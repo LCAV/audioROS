@@ -1,0 +1,3 @@
+[submodule "crazyflie-audio"]
+	path = crazyflie-audio
+	url = https://github.com/lcav/crazyflie-audio

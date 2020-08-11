@@ -1,0 +1,3 @@
+yaml https://github.com/duembgen/rosdistro/raw/master/rosdep/base.yaml
+yaml https://github.com/duembgen/rosdistro/raw/master/rosdep/python.yaml
+yaml https://github.com/duembgen/rosdistro/raw/master/rosdep/osx-homebrew.yaml osx

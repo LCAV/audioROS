@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>audio_stack</name>
+  <version>0.0.1</version>
+  <description>Processing and plotting of live audio data</description>
+  <maintainer email="frederike.duembgen@epfl.ch">duembgen</maintainer>
+  <license>Apache License 2.0</license>
+
+  <!-- Note that to make this work one needs to add a new rosdep rule-->
+  <!-- See here for instructions: https://docs.ros.org/independent/api/rosdep/html/contributing_rules.html -->
+  <depend>sounddevice</depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
