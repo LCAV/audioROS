@@ -12,7 +12,7 @@ git clone --recurse-submodules https://github.com/LCAV/audioROS
 To install all packages contained in this repo, run (from the root of this repository): 
 
 ```
-ln -s 19-custom.list /etc/ros/rosdep/sources.list.d/
+cp 19-custom.list /etc/ros/rosdep/sources.list.d/ #might need sudo here
 rosdep update 
 rosdep install --from-path src/
 colcon build --symlink-install
