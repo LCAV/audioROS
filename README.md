@@ -1,4 +1,4 @@
-# crazyflie-audio-ROS
+# audioROS
 
 This repository contains the ROS2-powered stack to do audio processing for sound source localization on the Crazyflie drone 2.1. 
 
@@ -6,7 +6,7 @@ This repository contains the ROS2-powered stack to do audio processing for sound
 
 Make sure to clone this repo including submodules by running
 ```
-git clone --recurse-submodules https://github.com/lcav/crazyflie-audio-ROS
+git clone --recurse-submodules https://github.com/LCAV/audioROS
 ```
 
 To install all packages contained in this repo, run (from the root of this repository): 
@@ -27,7 +27,7 @@ The stack is separated into the following modules:
 - `audio_interfaces` (C++): Custom ROS message definintions. Can be extended with services and/or actions in the future. 
 
 To publish autocorrelation data, obtained from an audio file, a sounddevice or the CRTP packages sent by the crazyflie, 
-adjust the file `src/audio_stack/audio_stack/publisher.py and run:
+adjust the file `src/audio_stack/audio_stack/publisher.py` and run:
 
 ```
 ros2 run audio_stack publisher
