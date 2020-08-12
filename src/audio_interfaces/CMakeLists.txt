@@ -34,7 +34,7 @@ if(BUILD_TESTING)
 endif()
 
 set(msg_files
-  "msg/Audio.msg"
+  "msg/Correlations.msg"
   "msg/Spectrum.msg"
 )
 

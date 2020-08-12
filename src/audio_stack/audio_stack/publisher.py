@@ -32,7 +32,7 @@ import sounddevice as sd
 
 from noise_cancellation import filter_iir_bandpass
 from algos_beamforming import select_frequencies
-from audio_interfaces.msg import Audio
+from audio_interfaces.msg import Correlations
 
 from .live_plotter import LivePlotter
 
@@ -83,7 +83,7 @@ METHOD_FREQUENCY_DICT = {
 MAX_YLIM = 1e5 # set to inf for no effect.
 MIN_YLIM = 1e-3 # set to -inf for no effect.
 
-def create_audio_message(signals, Fs): 
+def create_correlations_message(signals, Fs): 
     if METHOD_WINDOW == "tukey":
         window = signal.tukey(signals.shape[1])
         signals *= window
@@ -113,7 +113,7 @@ def create_audio_message(signals, Fs):
     # calculate Rs for chosen frequency bins 
     R = 1 / signals.shape[0] * signals_f[bins, :, None] @ signals_f[bins, None, :].conj()
 
-    msg = Audio()
+    msg = Correlations()
     msg.n_mics = int(signals.shape[0])
     msg.n_frequencies = len(frequencies)
     msg.frequencies = frequencies
@@ -126,7 +126,7 @@ class DummyPublisher(Node):
     def __init__(self):
         super().__init__('dummy_publisher')
         self.publisher_message = self.create_publisher(String, 'message', 10)
-        self.publisher_audio = self.create_publisher(Audio, 'audio', 10)
+        self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
         Fs = 10
         timer_period = 1/Fs  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -138,7 +138,7 @@ class DummyPublisher(Node):
         self.publisher_message.publish(msg)
         self.get_logger().info(f'Publishing: "{msg.data}"')
 
-        msg = Audio()
+        msg = Correlations()
         msg.n_mics = 4
         msg.n_frequencies = 3
         R = np.empty((msg.n_frequencies, msg.n_mics, msg.n_mics), dtype=np.complex128)
@@ -149,7 +149,7 @@ class DummyPublisher(Node):
         msg.imag_vect = list(np.imag(R.flatten()))
         msg.frequencies = [1., 10., 100.]
         msg.timestamp = self.i
-        self.publisher_audio.publish(msg)
+        self.publisher_correlations.publish(msg)
         self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
 
         self.i += 1
@@ -161,7 +161,7 @@ class FilePublisher(Node):
         :param publish_rate: in Hz, at which rate to publish
         """
         super().__init__('file_publisher')
-        self.publisher_audio = self.create_publisher(Audio, 'audio', 10)
+        self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
         self.plot = plot
 
         self.i = 0
@@ -194,7 +194,7 @@ class FilePublisher(Node):
             signals = np.c_[[
                data['data'][self.i:self.i+n_buffer] for data in self.audio_data.values()
             ]] # n_mics x n_samples
-            msg, signals_f, frequencies = create_audio_message(signals, self.Fs)
+            msg, signals_f, frequencies = create_correlations_message(signals, self.Fs)
             
             if self.plot: 
                 labels = [f"mic{i}" for i in range(signals_f.shape[1])]
@@ -203,7 +203,7 @@ class FilePublisher(Node):
             self.get_logger().debug(f'Publishing at {msg.timestamp}: frequencies {msg.frequencies}, \n {msg.real_vect}, {msg.imag_vect}')
         
             msg.timestamp = self.i
-            self.publisher_audio.publish(msg)
+            self.publisher_correlations.publish(msg)
             self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
             self.i += n_between_buffers
 
@@ -219,7 +219,7 @@ class StreamPublisher(Node):
         super().__init__('stream_publisher')
 
         self.publish_rate = publish_rate
-        self.publisher_audio = self.create_publisher(Audio, 'audio', 10)
+        self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
 
         self.Fs = 42000
         self.i = 0
@@ -233,16 +233,16 @@ class StreamPublisher(Node):
         with sd.InputStream(channels=n_mics, callback=self.publish_loop, blocksize=n_buffer):
             sd.sleep(int(duration*1000)) # input is in miliseconds.
 
-    def publish_loop(self, indata, frames, time_audio, status): 
+    def publish_loop(self, indata, frames, time_correlations, status): 
         if status:
             print(status)
         n_between_buffers = self.Fs // self.publish_rate
         seconds_between_buffers  = 1 / self.Fs * n_between_buffers
 
         signals = indata.T
-        msg = create_audio_message(signals, self.Fs)
+        msg = create_correlations_message(signals, self.Fs)
         msg.timestamp = self.i
-        self.publisher_audio.publish(msg)
+        self.publisher_correlations.publish(msg)
 
         self.get_logger().info(f'Publishing: {msg.timestamp}')
         self.i += 1
