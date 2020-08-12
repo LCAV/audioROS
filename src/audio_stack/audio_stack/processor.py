@@ -76,7 +76,7 @@ class PlotSubscriber(Node):
         spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
 
         labels=[f"f={frequencies[i]:.0f}Hz" for i in range(spectrum.shape[0])]
-        self.plotter.update_animation(spectrum, self.beam_former.theta_scan, labels=labels)
+        self.plotter.update_lines(spectrum, self.beam_former.theta_scan, labels=labels)
 
         msg_spec = Spectrum()
         msg_spec.timestamp = msg_correlations.timestamp
