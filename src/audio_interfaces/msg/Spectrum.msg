@@ -1,4 +1,4 @@
-uint16 timestamp
+uint32 timestamp
 uint8 n_frequencies
 
 # List of frequencies, in Hz

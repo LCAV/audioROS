@@ -1,4 +1,4 @@
-uint16 timestamp
+uint32 timestamp
 uint8 n_mics
 uint8 n_frequencies
 

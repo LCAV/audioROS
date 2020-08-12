@@ -52,3 +52,4 @@ CATKIN_IGNORE
 install/
 *.swp
 *.swo
+*.orig
