@@ -50,3 +50,5 @@ CATKIN_IGNORE
 # Custom files
 *.log
 install/
+*.swp
+*.swo
