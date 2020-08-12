@@ -183,7 +183,7 @@ class FilePublisher(Node):
 
         if publish_rate is None:
             # by default, adapt publish rate to n_buffer (no samples missed)
-            self.publish_rate = int(Fs // n_buffer)
+            self.publish_rate = int(self.Fs // n_buffer)
         else:
             self.publish_rate = publish_rate
         self.publish_loop(n_buffer)
@@ -219,10 +219,11 @@ class FilePublisher(Node):
 
 
 class StreamPublisher(Node):
-    def __init__(self, publish_rate=1):
+    def __init__(self, publish_rate=1, plot=False):
         super().__init__('stream_publisher')
 
         self.publish_rate = publish_rate
+        self.plot = plot
         self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
 
         self.Fs = 42000
@@ -230,6 +231,9 @@ class StreamPublisher(Node):
         n_buffer = 2**8
         n_mics = 4
         duration = 3 # in seconds
+
+        if self.plot:
+            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
 
         sd.default.device = 'default'
         sd.check_input_settings(sd.default.device, channels=n_mics, samplerate=self.Fs)
@@ -243,10 +247,16 @@ class StreamPublisher(Node):
         n_between_buffers = self.Fs // self.publish_rate
         seconds_between_buffers  = 1 / self.Fs * n_between_buffers
 
-        signals_f, freqs = get_stft(signals, self.Fs)
-        msg = create_correlations_message(signals_f, freqs, Fs, signals_f.shape[1])
+        signals_f, freqs = get_stft(indata.T, self.Fs)
+        msg = create_correlations_message(signals_f, freqs, self.Fs, signals_f.shape[1])
 
         msg.timestamp = self.i
+
+        if self.plot: 
+            labels = [f"mic{i}" for i in range(signals_f.shape[1])]
+            self.plotter.update_lines(np.abs(signals_f.T), freqs, labels)
+            self.plotter.update_axvlines(msg.frequencies)
+
         self.publisher_correlations.publish(msg)
 
         self.get_logger().info(f'Publishing: {msg.timestamp}')
@@ -261,6 +271,8 @@ def main(args=None):
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.abspath(current_dir + '/../../../crazyflie-audio/data/simulated')
+    plot = True
+    publish_rate = 11 # in Hz
 
     #publisher = DummyPublisher()
 
@@ -270,12 +282,10 @@ def main(args=None):
             os.path.join(data_dir, 'analytical_source_mic3.wav'),
             os.path.join(data_dir, 'analytical_source_mic4.wav'),
     ]
-    publish_rate = 11 # in Hz
     loop = True # loop after file ends.
-    plot = True
-    publisher = FilePublisher(fnames, publish_rate=publish_rate, loop=loop, plot=plot)
+    #publisher = FilePublisher(fnames, publish_rate=publish_rate, loop=loop, plot=plot)
 
-    #publisher = StreamPublisher(publish_rate=1)
+    publisher = StreamPublisher(publish_rate=1, plot=plot)
 
     rclpy.spin(publisher)
 
