@@ -83,7 +83,7 @@ METHOD_FREQUENCY_DICT = {
 MAX_YLIM = 1e5 # set to inf for no effect.
 MIN_YLIM = 1e-3 # set to -inf for no effect.
 
-def create_correlations_message(signals, Fs): 
+def get_stft(signals, Fs):
     if METHOD_WINDOW == "tukey":
         window = signal.tukey(signals.shape[1])
         signals *= window
@@ -105,21 +105,23 @@ def create_correlations_message(signals, Fs):
 
     signals_f = np.fft.rfft(signals, n=signals.shape[1], axis=1).T # n_samples x n_mics
     freqs = np.fft.rfftfreq(n=signals.shape[1], d=1/Fs)
+    return signals_f, freqs
 
-    bins = select_frequencies(signals.shape[1], Fs, METHOD_FREQUENCY, buffer_f=signals_f,
+def create_correlations_message(signals_f, freqs, Fs, n_buffer): 
+    bins = select_frequencies(n_buffer, Fs, METHOD_FREQUENCY, buffer_f=signals_f,
                               **METHOD_FREQUENCY_DICT[METHOD_FREQUENCY])
     frequencies = list(freqs[bins].flatten())
     
     # calculate Rs for chosen frequency bins 
-    R = 1 / signals.shape[0] * signals_f[bins, :, None] @ signals_f[bins, None, :].conj()
+    R = 1 / signals_f.shape[1] * signals_f[bins, :, None] @ signals_f[bins, None, :].conj()
 
     msg = Correlations()
-    msg.n_mics = int(signals.shape[0])
+    msg.n_mics = int(signals_f.shape[1])
     msg.n_frequencies = len(frequencies)
     msg.frequencies = frequencies
     msg.real_vect = list(np.real(R.flatten()))
     msg.imag_vect = list(np.imag(R.flatten()))
-    return msg, signals_f, freqs
+    return msg
 
 
 class DummyPublisher(Node):
@@ -194,15 +196,17 @@ class FilePublisher(Node):
             signals = np.c_[[
                data['data'][self.i:self.i+n_buffer] for data in self.audio_data.values()
             ]] # n_mics x n_samples
-            msg, signals_f, frequencies = create_correlations_message(signals, self.Fs)
+
+
+            signals_f, freqs = get_stft(signals, self.Fs) # n_samples x n_mics
+            msg = create_correlations_message(signals_f, freqs, self.Fs, signals.shape[1])
+            msg.timestamp = self.i
             
             if self.plot: 
                 labels = [f"mic{i}" for i in range(signals_f.shape[1])]
-                self.plotter.update_animation(np.abs(signals_f.T), frequencies, labels)
+                self.plotter.update_lines(np.abs(signals_f.T), freqs, labels)
+                self.plotter.update_axvlines(msg.frequencies)
 
-            self.get_logger().debug(f'Publishing at {msg.timestamp}: frequencies {msg.frequencies}, \n {msg.real_vect}, {msg.imag_vect}')
-        
-            msg.timestamp = self.i
             self.publisher_correlations.publish(msg)
             self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
             self.i += n_between_buffers
@@ -239,8 +243,9 @@ class StreamPublisher(Node):
         n_between_buffers = self.Fs // self.publish_rate
         seconds_between_buffers  = 1 / self.Fs * n_between_buffers
 
-        signals = indata.T
-        msg = create_correlations_message(signals, self.Fs)
+        signals_f, freqs = get_stft(signals, self.Fs)
+        msg = create_correlations_message(signals_f, freqs, Fs, signals_f.shape[1])
+
         msg.timestamp = self.i
         self.publisher_correlations.publish(msg)
 
