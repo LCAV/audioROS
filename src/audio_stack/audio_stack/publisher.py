@@ -259,7 +259,8 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    data_dir = '/home/duembgen/Documents/PhD/Audio/data/simulated'
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.abspath(current_dir + '/../../../crazyflie-audio/data/simulated')
 
     #publisher = DummyPublisher()
 
