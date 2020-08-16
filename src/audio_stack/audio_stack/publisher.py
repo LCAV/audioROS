@@ -46,7 +46,7 @@ METHOD_NOISE_DICT = {
     }
 }
 
-# available: 
+# Windowing method. Available: 
 # - None (no window)
 # - tukey (flat + cosine on borders)
 METHOD_WINDOW = "tukey" 
@@ -80,8 +80,10 @@ METHOD_FREQUENCY_DICT = {
     }
 }
 
+# Plotting parameters
 MAX_YLIM = 1e5 # set to inf for no effect.
 MIN_YLIM = 1e-3 # set to -inf for no effect.
+MAX_FREQ = 2000 # set to inf for no effect
 
 MAX_TIMESTAMP_INT = 2**32-1 # needs to match Spectrum.msg and Correlation.msg
 
@@ -109,6 +111,7 @@ def get_stft(signals, Fs):
     freqs = np.fft.rfftfreq(n=signals.shape[1], d=1/Fs)
     return signals_f, freqs
 
+
 def create_correlations_message(signals_f, freqs, Fs, n_buffer): 
     bins = select_frequencies(n_buffer, Fs, METHOD_FREQUENCY, buffer_f=signals_f,
                               **METHOD_FREQUENCY_DICT[METHOD_FREQUENCY])
@@ -130,9 +133,9 @@ class AudioPublisher(Node):
     def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, plot=False, Fs=None):
         super().__init__(name)
 
-        # by default, adapt publish rate to n_buffer (no samples skipped)
         if publish_rate is None:
-            self.publish_rate = int(self.Fs / self.n_buffer)
+            # by default, adapt publish rate to n_buffer (no samples skipped)
+            self.publish_rate = int(Fs / n_buffer)
         else:
             self.publish_rate = publish_rate
 
@@ -146,36 +149,40 @@ class AudioPublisher(Node):
             self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
 
         self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
-        self.i = 0
+        self.time_idx = 0
 
     def set_Fs(self, Fs):
         self.Fs = Fs
         self.n_between_buffers = self.Fs // self.publish_rate
         self.seconds_between_buffers  = 1 / self.Fs * self.n_between_buffers
 
-    def process_signal(self, signals):
+    def process_signal(self, signals, max_f=np.inf):
         assert self.Fs is not None, 'Need to set Fs before processing.'
         assert signals.shape[0] == 4
 
+        # processing
         signals_f, freqs = get_stft(signals, self.Fs) # n_samples x n_mics
         msg = create_correlations_message(signals_f, freqs, self.Fs, signals.shape[1])
-        msg.timestamp = self.i
-        
+        msg.timestamp = self.time_idx
+
+        mask = freqs < max_f
+        masked_frequencies = [f for f in msg.frequencies if f < max_f]
+
+        # plotting
         if self.plot: 
             labels = [f"mic{i}" for i in range(signals_f.shape[1])]
-            self.plotter.update_lines(np.abs(signals_f.T), freqs, labels)
-            self.plotter.update_axvlines(msg.frequencies)
+            self.plotter.update_lines(np.abs(signals_f[mask].T), freqs[mask], labels)
+            self.plotter.update_axvlines(masked_frequencies)
 
+        # publishing
         self.publisher_correlations.publish(msg)
         self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
 
-        self.i += self.n_between_buffers
-        if self.i >= MAX_TIMESTAMP_INT:
-            self.get_logger().warn('timestamp overflow.')
-            self.i = self.i % MAX_TIMESTAMP_INT
-
-        # TODO(FD): replace this with ROS sleep function
-        time.sleep(self.seconds_between_buffers)
+        # increment index
+        self.time_idx += 1
+        if self.time_idx >= MAX_TIMESTAMP_INT:
+            self.get_logger().error('timestamp overflow.')
+            self.time_idx = self.time_idx % MAX_TIMESTAMP_INT
 
 
 class DummyPublisher(Node):
@@ -186,12 +193,12 @@ class DummyPublisher(Node):
         self.Fs = 10
         timer_period = 1/self.Fs  # seconds
 
-        self.i = 0
+        self.time_idx = 0
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def timer_callback(self):
         msg = String()
-        msg.data = f'Hello World: {self.i}'
+        msg.data = f'Hello World: {self.time_idx}'
         self.publisher_message.publish(msg)
         self.get_logger().info(f'Publishing: "{msg.data}"')
 
@@ -205,10 +212,10 @@ class DummyPublisher(Node):
         msg.real_vect = list(np.real(R.flatten()))
         msg.imag_vect = list(np.imag(R.flatten()))
         msg.frequencies = [1., 10., 100.]
-        msg.timestamp = self.i
+        msg.timestamp = self.time_idx
         self.publisher_correlations.publish(msg)
         self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
-        self.i += 1
+        self.time_idx += 1
 
 
 class FilePublisher(AudioPublisher):
@@ -220,6 +227,7 @@ class FilePublisher(AudioPublisher):
         self.loop = loop
 
         # read audio from files
+        self.file_idx = 0
         self.audio_data = {f:{} for f in filenames}
         for fname in filenames:
             self.audio_data[fname]['Fs'], self.audio_data[fname]['data'] = read(fname) 
@@ -233,39 +241,64 @@ class FilePublisher(AudioPublisher):
         self.len = len(self.audio_data[filenames[0]]['data'])
         assert all(len(self.audio_data[f]['data'])==self.len for f in filenames)
 
-        self.publish_loop(n_buffer)
+        self.create_timer(1./self.publish_rate, self.publish_loop)
 
     def publish_loop(self, n_buffer):
-        while self.i + self.n_buffer < self.len:
-            # read current signal
-            signals = np.c_[[
-               data['data'][self.i:self.i + self.n_buffer] for data in self.audio_data.values()
-            ]] # n_mics x n_samples
+        signals = np.c_[[
+           data['data'][self.file_idx:self.file_idx + self.n_buffer] for data in self.audio_data.values()
+        ]] # n_mics x n_samples
 
-            self.process_signal(signals)
-
-            # advance in file
-            if self.loop and (self.i + self.n_buffer >= self.len):
-                self.i = 0
+        self.process_signal(signals, max_f=MAX_FREQ)
+ 
+        self.file_idx += self.n_between_buffers
+        if self.file_idx + self.n_buffer >= self.len:
+            if loop:
+                self.file_idx = 0
+            else:
+                sys.exit()
 
 
 class StreamPublisher(AudioPublisher):
     def __init__(self, Fs, n_buffer=256, publish_rate=None, plot=False):
         super().__init__('stream_publisher', n_buffer=n_buffer, publish_rate=publish_rate, plot=plot, Fs=Fs)
 
-        n_mics = 4
-        duration = 3 # in seconds
+        self.n_mics = 4
 
         sd.default.device = 'default'
-        sd.check_input_settings(sd.default.device, channels=n_mics, samplerate=self.Fs)
+        sd.check_input_settings(sd.default.device, channels=self.n_mics, samplerate=self.Fs)
 
-        with sd.InputStream(channels=n_mics, callback=self.publish_loop, blocksize=n_buffer):
-            sd.sleep(int(duration*1000)) # input is in miliseconds.
+        # blocking stream
+        self.stream = sd.InputStream(channels=self.n_mics, blocksize=self.n_buffer)
+        self.stream.start()
+        self.create_timer(1./self.publish_rate, self.publish_loop)
 
-    def publish_loop(self, indata, frames, time_correlations, status): 
+        # non-blocking stream
+        #self.duration = 60 * 60 # seconds
+        #with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=self.n_buffer):
+            #sd.sleep(self.duration)
+            #plt.show()
+            # need below return or we will stay in this context forever.
+            #return
+
+    def publish_stream(self, signals_T, frames, time_stream, status): 
+        self.get_logger().info(f'buffer start time: {time_stream.inputBufferAdcTime}')
+        self.get_logger().info(f'currentTime: {time_stream.currentTime}')
+
         if status:
             print(status)
-        self.process_signal(indata.T)
+
+        self.process_signal(signals_T.T, max_f=MAX_FREQ)
+
+    def publish_loop(self): 
+
+        n_available = self.stream.read_available
+        if self.n_buffer > n_available:
+            self.get_logger().warn('Requesting more frames ({self.n_buffer}) than available ({n_available})')
+        signals_T, overflow = self.stream.read(self.n_buffer) # frames x channels
+        if overflow:
+            self.get_logger().warn('overflow')
+
+        self.process_signal(signals_T.T, max_f=MAX_FREQ)
 
 
 def main(args=None):
@@ -273,26 +306,30 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.abspath(current_dir + '/../../../crazyflie-audio/data/simulated')
+    audio_source = 'stream'
+    #audio_source = 'file'
+    #audio_source = 'dummy'
+
+    # TODO(FD): make these ROS parameters
     n_buffer = 2**10
-    plot = False
-    publish_rate = 11 #11 # in Hz
+    plot = True #False
+    publish_rate = None #11 # in Hz
 
-    #publisher = DummyPublisher()
-
-    fnames = [os.path.join(data_dir, f'analytical_source_mic{i}.wav') for i in range(1, 5)] 
-    #loop = True # loop after file ends.
-    #publisher = FilePublisher(fnames, n_buffer=n_buffer, publish_rate=publish_rate, loop=True, plot=plot)
-
-    Fs = 44100
-    publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, plot=plot)
+    if audio_source == 'file':
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.abspath(current_dir + '/../../../crazyflie-audio/data/simulated')
+        fnames = [os.path.join(data_dir, f'analytical_source_mic{i}.wav') for i in range(1, 5)] 
+        loop = True # loop after file ends.
+        publisher = FilePublisher(fnames, n_buffer=n_buffer, publish_rate=publish_rate, loop=True, plot=plot)
+    elif audio_source == 'stream':
+        Fs = 44100
+        publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, plot=plot)
+    elif audio_source == 'dummy':
+        publisher = DummyPublisher()
 
     rclpy.spin(publisher)
 
     # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     minimal_publisher.destroy_node()
     rclpy.shutdown()
 
