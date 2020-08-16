@@ -243,7 +243,7 @@ class FilePublisher(AudioPublisher):
 
         self.create_timer(1./self.publish_rate, self.publish_loop)
 
-    def publish_loop(self, n_buffer):
+    def publish_loop(self):
         signals = np.c_[[
            data['data'][self.file_idx:self.file_idx + self.n_buffer] for data in self.audio_data.values()
         ]] # n_mics x n_samples
@@ -252,7 +252,7 @@ class FilePublisher(AudioPublisher):
  
         self.file_idx += self.n_between_buffers
         if self.file_idx + self.n_buffer >= self.len:
-            if loop:
+            if self.loop:
                 self.file_idx = 0
             else:
                 sys.exit()
@@ -306,14 +306,14 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    audio_source = 'stream'
-    #audio_source = 'file'
+    #audio_source = 'stream'
+    audio_source = 'file'
     #audio_source = 'dummy'
 
     # TODO(FD): make these ROS parameters
     n_buffer = 2**10
     plot = True #False
-    publish_rate = None #11 # in Hz
+    publish_rate = 11 # in Hz
 
     if audio_source == 'file':
         current_dir = os.path.dirname(os.path.abspath(__file__))
