@@ -39,6 +39,8 @@ MAX_BUFFERS = 500  # set to 0 for no saving
 
 OUT_DIR = "debug"
 
+from rcl_interfaces.msg import SetParametersResult
+
 class AudioPublisher(Node):
     def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, plot=False, Fs=None):
         super().__init__(name)
@@ -48,8 +50,8 @@ class AudioPublisher(Node):
             self.publish_rate = int(Fs / n_buffer)
         else:
             self.publish_rate = publish_rate
-
         self.n_buffer = n_buffer
+
         self.Fs = Fs
         if Fs is not None:
             self.set_Fs(Fs)
@@ -57,7 +59,33 @@ class AudioPublisher(Node):
         self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
         self.time_idx = 0
 
-        self.raw_data = np.empty((N_MICS, self.n_buffer*MAX_BUFFERS))
+        self.raw_data = np.empty((N_MICS, n_buffer*MAX_BUFFERS))
+
+        # create ROS parameters that can be changed from command line.
+        self.declare_parameter("n_buffer")
+        self.declare_parameter("publish_rate")
+        parameters = [
+                rclpy.parameter.Parameter("n_buffer", rclpy.Parameter.Type.STRING, str(self.n_buffer)),
+                rclpy.parameter.Parameter("publish_rate", rclpy.Parameter.Type.STRING, str(self.publish_rate))
+        ]
+        self.set_parameters_callback(self.set_params)
+        self.set_parameters(parameters)
+
+    def set_params(self, params):
+        for param in params:
+            old_value = self.get_parameter(param.name).get_parameter_value().string_value
+            str_value = param.get_parameter_value().string_value
+            int_value = param.get_parameter_value().integer_value
+            new_value = eval(str_value) if str_value != '' else int_value
+
+            self.get_logger().info(f"changing {param.name} from {old_value} to {new_value}")
+            if param.name == "n_buffer":
+                self.n_buffer = new_value
+                self.raw_data = np.empty((N_MICS, self.n_buffer*MAX_BUFFERS))
+            elif param.name == "publish_rate":
+                self.publish_rate = new_value
+
+        return SetParametersResult(successful=True)
 
     def set_Fs(self, Fs):
         self.Fs = Fs
@@ -65,6 +93,8 @@ class AudioPublisher(Node):
         self.seconds_between_buffers  = 1 / self.Fs * self.n_between_buffers
 
     def process_signals(self, signals):
+        n_buffer = signals.shape[1]
+
         t1 = time.time()
 
         assert self.Fs is not None, 'Need to set Fs before processing.'
@@ -73,14 +103,14 @@ class AudioPublisher(Node):
         # publishing
         msg = Signals()
         msg.timestamp = self.time_idx
-        msg.n_mics = signals.shape[0]
-        msg.n_buffer = signals.shape[1]
+        msg.n_mics = N_MICS
+        msg.n_buffer = n_buffer
         signals_vect = list(signals.flatten().astype(float))
         msg.signals_vect = signals_vect
         self.publisher_signals.publish(msg)
 
         if self.time_idx < MAX_BUFFERS:
-            self.raw_data[:, self.time_idx*self.n_buffer:(self.time_idx+1)*self.n_buffer] = signals
+            self.raw_data[:, self.time_idx*n_buffer:(self.time_idx+1)*n_buffer] = signals
         elif (self.time_idx == MAX_BUFFERS) and (MAX_BUFFERS > 0): 
             for i in range(self.raw_data.shape[0]):
                 fname = f"{OUT_DIR}/test_mic{i}.wav" 
@@ -140,14 +170,16 @@ class FilePublisher(AudioPublisher):
         self.create_timer(1./self.publish_rate, self.publish_loop)
 
     def publish_loop(self):
+        n_buffer = self.n_buffer
+
         signals = np.c_[[
-           data['data'][self.file_idx:self.file_idx + self.n_buffer] for data in self.audio_data.values()
+           data['data'][self.file_idx:self.file_idx + n_buffer] for data in self.audio_data.values()
         ]] # n_mics x n_samples
 
         self.process_signals(signals)
  
         self.file_idx += self.n_between_buffers
-        if self.file_idx + self.n_buffer >= self.len:
+        if self.file_idx + n_buffer >= self.len:
             if self.loop:
                 self.file_idx = 0
             else:
@@ -165,12 +197,12 @@ class StreamPublisher(AudioPublisher):
         sd.check_input_settings(sd.default.device, channels=self.n_mics, samplerate=self.Fs)
 
         # blocking stream
-        #self.stream = sd.InputStream(channels=self.n_mics, blocksize=self.n_buffer)
+        #self.stream = sd.InputStream(channels=self.n_mics, blocksize=n_buffer)
         #self.stream.start()
         #self.create_timer(1./self.publish_rate, self.publish_loop)
 
         # non-blocking stream
-        with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=self.n_buffer) as stream:
+        with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=n_buffer) as stream:
             sd.sleep(self.duration_ms)
             # need below return or we will stay in this context forever
             return
@@ -185,10 +217,12 @@ class StreamPublisher(AudioPublisher):
         self.process_signals(signals_T.T)
 
     def publish_loop(self): 
+        n_buffer = self.n_buffer
+
         n_available = self.stream.read_available
-        if self.n_buffer > n_available:
-            self.get_logger().warn(f'Requesting more frames ({self.n_buffer}) than available ({n_available})')
-        signals_T, overflow = self.stream.read(self.n_buffer) # frames x channels
+        if n_buffer > n_available:
+            self.get_logger().warn(f'Requesting more frames ({n_buffer}) than available ({n_available})')
+        signals_T, overflow = self.stream.read(n_buffer) # frames x channels
         if overflow:
             self.get_logger().warn('overflow')
 

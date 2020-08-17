@@ -7,6 +7,7 @@ all.launch.py:
 
 import os
 import pathlib
+import sys
 
 import launch
 import launch.actions
@@ -16,7 +17,7 @@ import launch_ros.actions
 LOG_SEVERITY = 3 #0-debug, 1-info, 2-Warn, 3-Error, 4-Fatal
 LOG_LEVEL = 'warn'
 node_config = {
-    'publisher': [{'n_buffer': 2**8}],
+    'publisher': [{'n_buffer': 2**8, 'publish_rate': 100}],
     'processor': [],
     'correlator': []
 }
@@ -50,3 +51,13 @@ def generate_launch_description():
             ]
         ]
     )
+
+def main(argv=sys.argv[1:]):
+    print('launching with', argv)
+    ld = generate_launch_description()
+    ls = launch.LaunchService(argv=argv)
+    ls.include_launch_description(ld)
+    return ls.run()
+
+if __name__ == '__main__':
+    main()
