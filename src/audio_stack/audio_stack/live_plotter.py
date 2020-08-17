@@ -6,25 +6,38 @@ live_plotter.py: live data plotting using matplotlib.
 
 import math
 
+import matplotlib
 import matplotlib.pylab as plt
+matplotlib.use("TkAgg")
 
 MAX_YLIM = math.inf # set to inf for no effect.
 MIN_YLIM = -math.inf # set to -inf for no effect.
 
 class LivePlotter(object):
-    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM):
+    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM, log=True):
 
         self.max_ylim = max_ylim
         self.min_ylim = min_ylim
+        self.log = log
 
         self.fig, self.ax = plt.subplots()
-        self.ax.set_xlabel('frequency [Hz]')
-        self.ax.set_ylabel('magnitude [-]')
         self.lines = {}
         self.axvlines = {}
+
+        self.fig.canvas.mpl_connect('close_event', self.handle_close)
+
+        # works with Tk backend: remove the frame so that user does not
+        # wrongly close window.
+        # win = plt.gcf().canvas.manager.window
+        # win.overrideredirect(1)
+
         # Need the block argument to make sure the script continues after
         # plotting the figure. 
         plt.show(block=False)
+
+    def handle_close(self, evt):
+        plt.close('all')
+        print('closed all figures')
 
     def update_lines(self, data_matrix, x_data=None, labels=None):
         """ Plot each row of data_matrix as one line.
@@ -35,7 +48,11 @@ class LivePlotter(object):
             else:
                 x_data = range(data_matrix.shape[1]) if x_data is None else x_data
                 label = labels[i] if labels is not None else None
-                line, = self.ax.semilogy(x_data, data_matrix[i, :], color=f"C{i % 10}", 
+                if self.log:
+                    line, = self.ax.semilogy(x_data, data_matrix[i, :], color=f"C{i % 10}", 
+                                             label=label)
+                else:
+                    line, = self.ax.plot(x_data, data_matrix[i, :], color=f"C{i % 10}", 
                                          label=label)
                 self.lines[i] = line
 
@@ -66,6 +83,7 @@ class LivePlotter(object):
 
         # update ax.viewLim using new ax.dataLim
         self.ax.set_ylim(ymin_new, ymax_new)
+
 
 if __name__ == "__main__":
     test = LivePlotter()
