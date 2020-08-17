@@ -28,41 +28,23 @@ from .live_plotter import LivePlotter
 MAX_YLIM = 1 # set to inf for no effect.
 MIN_YLIM = 1e-13 # set to -inf for no effect.
 
-class PrintSubscriber(Node):
-    def __init__(self):
-        super().__init__('print_subscriber')
-        self.subscription_message = self.create_subscription(
-            String,
-            'message',
-            self.listener_callback_message,
-            10)
-        self.subscription_correlations = self.create_subscription( Correlations,
-            'correlations',
-            self.listener_callback_correlations,
-            10)
-        self.subscription_message # prevent unused variable warning
-        self.subscription_correlations # prevent unused variable warning
 
-    def listener_callback_message(self, msg):
-        self.get_logger().info(f'I heard a message: "{msg.data}"')
-
-    def listener_callback_correlations(self, msg):
-        self.get_logger().info(f'I heard correlations: {msg.timestamp}: {msg.real_vect[0, :2, :2]} etc.')
-
-
-class PlotSubscriber(Node):
+class DoaEstimator(Node):
     def __init__(self, mic_positions):
-        super().__init__('raw_plot_subscriber')
+        super().__init__('doa_estimator')
 
         self.subscription_correlations = self.create_subscription(
-            Correlations, 'correlations', self.listener_callback_correlations, 10)
+            Correlations, 'audio/correlations', self.listener_callback_correlations, 10)
         self.subscription_correlations # prevent unused variable warning
 
-        self.publisher_spectrum = self.create_publisher(Spectrum, 'spectrum', 10)
+        self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/spectrum', 10)
 
         self.beam_former = BeamFormer(mic_positions)
 
         self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
+        self.plotter.ax.set_xlabel('angle [rad]')
+        self.plotter.ax.set_ylabel('magnitude [-]')
+
 
     def handle_close(self, evt):
         plt.close('all')
@@ -96,7 +78,6 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    #subscriber = PrintSubscriber()
     fname = os.path.abspath(os.path.join(data_dir, 'analytical_mics.npy'))
     try:
         mic_positions = np.load(fname)
@@ -104,14 +85,15 @@ def main(args=None):
         print(f'Did not find file {fname}.')
         print('You might have to run crazyflie-audio/python/DOASimulation.ipynb first.')
         sys.exit()
-    subscriber = PlotSubscriber(mic_positions)
 
-    rclpy.spin(subscriber)
+    estimator = DoaEstimator(mic_positions)
+
+    rclpy.spin(estimator)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    subscriber.destroy_node()
+    estimator.destroy_node()
     rclpy.shutdown()
 
 

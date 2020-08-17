@@ -53,3 +53,4 @@ install/
 *.swp
 *.swo
 *.orig
+debug/

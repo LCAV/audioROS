@@ -12,122 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 import time
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir + '/../../../crazyflie-audio/python/')
-
 import matplotlib.pylab as plt
 import numpy as np
-from scipy.io.wavfile import read
-from scipy import signal
+from scipy.io.wavfile import read, write
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
 
 import sounddevice as sd
 
-from noise_cancellation import filter_iir_bandpass
-from algos_beamforming import select_frequencies
-from audio_interfaces.msg import Correlations
+from audio_interfaces.msg import Signals
 
-from .live_plotter import LivePlotter
-
-
-METHOD_NOISE = "bandpass"
-METHOD_NOISE_DICT = {
-    "bandpass": {
-        "fmin": 100,
-        "fmax": 300,
-        "order": 3
-    }
-}
-
-# Windowing method. Available: 
-# - None (no window)
-# - tukey (flat + cosine on borders)
-METHOD_WINDOW = "tukey" 
-
-# Frequency selection
-N_FREQUENCIES = 10
-METHOD_FREQUENCY = "single" #"uniform"
-METHOD_FREQUENCY_DICT = {
-    "uniform": { # uniform frequencies between min and max
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
-    },
-    "single": { # one single frequency (beam width between min and max)
-        "num_frequencies": 1,
-        "min_freq": 150,
-        "max_freq": 250,
-    },
-    "between": { # random, between propeller frequencies
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
-        "delta": 1
-    },
-    "between_snr": { # choose highest snr between propeller frequencies
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
-        "amp_ratio": 1, 
-        "delta": 1
-    }
-}
+N_MICS = 4
 
 # Plotting parameters
 MAX_YLIM = 1e5 # set to inf for no effect.
-MIN_YLIM = 1e-3 # set to -inf for no effect.
-MAX_FREQ = 2000 # set to inf for no effect
+MIN_YLIM = -1e5 # set to -inf for no effect.
 
 MAX_TIMESTAMP_INT = 2**32-1 # needs to match Spectrum.msg and Correlation.msg
 
-def get_stft(signals, Fs):
-    if METHOD_WINDOW == "tukey":
-        window = signal.tukey(signals.shape[1])
-        signals *= window
-    elif METHOD_WINDOW is None:
-        pass
-    else:
-        raise ValueError(METHOD_WINDOW)
+# number of buffers to save, e.g. 256*1000=256'000 at 32000Hz: 8seconds
+MAX_BUFFERS = 500  # set to 0 for no saving
 
-    if METHOD_NOISE == "bandpass":
-        signals = filter_iir_bandpass(signals, Fs=Fs, method='cheby2', plot=False, 
-                                      **METHOD_NOISE_DICT[METHOD_NOISE])
-    elif METHOD_NOISE == "single":
-        signals = filter_iir_bandpass(signals, Fs=Fs, method='single', plot=False, 
-                                      **METHOD_NOISE_DICT[METHOD_NOISE])
-    elif METHOD_NOISE is None:
-        pass
-    else:
-        ValueError(METHOD_NOISE)
-
-    signals_f = np.fft.rfft(signals, n=signals.shape[1], axis=1).T # n_samples x n_mics
-    freqs = np.fft.rfftfreq(n=signals.shape[1], d=1/Fs)
-    return signals_f, freqs
-
-
-def create_correlations_message(signals_f, freqs, Fs, n_buffer): 
-    bins = select_frequencies(n_buffer, Fs, METHOD_FREQUENCY, buffer_f=signals_f,
-                              **METHOD_FREQUENCY_DICT[METHOD_FREQUENCY])
-    frequencies = list(freqs[bins].flatten())
-    
-    # calculate Rs for chosen frequency bins 
-    R = 1 / signals_f.shape[1] * signals_f[bins, :, None] @ signals_f[bins, None, :].conj()
-
-    msg = Correlations()
-    msg.n_mics = int(signals_f.shape[1])
-    msg.n_frequencies = len(frequencies)
-    msg.frequencies = frequencies
-    msg.real_vect = list(np.real(R.flatten()))
-    msg.imag_vect = list(np.imag(R.flatten()))
-    return msg
-
+OUT_DIR = "debug"
 
 class AudioPublisher(Node):
     def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, plot=False, Fs=None):
@@ -140,59 +50,59 @@ class AudioPublisher(Node):
             self.publish_rate = publish_rate
 
         self.n_buffer = n_buffer
-        self.plot = plot
-        self.Fs = None
+        self.Fs = Fs
         if Fs is not None:
             self.set_Fs(Fs)
 
-        if self.plot:
-            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-
-        self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
+        self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
         self.time_idx = 0
+
+        self.raw_data = np.empty((N_MICS, self.n_buffer*MAX_BUFFERS))
 
     def set_Fs(self, Fs):
         self.Fs = Fs
         self.n_between_buffers = self.Fs // self.publish_rate
         self.seconds_between_buffers  = 1 / self.Fs * self.n_between_buffers
 
-    def process_signal(self, signals, max_f=np.inf):
+    def process_signals(self, signals):
+        t1 = time.time()
+
         assert self.Fs is not None, 'Need to set Fs before processing.'
-        assert signals.shape[0] == 4
-
-        # processing
-        signals_f, freqs = get_stft(signals, self.Fs) # n_samples x n_mics
-        msg = create_correlations_message(signals_f, freqs, self.Fs, signals.shape[1])
-        msg.timestamp = self.time_idx
-
-        mask = freqs < max_f
-        masked_frequencies = [f for f in msg.frequencies if f < max_f]
-
-        # plotting
-        if self.plot: 
-            labels = [f"mic{i}" for i in range(signals_f.shape[1])]
-            self.plotter.update_lines(np.abs(signals_f[mask].T), freqs[mask], labels)
-            self.plotter.update_axvlines(masked_frequencies)
+        assert signals.shape[0] == N_MICS
 
         # publishing
-        self.publisher_correlations.publish(msg)
-        self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
+        msg = Signals()
+        msg.timestamp = self.time_idx
+        msg.n_mics = signals.shape[0]
+        msg.n_buffer = signals.shape[1]
+        signals_vect = list(signals.flatten().astype(float))
+        msg.signals_vect = signals_vect
+        self.publisher_signals.publish(msg)
 
-        # increment index
+        if self.time_idx < MAX_BUFFERS:
+            self.raw_data[:, self.time_idx*self.n_buffer:(self.time_idx+1)*self.n_buffer] = signals
+        elif (self.time_idx == MAX_BUFFERS) and (MAX_BUFFERS > 0): 
+            for i in range(self.raw_data.shape[0]):
+                fname = f"{OUT_DIR}/test_mic{i}.wav" 
+                write(fname, self.Fs, self.raw_data[i])
+                self.get_logger().info(f"Saved audio as {fname}")
+
         self.time_idx += 1
         if self.time_idx >= MAX_TIMESTAMP_INT:
             self.get_logger().error('timestamp overflow.')
             self.time_idx = self.time_idx % MAX_TIMESTAMP_INT
 
+        t2 = time.time()
+        processing_time = t2-t1
+        if processing_time > 1.0/self.publish_rate:
+            self.get_logger().warn(f'processing time ({processing_time:.1e}) longer than publishing period ({1/self.publish_rate:.1e})')
+
 
 class DummyPublisher(Node):
     def __init__(self):
+        from std_msgs.msg import String
         super().__init__('dummy_publisher')
         self.publisher_message = self.create_publisher(String, 'message', 10)
-        self.publisher_correlations = self.create_publisher(Correlations, 'correlations', 10)
-        self.Fs = 10
-        timer_period = 1/self.Fs  # seconds
-
         self.time_idx = 0
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
@@ -201,20 +111,6 @@ class DummyPublisher(Node):
         msg.data = f'Hello World: {self.time_idx}'
         self.publisher_message.publish(msg)
         self.get_logger().info(f'Publishing: "{msg.data}"')
-
-        msg = Correlations()
-        msg.n_mics = 4
-        msg.n_frequencies = 3
-        R = np.empty((msg.n_frequencies, msg.n_mics, msg.n_mics), dtype=np.complex128)
-        R[0] = np.array([1.0 + 1j for i in range(msg.n_mics**2)]).reshape((msg.n_mics, msg.n_mics)) 
-        R[1] = np.array([2.0 + 2j for i in range(msg.n_mics**2)]).reshape((msg.n_mics, msg.n_mics))
-        R[2] = np.array([3.0 + 3j for i in range(msg.n_mics**2)]).reshape((msg.n_mics, msg.n_mics))
-        msg.real_vect = list(np.real(R.flatten()))
-        msg.imag_vect = list(np.imag(R.flatten()))
-        msg.frequencies = [1., 10., 100.]
-        msg.timestamp = self.time_idx
-        self.publisher_correlations.publish(msg)
-        self.get_logger().info(f'Publishing at {msg.timestamp}: data from {msg.n_mics} mics.')
         self.time_idx += 1
 
 
@@ -248,7 +144,7 @@ class FilePublisher(AudioPublisher):
            data['data'][self.file_idx:self.file_idx + self.n_buffer] for data in self.audio_data.values()
         ]] # n_mics x n_samples
 
-        self.process_signal(signals, max_f=MAX_FREQ)
+        self.process_signals(signals)
  
         self.file_idx += self.n_between_buffers
         if self.file_idx + self.n_buffer >= self.len:
@@ -262,43 +158,41 @@ class StreamPublisher(AudioPublisher):
     def __init__(self, Fs, n_buffer=256, publish_rate=None, plot=False):
         super().__init__('stream_publisher', n_buffer=n_buffer, publish_rate=publish_rate, plot=plot, Fs=Fs)
 
-        self.n_mics = 4
+        self.duration_ms = 100 * 1000
+        self.n_mics = N_MICS
 
         sd.default.device = 'default'
         sd.check_input_settings(sd.default.device, channels=self.n_mics, samplerate=self.Fs)
 
         # blocking stream
-        self.stream = sd.InputStream(channels=self.n_mics, blocksize=self.n_buffer)
-        self.stream.start()
-        self.create_timer(1./self.publish_rate, self.publish_loop)
+        #self.stream = sd.InputStream(channels=self.n_mics, blocksize=self.n_buffer)
+        #self.stream.start()
+        #self.create_timer(1./self.publish_rate, self.publish_loop)
 
         # non-blocking stream
-        #self.duration = 60 * 60 # seconds
-        #with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=self.n_buffer):
-            #sd.sleep(self.duration)
-            #plt.show()
-            # need below return or we will stay in this context forever.
-            #return
+        with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=self.n_buffer) as stream:
+            sd.sleep(self.duration_ms)
+            # need below return or we will stay in this context forever
+            return
 
     def publish_stream(self, signals_T, frames, time_stream, status): 
-        self.get_logger().info(f'buffer start time: {time_stream.inputBufferAdcTime}')
-        self.get_logger().info(f'currentTime: {time_stream.currentTime}')
+        self.get_logger().debug(f'buffer start time: {time_stream.inputBufferAdcTime}')
+        self.get_logger().debug(f'currentTime: {time_stream.currentTime}')
 
         if status:
             print(status)
 
-        self.process_signal(signals_T.T, max_f=MAX_FREQ)
+        self.process_signals(signals_T.T)
 
     def publish_loop(self): 
-
         n_available = self.stream.read_available
         if self.n_buffer > n_available:
-            self.get_logger().warn('Requesting more frames ({self.n_buffer}) than available ({n_available})')
+            self.get_logger().warn(f'Requesting more frames ({self.n_buffer}) than available ({n_available})')
         signals_T, overflow = self.stream.read(self.n_buffer) # frames x channels
         if overflow:
             self.get_logger().warn('overflow')
 
-        self.process_signal(signals_T.T, max_f=MAX_FREQ)
+        self.process_signals(signals_T.T)
 
 
 def main(args=None):
@@ -311,9 +205,12 @@ def main(args=None):
     #audio_source = 'dummy'
 
     # TODO(FD): make these ROS parameters
+    Fs = 44100
     n_buffer = 2**10
-    plot = True #False
-    publish_rate = 11 # in Hz
+    plot = False #True
+    publish_rate = int(Fs/n_buffer) #11 # in Hz
+
+    print(f'Publishing audio data from {audio_source} at {publish_rate}Hz.')
 
     if audio_source == 'file':
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -321,18 +218,12 @@ def main(args=None):
         fnames = [os.path.join(data_dir, f'analytical_source_mic{i}.wav') for i in range(1, 5)] 
         loop = True # loop after file ends.
         publisher = FilePublisher(fnames, n_buffer=n_buffer, publish_rate=publish_rate, loop=True, plot=plot)
+        rclpy.spin(publisher)
     elif audio_source == 'stream':
-        Fs = 44100
         publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, plot=plot)
     elif audio_source == 'dummy':
         publisher = DummyPublisher()
-
-    rclpy.spin(publisher)
+        rclpy.spin(publisher)
 
     # Destroy the node explicitly
-    minimal_publisher.destroy_node()
     rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
