@@ -15,11 +15,9 @@
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import String
 from audio_interfaces.msg import Correlations, Spectrum
 
 import matplotlib.pylab as plt
-from matplotlib.animation import FuncAnimation
 import numpy as np
 
 from .beam_former import BeamFormer
@@ -53,7 +51,7 @@ class DoaEstimator(Node):
         self.get_logger().info(f'Processing correlations: {msg_correlations.timestamp}.')
 
         frequencies = np.array(msg_correlations.frequencies).astype(np.float) #[10, 100, 1000]
-        R = (np.array(msg_correlations.real_vect) + 1j*np.array(msg_correlations.imag_vect)).reshape((len(frequencies), msg_correlations.n_mics, msg_correlations.n_mics))
+        R = (np.array(msg_correlations.corr_real_vect) + 1j*np.array(msg_correlations.corr_imag_vect)).reshape((len(frequencies), msg_correlations.n_mics, msg_correlations.n_mics))
 
         spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
 
