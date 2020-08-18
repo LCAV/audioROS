@@ -37,6 +37,7 @@ set(msg_files
   "msg/Correlations.msg"
   "msg/Spectrum.msg"
   "msg/Signals.msg"
+  "msg/SignalsFreq.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
