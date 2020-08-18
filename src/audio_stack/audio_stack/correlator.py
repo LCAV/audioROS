@@ -109,8 +109,8 @@ def create_correlations_message(signals_f, freqs, Fs, n_buffer):
     msg.n_mics = int(signals_f.shape[1])
     msg.n_frequencies = len(frequencies)
     msg.frequencies = frequencies
-    msg.real_vect = list(np.real(R.flatten()))
-    msg.imag_vect = list(np.imag(R.flatten()))
+    msg.corr_real_vect = list(np.real(R.flatten()))
+    msg.corr_imag_vect = list(np.imag(R.flatten()))
     return msg
 
 
@@ -172,8 +172,6 @@ class Correlator(Node):
         processing_time = t2-t1
 
 def main(args=None):
-    import os
-
     rclpy.init(args=args)
 
     Fs = 44100
