@@ -37,14 +37,26 @@ N_FULL_PACKETS, N_BYTES_LAST_PACKET = divmod(N_BYTES, CRTP_PAYLOAD)
 FS = 32000
 N = 1024
 
+def set_thrust(cf,thrust):
+    thrust_str = f'{thrust}'
+    cf.param.set_value('motorPowerSet.m4', thrust_str)
+    cf.param.set_value('motorPowerSet.m1', thrust_str)
+    cf.param.set_value('motorPowerSet.m2', thrust_str)
+    cf.param.set_value('motorPowerSet.m3', thrust_str)
+    cf.param.set_value('motorPowerSet.enable', '1')
+
+
 class AudioPublisher(Node):
-    def __init__(self, crazyflie):
+    def __init__(self, crazyflie, plot=False):
         super().__init__('audio_publisher')
 
         self.publisher_signals = self.create_publisher(SignalsFreq, 'audio/signals_f', 10)
-        self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-        self.plotter.ax.set_xlabel('angle [rad]')
-        self.plotter.ax.set_ylabel('magnitude [-]')
+        self.plot = plot
+
+        if self.plot:
+            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
+            self.plotter.ax.set_xlabel('angle [rad]')
+            self.plotter.ax.set_ylabel('magnitude [-]')
 
         # Crazyflie stuff
         self.array = np.zeros(N_BYTES, dtype=np.uint8)
@@ -82,24 +94,21 @@ class AudioPublisher(Node):
                 # TODO(FD) get this from CRTP
                 frequencies = np.fft.rfftfreq(n=N, d=1/FS)[:N_FREQUENCIES].astype(np.int)
                 #frequencies = np.arange(N_FREQUENCIES)
-
-
                 # signals_f_vect is of structure
                 # 
                 # [real_1(f1), real_2(f1), real_3(f1), real_4(f1),
                 #  imag_1(f1), imag_2(f1), imag_3(f1), imag_4(f1),
                 #  ... (f2), ...
                 #  ... (fN)]
-
                 signals_f = np.zeros((N_MICS, N_FREQUENCIES), dtype=np.complex128)
                 for i in range(N_MICS):
                     signals_f[i].real = signals_f_vect[i::N_MICS*2]
                     signals_f[i].imag = signals_f_vect[i+N_MICS::N_MICS*2]
 
                 # plot data
-                labels=[f"mic{i}" for i in range(N_MICS)]
-                self.plotter.update_lines(np.abs(signals_f), frequencies, labels=labels)
-                self.get_logger().info(f'Published signals.')
+                if self.plot:
+                    labels=[f"mic{i}" for i in range(N_MICS)]
+                    self.plotter.update_lines(np.abs(signals_f), frequencies, labels=labels)
 
                 # send data
                 msg = SignalsFreq()
@@ -111,7 +120,7 @@ class AudioPublisher(Node):
                 msg.n_mics = N_MICS
                 msg.n_frequencies = N_FREQUENCIES
                 self.publisher_signals.publish(msg)
-
+                self.get_logger().info(f'Published signals.')
 
             else:
                 self.array[
@@ -124,13 +133,15 @@ class AudioPublisher(Node):
 
 def main(args=None):
 
+    plot = False
+
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
-    print('ok')
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
-        publisher = AudioPublisher(cf)
+        set_thrust(cf, 43000)
+        publisher = AudioPublisher(cf, plot=plot)
         print('done initializing')
         plt.show()
         while True:
