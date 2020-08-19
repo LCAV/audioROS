@@ -100,7 +100,7 @@ def get_stft(signals, Fs):
 def create_correlations_message(signals_f, freqs, Fs, n_buffer): 
     bins = select_frequencies(n_buffer, Fs, METHOD_FREQUENCY, buffer_f=signals_f,
                               **METHOD_FREQUENCY_DICT[METHOD_FREQUENCY])
-    frequencies = list(freqs[bins].flatten())
+    frequencies = freqs[bins]
     
     # calculate Rs for chosen frequency bins 
     R = 1 / signals_f.shape[1] * signals_f[bins, :, None] @ signals_f[bins, None, :].conj()
@@ -108,7 +108,7 @@ def create_correlations_message(signals_f, freqs, Fs, n_buffer):
     msg = Correlations()
     msg.n_mics = int(signals_f.shape[1])
     msg.n_frequencies = len(frequencies)
-    msg.frequencies = frequencies
+    msg.frequencies = [int(f) for f in frequencies]
     msg.corr_real_vect = list(np.real(R.flatten()))
     msg.corr_imag_vect = list(np.imag(R.flatten()))
     return msg
@@ -170,6 +170,7 @@ class Correlator(Node):
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2-t1
+
 
 def main(args=None):
     rclpy.init(args=args)

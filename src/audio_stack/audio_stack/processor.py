@@ -51,9 +51,13 @@ class DoaEstimator(Node):
         self.get_logger().info(f'Processing correlations: {msg_correlations.timestamp}.')
 
         frequencies = np.array(msg_correlations.frequencies).astype(np.float) #[10, 100, 1000]
-        R = (np.array(msg_correlations.corr_real_vect) + 1j*np.array(msg_correlations.corr_imag_vect)).reshape((len(frequencies), msg_correlations.n_mics, msg_correlations.n_mics))
+        real_vect = np.array(msg_correlations.corr_real_vect)
+        imag_vect = np.array(msg_correlations.corr_imag_vect)
+
+        R = (real_vect + 1j*imag_vect).reshape((len(frequencies), msg_correlations.n_mics, msg_correlations.n_mics))
 
         spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
+        #spectrum = self.beam_former.get_das_spectrum(R, frequencies) # n_frequencies x n_angles 
 
         labels=[f"f={frequencies[i]:.0f}Hz" for i in range(spectrum.shape[0])]
         self.plotter.update_lines(spectrum, self.beam_former.theta_scan, labels=labels)
@@ -76,14 +80,22 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    fname = os.path.abspath(os.path.join(data_dir, 'analytical_mics.npy'))
-    try:
-        mic_positions = np.load(fname)
-    except FileNotFoundError:
-        print(f'Did not find file {fname}.')
-        print('You might have to run crazyflie-audio/python/DOASimulation.ipynb first.')
-        sys.exit()
+    # for simulated data
+    #fname = os.path.abspath(os.path.join(data_dir, 'analytical_mics.npy'))
+    #try:
+    #    mic_positions = np.load(fname)
+    #except FileNotFoundError:
+    #    print(f'Did not find file {fname}.')
+    #    print('You might have to run crazyflie-audio/python/DOASimulation.ipynb first.')
+    #    sys.exit()
 
+    mic_d = 0.108 # distance between mics (meters)
+    mic_positions = mic_d/2 * np.c_[
+            [1, 1], # 
+            [1, -1], # 
+            [-1, 1], # 
+            [-1, -1]].T #
+    assert mic_positions.shape == (4, 2), mic_positions.shape
     estimator = DoaEstimator(mic_positions)
 
     rclpy.spin(estimator)

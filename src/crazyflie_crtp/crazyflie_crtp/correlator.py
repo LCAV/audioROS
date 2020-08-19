@@ -15,17 +15,18 @@ from audio_interfaces.msg import SignalsFreq, Correlations
 from audio_stack.live_plotter import LivePlotter
 
 # Plotting parameters
-MAX_YLIM = 1e5 # set to inf for no effect.
-MIN_YLIM = 1e-3 # set to -inf for no effect.
-MAX_FREQ = 2000 # set to inf for no effect
+MAX_YLIM = 1e13 # set to inf for no effect.
+MIN_YLIM = 1e-13 # set to -inf for no effect.
 
 # DEBUGGING ONLY
 N_MICS = 4
 N_FREQUENCIES = 32
+MAX_FREQ = 600
+MIN_FREQ = 400
 
 def create_correlations_message(signals_f, frequencies): 
     n_frequencies = len(frequencies)
-    assert n_frequencies == N_FREQUENCIES
+    #assert n_frequencies == N_FREQUENCIES
     R = 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
     assert R.shape == (n_frequencies, N_MICS, N_MICS)
 
@@ -52,28 +53,30 @@ class Correlator(Node):
             self.plotter_freq.ax.set_xlabel('frequency [Hz]')
             self.plotter_freq.ax.set_ylabel('magnitude [-]')
 
-        self.labels = None
-
     def listener_callback_signals(self, msg):
         t1 = time.time()
 
-        if (self.labels is None) and self.plot_freq:
-            self.labels = [f"mic{i}" for i in range(msg.n_mics)]
-
+        # convert msg format to numpy arrays
         signals_f = np.array(msg.signals_real_vect) + 1j*np.array(msg.signals_imag_vect)
         signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
         freqs = np.array(msg.frequencies)
 
+        # TODO(FD) replace this with correct scheme
+        mask = (freqs < MAX_FREQ) & (freqs > MIN_FREQ)
+        freqs = freqs[mask]
+        signals_f = signals_f[mask]
+
         msg_new = create_correlations_message(signals_f, freqs)
         msg_new.timestamp = msg.timestamp
 
-        mask = freqs < MAX_FREQ
-        masked_frequencies = [f for f in msg_new.frequencies if f < MAX_FREQ]
+        if len(freqs) == 0:
+            self.get_logger().error('no frequency bins')
 
         # plotting
         if self.plot_freq: 
-            self.plotter_freq.update_lines(np.abs(signals_f[mask].T), freqs[mask], self.labels)
-            self.plotter_freq.update_axvlines(masked_frequencies)
+            labels = [f"mic{i}" for i in range(msg.n_mics)]
+            self.plotter_freq.update_lines(np.abs(signals_f.T), freqs, labels)
+            self.plotter_freq.update_axvlines(freqs)
 
         # publishing
         self.publisher_correlations.publish(msg_new)
@@ -86,7 +89,6 @@ class Correlator(Node):
 
 
 def main(args=None):
-
     rclpy.init(args=args)
 
     correlator = Correlator(plot_freq=True)

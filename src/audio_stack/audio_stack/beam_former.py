@@ -16,6 +16,9 @@ from algos_beamforming import get_lcmv_beamformer, get_das_beamformer, get_power
 
 class BeamFormer(object):
     def __init__(self, mic_positions): 
+        """
+        :param mic_positions: array of mic positions, n_mics x dimension
+        """
         self.mic_positions = mic_positions
         self.n_mics = mic_positions.shape[0]
 
