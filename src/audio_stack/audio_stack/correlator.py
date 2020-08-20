@@ -14,6 +14,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rcl_interfaces.msg import SetParametersResult
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + '/../../../crazyflie-audio/python/')
@@ -23,7 +24,7 @@ from algos_beamforming import select_frequencies
 from audio_interfaces.msg import Signals, Correlations
 from .live_plotter import LivePlotter
 
-# TODO(FD): make below ROS parameters.
+# Denoising method.
 METHOD_NOISE = "bandpass"
 METHOD_NOISE_DICT = {
     "bandpass": {
@@ -68,62 +69,64 @@ METHOD_FREQUENCY_DICT = {
 }
 
 # Plotting parameters
-MAX_YLIM = 1e5 # set to inf for no effect.
 MIN_YLIM = 1e-3 # set to -inf for no effect.
-MAX_FREQ = 2000 # set to inf for no effect
+MAX_YLIM = 1e5 # set to inf for no effect.
+MIN_FREQ = 400 # set to -inf for no effect
+MAX_FREQ = 600 # set to inf for no effect
 
-def get_stft(signals, Fs):
-    if METHOD_WINDOW == "tukey":
+def get_stft(signals, Fs, method_window, method_noise):
+    if method_window == "tukey":
         window = signal.tukey(signals.shape[1])
         signals *= window
-    elif METHOD_WINDOW is None:
+    elif method_window is None:
         pass
     else:
-        raise ValueError(METHOD_WINDOW)
+        raise ValueError(method_window)
 
-    if METHOD_NOISE == "bandpass":
+    if method_noise == "bandpass":
         signals = filter_iir_bandpass(signals, Fs=Fs, method='cheby2', plot=False, 
-                                      **METHOD_NOISE_DICT[METHOD_NOISE])
-    elif METHOD_NOISE == "single":
+                                      **METHOD_NOISE_DICT[method_noise])
+    elif method_noise == "single":
         signals = filter_iir_bandpass(signals, Fs=Fs, method='single', plot=False, 
-                                      **METHOD_NOISE_DICT[METHOD_NOISE])
-    elif METHOD_NOISE is None:
+                                      **METHOD_NOISE_DICT[method_noise])
+    elif method_noise is None:
         pass
     else:
-        ValueError(METHOD_NOISE)
+        ValueError(method_noise)
 
     signals_f = np.fft.rfft(signals, n=signals.shape[1], axis=1).T # n_samples x n_mics
     freqs = np.fft.rfftfreq(n=signals.shape[1], d=1/Fs)
     return signals_f, freqs
 
 
-def create_correlations_message(signals_f, freqs, Fs, n_buffer): 
-    bins = select_frequencies(n_buffer, Fs, METHOD_FREQUENCY, buffer_f=signals_f,
-                              **METHOD_FREQUENCY_DICT[METHOD_FREQUENCY])
-    frequencies = freqs[bins]
+def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency): 
     
     # calculate Rs for chosen frequency bins 
-    R = 1 / signals_f.shape[1] * signals_f[bins, :, None] @ signals_f[bins, None, :].conj()
+    R = 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
 
     msg = Correlations()
     msg.n_mics = int(signals_f.shape[1])
-    msg.n_frequencies = len(frequencies)
-    msg.frequencies = [int(f) for f in frequencies]
+    msg.n_frequencies = len(freqs)
+    msg.frequencies = [int(f) for f in freqs]
     msg.corr_real_vect = list(np.real(R.flatten()))
     msg.corr_imag_vect = list(np.imag(R.flatten()))
     return msg
 
 
 class Correlator(Node):
-    def __init__(self, Fs, plot_freq=False, plot_time=False):
+    """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
+    """
+    def __init__(self, plot_freq=False, plot_time=False):
         super().__init__('correlator')
 
-        self.Fs = Fs
         self.plot_freq = plot_freq
         self.plot_time = plot_time
         self.subscription_signals = self.create_subscription(Signals,
             'audio/signals',
             self.listener_callback_signals, 10)
+        self.subscription_signals_f = self.create_subscription(Signals,
+            'audio/signals_f',
+            self.listener_callback_signals_f, 10)
         self.publisher_correlations = self.create_publisher(Correlations, 'audio/correlations', 10)
 
         if self.plot_freq:
@@ -136,47 +139,99 @@ class Correlator(Node):
             self.plotter_time.ax.set_xlabel('time idx [-]')
             self.plotter_time.ax.set_ylabel('magnitude [-]')
 
-        self.labels = None
+        self.methods = {
+                "noise": METHOD_NOISE,
+                "window": METHOD_WINDOW,
+                "frequency": METHOD_FREQUENCY,
+        }
+        parameters = []
+        for key, value in self.methods.items():
+            self.declare_parameter(key)
+            parameters.append(
+                    rclpy.parameter.Parameter(key, rclpy.Parameter.Type.STRING, value)
+            )
+        self.set_parameters_callback(self.set_params)
+        self.set_parameters(parameters)
+
+    def set_params(self, params):
+        for param in params:
+            if param.name in self.methods.keys():
+                self.methods[param.name] = param.get_parameter_value().string_value
+            else:
+                return SetParametersResult(successful=False)
+        return SetParametersResult(successful=True)
 
     def listener_callback_signals(self, msg):
         t1 = time.time()
-
-        if (self.labels is None) and (self.plot_time or self.plot_freq):
-            self.labels = [f"mic{i}" for i in range(msg.n_mics)]
+        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
 
         signals = np.array(msg.signals_vect)
         signals = signals.reshape((msg.n_mics, msg.n_buffer))
 
-        # processing
-        signals_f, freqs = get_stft(signals, self.Fs) # n_samples x n_mics
-        msg_new = create_correlations_message(signals_f, freqs, self.Fs, signals.shape[1])
-        msg_new.timestamp = msg.timestamp
-
-        mask = freqs < MAX_FREQ
-        masked_frequencies = [f for f in msg_new.frequencies if f < MAX_FREQ]
-
-        # plotting
-        if self.plot_freq: 
-            self.plotter_freq.update_lines(np.abs(signals_f[mask].T), freqs[mask], self.labels)
-            self.plotter_freq.update_axvlines(masked_frequencies)
         if self.plot_time: 
             self.plotter_time.update_lines(signals, range(signals.shape[1]), self.labels)
 
-        # publishing
-        self.publisher_correlations.publish(msg_new)
-        self.get_logger().info(f'Publishing at {msg_new.timestamp}: data from {msg_new.n_mics} mics.')
+        # processing
+        signals_f, freqs = get_stft(signals, msg.fs, self.methods["window"], self.methods["noise"]) # n_samples x n_mics
+        bins = select_frequencies(msg.n_buffer, msg.fs, self.methods["frequency"], buffer_f=signals_f,
+                                  **METHOD_FREQUENCY_DICT[self.methods["frequency"]])
+        freqs = freqs[bins]
+        signals_f = signals_f[bins]
+
+        # TODO: we could publish signals_f to audio/signals_f topic here, but not sure
+        # if that would introduce too much overhead.
+        self.process_signals_f(signals_f, freqs, msg.fs)
+
+        # check that the above processing pipeline does not
+        # take too long compared to the desired publish rate.
+        t2 = time.time()
+        processing_time = t2-t1
+        self.get_logger().info(f'listener_callback_signals: Publishing after processing time {processing_time}')
+
+    def listener_callback_signals_f(self, msg):
+        t1 = time.time()
+        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
+
+        # convert msg format to numpy arrays
+        signals_f = np.array(msg.signals_real_vect) + 1j*np.array(msg.signals_imag_vect)
+        signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
+        freqs = np.array(msg.frequencies)
+
+        # TODO(FD): will move this scheme to the microprocessor eventually. 
+        mask = (freqs < MAX_FREQ) & (freqs > MIN_FREQ)
+        freqs = freqs[mask]
+        signals_f = signals_f[mask]
+
+        if not len(freqs):
+            self.get_logger().error(f'no frequency bins in range {MIN_FREQ}, {MAX_FREQ}')
+
+        self.process_signals_f(signals_f, freqs, msg.fs)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2-t1
 
+        self.get_logger().info(f'listener_callback_signals_f: Publishing after processing time {processing_time}')
+
+    def process_signals_f(self, signals_f, freqs, Fs):
+        msg_new = create_correlations_message(signals_f, freqs, Fs, signals_f.shape[0], self.methods["frequency"])
+        # TODO(FD): replace with a better timestamp.
+        msg_new.timestamp = int(time.time())
+
+        # plotting
+        if self.plot_freq: 
+            self.plotter_freq.update_lines(np.abs(signals_f.T), freqs, self.labels)
+            self.plotter_freq.update_axvlines(freqs)
+
+        # publishing
+        self.publisher_correlations.publish(msg_new)
+
 
 def main(args=None):
     rclpy.init(args=args)
 
-    Fs = 44100
-    correlator = Correlator(Fs, plot_freq=True, plot_time=True)
+    correlator = Correlator(plot_freq=True, plot_time=True)
     rclpy.spin(correlator)
 
     # Destroy the node explicitly

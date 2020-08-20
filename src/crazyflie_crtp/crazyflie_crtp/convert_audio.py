@@ -140,7 +140,7 @@ def main(args=None):
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
-        set_thrust(cf, 43000)
+        #set_thrust(cf, 43000)
         publisher = AudioPublisher(cf, plot=plot)
         print('done initializing')
         plt.show()
