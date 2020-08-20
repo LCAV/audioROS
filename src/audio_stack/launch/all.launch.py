@@ -15,10 +15,24 @@ import launch.substitutions
 import launch_ros.actions
 
 LOG_LEVEL = 'warn'
+
 node_config = {
-    'publisher': [{'n_buffer': 2**8, 'publish_rate': 100}],
-    'processor': [{'bf_method':'mvdr'}],
-    'correlator': [{'noise':'', 'frequency':'', 'window':'tukey']
+    'crazyflie': {
+        'params': [],
+        'pkg': 'audio_setup'
+    },
+    'file_publisher': {
+        'params': [{'n_buffer': 2**8, 'publish_rate': 100}],
+        'pkg': 'audio_publisher'
+    },
+    'processor': {
+        'params': [{'bf_method':'mvdr'}],
+        'pkg': 'audio_stack'
+    },
+    'correlator': {
+        'params': [{'noise':'', 'frequency':'', 'window':'tukey'],
+        'pkg': 'audio_stack'
+    }
 }
 
 def generate_launch_description():
@@ -38,12 +52,12 @@ def generate_launch_description():
                     launch.substitutions.LaunchConfiguration("node_prefix"),
                     f"name_{executable}",
                 ],
-                parameters=params, 
+                parameters=dict_['params'], 
                 # TODO deprecated but works
                 arguments=[(f'__log_level:={LOG_LEVEL}')])
                 # TODO not deprecated but doesn't work
                 #arguments=[(f'--ros-args --log-level {str.upper(LOG_LEVEL)}')])
-                for executable, params in node_config.items()
+                for executable, dict_ in node_config.items()
             ]
         ]
     )

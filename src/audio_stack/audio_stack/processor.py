@@ -98,15 +98,6 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    # for simulated data
-    #fname = os.path.abspath(os.path.join(data_dir, 'analytical_mics.npy'))
-    #try:
-    #    mic_positions = np.load(fname)
-    #except FileNotFoundError:
-    #    print(f'Did not find file {fname}.')
-    #    print('You might have to run crazyflie-audio/python/DOASimulation.ipynb first.')
-    #    sys.exit()
-
     mic_d = 0.108 # distance between mics (meters)
     mic_positions = mic_d/2 * np.c_[
             [1, 1], # 
