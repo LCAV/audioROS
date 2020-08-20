@@ -1,6 +1,6 @@
 uint32 timestamp
 uint8 n_mics
-uint8 n_frequencies
+uint16 n_frequencies
 
 # List of frequencies, in Hz
 uint16[] frequencies
