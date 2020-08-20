@@ -15,12 +15,12 @@
 import sys
 import time
 
-import matplotlib.pylab as plt
 import numpy as np
 from scipy.io.wavfile import read, write
 
 import rclpy
 from rclpy.node import Node
+from rcl_interfaces.msg import SetParametersResult
 
 import sounddevice as sd
 
@@ -39,10 +39,8 @@ MAX_BUFFERS = 500  # set to 0 for no saving
 
 OUT_DIR = "debug"
 
-from rcl_interfaces.msg import SetParametersResult
-
 class AudioPublisher(Node):
-    def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, plot=False, Fs=None):
+    def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, Fs=None):
         super().__init__(name)
 
         if publish_rate is None:
@@ -128,28 +126,12 @@ class AudioPublisher(Node):
             self.get_logger().warn(f'processing time ({processing_time:.1e}) longer than publishing period ({1/self.publish_rate:.1e})')
 
 
-class DummyPublisher(Node):
-    def __init__(self):
-        from std_msgs.msg import String
-        super().__init__('dummy_publisher')
-        self.publisher_message = self.create_publisher(String, 'message', 10)
-        self.time_idx = 0
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-
-    def timer_callback(self):
-        msg = String()
-        msg.data = f'Hello World: {self.time_idx}'
-        self.publisher_message.publish(msg)
-        self.get_logger().info(f'Publishing: "{msg.data}"')
-        self.time_idx += 1
-
-
 class FilePublisher(AudioPublisher):
-    def __init__(self, filenames=None, loop=False, n_buffer=256, publish_rate=None, plot=False):
+    def __init__(self, filenames=None, loop=False, n_buffer=256, publish_rate=None):
         """
         :param publish_rate: in Hz, at which rate to publish
         """
-        super().__init__('file_publisher', n_buffer=n_buffer, publish_rate=publish_rate, plot=plot, Fs=None)
+        super().__init__('file_publisher', n_buffer=n_buffer, publish_rate=publish_rate, Fs=None)
         self.loop = loop
 
         # read audio from files
@@ -187,8 +169,8 @@ class FilePublisher(AudioPublisher):
 
 
 class StreamPublisher(AudioPublisher):
-    def __init__(self, Fs, n_buffer=256, publish_rate=None, plot=False):
-        super().__init__('stream_publisher', n_buffer=n_buffer, publish_rate=publish_rate, plot=plot, Fs=Fs)
+    def __init__(self, Fs, n_buffer=256, publish_rate=None, blocking=False):
+        super().__init__('stream_publisher', n_buffer=n_buffer, publish_rate=publish_rate, Fs=Fs)
 
         self.duration_ms = 100 * 1000
         self.n_mics = N_MICS
@@ -196,16 +178,18 @@ class StreamPublisher(AudioPublisher):
         sd.default.device = 'default'
         sd.check_input_settings(sd.default.device, channels=self.n_mics, samplerate=self.Fs)
 
-        # blocking stream
-        #self.stream = sd.InputStream(channels=self.n_mics, blocksize=n_buffer)
-        #self.stream.start()
-        #self.create_timer(1./self.publish_rate, self.publish_loop)
+        # blocking stream, more ROS-like, better for plotting. However might result in some lost samples 
+        if blocking:
+            self.stream = sd.InputStream(channels=self.n_mics, blocksize=n_buffer)
+            self.stream.start()
+            self.create_timer(1./self.publish_rate, self.publish_loop)
 
-        # non-blocking stream
-        with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=n_buffer) as stream:
-            sd.sleep(self.duration_ms)
-            # need below return or we will stay in this context forever
-            return
+        # non-blocking stream, less ROS-like, problematic for plotting. But we do not lose samples. 
+        else:
+            with sd.InputStream(channels=self.n_mics, callback=self.publish_stream, blocksize=n_buffer) as stream:
+                sd.sleep(self.duration_ms)
+                # need below return or we will stay in this context forever
+                return
 
     def publish_stream(self, signals_T, frames, time_stream, status): 
         self.get_logger().debug(f'buffer start time: {time_stream.inputBufferAdcTime}')
@@ -236,13 +220,11 @@ def main(args=None):
 
     #audio_source = 'stream'
     audio_source = 'file'
-    #audio_source = 'dummy'
 
-    # TODO(FD): make these ROS parameters
     Fs = 44100
     n_buffer = 2**10
-    plot = False #True
     publish_rate = int(Fs/n_buffer) #11 # in Hz
+    blocking = False
 
     print(f'Publishing audio data from {audio_source} at {publish_rate}Hz.')
 
@@ -250,14 +232,10 @@ def main(args=None):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.abspath(current_dir + '/../../../crazyflie-audio/data/simulated')
         fnames = [os.path.join(data_dir, f'analytical_source_mic{i}.wav') for i in range(1, 5)] 
-        loop = True # loop after file ends.
-        publisher = FilePublisher(fnames, n_buffer=n_buffer, publish_rate=publish_rate, loop=True, plot=plot)
+        publisher = FilePublisher(fnames, n_buffer=n_buffer, publish_rate=publish_rate, loop=True)
         rclpy.spin(publisher)
     elif audio_source == 'stream':
-        publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, plot=plot)
-    elif audio_source == 'dummy':
-        publisher = DummyPublisher()
-        rclpy.spin(publisher)
+        publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, blocking=blocking)
 
     # Destroy the node explicitly
     rclpy.shutdown()
