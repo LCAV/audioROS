@@ -26,6 +26,10 @@ from .live_plotter import LivePlotter
 MAX_YLIM = 1 # set to inf for no effect.
 MIN_YLIM = 1e-13 # set to -inf for no effect.
 
+# for plotting only
+MIN_FREQ = 400
+MAX_FREQ = 600
+
 
 class DoaEstimator(Node):
     def __init__(self, mic_positions):
@@ -78,9 +82,7 @@ class DoaEstimator(Node):
         else:
             raise ValueError(self.bf_method) 
 
-        labels=[f"f={frequencies[i]:.0f}Hz" for i in range(spectrum.shape[0])]
-        self.plotter.update_lines(spectrum, self.beam_former.theta_scan, labels=labels)
-
+        # publish
         msg_spec = Spectrum()
         msg_spec.timestamp = msg_correlations.timestamp
         msg_spec.n_frequencies = len(frequencies)
@@ -88,6 +90,12 @@ class DoaEstimator(Node):
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
         self.get_logger().info(f'Published spectrum.')
+
+        # plot
+        assert len(frequencies) == spectrum.shape[0]
+        mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
+        labels=[f"f={f:.0f}Hz" for f in frequencies[mask]]
+        self.plotter.update_lines(spectrum[mask], self.beam_former.theta_scan, labels=labels)
 
 def main(args=None):
     import os
