@@ -14,12 +14,12 @@
 
 import rclpy
 from rclpy.node import Node
-
-from audio_interfaces.msg import Correlations, Spectrum
+from rcl_interfaces.msg import SetParametersResult
 
 import matplotlib.pylab as plt
 import numpy as np
 
+from audio_interfaces.msg import Correlations, Spectrum
 from .beam_former import BeamFormer
 from .live_plotter import LivePlotter
 
@@ -43,9 +43,24 @@ class DoaEstimator(Node):
         self.plotter.ax.set_xlabel('angle [rad]')
         self.plotter.ax.set_ylabel('magnitude [-]')
 
+        # create ROS parameters that can be changed from command line.
+        self.declare_parameter("bf_method")
+        self.bf_method = "mvdr"
+        parameters = [
+                rclpy.parameter.Parameter("bf_method", rclpy.Parameter.Type.STRING, self.bf_method),
+        ]
+        self.set_parameters_callback(self.set_params)
+        self.set_parameters(parameters)
 
-    def handle_close(self, evt):
-        plt.close('all')
+
+    def set_params(self, params):
+        for param in params:
+            if param.name == "bf_method":
+                self.bf_method = param.get_parameter_value().string_value
+            else:
+                return SetParametersResult(successful=False)
+        return SetParametersResult(successful=True)
+
 
     def listener_callback_correlations(self, msg_correlations):
         self.get_logger().info(f'Processing correlations: {msg_correlations.timestamp}.')
@@ -56,8 +71,12 @@ class DoaEstimator(Node):
 
         R = (real_vect + 1j*imag_vect).reshape((len(frequencies), msg_correlations.n_mics, msg_correlations.n_mics))
 
-        spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
-        #spectrum = self.beam_former.get_das_spectrum(R, frequencies) # n_frequencies x n_angles 
+        if self.bf_method == "mvdr":
+            spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
+        elif self.bf_method == "das":
+            spectrum = self.beam_former.get_das_spectrum(R, frequencies) # n_frequencies x n_angles 
+        else:
+            raise ValueError(self.bf_method) 
 
         labels=[f"f={frequencies[i]:.0f}Hz" for i in range(spectrum.shape[0])]
         self.plotter.update_lines(spectrum, self.beam_former.theta_scan, labels=labels)
@@ -69,7 +88,6 @@ class DoaEstimator(Node):
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
         self.get_logger().info(f'Published spectrum.')
-
 
 def main(args=None):
     import os
@@ -95,7 +113,6 @@ def main(args=None):
             [1, -1], # 
             [-1, 1], # 
             [-1, -1]].T #
-    assert mic_positions.shape == (4, 2), mic_positions.shape
     estimator = DoaEstimator(mic_positions)
 
     rclpy.spin(estimator)

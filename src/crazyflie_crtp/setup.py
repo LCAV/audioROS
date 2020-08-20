@@ -21,7 +21,6 @@ setup(
     entry_points={
         'console_scripts': [
             'convert_audio = crazyflie_crtp.convert_audio:main',
-            'correlator = crazyflie_crtp.correlator:main'
         ],
     },
 )

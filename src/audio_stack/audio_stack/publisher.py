@@ -82,7 +82,6 @@ class AudioPublisher(Node):
                 self.raw_data = np.empty((N_MICS, self.n_buffer*MAX_BUFFERS))
             elif param.name == "publish_rate":
                 self.publish_rate = new_value
-
         return SetParametersResult(successful=True)
 
     def set_Fs(self, Fs):
@@ -101,6 +100,7 @@ class AudioPublisher(Node):
         # publishing
         msg = Signals()
         msg.timestamp = self.time_idx
+        msg.fs = self.Fs
         msg.n_mics = N_MICS
         msg.n_buffer = n_buffer
         signals_vect = list(signals.flatten().astype(float))

@@ -14,16 +14,12 @@ import launch.actions
 import launch.substitutions
 import launch_ros.actions
 
-LOG_SEVERITY = 3 #0-debug, 1-info, 2-Warn, 3-Error, 4-Fatal
 LOG_LEVEL = 'warn'
 node_config = {
     'publisher': [{'n_buffer': 2**8, 'publish_rate': 100}],
-    'processor': [],
-    'correlator': []
+    'processor': [{'bf_method':'mvdr'}],
+    'correlator': [{'noise':'', 'frequency':'', 'window':'tukey']
 }
-# TODO does not work
-for node in node_config.keys():
-    node_config[node].append({'log_severity': LOG_SEVERITY})
 
 def generate_launch_description():
     return launch.LaunchDescription(
@@ -45,7 +41,7 @@ def generate_launch_description():
                 parameters=params, 
                 # TODO deprecated but works
                 arguments=[(f'__log_level:={LOG_LEVEL}')])
-                # TODO doesn't work
+                # TODO not deprecated but doesn't work
                 #arguments=[(f'--ros-args --log-level {str.upper(LOG_LEVEL)}')])
                 for executable, params in node_config.items()
             ]
