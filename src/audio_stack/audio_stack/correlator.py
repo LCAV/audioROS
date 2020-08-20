@@ -21,7 +21,7 @@ sys.path.append(current_dir + '/../../../crazyflie-audio/python/')
 from noise_cancellation import filter_iir_bandpass
 from algos_beamforming import select_frequencies
 
-from audio_interfaces.msg import Signals, Correlations
+from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 from .live_plotter import LivePlotter
 
 # Denoising method.
@@ -71,8 +71,8 @@ METHOD_FREQUENCY_DICT = {
 # Plotting parameters
 MIN_YLIM = 1e-3 # set to -inf for no effect.
 MAX_YLIM = 1e5 # set to inf for no effect.
-MIN_FREQ = 400 # set to -inf for no effect
-MAX_FREQ = 600 # set to inf for no effect
+MIN_FREQ = 100 # set to -inf for no effect
+MAX_FREQ = 800 # set to inf for no effect
 
 def get_stft(signals, Fs, method_window, method_noise):
     if method_window == "tukey":
@@ -108,8 +108,8 @@ def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency
     msg.n_mics = int(signals_f.shape[1])
     msg.n_frequencies = len(freqs)
     msg.frequencies = [int(f) for f in freqs]
-    msg.corr_real_vect = list(np.real(R.flatten()))
-    msg.corr_imag_vect = list(np.imag(R.flatten()))
+    msg.corr_real_vect = [float(f) for f in R.real.flatten()]
+    msg.corr_imag_vect = [float(f) for f in R.imag.flatten()]
     return msg
 
 
@@ -124,7 +124,7 @@ class Correlator(Node):
         self.subscription_signals = self.create_subscription(Signals,
             'audio/signals',
             self.listener_callback_signals, 10)
-        self.subscription_signals_f = self.create_subscription(Signals,
+        self.subscription_signals_f = self.create_subscription(SignalsFreq,
             'audio/signals_f',
             self.listener_callback_signals_f, 10)
         self.publisher_correlations = self.create_publisher(Correlations, 'audio/correlations', 10)
