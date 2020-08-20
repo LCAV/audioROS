@@ -35,13 +35,13 @@ METHOD_NOISE_DICT = {
 }
 
 # Windowing method. Available: 
-# - None (no window)
-# - tukey (flat + cosine on borders)
+# - "" (no window)
+# - "tukey" (flat + cosine on borders)
 METHOD_WINDOW = "tukey" 
 
 # Frequency selection
 N_FREQUENCIES = 10
-METHOD_FREQUENCY = "single" #"uniform"
+METHOD_FREQUENCY = "" 
 METHOD_FREQUENCY_DICT = {
     "uniform": { # uniform frequencies between min and max
         "num_frequencies": N_FREQUENCIES,
@@ -78,7 +78,7 @@ def get_stft(signals, Fs, method_window, method_noise):
     if method_window == "tukey":
         window = signal.tukey(signals.shape[1])
         signals *= window
-    elif method_window is None:
+    elif method_window == "":
         pass
     else:
         raise ValueError(method_window)
@@ -89,7 +89,7 @@ def get_stft(signals, Fs, method_window, method_noise):
     elif method_noise == "single":
         signals = filter_iir_bandpass(signals, Fs=Fs, method='single', plot=False, 
                                       **METHOD_NOISE_DICT[method_noise])
-    elif method_noise is None:
+    elif method_noise == "":
         pass
     else:
         ValueError(method_noise)
@@ -173,10 +173,11 @@ class Correlator(Node):
 
         # processing
         signals_f, freqs = get_stft(signals, msg.fs, self.methods["window"], self.methods["noise"]) # n_samples x n_mics
-        bins = select_frequencies(msg.n_buffer, msg.fs, self.methods["frequency"], buffer_f=signals_f,
-                                  **METHOD_FREQUENCY_DICT[self.methods["frequency"]])
-        freqs = freqs[bins]
-        signals_f = signals_f[bins]
+        if self.methods["frequency"] != "":
+            bins = select_frequencies(msg.n_buffer, msg.fs, self.methods["frequency"], buffer_f=signals_f,
+                                      **METHOD_FREQUENCY_DICT[self.methods["frequency"]])
+            freqs = freqs[bins]
+            signals_f = signals_f[bins]
 
         # TODO: we could publish signals_f to audio/signals_f topic here, but not sure
         # if that would introduce too much overhead.

@@ -67,6 +67,8 @@ class AudioPublisher(Node):
         self.cf = crazyflie
         self.cf.add_port_callback(AUDIO_PORT, self.callback_incoming)
 
+        self.last_time = 0
+
 
     def callback_incoming(self, packet):
         if packet.channel == 1:
@@ -75,10 +77,14 @@ class AudioPublisher(Node):
             self.index = 0  # reset index
             self.start = True
             self.start_time = time.time()
+            self.get_logger().info(
+                f"Time between data = {self.start_time - self.last_time}s"
+            )
 
         if self.start:
             # received all full packets, read remaining bytes
             if self.index == N_FULL_PACKETS:
+
                 self.array[
                     self.index * CRTP_PAYLOAD : self.index * CRTP_PAYLOAD
                     + N_BYTES_LAST_PACKET
@@ -121,6 +127,9 @@ class AudioPublisher(Node):
                 msg.n_frequencies = N_FREQUENCIES
                 self.publisher_signals.publish(msg)
                 self.get_logger().info(f'Published signals.')
+
+                self.last_time = time.time()
+
 
             else:
                 self.array[
