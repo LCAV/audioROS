@@ -129,6 +129,9 @@ class Correlator(Node):
             self.listener_callback_signals_f, 10)
         self.publisher_correlations = self.create_publisher(Correlations, 'audio/correlations', 10)
 
+        self.current_n_buffer = None
+        self.current_n_frequencies = None
+
         if self.plot_freq:
             self.plotter_freq = LivePlotter(MAX_YLIM, MIN_YLIM)
             self.plotter_freq.ax.set_xlabel('frequency [Hz]')
@@ -165,11 +168,16 @@ class Correlator(Node):
         t1 = time.time()
         self.labels = [f"mic{i}" for i in range(msg.n_mics)]
 
+
         signals = np.array(msg.signals_vect)
         signals = signals.reshape((msg.n_mics, msg.n_buffer))
 
         if self.plot_time: 
+            if msg.n_buffer != self.current_n_buffer:
+                self.plotter_time.clear()
+
             self.plotter_time.update_lines(signals, range(signals.shape[1]), self.labels)
+            self.current_n_buffer = msg.n_buffer
 
         # processing
         signals_f, freqs = get_stft(signals, msg.fs, self.methods["window"], self.methods["noise"]) # n_samples x n_mics
@@ -222,9 +230,11 @@ class Correlator(Node):
 
         # plotting
         if self.plot_freq: 
+            if  msg_new.n_frequencies != self.current_n_frequencies:
+                self.plotter_freq.clear()
             self.plotter_freq.update_lines(np.abs(signals_f.T), freqs, self.labels)
             self.plotter_freq.update_axvlines(freqs)
-
+            self.current_n_frequencies = msg_new.n_frequencies
         # publishing
         self.publisher_correlations.publish(msg_new)
 
