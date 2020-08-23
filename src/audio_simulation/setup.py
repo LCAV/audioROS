@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'crazyflie_audio_simulation'
+package_name = 'audio_simulation'
 
 setup(
     name=package_name,
@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'simulation = crazyflie_audio_simulation.simulation:main',
+            'simulation = audio_simulation.simulation:main',
         ],
     },
 )
