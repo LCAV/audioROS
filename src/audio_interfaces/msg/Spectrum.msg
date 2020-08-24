@@ -1,5 +1,5 @@
 uint32 timestamp
-uint8 n_frequencies
+uint16 n_frequencies
 
 # List of frequencies, in Hz
 float32[] frequencies

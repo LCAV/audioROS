@@ -39,12 +39,24 @@ class LivePlotter(object):
         plt.close('all')
         print('closed all figures')
 
+    def clear(self):
+        for i in range(len(self.ax.lines)):
+            self.ax.lines.pop()
+        self.lines = {}
+        self.axvlines = {}
+
+
     def update_lines(self, data_matrix, x_data=None, labels=None):
         """ Plot each row of data_matrix as one line.
         """
         for i in range(data_matrix.shape[0]):
+
             if (i in self.lines.keys()):
-                self.lines[i].set_ydata(data_matrix[i, :])
+                if x_data is not None:
+                    self.lines[i].set_data(x_data, data_matrix[i, :])
+                    self.ax.set_xlim(min(x_data), max(x_data))
+                else:
+                    self.lines[i].set_ydata(data_matrix[i, :])
             else:
                 x_data = range(data_matrix.shape[1]) if x_data is None else x_data
                 label = labels[i] if labels is not None else None
@@ -63,12 +75,14 @@ class LivePlotter(object):
         self.fig.canvas.draw()
 
     def update_axvlines(self, data_vector):
+
         for i, xcoord in enumerate(data_vector):
             if (i in self.axvlines.keys()):
                 self.axvlines[i].set_xdata(xcoord)
             else:
                 axvline = self.ax.axvline(xcoord, color=f"C{i % 10}", ls=':')
                 self.axvlines[i] = axvline
+
         self.fig.canvas.draw()
 
 

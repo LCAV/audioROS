@@ -41,12 +41,12 @@ METHOD_WINDOW = "tukey"
 
 # Frequency selection
 N_FREQUENCIES = 10
-METHOD_FREQUENCY = "" 
+METHOD_FREQUENCY = "uniform" 
 METHOD_FREQUENCY_DICT = {
     "uniform": { # uniform frequencies between min and max
         "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
+        "min_freq": 200,
+        "max_freq": 500,
     },
     "single": { # one single frequency (beam width between min and max)
         "num_frequencies": 1,
@@ -118,6 +118,7 @@ class Correlator(Node):
     """
     def __init__(self, plot_freq=False, plot_time=False):
         super().__init__('correlator')
+        self.start_time = int(time.time()*1000)
 
         self.plot_freq = plot_freq
         self.plot_time = plot_time
@@ -128,6 +129,9 @@ class Correlator(Node):
             'audio/signals_f',
             self.listener_callback_signals_f, 10)
         self.publisher_correlations = self.create_publisher(Correlations, 'audio/correlations', 10)
+
+        self.current_n_buffer = None
+        self.current_n_frequencies = None
 
         if self.plot_freq:
             self.plotter_freq = LivePlotter(MAX_YLIM, MIN_YLIM)
@@ -164,12 +168,17 @@ class Correlator(Node):
     def listener_callback_signals(self, msg):
         t1 = time.time()
         self.labels = [f"mic{i}" for i in range(msg.n_mics)]
+        self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         signals = np.array(msg.signals_vect)
         signals = signals.reshape((msg.n_mics, msg.n_buffer))
 
         if self.plot_time: 
+            if msg.n_buffer != self.current_n_buffer:
+                self.plotter_time.clear()
+
             self.plotter_time.update_lines(signals, range(signals.shape[1]), self.labels)
+            self.current_n_buffer = msg.n_buffer
 
         # processing
         signals_f, freqs = get_stft(signals, msg.fs, self.methods["window"], self.methods["noise"]) # n_samples x n_mics
@@ -192,6 +201,7 @@ class Correlator(Node):
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
         self.labels = [f"mic{i}" for i in range(msg.n_mics)]
+        self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         # convert msg format to numpy arrays
         signals_f = np.array(msg.signals_real_vect) + 1j*np.array(msg.signals_imag_vect)
@@ -218,13 +228,17 @@ class Correlator(Node):
     def process_signals_f(self, signals_f, freqs, Fs):
         msg_new = create_correlations_message(signals_f, freqs, Fs, signals_f.shape[0], self.methods["frequency"])
         # TODO(FD): replace with a better timestamp.
-        msg_new.timestamp = int(time.time())
+        msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
+        msg_new.timestamp = int(time.time()*1000) - self.start_time
 
         # plotting
         if self.plot_freq: 
+            if  msg_new.n_frequencies != self.current_n_frequencies:
+                self.plotter_freq.clear()
             self.plotter_freq.update_lines(np.abs(signals_f.T), freqs, self.labels)
+            self.plotter_freq.ax.set_title(f"time (ms): {msg_new.timestamp}")
             self.plotter_freq.update_axvlines(freqs)
-
+            self.current_n_frequencies = msg_new.n_frequencies
         # publishing
         self.publisher_correlations.publish(msg_new)
 

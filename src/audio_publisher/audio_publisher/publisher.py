@@ -40,7 +40,8 @@ MAX_BUFFERS = 500  # set to 0 for no saving
 OUT_DIR = "debug"
 
 class AudioPublisher(Node):
-    def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, Fs=None):
+    def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, Fs=None, 
+                 mic_positions=None):
         super().__init__(name)
 
         if publish_rate is None:
@@ -50,12 +51,12 @@ class AudioPublisher(Node):
             self.publish_rate = publish_rate
         self.n_buffer = n_buffer
 
-        self.Fs = Fs
         if Fs is not None:
             self.set_Fs(Fs)
 
+        self.mic_positions = mic_positions
+
         self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
-        self.publisher_mic_positions = self.create_publisher(MicPositions, 'setup/mic_positions', 10)
 
         self.time_idx = 0
         self.raw_data = np.empty((N_MICS, n_buffer*MAX_BUFFERS))
@@ -70,13 +71,6 @@ class AudioPublisher(Node):
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
-    def publish_mic_positions(self, mic_positions):
-        """ Is run once by inheriting classes to publish the mic positions. """
-        msg = MicPositions()
-        msg.n_mics = mic_positions.shape[0]
-        msg.dimension = mic_positions.shape[1]
-        msg.mic_positions = list(mic_positions.astype(np.float).flatten())
-        self.publisher_mic_positions.publish(msg)
 
     def set_params(self, params):
         for param in params:
@@ -96,7 +90,6 @@ class AudioPublisher(Node):
     def set_Fs(self, Fs):
         self.Fs = Fs
         self.n_between_buffers = self.Fs // self.publish_rate
-        self.seconds_between_buffers  = 1 / self.Fs * self.n_between_buffers
 
     def process_signals(self, signals):
         n_buffer = signals.shape[1]
@@ -105,6 +98,8 @@ class AudioPublisher(Node):
 
         assert self.Fs is not None, 'Need to set Fs before processing.'
         assert signals.shape[0] == N_MICS
+        if self.mic_positions is None:
+            self.get_logger.warn("Did not set mic_positions.")
 
         # publishing
         msg = Signals()
@@ -112,8 +107,11 @@ class AudioPublisher(Node):
         msg.fs = self.Fs
         msg.n_mics = N_MICS
         msg.n_buffer = n_buffer
-        signals_vect = list(signals.flatten().astype(float))
-        msg.signals_vect = signals_vect
+        msg.signals_vect = list(signals.flatten().astype(float))
+        if self.mic_positions is not None:
+            msg.mic_positions = list(self.mic_positions.flatten().astype(float))
+        else:
+            msg.mic_positions = []
         self.publisher_signals.publish(msg)
 
         if self.time_idx < MAX_BUFFERS:
