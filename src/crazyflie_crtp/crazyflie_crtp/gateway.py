@@ -1,4 +1,3 @@
-
 import time
 
 import rclpy
@@ -139,9 +138,7 @@ class AudioPublisher(Node):
             self.index += 1
 
 
-
 def main(args=None):
-
     plot = False
 
     cflib.crtp.init_drivers(enable_debug_driver=False)

@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'convert_audio = crazyflie_crtp.convert_audio:main',
+            'gateway = crazyflie_crtp.gateway:main',
         ],
     },
 )
