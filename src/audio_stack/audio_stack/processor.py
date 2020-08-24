@@ -19,7 +19,7 @@ from rcl_interfaces.msg import SetParametersResult
 import matplotlib.pylab as plt
 import numpy as np
 
-from audio_interfaces.msg import Correlations, Spectrum
+from audio_interfaces.msg import Correlations, Spectrum, MicPositions
 from .beam_former import BeamFormer
 from .live_plotter import LivePlotter
 
@@ -32,16 +32,15 @@ MAX_FREQ = 600
 
 
 class DoaEstimator(Node):
-    def __init__(self, mic_positions):
+    def __init__(self):
         super().__init__('doa_estimator')
 
         self.subscription_correlations = self.create_subscription(
             Correlations, 'audio/correlations', self.listener_callback_correlations, 10)
-        self.subscription_correlations # prevent unused variable warning
 
         self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/spectrum', 10)
 
-        self.beam_former = BeamFormer(mic_positions)
+        self.beam_former = None 
 
         self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
         self.plotter.ax.set_xlabel('angle [rad]')
@@ -65,15 +64,31 @@ class DoaEstimator(Node):
                 return SetParametersResult(successful=False)
         return SetParametersResult(successful=True)
 
+    def listener_callback_mic_positions(self, msg_mic):
+        self.get_logger().info(f'Updating mic_positions: {mic_positions}.')
+        mic_positions = np.array(msg_mic.mic_positions).reshape((msg_mic.n_mics, msg_mic.dimension))
+        self.beam_former = BeamFormer(mic_positions)
 
-    def listener_callback_correlations(self, msg_correlations):
-        self.get_logger().info(f'Processing correlations: {msg_correlations.timestamp}.')
+    def listener_callback_correlations(self, msg_cor):
+        self.get_logger().info(f'Processing correlations: {msg_cor.timestamp}.')
 
-        frequencies = np.array(msg_correlations.frequencies).astype(np.float) #[10, 100, 1000]
-        real_vect = np.array(msg_correlations.corr_real_vect)
-        imag_vect = np.array(msg_correlations.corr_imag_vect)
+        n_frequencies = len(msg_cor.frequencies)
+        if n_frequencies >= 2**8:
+            self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
+            return
 
-        R = (real_vect + 1j*imag_vect).reshape((len(frequencies), msg_correlations.n_mics, msg_correlations.n_mics))
+        if self.beam_former is None:
+            if msg_cor.mic_positions:
+                mic_positions = np.array(msg_cor.mic_positions).reshape((msg_cor.n_mics, -1))
+                self.beam_former = BeamFormer(mic_positions)
+            else:
+                self.get_logger().error("need to set send mic_positions in Correlation to do DOA")
+
+        frequencies = np.array(msg_cor.frequencies).astype(np.float) #[10, 100, 1000]
+        real_vect = np.array(msg_cor.corr_real_vect)
+        imag_vect = np.array(msg_cor.corr_imag_vect)
+
+        R = (real_vect + 1j*imag_vect).reshape((len(frequencies), msg_cor.n_mics, msg_cor.n_mics))
 
         if self.bf_method == "mvdr":
             spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
@@ -84,8 +99,8 @@ class DoaEstimator(Node):
 
         # publish
         msg_spec = Spectrum()
-        msg_spec.timestamp = msg_correlations.timestamp
-        msg_spec.n_frequencies = len(frequencies)
+        msg_spec.timestamp = msg_cor.timestamp
+        msg_spec.n_frequencies = n_frequencies
         msg_spec.frequencies = list(frequencies)
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
@@ -112,7 +127,8 @@ def main(args=None):
             [1, -1], # 
             [-1, 1], # 
             [-1, -1]].T #
-    estimator = DoaEstimator(mic_positions)
+    #estimator = DoaEstimator(mic_positions)
+    estimator = DoaEstimator()
 
     rclpy.spin(estimator)
 
