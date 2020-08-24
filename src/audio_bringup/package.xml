@@ -3,7 +3,7 @@
 <package format="3">
   <name>audio_bringup</name>
   <version>0.0.1</version>
-  <description>Launch audio pipeline</description>
+  <description>Launch files for audio processing</description>
   <maintainer email="frederike.duembgen@epfl.ch">duembgen</maintainer>
   <license>Apache License 2.0</license>
 

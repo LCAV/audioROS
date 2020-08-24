@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='duembgen',
     maintainer_email='frederike.duembgen@epfl.ch',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Publishing of audio data from different sources',
+    license='Apache License 2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
