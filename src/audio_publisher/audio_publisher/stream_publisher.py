@@ -23,17 +23,14 @@ from .publisher import AudioPublisher
 N_MICS = 4
 
 class StreamPublisher(AudioPublisher):
-    def __init__(self, Fs, n_buffer=256, publish_rate=None, blocking=False):
-        super().__init__('stream_publisher', n_buffer=n_buffer, publish_rate=publish_rate, Fs=Fs)
+    def __init__(self, Fs, n_buffer=256, publish_rate=None, blocking=False, mic_positions=None):
+        super().__init__('stream_publisher', mic_positions=mic_positions, n_buffer=n_buffer, publish_rate=publish_rate, Fs=Fs)
 
         self.duration_ms = 100 * 1000
         self.n_mics = N_MICS
 
         sd.default.device = 'default'
         sd.check_input_settings(sd.default.device, channels=self.n_mics, samplerate=self.Fs)
-
-        mic_positions = np.zeros((N_MICS, 2))
-        self.publish_mic_positions(mic_positions)
 
         # blocking stream, more ROS-like, better for plotting. However might result in some lost samples 
         if blocking:
@@ -80,6 +77,8 @@ def main(args=None):
 
     print(f'Publishing audio data from stream at {publish_rate}Hz.')
 
-    publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, blocking=blocking)
+    mic_positions = np.zeros((N_MICS, 2))
+
+    publisher = StreamPublisher(Fs=Fs, publish_rate=publish_rate, n_buffer=n_buffer, blocking=blocking, mic_positions=mic_positions)
 
     rclpy.shutdown()

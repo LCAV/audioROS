@@ -1,9 +1,9 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
+'''
 file_publisher.py: 
-"""
+'''
 import sys
 
 import numpy as np
@@ -16,22 +16,20 @@ from .publisher import AudioPublisher
 
 class FilePublisher(AudioPublisher):
     def __init__(self, filenames=None, loop=False, n_buffer=256, publish_rate=None, mic_fname=''):
-        """
+        '''
         :param publish_rate: in Hz, at which rate to publish
-        """
-        super().__init__('file_publisher', n_buffer=n_buffer, publish_rate=publish_rate, Fs=None)
-        self.loop = loop
+        '''
+        mic_positions = None
+        if mic_fname != '':
+            mic_positions = np.load(mic_fname)
+        super().__init__('file_publisher', mic_positions=mic_positions, n_buffer=n_buffer, publish_rate=publish_rate, Fs=None)
 
-        # read audio from files
+        # audio file preparation
+        self.loop = loop
         self.file_idx = 0
         self.audio_data = {f:{} for f in filenames}
         for fname in filenames:
             self.audio_data[fname]['Fs'], self.audio_data[fname]['data'] = read(fname) 
-
-        # read and publish mic positions
-        if mic_fname != '':
-            mic_positions = np.load(mic_fname)
-            self.publish_mic_positions(mic_positions)
 
         # read Fs and make sure it matches all files
         Fs = self.audio_data[filenames[0]]['Fs']
