@@ -19,11 +19,8 @@ from cflib.utils.callbacks import Caller
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 import cflib.crtp
 
-
 logging.basicConfig(level=logging.ERROR)
 id = "radio://0/80/2M"
-
-AUDIO_PORT = 0x09
 
 N_FREQUENCIES = 32
 N_MICS = 4
@@ -46,10 +43,11 @@ def set_thrust(cf,thrust):
 
 
 class AudioPublisher(Node):
-    def __init__(self, crazyflie, plot=False):
+    def __init__(self, audio_crtp, plot=False):
         super().__init__('audio_publisher')
 
         self.publisher_signals = self.create_publisher(SignalsFreq, 'audio/signals_f', 10)
+        self.publisher_motion = self.create_publisher(SignalsFreq, 'audio/signals_f', 10)
         self.plot = plot
 
         if self.plot:
@@ -58,85 +56,46 @@ class AudioPublisher(Node):
             self.plotter.ax.set_ylabel('magnitude [-]')
 
         # Crazyflie stuff
-        self.array = np.zeros(N_BYTES, dtype=np.uint8)
-        self.receivedChar = Caller()
-        self.start = False
-        self.index = 0
-        self.start_time = 0
-        self.cf = crazyflie
-        self.cf.add_port_callback(AUDIO_PORT, self.callback_incoming)
+        self.audio_crtp = audio_crtp
+        # choose high publish rate so that we introduce as little
+        # waiting time as possible
+        self.create_timer(0.001, self.publish_current_data)
 
-        self.last_time = 0
+    def publish_current_data(self):
+        if not self.audio_crtp.audio_data['published']:
+            self.publish_audio_data()
+            self.audio_crtp.audio_data['published'] = True
 
+        if not self.audio_crtp.motion_data['published']:
+            self.publish_motion_data()
+            self.audio_crtp.motion_data['published'] = True
 
-    def callback_incoming(self, packet):
-        if packet.channel == 1:
-            if (self.index != 0) and (self.index != N_FULL_PACKETS + 1):
-                print(f"packets loss: received only {self.index}/{N_FULL_PACKETS+1}")
-            self.index = 0  # reset index
-            self.start = True
-            self.start_time = time.time()
-            self.get_logger().info(
-                f"Time between data = {self.start_time - self.last_time}s"
-            )
+    def publish_audio_data(self):
+        self.get_logger().info(f'Publishing signals.')
+        # TODO(FD) get this from CRTP
+        signals_f_vect = self.audio_crtp.audio_data['data']
 
-        if self.start:
-            # received all full packets, read remaining bytes
-            if self.index == N_FULL_PACKETS:
+        frequencies = np.fft.rfftfreq(n=N, d=1/FS)[:N_FREQUENCIES].astype(np.int)
+        signals_f = np.zeros((N_MICS, N_FREQUENCIES), dtype=np.complex128)
+        for i in range(N_MICS):
+            signals_f[i].real = signals_f_vect[i::N_MICS*2]
+            signals_f[i].imag = signals_f_vect[i+N_MICS::N_MICS*2]
 
-                self.array[
-                    self.index * CRTP_PAYLOAD : self.index * CRTP_PAYLOAD
-                    + N_BYTES_LAST_PACKET
-                ] = packet.datal[
-                    0:N_BYTES_LAST_PACKET
-                ]  # last bytes
+        # plot data
+        if self.plot:
+            labels=[f"mic{i}" for i in range(N_MICS)]
+            self.plotter.update_lines(np.abs(signals_f), frequencies, labels=labels)
 
-                signals_f_vect = np.frombuffer(self.array, dtype=np.float32)
-                self.get_logger().info(
-                    f"Elapsed time for receiving audio data = {time.time() - self.start_time}s"
-                )
-
-                # TODO(FD) get this from CRTP
-                frequencies = np.fft.rfftfreq(n=N, d=1/FS)[:N_FREQUENCIES].astype(np.int)
-                #frequencies = np.arange(N_FREQUENCIES)
-                # signals_f_vect is of structure
-                # 
-                # [real_1(f1), real_2(f1), real_3(f1), real_4(f1),
-                #  imag_1(f1), imag_2(f1), imag_3(f1), imag_4(f1),
-                #  ... (f2), ...
-                #  ... (fN)]
-                signals_f = np.zeros((N_MICS, N_FREQUENCIES), dtype=np.complex128)
-                for i in range(N_MICS):
-                    signals_f[i].real = signals_f_vect[i::N_MICS*2]
-                    signals_f[i].imag = signals_f_vect[i+N_MICS::N_MICS*2]
-
-                # plot data
-                if self.plot:
-                    labels=[f"mic{i}" for i in range(N_MICS)]
-                    self.plotter.update_lines(np.abs(signals_f), frequencies, labels=labels)
-
-                # send data
-                msg = SignalsFreq()
-                msg.frequencies = [int(f) for f in frequencies]
-                msg.signals_real_vect = list(signals_f.real.flatten())
-                msg.signals_imag_vect = list(signals_f.imag.flatten())
-
-                msg.timestamp = int(time.time()) # returns integer
-                msg.n_mics = N_MICS
-                msg.n_frequencies = N_FREQUENCIES
-                self.publisher_signals.publish(msg)
-                self.get_logger().info(f'Published signals.')
-
-                self.last_time = time.time()
-
-
-            else:
-                self.array[
-                    self.index * CRTP_PAYLOAD : (self.index + 1) * CRTP_PAYLOAD
-                ] = packet.datal
-
-            self.index += 1
-
+        # send data
+        msg = SignalsFreq()
+        msg.frequencies = [int(f) for f in frequencies]
+        msg.signals_real_vect = list(signals_f.real.flatten())
+        msg.signals_imag_vect = list(signals_f.imag.flatten())
+        msg.timestamp = int(time.time()*1000)
+        msg.n_mics = N_MICS
+        msg.n_frequencies = N_FREQUENCIES
+        self.publisher_signals.publish(msg)
+        self.get_logger().info(f'Published signals.')
 
 def main(args=None):
     plot = False
