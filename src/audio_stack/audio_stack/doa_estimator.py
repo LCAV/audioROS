@@ -19,34 +19,37 @@ from rcl_interfaces.msg import SetParametersResult
 import matplotlib.pylab as plt
 import numpy as np
 
-from audio_interfaces.msg import Correlations, Spectrum
-from .beam_former import BeamFormer
+from audio_interfaces.msg import Spectrum
 from .live_plotter import LivePlotter
 
 MAX_YLIM = 1 # set to inf for no effect.
 MIN_YLIM = 1e-13 # set to -inf for no effect.
 
+# for plotting only
+MIN_FREQ = 400
+MAX_FREQ = 600
 
 class DoaEstimator(Node):
     def __init__(self):
         super().__init__('doa_estimator')
 
-        self.subscription_correlations = self.create_subscription(
-            Correlations, 'audio/correlations', self.listener_callback_correlations, 10)
-
-        self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/spectrum', 10)
-
-        self.beam_former = None 
+        self.subscription_spectrum = self.create_subscription(
+            Spectrum, 'audio/spectrum', self.listener_callback_spectrum, 10)
+        self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/combined_spectrum', 10)
+        self.spectrum_orientation_list = []
 
         self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
         self.plotter.ax.set_xlabel('angle [rad]')
         self.plotter.ax.set_ylabel('magnitude [-]')
 
         # create ROS parameters that can be changed from command line.
-        self.declare_parameter("bf_method")
-        self.bf_method = "mvdr"
+        self.declare_parameter("combination_n")
+        self.combination_n = 5
+        self.declare_parameter("combination_method")
+        self.combination_method = "sum"
         parameters = [
-                rclpy.parameter.Parameter("bf_method", rclpy.Parameter.Type.STRING, self.bf_method),
+                rclpy.parameter.Parameter("combination_method", rclpy.Parameter.Type.STRING, self.combination_method),
+                rclpy.parameter.Parameter("combination_n", rclpy.Parameter.Type.INT, self.combination_n),
         ]
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
@@ -54,56 +57,53 @@ class DoaEstimator(Node):
 
     def set_params(self, params):
         for param in params:
-            if param.name == "bf_method":
-                self.bf_method = param.get_parameter_value().string_value
+            if param.name == "combination_method":
+                self.combination_method = param.get_parameter_value().string_value
+            if param.name == "combination_n":
+                self.combination_n = param.get_parameter_value().int_value
             else:
                 return SetParametersResult(successful=False)
         return SetParametersResult(successful=True)
 
-    def listener_callback_mic_positions(self, msg_mic):
-        self.get_logger().info(f'Updating mic_positions: {mic_positions}.')
-        mic_positions = np.array(msg_mic.mic_positions).reshape((msg_mic.n_mics, msg_mic.dimension))
-        self.beam_former = BeamFormer(mic_positions)
 
-    def listener_callback_correlations(self, msg_cor):
-        self.get_logger().info(f'Processing correlations: {msg_cor.timestamp}.')
+    def listener_callback_spectrum(self, msg_spec):
+        self.get_logger().info(f'Processing spectrum: {msg_spec.timestamp}.')
 
-        n_frequencies = len(msg_cor.frequencies)
-        if n_frequencies >= 2**8:
-            self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
-            return
+        spectrum = np.array(msg_spec.spectrum_vect).reshape((msg_spec.n_frequencies, msg_spec.n_angles))
+        self.spectrum_orientation_list.append((spectrum, msg_spec.orientation))
 
-        if self.beam_former is None:
-            if msg_cor.mic_positions:
-                mic_positions = np.array(msg_cor.mic_positions).reshape((msg_cor.n_mics, -1))
-                self.beam_former = BeamFormer(mic_positions)
-            else:
-                self.get_logger().error("need to set send mic_positions in Correlation to do DOA")
+        # remove outdated spectra
+        while len(self.spectrum_list) >= self.combination_n:
+            self.spectrum_orientation_list.pop(0)
 
-        frequencies = np.array(msg_cor.frequencies).astype(np.float) #[10, 100, 1000]
-        real_vect = np.array(msg_cor.corr_real_vect)
-        imag_vect = np.array(msg_cor.corr_imag_vect)
+        # the combined spectrum is going to be in the coordinate frame of the latest 
+        # spectrum.
+        spectra_shifted = self.spectrum_orientation_list[-1:][0] # latest element.
+        o_ref = self.spectrum_orientation_list[-1][1] 
+        for spectrum, orientation in self.spectrum_orientation_list[:-1]:
+            # TODO(FD) do interpolation rather than nearest neighbor.
+            # Note that index can be both positive and negative, both will work.
+            index = round((orientation - o_ref) * (msg_spec.n_angles - 1) / 360)
+            # TODO(FD) use a rolling buffer (linked list or so) instead of the copies here.
+            spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
 
-        R = (real_vect + 1j*imag_vect).reshape((len(frequencies), msg_cor.n_mics, msg_cor.n_mics))
-
-        if self.bf_method == "mvdr":
-            spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
-        elif self.bf_method == "das":
-            spectrum = self.beam_former.get_das_spectrum(R, frequencies) # n_frequencies x n_angles 
-        else:
-            raise ValueError(self.bf_method) 
+        if self.combination_method == "sum":
+            combined_spectrum = np.sum(spectra_shifted, axis=0) # n_frequencies x n_angles
+        elif self.combination_method == "product":
+            combined_spectrum = np.product(spectra_shifted, axis=0) # n_frequencies x n_angles
 
         # publish
-        msg_spec = Spectrum()
-        msg_spec.timestamp = msg_cor.timestamp
-        msg_spec.n_frequencies = n_frequencies
-        msg_spec.frequencies = list(frequencies)
-        msg_spec.spectrum_vect = list(spectrum.flatten())
-        self.publisher_spectrum.publish(msg_spec)
+        msg_new = Spectrum()
+        msg_new.timestamp = msg_spec.timestamp
+        msg_new.n_frequencies = n_frequencies
+        msg_new.n_angles = combined_spectrum.shape[1]
+        msg_new.frequencies = msg_spec.frequencies
+        msg_new.spectrum_vect = list(combined_spectrum.flatten())
+        self.publisher_spectrum.publish(msg_new)
         self.get_logger().info(f'Published spectrum.')
 
         # plot
-        assert len(frequencies) == spectrum.shape[0]
+        assert len(frequencies) == combined_spectrum.shape[0]
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
         labels=[f"f={f:.0f}Hz" for f in frequencies[mask]]
         self.plotter.update_lines(spectrum[mask], self.beam_former.theta_scan, labels=labels)
