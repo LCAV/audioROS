@@ -26,12 +26,8 @@ from .live_plotter import LivePlotter
 MAX_YLIM = 1 # set to inf for no effect.
 MIN_YLIM = 1e-13 # set to -inf for no effect.
 
-# for plotting only
-MIN_FREQ = 400
-MAX_FREQ = 600
 
-
-class SpectrumEstimator(Node):
+class DoaEstimator(Node):
     def __init__(self):
         super().__init__('doa_estimator')
 
@@ -54,6 +50,7 @@ class SpectrumEstimator(Node):
         ]
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
+
 
     def set_params(self, params):
         for param in params:
@@ -118,7 +115,7 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    estimator = SpectrumEstimator()
+    estimator = DoaEstimator()
 
     rclpy.spin(estimator)
 

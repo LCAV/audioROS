@@ -54,3 +54,4 @@ install/
 *.swo
 *.orig
 debug/
+stash/
