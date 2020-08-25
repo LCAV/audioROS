@@ -1,5 +1,5 @@
 # time in miliseconds
-uint16 timestamp
+uint32 timestamp
 # delta x in meters
 float32 dx
 # delta y in meters

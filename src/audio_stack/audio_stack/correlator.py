@@ -118,7 +118,6 @@ class Correlator(Node):
     """
     def __init__(self, plot_freq=False, plot_time=False):
         super().__init__('correlator')
-        self.start_time = int(time.time()*1000)
 
         self.plot_freq = plot_freq
         self.plot_time = plot_time
@@ -190,7 +189,7 @@ class Correlator(Node):
 
         # TODO: we could publish signals_f to audio/signals_f topic here, but not sure
         # if that would introduce too much overhead.
-        self.process_signals_f(signals_f, freqs, msg.fs)
+        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
@@ -216,20 +215,19 @@ class Correlator(Node):
         if not len(freqs):
             self.get_logger().error(f'no frequency bins in range {MIN_FREQ}, {MAX_FREQ}')
 
-        self.process_signals_f(signals_f, freqs, msg.fs)
+        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2-t1
-
         self.get_logger().info(f'listener_callback_signals_f: Publishing after processing time {processing_time}')
 
-    def process_signals_f(self, signals_f, freqs, Fs):
+    def process_signals_f(self, signals_f, freqs, Fs, timestamp):
         msg_new = create_correlations_message(signals_f, freqs, Fs, signals_f.shape[0], self.methods["frequency"])
         # TODO(FD): replace with a better timestamp.
         msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
-        msg_new.timestamp = int(time.time()*1000) - self.start_time
+        msg_new.timestamp = timestamp
 
         # plotting
         if self.plot_freq: 
