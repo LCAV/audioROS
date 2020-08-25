@@ -40,7 +40,7 @@ class SpectrumEstimator(Node):
             Correlations, 'audio/correlations', self.listener_callback_correlations, 10)
         self.subscription_pose_raw = self.create_subscription(
             PoseRaw, 'motion/pose_raw', self.listener_callback_pose_raw, 10)
-        self.latest_orientation = None
+        self.latest_time_and_orientation = None
 
         self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/spectrum', 10)
 
@@ -95,19 +95,19 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method) 
 
-        orientation = 0.0
-        latest = self.latest_orientation
+        orientation = 0
+        latest = self.latest_time_and_orientation
         if (latest is not None) and (abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS):
             orientation = latest[1]
         elif latest is not None:
-            self.get_logger().warn(f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[1]}")
+            self.get_logger().warn(f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}")
 
         # publish
         msg_spec = Spectrum()
         msg_spec.timestamp = msg_cor.timestamp
         msg_spec.n_frequencies = n_frequencies
         msg_spec.n_angles = spectrum.shape[1]
-        msg_spec.orientation = orientation
+        msg_spec.orientation = float(orientation)
         msg_spec.frequencies = list(frequencies)
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
@@ -121,7 +121,7 @@ class SpectrumEstimator(Node):
 
     def listener_callback_pose_raw(self, msg_pose_raw):
         self.get_logger().info(f'Processing pose: {msg_pose_raw.timestamp}.')
-        self.latest_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
+        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
 
 def main(args=None):
     import os
