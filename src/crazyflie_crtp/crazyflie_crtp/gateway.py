@@ -108,6 +108,7 @@ class AudioPublisher(Node):
 
         msg_pose = Pose()
         msg_pose.position = Point() 
+        # TODO(FD) fix the position update to consider also rotation.
         msg_pose.position.x = motion_dict['dx'] + self.prev_position_x
         msg_pose.position.y = motion_dict['dy'] + self.prev_position_y
         msg_pose.position.z = motion_dict['z']
@@ -123,6 +124,9 @@ class AudioPublisher(Node):
         msg_pose.orientation.w = r_quat[3]
         self.publisher_motion_pose.publish(msg_pose)
         self.get_logger().info('Published motion data.')
+
+        self.prev_position_x = msg_pose.position.x
+        self.prev_position_y = msg_pose.position.y
 
 
 def main(args=None):
