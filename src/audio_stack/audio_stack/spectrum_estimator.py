@@ -19,7 +19,7 @@ from rcl_interfaces.msg import SetParametersResult
 import matplotlib.pylab as plt
 import numpy as np
 
-from audio_interfaces.msg import Correlations, Spectrum
+from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
 from .live_plotter import LivePlotter
 
@@ -95,11 +95,11 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method) 
 
-        orientation = 0
+        orientation = 0.0
         latest = self.latest_orientation
-        if abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS:
+        if (latest is not None) and (abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS):
             orientation = latest[1]
-        else:
+        elif latest is not None:
             self.get_logger().warn(f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[1]}")
 
         # publish
