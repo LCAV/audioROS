@@ -18,7 +18,7 @@ node_config = {
         'params': [],
         'pkg': 'crazyflie_crtp'
     },
-    'processor': {
+    'doa_estimator': {
         'params': [{'bf_method':'mvdr'}],
         'pkg': 'audio_stack'
     },

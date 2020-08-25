@@ -22,7 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'correlator = audio_stack.correlator:main',
-            'processor = audio_stack.processor:main',
+            'doa_estimator = audio_stack.doa_estimator:main',
         ],
     },
 )
