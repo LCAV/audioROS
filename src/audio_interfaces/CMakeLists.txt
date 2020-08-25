@@ -38,7 +38,7 @@ set(msg_files
   "msg/Spectrum.msg"
   "msg/Signals.msg"
   "msg/SignalsFreq.msg"
-  "msg/MicPositions.msg"
+  "msg/PoseRaw.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
