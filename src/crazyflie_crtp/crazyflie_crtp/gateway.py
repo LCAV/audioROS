@@ -29,8 +29,10 @@ FS = 32000
 N = 1024
 
 class AudioPublisher(Node):
-    def __init__(self, reader_crtp, plot=False):
+    def __init__(self, reader_crtp, mic_positions=None, plot=False):
         super().__init__('audio_publisher')
+
+        self.mic_positions = mic_positions
 
         self.publisher_signals = self.create_publisher(SignalsFreq, 'audio/signals_f', 10)
         self.publisher_motion_pose = self.create_publisher(Pose, 'motion/pose', 10)
@@ -88,6 +90,11 @@ class AudioPublisher(Node):
         msg.timestamp = int((time.time()-self.start_time)*1000)
         msg.n_mics = N_MICS
         msg.n_frequencies = N_FREQUENCIES
+
+        if self.mic_positions is not None:
+            msg.mic_positions = list(self.mic_positions.flatten().astype(float))
+        else:
+            msg.mic_positions = []
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(f'Published audio_data.')
@@ -130,20 +137,25 @@ class AudioPublisher(Node):
 
 
 def main(args=None):
-    from cflib.crazyflie.log import LogConfig
     from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
-    from cflib.crazyflie.syncLogger import SyncLogger
     import cflib.crtp
     plot = False
 
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
 
+    mic_d = 0.108 # distance between mics (meters)
+    mic_positions = mic_d/2 * np.c_[
+            [1, 1], # 
+            [1, -1], # 
+            [-1, 1], # 
+            [-1, -1]].T #
+
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         #set_thrust(cf, 43000)
         reader_crtp = ReaderCRTP(cf, verbose=True)
-        publisher = AudioPublisher(reader_crtp, plot=plot)
+        publisher = AudioPublisher(reader_crtp, mic_positions=mic_positions, plot=plot)
         print('done initializing')
 
         rclpy.spin(publisher)
