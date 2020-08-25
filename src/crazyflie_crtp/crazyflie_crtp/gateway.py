@@ -28,9 +28,9 @@ N_MICS = 4
 FS = 32000
 N = 1024
 
-class AudioPublisher(Node):
+class Gateway(Node):
     def __init__(self, reader_crtp, mic_positions=None, plot=False):
-        super().__init__('audio_publisher')
+        super().__init__('gateway')
 
         self.start_time = time.time()
         self.mic_positions = mic_positions
@@ -155,15 +155,20 @@ def main(args=None):
         cf = scf.cf
         #set_thrust(cf, 43000)
         reader_crtp = ReaderCRTP(cf, verbose=True)
-        publisher = AudioPublisher(reader_crtp, mic_positions=mic_positions, plot=plot)
+        publisher = Gateway(reader_crtp, mic_positions=mic_positions, plot=plot)
         print('done initializing')
 
-        rclpy.spin(publisher)
-        print('done spinning')
-        #plt.show()
+        try:
+            rclpy.spin(publisher)
+            print('done spinning')
+            #plt.show()
 
-        while True:
-            time.sleep(1)
+            while True:
+                time.sleep(1)
+        except:
+            print("unset audio.send_audio_enable")
+            cf.param.set_value("audio.send_audio_enable", 0)
+
 
     publisher.destroy_node()
     rclpy.shutdown()

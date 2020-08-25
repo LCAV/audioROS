@@ -30,7 +30,7 @@ MIN_YLIM = 1e-13 # set to -inf for no effect.
 MIN_FREQ = 400
 MAX_FREQ = 600
 
-ALLOWED_LAG_MS = 10 # allowed lag between pose and correlation message
+ALLOWED_LAG_MS = 20 # allowed lag between pose and audio message
 
 class SpectrumEstimator(Node):
     def __init__(self):
