@@ -18,7 +18,7 @@ node_config = {
         'params': [{'n_buffer': 2**8, 'publish_rate': 100}],
         'pkg': 'audio_publisher'
     },
-    'processor': {
+    'doa_estimator': {
         'params': [{'bf_method':'mvdr'}],
         'pkg': 'audio_stack'
     },
