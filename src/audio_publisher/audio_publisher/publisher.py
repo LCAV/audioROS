@@ -32,16 +32,23 @@ from audio_interfaces.msg import Signals
 
 N_MICS = 4
 
-MAX_TIMESTAMP_INT = 2**32-1 # needs to match Spectrum.msg and Correlation.msg
+MAX_TIMESTAMP_INT = 2 ** 32 - 1  # needs to match Spectrum.msg and Correlation.msg
 
 # number of buffers to save, e.g. 256*1000=256'000 at 32000Hz: 8seconds
 MAX_BUFFERS = 0  # set to 0 for no saving
 
 OUT_DIR = "debug"
 
+
 class AudioPublisher(Node):
-    def __init__(self, name="audio_publisher", n_buffer=256, publish_rate=None, Fs=None, 
-                 mic_positions=None):
+    def __init__(
+        self,
+        name="audio_publisher",
+        n_buffer=256,
+        publish_rate=None,
+        Fs=None,
+        mic_positions=None,
+    ):
         super().__init__(name)
 
         if publish_rate is None:
@@ -56,33 +63,40 @@ class AudioPublisher(Node):
 
         self.mic_positions = mic_positions
 
-        self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
+        self.publisher_signals = self.create_publisher(Signals, "audio/signals", 10)
 
         self.time_idx = 0
-        self.raw_data = np.empty((N_MICS, n_buffer*MAX_BUFFERS))
+        self.raw_data = np.empty((N_MICS, n_buffer * MAX_BUFFERS))
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("n_buffer")
         self.declare_parameter("publish_rate")
         parameters = [
-                rclpy.parameter.Parameter("n_buffer", rclpy.Parameter.Type.STRING, str(self.n_buffer)),
-                rclpy.parameter.Parameter("publish_rate", rclpy.Parameter.Type.STRING, str(self.publish_rate))
+            rclpy.parameter.Parameter(
+                "n_buffer", rclpy.Parameter.Type.STRING, str(self.n_buffer)
+            ),
+            rclpy.parameter.Parameter(
+                "publish_rate", rclpy.Parameter.Type.STRING, str(self.publish_rate)
+            ),
         ]
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
-
     def set_params(self, params):
         for param in params:
-            old_value = self.get_parameter(param.name).get_parameter_value().string_value
+            old_value = (
+                self.get_parameter(param.name).get_parameter_value().string_value
+            )
             str_value = param.get_parameter_value().string_value
             int_value = param.get_parameter_value().integer_value
-            new_value = eval(str_value) if str_value != '' else int_value
+            new_value = eval(str_value) if str_value != "" else int_value
 
-            self.get_logger().info(f"changing {param.name} from {old_value} to {new_value}")
+            self.get_logger().info(
+                f"changing {param.name} from {old_value} to {new_value}"
+            )
             if param.name == "n_buffer":
                 self.n_buffer = new_value
-                self.raw_data = np.empty((N_MICS, self.n_buffer*MAX_BUFFERS))
+                self.raw_data = np.empty((N_MICS, self.n_buffer * MAX_BUFFERS))
             elif param.name == "publish_rate":
                 self.publish_rate = new_value
         return SetParametersResult(successful=True)
@@ -96,7 +110,7 @@ class AudioPublisher(Node):
 
         t1 = time.time()
 
-        assert self.Fs is not None, 'Need to set Fs before processing.'
+        assert self.Fs is not None, "Need to set Fs before processing."
         assert signals.shape[0] == N_MICS
         if self.mic_positions is None:
             self.get_logger.warn("Did not set mic_positions.")
@@ -115,19 +129,23 @@ class AudioPublisher(Node):
         self.publisher_signals.publish(msg)
 
         if self.time_idx < MAX_BUFFERS:
-            self.raw_data[:, self.time_idx*n_buffer:(self.time_idx+1)*n_buffer] = signals
-        elif (self.time_idx == MAX_BUFFERS) and (MAX_BUFFERS > 0): 
+            self.raw_data[
+                :, self.time_idx * n_buffer : (self.time_idx + 1) * n_buffer
+            ] = signals
+        elif (self.time_idx == MAX_BUFFERS) and (MAX_BUFFERS > 0):
             for i in range(self.raw_data.shape[0]):
-                fname = f"{OUT_DIR}/test_mic{i}.wav" 
+                fname = f"{OUT_DIR}/test_mic{i}.wav"
                 write(fname, self.Fs, self.raw_data[i])
                 self.get_logger().info(f"Saved audio as {fname}")
 
         self.time_idx += 1
         if self.time_idx >= MAX_TIMESTAMP_INT:
-            self.get_logger().error('timestamp overflow.')
+            self.get_logger().error("timestamp overflow.")
             self.time_idx = self.time_idx % MAX_TIMESTAMP_INT
 
         t2 = time.time()
-        processing_time = t2-t1
-        if processing_time > 1.0/self.publish_rate:
-            self.get_logger().warn(f'processing time ({processing_time:.1e}) longer than publishing period ({1/self.publish_rate:.1e})')
+        processing_time = t2 - t1
+        if processing_time > 1.0 / self.publish_rate:
+            self.get_logger().warn(
+                f"processing time ({processing_time:.1e}) longer than publishing period ({1/self.publish_rate:.1e})"
+            )
