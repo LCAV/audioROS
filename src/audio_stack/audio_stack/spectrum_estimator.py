@@ -23,38 +23,43 @@ from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
 from .live_plotter import LivePlotter
 
-MAX_YLIM = 1 # set to inf for no effect.
-MIN_YLIM = 1e-13 # set to -inf for no effect.
+MAX_YLIM = 1  # set to inf for no effect.
+MIN_YLIM = 1e-13  # set to -inf for no effect.
 
 # for plotting only
 MIN_FREQ = 400
 MAX_FREQ = 600
 
-ALLOWED_LAG_MS = 20 # allowed lag between pose and audio message
+ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
+
 
 class SpectrumEstimator(Node):
     def __init__(self):
-        super().__init__('spectrum_estimator')
+        super().__init__("spectrum_estimator")
 
         self.subscription_correlations = self.create_subscription(
-            Correlations, 'audio/correlations', self.listener_callback_correlations, 10)
+            Correlations, "audio/correlations", self.listener_callback_correlations, 10
+        )
         self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, 'motion/pose_raw', self.listener_callback_pose_raw, 10)
+            PoseRaw, "motion/pose_raw", self.listener_callback_pose_raw, 10
+        )
         self.latest_time_and_orientation = None
 
-        self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/spectrum', 10)
+        self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
 
-        self.beam_former = None 
+        self.beam_former = None
 
         self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-        self.plotter.ax.set_xlabel('angle [rad]')
-        self.plotter.ax.set_ylabel('magnitude [-]')
+        self.plotter.ax.set_xlabel("angle [rad]")
+        self.plotter.ax.set_ylabel("magnitude [-]")
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
         self.bf_method = "mvdr"
         parameters = [
-                rclpy.parameter.Parameter("bf_method", rclpy.Parameter.Type.STRING, self.bf_method),
+            rclpy.parameter.Parameter(
+                "bf_method", rclpy.Parameter.Type.STRING, self.bf_method
+            ),
         ]
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
@@ -68,39 +73,53 @@ class SpectrumEstimator(Node):
         return SetParametersResult(successful=True)
 
     def listener_callback_correlations(self, msg_cor):
-        self.get_logger().info(f'Processing correlations: {msg_cor.timestamp}.')
+        self.get_logger().info(f"Processing correlations: {msg_cor.timestamp}.")
 
         n_frequencies = len(msg_cor.frequencies)
-        if n_frequencies >= 2**8:
+        if n_frequencies >= 2 ** 8:
             self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
             return
 
         if self.beam_former is None:
             if msg_cor.mic_positions:
-                mic_positions = np.array(msg_cor.mic_positions).reshape((msg_cor.n_mics, -1))
+                mic_positions = np.array(msg_cor.mic_positions).reshape(
+                    (msg_cor.n_mics, -1)
+                )
                 self.beam_former = BeamFormer(mic_positions)
             else:
-                self.get_logger().error("need to set send mic_positions in Correlation to do DOA")
+                self.get_logger().error(
+                    "need to set send mic_positions in Correlation to do DOA"
+                )
 
-        frequencies = np.array(msg_cor.frequencies).astype(np.float) #[10, 100, 1000]
+        frequencies = np.array(msg_cor.frequencies).astype(np.float)  # [10, 100, 1000]
         real_vect = np.array(msg_cor.corr_real_vect)
         imag_vect = np.array(msg_cor.corr_imag_vect)
 
-        R = (real_vect + 1j*imag_vect).reshape((len(frequencies), msg_cor.n_mics, msg_cor.n_mics))
+        R = (real_vect + 1j * imag_vect).reshape(
+            (len(frequencies), msg_cor.n_mics, msg_cor.n_mics)
+        )
 
         if self.bf_method == "mvdr":
-            spectrum = self.beam_former.get_mvdr_spectrum(R, frequencies) # n_frequencies x n_angles 
+            spectrum = self.beam_former.get_mvdr_spectrum(
+                R, frequencies
+            )  # n_frequencies x n_angles
         elif self.bf_method == "das":
-            spectrum = self.beam_former.get_das_spectrum(R, frequencies) # n_frequencies x n_angles 
+            spectrum = self.beam_former.get_das_spectrum(
+                R, frequencies
+            )  # n_frequencies x n_angles
         else:
-            raise ValueError(self.bf_method) 
+            raise ValueError(self.bf_method)
 
         orientation = 0
         latest = self.latest_time_and_orientation
-        if (latest is not None) and (abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS):
+        if (latest is not None) and (
+            abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS
+        ):
             orientation = latest[1]
         elif latest is not None:
-            self.get_logger().warn(f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}")
+            self.get_logger().warn(
+                f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}"
+            )
 
         # publish
         msg_spec = Spectrum()
@@ -111,22 +130,26 @@ class SpectrumEstimator(Node):
         msg_spec.frequencies = list(frequencies)
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
-        self.get_logger().info(f'Published spectrum.')
+        self.get_logger().info(f"Published spectrum.")
 
         # plot
         assert len(frequencies) == spectrum.shape[0]
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-        labels=[f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter.update_lines(spectrum[mask], self.beam_former.theta_scan, labels=labels)
+        labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
+        self.plotter.update_lines(
+            spectrum[mask], self.beam_former.theta_scan, labels=labels
+        )
 
     def listener_callback_pose_raw(self, msg_pose_raw):
-        self.get_logger().info(f'Processing pose: {msg_pose_raw.timestamp}.')
+        self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
         self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
+
 
 def main(args=None):
     import os
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = current_dir + '/../../../crazyflie-audio/data/simulated'
+    data_dir = current_dir + "/../../../crazyflie-audio/data/simulated"
 
     rclpy.init(args=args)
 
@@ -141,5 +164,5 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
