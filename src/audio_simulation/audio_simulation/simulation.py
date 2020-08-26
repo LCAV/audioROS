@@ -8,6 +8,8 @@ from rclpy.node import Node
 import pyroomacoustics as pra 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+
 from scipy.spatial.transform import Rotation as R
 from scipy.io import wavfile
 from operator import add
@@ -18,37 +20,33 @@ from geometry_msgs.msg import Pose
 from std_msgs.msg import String
 
 N_MICS = 4
-MIC_DISTANCE = 0.108                                                            # distance between microphones
-ROOM_DIM = [2, 2, 2]                                                            # room dimensions
-SOURCE_POS = [1, 1, 1]                                                          # source position
-#WAV_PATH = "./audio_source/white_noise.wav"                                     # source .wav file
-WAV_PATH = "/home/emilia/audioROS/src/audio_simulation/audio_simulation/audio_source/white_noise.wav"
+MIC_DISTANCE = 0.108                                                                                    # distance between microphones
+ROOM_DIM = [2, 2, 2]                                                                                    # room dimensions
+SOURCE_POS = [1, 1, 1]                                                                                  # source position
+WAV_PATH = os.getcwd() + "/src/audio_simulation/audio_simulation/audio_source/white_noise.wav"          # source .wav file
 
 class AudioSimulation(Node):
 
     def __init__(self):
         super().__init__('audio_simulation')
         
-        # creating the room with the audio source
-        room = SetRoom(ROOM_DIM, WAV_PATH)
+        room = SetRoom(ROOM_DIM, WAV_PATH)                                              # creating the room with the audio source
 
         self.publisher_signals = self.create_publisher(String, 'OK_NOK', 10)
         self.subscription_position = self.create_subscription(Pose, 'crazyflie_position', self.listener_callback, 10)
 
     def listener_callback(self, msg_received):
         
-        ROTATION = msg_received.orientation                                             # rotation (quaternion) 
-        DRONE_CENTER = msg_received.position                                            # drone's center position
+        rotation_rx = msg_received.orientation                                          # rotation (quaternion) received
+        drone_center_rx = msg_received.position                                         # drone's center position received
         
-        print(ROTATION)
-        print(DRONE_CENTER)
-        
+        rotation = [rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w]         # convertion to list
+        drone_center = [drone_center_rx.x, drone_center_rx.y, drone_center_rx.z]
 
         # plot the room
         #room.plot(img_order=0)
         #plt.show()
 
-        
         #msg = String()
         #msg.data = 'Something was sent'
         #self.publisher_signals.publish(msg)
@@ -80,9 +78,6 @@ def SetRoom(room_dim, wav_path):
     #room.add_microphone_array(mic_arr)
     #room.simulate()
 
-
-
-
 def main(args=None):
     rclpy.init(args=args)
 
@@ -90,31 +85,11 @@ def main(args=None):
 
     rclpy.spin(new_pubsub)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
+    # Destroy the node explicitly (otherwise it will be done automatically when the garbage collector destroys the node object)
     new_pubsub.destroy_node()
     rclpy.shutdown()
 
 
-
 if __name__ == '__main__':
     main()        
-
-
-#geometry_msgs/Pose pose
-#    geometry_msgs/Point position
-#        float64 x
-#        float64 y
-#        float64 z
-#    geometry_msgs/Quaternion orientation
-#        float64 x
-#        float64 y
-#        float64 z
-#        float64 w
-
-        #room = pra.ShoeBox(ROOM_DIM)
-        #wav_path = "./audio_source/white_noise.wav"
-        #fs, audio_source = wavfile.read(WAV_PATH)
-        #room.add_source(SOURCE_POS, signal = audio_source)
 
