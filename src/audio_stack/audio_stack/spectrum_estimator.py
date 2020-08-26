@@ -19,7 +19,7 @@ from rcl_interfaces.msg import SetParametersResult
 import matplotlib.pylab as plt
 import numpy as np
 
-from audio_interfaces.msg import Correlations, Spectrum
+from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
 from .live_plotter import LivePlotter
 
@@ -30,13 +30,17 @@ MIN_YLIM = 1e-13 # set to -inf for no effect.
 MIN_FREQ = 400
 MAX_FREQ = 600
 
+ALLOWED_LAG_MS = 20 # allowed lag between pose and audio message
 
 class SpectrumEstimator(Node):
     def __init__(self):
-        super().__init__('doa_estimator')
+        super().__init__('spectrum_estimator')
 
         self.subscription_correlations = self.create_subscription(
             Correlations, 'audio/correlations', self.listener_callback_correlations, 10)
+        self.subscription_pose_raw = self.create_subscription(
+            PoseRaw, 'motion/pose_raw', self.listener_callback_pose_raw, 10)
+        self.latest_time_and_orientation = None
 
         self.publisher_spectrum = self.create_publisher(Spectrum, 'audio/spectrum', 10)
 
@@ -62,11 +66,6 @@ class SpectrumEstimator(Node):
             else:
                 return SetParametersResult(successful=False)
         return SetParametersResult(successful=True)
-
-    def listener_callback_mic_positions(self, msg_mic):
-        self.get_logger().info(f'Updating mic_positions: {mic_positions}.')
-        mic_positions = np.array(msg_mic.mic_positions).reshape((msg_mic.n_mics, msg_mic.dimension))
-        self.beam_former = BeamFormer(mic_positions)
 
     def listener_callback_correlations(self, msg_cor):
         self.get_logger().info(f'Processing correlations: {msg_cor.timestamp}.')
@@ -96,10 +95,19 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method) 
 
+        orientation = 0
+        latest = self.latest_time_and_orientation
+        if (latest is not None) and (abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS):
+            orientation = latest[1]
+        elif latest is not None:
+            self.get_logger().warn(f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}")
+
         # publish
         msg_spec = Spectrum()
         msg_spec.timestamp = msg_cor.timestamp
         msg_spec.n_frequencies = n_frequencies
+        msg_spec.n_angles = spectrum.shape[1]
+        msg_spec.orientation = float(orientation)
         msg_spec.frequencies = list(frequencies)
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
@@ -110,6 +118,10 @@ class SpectrumEstimator(Node):
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
         labels=[f"f={f:.0f}Hz" for f in frequencies[mask]]
         self.plotter.update_lines(spectrum[mask], self.beam_former.theta_scan, labels=labels)
+
+    def listener_callback_pose_raw(self, msg_pose_raw):
+        self.get_logger().info(f'Processing pose: {msg_pose_raw.timestamp}.')
+        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
 
 def main(args=None):
     import os

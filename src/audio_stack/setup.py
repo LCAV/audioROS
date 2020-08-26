@@ -23,6 +23,7 @@ setup(
         'console_scripts': [
             'correlator = audio_stack.correlator:main',
             'doa_estimator = audio_stack.doa_estimator:main',
+            'spectrum_estimator = audio_stack.spectrum_estimator:main',
         ],
     },
 )

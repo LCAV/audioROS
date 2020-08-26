@@ -28,10 +28,11 @@ N_MICS = 4
 FS = 32000
 N = 1024
 
-class AudioPublisher(Node):
+class Gateway(Node):
     def __init__(self, reader_crtp, mic_positions=None, plot=False):
-        super().__init__('audio_publisher')
+        super().__init__('gateway')
 
+        self.start_time = time.time()
         self.mic_positions = mic_positions
 
         self.publisher_signals = self.create_publisher(SignalsFreq, 'audio/signals_f', 10)
@@ -47,7 +48,6 @@ class AudioPublisher(Node):
             self.plotter.ax.set_xlabel('angle [rad]')
             self.plotter.ax.set_ylabel('magnitude [-]')
 
-        self.start_time = time.time()
 
         self.reader_crtp = reader_crtp
 
@@ -87,7 +87,7 @@ class AudioPublisher(Node):
         msg.frequencies = [int(f) for f in frequencies]
         msg.signals_real_vect = list(signals_f.real.flatten())
         msg.signals_imag_vect = list(signals_f.imag.flatten())
-        msg.timestamp = int((time.time()-self.start_time)*1000)
+        msg.timestamp = self.reader_crtp.audio_data['timestamp']
         msg.n_mics = N_MICS
         msg.n_frequencies = N_FREQUENCIES
 
@@ -101,16 +101,16 @@ class AudioPublisher(Node):
 
     def publish_motion_data(self):
         motion_dict = self.reader_crtp.motion_data['data']
-        # TODO(FD) figure out which one to use.
-        #timestamp = int(self.reader_crtp.motion_data['timestamp'])
-        timestamp = int((time.time() - self.start_time)*1000)
 
         msg_pose_raw = PoseRaw()
         msg_pose_raw.dx = motion_dict['dx']
         msg_pose_raw.dy = motion_dict['dy']
         msg_pose_raw.dy = motion_dict['z']
         msg_pose_raw.yaw = motion_dict['yaw']
-        msg_pose_raw.timestamp = timestamp 
+        # TODO: we are using the time of publishing as the timestamp
+        # and not the time the python script got this value. 
+        # to be figured out which one is better.
+        msg_pose_raw.timestamp = self.reader_crtp.motion_data['timestamp']
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         msg_pose = Pose()
@@ -155,15 +155,20 @@ def main(args=None):
         cf = scf.cf
         #set_thrust(cf, 43000)
         reader_crtp = ReaderCRTP(cf, verbose=True)
-        publisher = AudioPublisher(reader_crtp, mic_positions=mic_positions, plot=plot)
+        publisher = Gateway(reader_crtp, mic_positions=mic_positions, plot=plot)
         print('done initializing')
 
-        rclpy.spin(publisher)
-        print('done spinning')
-        #plt.show()
+        try:
+            rclpy.spin(publisher)
+            print('done spinning')
+            #plt.show()
 
-        while True:
-            time.sleep(1)
+            while True:
+                time.sleep(1)
+        except:
+            print("unset audio.send_audio_enable")
+            cf.param.set_value("audio.send_audio_enable", 0)
+
 
     publisher.destroy_node()
     rclpy.shutdown()

@@ -28,14 +28,14 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
-from audio_interfaces.msg import Signals, MicPositions
+from audio_interfaces.msg import Signals
 
 N_MICS = 4
 
 MAX_TIMESTAMP_INT = 2**32-1 # needs to match Spectrum.msg and Correlation.msg
 
 # number of buffers to save, e.g. 256*1000=256'000 at 32000Hz: 8seconds
-MAX_BUFFERS = 500  # set to 0 for no saving
+MAX_BUFFERS = 0  # set to 0 for no saving
 
 OUT_DIR = "debug"
 
