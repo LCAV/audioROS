@@ -47,7 +47,7 @@ qtcreator-*
 # Catkin custom files
 CATKIN_IGNORE
 
-# Custom files
+####### Custom files
 *.log
 install/
 *.swp
@@ -55,3 +55,5 @@ install/
 *.orig
 debug/
 stash/
+#pycharm:
+.idea/
