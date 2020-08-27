@@ -1,9 +1,9 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 file_publisher.py: Publish audio data from file
 """
+import os
 import sys
 
 import numpy as np
@@ -13,10 +13,13 @@ import rclpy
 
 from .publisher import AudioPublisher
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
+import file_parser as fp
 
 class FilePublisher(AudioPublisher):
     def __init__(
-        self, filenames=None, loop=False, n_buffer=256, publish_rate=None, mic_fname=""
+        self, file_source, loop=False, n_buffer=256, publish_rate=None, mic_fname=""
     ):
         """
         :param publish_rate: in Hz, at which rate to publish
@@ -32,33 +35,26 @@ class FilePublisher(AudioPublisher):
             Fs=None,
         )
 
-        # audio file preparation
         self.loop = loop
         self.file_idx = 0
-        self.audio_data = {f: {} for f in filenames}
-        for fname in filenames:
-            self.audio_data[fname]["Fs"], self.audio_data[fname]["data"] = read(fname)
 
-        # read Fs and make sure it matches all files
-        Fs = self.audio_data[filenames[0]]["Fs"]
-        assert all(self.audio_data[f]["Fs"] == Fs for f in filenames)
+        if file_source == "analytical_source":
+            self.signals_full, Fs = fp.read_simulation(file_source)
+        elif file_source == "recordings_16_7_20":
+            signals_props, signals_source, signals_all = fp.read_recordings_16_7_20("high", 0, "white_noise")
+            Fs = fp.parameters[file_source]["Fs"]
+            start_idx = fp.parameters[file_source]["time_index"]
+            self.signals_full = signals_all[:, start_idx:]
+
         self.set_Fs(Fs)
-
-        # read len and make sure it matches all files
-        self.len = len(self.audio_data[filenames[0]]["data"])
-        assert all(len(self.audio_data[f]["data"]) == self.len for f in filenames)
+        self.len = self.signals_full.shape[1]
 
         self.create_timer(1.0 / self.publish_rate, self.publish_loop)
 
     def publish_loop(self):
         n_buffer = self.n_buffer
 
-        signals = np.c_[
-            [
-                data["data"][self.file_idx : self.file_idx + n_buffer]
-                for data in self.audio_data.values()
-            ]
-        ]  # n_mics x n_samples
+        signals = self.signals_full[:, self.file_idx:self.file_idx + n_buffer]
 
         self.process_signals(signals)
 
@@ -81,15 +77,13 @@ def main(args=None):
 
     print(f"Publishing audio data from file at {publish_rate}Hz.")
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.abspath(current_dir + "/../../../crazyflie-audio/data/simulated")
-    fnames = [
-        os.path.join(data_dir, f"analytical_source_mic{i}.wav") for i in range(1, 5)
-    ]
-    mic_fname = os.path.join(data_dir, "analytical_mics.npy")
+    mic_fname = os.path.abspath(current_dir + "/../../../crazyflie-audio/data/simulated/analytical_mics.npy")
 
+    file_source = "analytical_source"
+    file_source = "recordings_16_7_20"
+        
     publisher = FilePublisher(
-        fnames,
+        file_source,
         n_buffer=n_buffer,
         publish_rate=publish_rate,
         loop=True,
