@@ -12,6 +12,7 @@ import os
 
 from scipy.spatial.transform import Rotation as R
 from scipy.io import wavfile
+from scipy.signal import decimate 
 from operator import add
 from operator import neg
 
@@ -30,9 +31,9 @@ class AudioSimulation(Node):
     def __init__(self):
         super().__init__('audio_simulation')
         
-        room = SetRoom(ROOM_DIM, WAV_PATH)                                              # creating the room with the audio source
+#        self.room = set_room(ROOM_DIM, WAV_PATH)                                             # creating the room with the audio source
 
-        self.publisher_signals = self.create_publisher(String, 'OK_NOK', 10)
+        self.publisher_signals = self.create_publisher(Signals, 'OK_NOK', 10)
         self.subscription_position = self.create_subscription(Pose, 'crazyflie_position', self.listener_callback, 10)
 
     def listener_callback(self, msg_received):
@@ -42,41 +43,65 @@ class AudioSimulation(Node):
         
         rotation = [rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w]         # convertion to list
         drone_center = [drone_center_rx.x, drone_center_rx.y, drone_center_rx.z]
+        
+        room = set_room(ROOM_DIM, WAV_PATH)
+        microphones_sim, microphones_msg = generate_mic_position_array(rotation, drone_center)
+        simulation(microphones_sim, room)                                                       # running the audio simulation
 
-        # plot the room
-        #room.plot(img_order=0)
-        #plt.show()
+        msg = Signals()
+        msg.timestamp = 0
+        msg.fs = room.fs
+        msg.n_mics = N_MICS
+        
+        signal = [0, 0, 0, 0]
 
-        #msg = String()
-        #msg.data = 'Something was sent'
-        #self.publisher_signals.publish(msg)
-        #self.get_logger().info('Received data')
+        for i in range(len(room.mic_array.signals)):                                # decimating signal
+            signal[i] = decimate(room.mic_array.signals[i], 8)
+        
+
+        msg.n_buffer = len(signal[0])
+        
+        signal = np.array(signal, dtype = float)                                    # converting signals to np.ndarray
+        microphones_msg = np.array(microphones_msg, dtype = float)
+
+        msg.signals_vect = list(signal.flatten())
+        msg.mic_positions= list(microphones_msg.flatten())
+
+        self.publisher_signals.publish(msg)
+        self.get_logger().info('Data was sent')
 
 
-def SetRoom(room_dim, wav_path):
+def set_room(room_dim, wav_path):                                                   # setting the shoe box room
     pyroom = pra.ShoeBox(room_dim)
     fs, audio_source = wavfile.read(wav_path)
     pyroom.add_source(SOURCE_POS, signal = audio_source)
     return pyroom
 
-#def Simulation(rotation, pose, pyroom):
-    #rot = R.from_quat(ROTATION)
-    #DRONE_CENTER_REV = list(map(neg, DRONE_CENTER))
-    #MIC_LT = list( map(add, DRONE_CENTER, [-MIC_DISTANCE/2, MIC_DISTANCE/2, 0]))    # left top
-    #MIC_RT = list( map(add, DRONE_CENTER, [MIC_DISTANCE/2, MIC_DISTANCE/2, 0]))     # right top
-    #MIC_RB = list( map(add, DRONE_CENTER, [MIC_DISTANCE/2, -MIC_DISTANCE/2, 0]))    # right bottom
-    #MIC_LB = list( map(add, DRONE_CENTER, [-MIC_DISTANCE/2, -MIC_DISTANCE/2, 0]))   # left bottom
-    #mic_locs = [MIC_LT, MIC_RT, MIC_RB, MIC_LB]
+
+def simulation(mic_array, pyroom):
+    pyroom.add_microphone_array(mic_array)                                          # adding microphones
+    pyroom.simulate()
+
+
+def generate_mic_position_array(rotation, drone_center):
+    rot = R.from_quat(rotation)
+    drone_center_rev = list(map(neg, drone_center))
+    mic_lt = list( map(add, drone_center, [-MIC_DISTANCE/2, MIC_DISTANCE/2, 0]))    # left top
+    mic_rt = list( map(add, drone_center, [MIC_DISTANCE/2, MIC_DISTANCE/2, 0]))     # right top
+    mic_rb = list( map(add, drone_center, [MIC_DISTANCE/2, -MIC_DISTANCE/2, 0]))    # right bottom
+    mic_lb = list( map(add, drone_center, [-MIC_DISTANCE/2, -MIC_DISTANCE/2, 0]))   # left bottom
+    mic_locs = [mic_lt, mic_rt, mic_rb, mic_lb]
      
-    # MIC_new_position = (MIC_vector - DRONE_CENTER_vector) * rotation + DRONE_CENTER_vector
-    #for i in range(len(mic_locs)):
-    #    tmp = list( map( add, mic_locs[i], DRONE_CENTER_REV ) )         # tmp = (MIC_vector - DRONE_CENTER_vector)
-    #    mic_locs[i] = list( map(add, rot.apply(tmp), DRONE_CENTER))     # (tmp * rotation) + DRONE_CENTER_vector
+    # getting mic_new_position = (mic_vector - drone_center_vector) * rotation + drone_center_vector
+    
+    for i in range(len(mic_locs)):
+        tmp = list( map( add, mic_locs[i], drone_center_rev ) )                     # tmp = (mic_vector - drone_center_vector)
+        mic_locs[i] = list( map(add, rot.apply(tmp), drone_center))                 # (tmp * rotation) + drone_center_vector
 
-    #mic_arr = np.c_[    mic_locs[0], mic_locs[1], mic_locs[2], mic_locs[3],    ]
+    mic_arr = np.c_[mic_locs[0], mic_locs[1], mic_locs[2], mic_locs[3],]            
+    
+    return mic_arr, mic_locs                                                        # mic_arr format is needed for simulation, mic_locs for sending the message
 
-    #room.add_microphone_array(mic_arr)
-    #room.simulate()
 
 def main(args=None):
     rclpy.init(args=args)
