@@ -23,7 +23,6 @@ id = "radio://0/80/2M"
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
-N_FREQUENCIES = 32
 N_MICS = 4
 FS = 32000
 N = 1024
@@ -60,25 +59,34 @@ class Gateway(Node):
         self.create_timer(0.001, self.publish_current_data)
 
     def publish_current_data(self):
-        if not self.reader_crtp.audio_data["published"]:
-            self.publish_audio_data()
-            self.reader_crtp.audio_data["published"] = True
+        if not self.reader_crtp.audio_dict["published"]:
+            self.publish_audio_dict()
+            self.reader_crtp.audio_dict["published"] = True
 
-        if not self.reader_crtp.motion_data["published"]:
-            self.publish_motion_data()
-            self.reader_crtp.motion_data["published"] = True
+        if not self.reader_crtp.motion_dict["published"]:
+            self.publish_motion_dict()
+            self.reader_crtp.motion_dict["published"] = True
 
-    def publish_audio_data(self):
-        self.get_logger().info(f"Publishing signals.")
-        signals_f_vect = self.reader_crtp.audio_data["data"]
+    def publish_audio_dict(self):
+        self.get_logger().info(f"Publishing audio signals.")
+        signals_f_vect = self.reader_crtp.audio_dict["data"]
 
-        # TODO(FD) get this from CRTP
-        assert N_FREQUENCIES == len(signals_f_vect) / (
-            N_MICS * 2
-        ), f"{N_FREQUENCIES} != {len(signals_f_vect)} / {(N_MICS * 2)}"
-        frequencies = np.fft.rfftfreq(n=N, d=1 / FS)[:N_FREQUENCIES].astype(np.int)
+        # read frequencies
+        if self.reader_crtp.fbins_dict["published"]:
+            self.get_logger().error("Synchronization issue: already published fbins")
+        fbins = self.reader_crtp.fbins_dict["data"]
 
-        signals_f = np.zeros((N_MICS, N_FREQUENCIES), dtype=np.complex128)
+        self.get_logger().info("Read fbins:", fbins)
+
+        n_frequencies = len(fbins)
+        assert n_frequencies == len(signals_f_vect) / (N_MICS * 2), \
+            f"{n_frequencies} does not match {len(signals_f_vect)}"
+        all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
+        # TODO(FD): change back
+        frequencies = all_frequencies[:n_frequencies]
+        #frequencies = all_frequencies[fbins]
+
+        signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
         for i in range(N_MICS):
             signals_f[i].real = signals_f_vect[i :: N_MICS * 2]
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
@@ -93,9 +101,9 @@ class Gateway(Node):
         msg.frequencies = [int(f) for f in frequencies]
         msg.signals_real_vect = list(signals_f.real.flatten())
         msg.signals_imag_vect = list(signals_f.imag.flatten())
-        msg.timestamp = self.reader_crtp.audio_data["timestamp"]
+        msg.timestamp = self.reader_crtp.audio_dict["timestamp"]
         msg.n_mics = N_MICS
-        msg.n_frequencies = N_FREQUENCIES
+        msg.n_frequencies = n_frequencies
 
         if self.mic_positions is not None:
             msg.mic_positions = list(self.mic_positions.flatten().astype(float))
@@ -103,17 +111,18 @@ class Gateway(Node):
             msg.mic_positions = []
         self.publisher_signals.publish(msg)
 
-        self.get_logger().info(f"Published audio_data.")
+        self.get_logger().info(f"Published audio_dict.")
 
-    def publish_motion_data(self):
-        motion_dict = self.reader_crtp.motion_data["data"]
+    def publish_motion_dict(self):
+        self.get_logger().info(f"Publishing motion signals.")
+        motion_dict = self.reader_crtp.motion_dict["data"]
 
         msg_pose_raw = PoseRaw()
         msg_pose_raw.dx = motion_dict["dx"]
         msg_pose_raw.dy = motion_dict["dy"]
         msg_pose_raw.dy = motion_dict["z"]
         msg_pose_raw.yaw = motion_dict["yaw"]
-        msg_pose_raw.timestamp = self.reader_crtp.motion_data["timestamp"]
+        msg_pose_raw.timestamp = self.reader_crtp.motion_dict["timestamp"]
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         # TODO(FD) fix the position update to consider also rotation.
@@ -164,7 +173,7 @@ def main(args=None):
 
             while True:
                 time.sleep(1)
-        except:
+        except KeyboardInterrupt:
             print("unset audio.send_audio_enable")
             cf.param.set_value("audio.send_audio_enable", 0)
 
