@@ -76,20 +76,22 @@ class Gateway(Node):
             self.get_logger().error("Synchronization issue: already published fbins")
         fbins = self.reader_crtp.fbins_dict["data"]
 
-        self.get_logger().info("Read fbins:", fbins)
+        #This seems to be ok now
+        #self.get_logger().info(f"Read fbins: {fbins}")
+        #self.get_logger().info(f"Read audio data: {signals_f_vect.reshape((8, 32))}")
 
         n_frequencies = len(fbins)
         assert n_frequencies == len(signals_f_vect) / (N_MICS * 2), \
             f"{n_frequencies} does not match {len(signals_f_vect)}"
         all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
-        # TODO(FD): change back
-        frequencies = all_frequencies[:n_frequencies]
-        #frequencies = all_frequencies[fbins]
+        #frequencies = all_frequencies[:n_frequencies]
+        frequencies = all_frequencies[fbins]
 
         signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
         for i in range(N_MICS):
             signals_f[i].real = signals_f_vect[i :: N_MICS * 2]
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
+
 
         # plot data
         if self.plot:
