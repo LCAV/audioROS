@@ -33,20 +33,14 @@ colcon build --symlink-install
 
 The stack is separated into the following modules:
 
-- `audio_stack` (python): Read, publish, process and plot audio data.
-- `audio_interfaces` (C++): Custom ROS message definintions. Can be extended with services and/or actions in the future. 
+- `audio_stack` (python): Read and process audio signals.
+- `audio_interfaces` (C++): Custom ROS message definintions. 
+- `audio_publisher` (python): Publish signals from file or computer's audio input stream. 
+- `crazyflie_crtp` (python): Publish audio signals received over CRTP from Crazyflie drone.  
 
-To publish correlation data, obtained from an audio file, a sounddevice or the CRTP packages sent by the crazyflie, 
-adjust the file `src/audio_stack/audio_stack/publisher.py` and run:
+A diagram of the interactions of the different packages is shown below.
 
-```
-ros2 run audio_stack publisher
-```
-
-To process the data and plot the resulting DOA spectrum, run (in a different terminal):
-```
-ros2 run audio_stack processor
-```
+![Diagram showing package interactions](https://app.lucidchart.com/publicSegments/view/8da32e75-dd1a-45f2-a5a3-6a195968585d/image.png)
 
 ## Credits
 
