@@ -165,7 +165,7 @@ def main(args=None):
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         # set_thrust(cf, 43000)
-        reader_crtp = ReaderCRTP(cf, verbose=True)
+        reader_crtp = ReaderCRTP(cf, verbose=False)
         publisher = Gateway(reader_crtp, mic_positions=mic_positions, plot=plot)
         print("done initializing")
 

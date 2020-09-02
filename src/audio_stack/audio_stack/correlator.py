@@ -19,6 +19,7 @@ from rcl_interfaces.msg import SetParametersResult
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
+from bin_selection import select_frequencies as embedded_select_frequencies
 from algos_beamforming import select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
@@ -35,7 +36,7 @@ METHOD_WINDOW = "tukey"
 
 # Frequency selection
 N_FREQUENCIES = 10
-METHOD_FREQUENCY = "uniform"
+METHOD_FREQUENCY = "embedded" #"uniform"
 METHOD_FREQUENCY_DICT = {
     "uniform": {  # uniform frequencies between min and max
         "num_frequencies": N_FREQUENCIES,
@@ -60,13 +61,19 @@ METHOD_FREQUENCY_DICT = {
         "amp_ratio": 1,
         "delta": 1,
     },
+    "embedded": {
+        "min_freq": 200,
+        "max_freq": 10000,
+        "filter_snr": True,
+        "thrust": 43000
+    }
 }
 
 # Plotting parameters
 MIN_YLIM = 1e-3  # set to -inf for no effect.
 MAX_YLIM = 1e5  # set to inf for no effect.
-MIN_FREQ = 100  # set to -inf for no effect
-MAX_FREQ = 800  # set to inf for no effect
+MIN_FREQ = -np.inf # set to -inf for no effect
+MAX_FREQ = +np.inf  # set to inf for no effect
 
 
 def get_stft(signals, Fs, method_window, method_noise):
@@ -120,6 +127,7 @@ def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency
 
 class Correlator(Node):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
+
     """
 
     def __init__(self, plot_freq=False, plot_time=False):
@@ -193,7 +201,16 @@ class Correlator(Node):
         signals_f, freqs = get_stft(
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
-        if self.methods["frequency"] != "":
+        if self.methods["frequency"] == "embedded":
+            bins = embedded_select_frequencies(
+                msg.n_buffer,
+                msg.fs,
+                buffer_f=signals_f,
+                **METHOD_FREQUENCY_DICT["embedded"],
+            )
+            freqs = freqs[bins]
+            signals_f = signals_f[bins]
+        elif self.methods["frequency"] != "":
             bins = select_frequencies(
                 msg.n_buffer,
                 msg.fs,
@@ -225,6 +242,7 @@ class Correlator(Node):
         )
         signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
         freqs = np.array(msg.frequencies)
+        self.get_logger().info(f"frequencies: {freqs}")
 
         # TODO(FD): will move this scheme to the microprocessor eventually.
         mask = (freqs < MAX_FREQ) & (freqs > MIN_FREQ)
