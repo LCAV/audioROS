@@ -17,6 +17,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
 import file_parser as fp
 
+GT_DEGREES = 0
+LOUDNESS = "high"
+SOURCE = "white_noise"
+
 class FilePublisher(AudioPublisher):
     def __init__(
         self, file_source, Fs, loop=False, n_buffer=256, publish_rate=None, mic_positions=None
@@ -41,13 +45,13 @@ class FilePublisher(AudioPublisher):
             signals_props, signals_source, signals_all = fp.read_simulation(file_source)
         elif file_source == "recordings_16_7_20":
             signals_props, signals_source, signals_all = fp.read_recordings_16_7_20(
-                    loudness="high", 
-                    gt_degrees=0, 
-                    source="white_noise")
+                    loudness=LOUDNESS, 
+                    gt_degrees=GT_DEGREES, 
+                    source=SOURCE)
         elif file_source == "recordings_14_7_20":
-            signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(gt_degrees=0)
+            signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(gt_degrees=GT_DEGREES)
         elif file_source == "recordings_9_7_20":
-            signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=0)
+            signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=GT_DEGREES)
 
         signals_full = signals_all
         start_idx = fp.parameters[file_source]["time_index"]
@@ -74,11 +78,11 @@ def main(args=None):
 
     n_buffer = 2 ** 10
 
-    file_source = "analytical"
+    #file_source = "analytical"
     #file_source = "pyroomacoustics"
     #file_source = "recordings_9_7_20"
     #file_source = "recordings_14_7_20"
-    #file_source = "recordings_16_7_20"
+    file_source = "recordings_16_7_20"
 
     Fs = fp.parameters[file_source]["Fs"]
     mic_positions = fp.parameters[file_source]["mic_positions"]
