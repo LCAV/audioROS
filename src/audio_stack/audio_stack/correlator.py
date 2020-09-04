@@ -26,7 +26,8 @@ from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 from .live_plotter import LivePlotter
 
 # Denoising method.
-METHOD_NOISE = "bandpass"
+# METHOD_NOISE = "bandpass"
+METHOD_NOISE = ""
 METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 
 # Windowing method. Available:
@@ -35,37 +36,23 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 METHOD_WINDOW = "tukey"
 
 # Frequency selection
-N_FREQUENCIES = 10
-METHOD_FREQUENCY = "embedded" #"uniform"
+THRUST = 43000
+#METHOD_FREQUENCY = "standard"
+METHOD_FREQUENCY = "single"
 METHOD_FREQUENCY_DICT = {
-    "uniform": {  # uniform frequencies between min and max
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 200,
-        "max_freq": 500,
-    },
-    "single": {  # one single frequency (beam width between min and max)
-        "num_frequencies": 1,
-        "min_freq": 150,
-        "max_freq": 250,
-    },
-    "between": {  # random, between propeller frequencies
-        "num_frequencies": N_FREQUENCIES,
+    "standard": {
         "min_freq": 100,
-        "max_freq": 1000,
-        "delta": 1,
-    },
-    "between_snr": {  # choose highest snr between propeller frequencies
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
-        "amp_ratio": 1,
-        "delta": 1,
-    },
-    "embedded": {
-        "min_freq": 200,
         "max_freq": 10000,
+        "delta_freq": 100,
         "filter_snr": True,
-        "thrust": 43000
+        "thrust": THRUST,
+    },
+    "single": {
+        "min_freq": 200,
+        "max_freq": 200,
+        "delta_freq": 100,
+        "filter_snr": False,
+        "thrust": 0,
     }
 }
 
@@ -169,15 +156,32 @@ class Correlator(Node):
             parameters.append(
                 rclpy.parameter.Parameter(key, rclpy.Parameter.Type.STRING, value)
             )
-        self.set_parameters_callback(self.set_params)
+
+        self.frequency_params = METHOD_FREQUENCY_DICT[METHOD_FREQUENCY]
+        for key, value in self.frequency_params.items():
+            self.declare_parameter(key)
+            parameters.append(
+                rclpy.parameter.Parameter(key, rclpy.Parameter.Type.INTEGER, value)
+            )
+
         self.set_parameters(parameters)
+        self.set_parameters_callback(self.set_params)
 
     def set_params(self, params):
         for param in params:
             if param.name in self.methods.keys():
-                self.methods[param.name] = param.get_parameter_value().string_value
+                # set high-level parameters
+                value = param.get_parameter_value().string_value
+                self.methods[param.name] = value
+
+                if param.name == "frequency":
+                    for key in self.frequency_params.keys():
+                        self.frequency_params[key] = METHOD_FREQUENCY_DICT[value][key]
             else:
-                return SetParametersResult(successful=False)
+                # set low-level parameters
+                self.methods["frequency"] = "custom"
+                value = param.get_parameter_value().integer_value
+                self.frequency_params[param.name] = value
         return SetParametersResult(successful=True)
 
     def listener_callback_signals(self, msg):
@@ -201,22 +205,12 @@ class Correlator(Node):
         signals_f, freqs = get_stft(
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
-        if self.methods["frequency"] == "embedded":
+        if self.methods["frequency"] != "":
             bins = embedded_select_frequencies(
                 msg.n_buffer,
                 msg.fs,
-                buffer_f=signals_f,
-                **METHOD_FREQUENCY_DICT["embedded"],
-            )
-            freqs = freqs[bins]
-            signals_f = signals_f[bins]
-        elif self.methods["frequency"] != "":
-            bins = select_frequencies(
-                msg.n_buffer,
-                msg.fs,
-                self.methods["frequency"],
-                buffer_f=signals_f,
-                **METHOD_FREQUENCY_DICT[self.methods["frequency"]],
+                buffer_f=signals_f.T,
+                **self.frequency_params,
             )
             freqs = freqs[bins]
             signals_f = signals_f[bins]
@@ -275,7 +269,12 @@ class Correlator(Node):
         if self.plot_freq:
             if msg_new.n_frequencies != self.current_n_frequencies:
                 self.plotter_freq.clear()
-            self.plotter_freq.update_lines(np.abs(signals_f.T), freqs, self.labels)
+
+            # sort frequencies
+            indices = np.argsort(freqs)
+            y = np.abs(signals_f[indices, :].T)
+            x = freqs[indices]
+            self.plotter_freq.update_lines(y, x, self.labels)
             self.plotter_freq.ax.set_title(f"time (ms): {msg_new.timestamp}")
             self.plotter_freq.update_axvlines(freqs)
             self.current_n_frequencies = msg_new.n_frequencies
