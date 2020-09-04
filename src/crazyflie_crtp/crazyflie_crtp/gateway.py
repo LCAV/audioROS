@@ -18,9 +18,9 @@ from audio_stack.live_plotter import LivePlotter
 from reader_crtp import ReaderCRTP
 
 logging.basicConfig(level=logging.ERROR)
-#id = "radio://0/80/2M"
+id = "radio://0/80/2M"
 #id = "radio://0/48/2M"
-id = "radio://0/69/2M"
+#id = "radio://0/69/2M"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -35,8 +35,9 @@ PARAMETERS_TUPLES = [
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),
-    ("max_freq", rclpy.Parameter.Type.INTEGER, 100),
-    ("min_freq", rclpy.Parameter.Type.INTEGER, 3000),
+    ("max_freq", rclpy.Parameter.Type.INTEGER, 10000),
+    ("min_freq", rclpy.Parameter.Type.INTEGER, 100),
+    ("delta_freq", rclpy.Parameter.Type.INTEGER, 100),
     ("use_iir", rclpy.Parameter.Type.INTEGER, 0),
     ("ma_window", rclpy.Parameter.Type.INTEGER, 0),
     ("alpha_iir", rclpy.Parameter.Type.DOUBLE, 0.5)
