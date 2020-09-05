@@ -62,6 +62,15 @@ MAX_YLIM = 1e5  # set to inf for no effect.
 MIN_FREQ = -np.inf # set to -inf for no effect
 MAX_FREQ = +np.inf  # set to inf for no effect
 
+def verify_validity(params_dict):
+    assert all([key in params_dict.keys() for key in METHOD_FREQUENCY_DICT["standard"].keys()])
+    assert params_dict["min_freq"] <= params_dict["max_freq"]
+    assert params_dict["min_freq"] >= 0
+    assert params_dict["max_freq"] >= 0
+    assert params_dict["thrust"] >= 0
+    assert params_dict["filter_snr"] in [0, 1]
+    return True
+
 
 def get_stft(signals, Fs, method_window, method_noise):
     if method_window == "tukey":
@@ -168,6 +177,7 @@ class Correlator(Node):
         self.set_parameters_callback(self.set_params)
 
     def set_params(self, params):
+        new_params = self.frequency_params.copy()
         for param in params:
             if param.name in self.methods.keys():
                 # set high-level parameters
@@ -175,14 +185,20 @@ class Correlator(Node):
                 self.methods[param.name] = value
 
                 if param.name == "frequency":
-                    for key in self.frequency_params.keys():
-                        self.frequency_params[key] = METHOD_FREQUENCY_DICT[value][key]
+                    for key in new_params.keys():
+                        new_params[key] = METHOD_FREQUENCY_DICT[value][key]
             else:
                 # set low-level parameters
                 self.methods["frequency"] = "custom"
                 value = param.get_parameter_value().integer_value
-                self.frequency_params[param.name] = value
-        return SetParametersResult(successful=True)
+
+                new_params[param.name] = value
+
+        if verify_validity(new_params):
+            self.frequency_params = new_params
+            return SetParametersResult(successful=True)
+        else:
+            return SetParametersResult(successful=False)
 
     def listener_callback_signals(self, msg):
         t1 = time.time()
@@ -222,7 +238,7 @@ class Correlator(Node):
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-            f"listener_callback_signals: Publishing after processing time {processing_time}"
+                f"listener_callback_signals: Publishing after processing time {processing_time:.2f}"
         )
 
     def listener_callback_signals_f(self, msg):
@@ -237,16 +253,6 @@ class Correlator(Node):
         signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
         freqs = np.array(msg.frequencies)
         self.get_logger().info(f"frequencies: {freqs}")
-
-        # TODO(FD): will move this scheme to the microprocessor eventually.
-        mask = (freqs < MAX_FREQ) & (freqs > MIN_FREQ)
-        freqs = freqs[mask]
-        signals_f = signals_f[mask]
-
-        if not len(freqs):
-            self.get_logger().error(
-                f"no frequency bins in range {MIN_FREQ}, {MAX_FREQ}"
-            )
 
         self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
 
@@ -278,6 +284,7 @@ class Correlator(Node):
             self.plotter_freq.ax.set_title(f"time (ms): {msg_new.timestamp}")
             self.plotter_freq.update_axvlines(freqs)
             self.current_n_frequencies = msg_new.n_frequencies
+
         # publishing
         self.publisher_correlations.publish(msg_new)
 

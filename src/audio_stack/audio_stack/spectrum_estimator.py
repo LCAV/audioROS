@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
@@ -27,15 +29,16 @@ MAX_YLIM = 1  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
 # for plotting only
-MIN_FREQ = 400
-MAX_FREQ = 600
+MIN_FREQ = -np.inf #400
+MAX_FREQ = np.inf #600
 
 ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
 
-
 class SpectrumEstimator(Node):
-    def __init__(self):
+    def __init__(self, plot=False):
         super().__init__("spectrum_estimator")
+        
+        self.plot = plot
 
         self.subscription_correlations = self.create_subscription(
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
@@ -49,9 +52,10 @@ class SpectrumEstimator(Node):
 
         self.beam_former = None
 
-        self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-        self.plotter.ax.set_xlabel("angle [rad]")
-        self.plotter.ax.set_ylabel("magnitude [-]")
+        if self.plot:
+            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
+            self.plotter.ax.set_xlabel("angle [rad]")
+            self.plotter.ax.set_ylabel("magnitude [-]")
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
@@ -74,6 +78,8 @@ class SpectrumEstimator(Node):
 
     def listener_callback_correlations(self, msg_cor):
         self.get_logger().info(f"Processing correlations: {msg_cor.timestamp}.")
+
+        t1 = time.time()
 
         n_frequencies = len(msg_cor.frequencies)
         if n_frequencies >= 2 ** 8:
@@ -99,6 +105,8 @@ class SpectrumEstimator(Node):
             (len(frequencies), msg_cor.n_mics, msg_cor.n_mics)
         )
 
+        # TODO(FD): implement below more efficiently.
+        t11 = time.time()
         if self.bf_method == "mvdr":
             spectrum = self.beam_former.get_mvdr_spectrum(
                 R, frequencies
@@ -109,6 +117,8 @@ class SpectrumEstimator(Node):
             )  # n_frequencies x n_angles
         else:
             raise ValueError(self.bf_method)
+        t22 = time.time()
+        print(f"Time for beamforming: {t22-t11:.2f}")
 
         orientation = 0
         latest = self.latest_time_and_orientation
@@ -130,15 +140,19 @@ class SpectrumEstimator(Node):
         msg_spec.frequencies = list(frequencies)
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
-        self.get_logger().info(f"Published spectrum.")
+
+        t2 = time.time()
+        processing_time = t2 - t1
+        self.get_logger().info(f"Published spectrum after {processing_time:.2f}.")
 
         # plot
-        assert len(frequencies) == spectrum.shape[0]
-        mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-        labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter.update_lines(
-            spectrum[mask], self.beam_former.theta_scan, labels=labels
-        )
+        if self.plot:
+            assert len(frequencies) == spectrum.shape[0]
+            mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
+            #labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
+            self.plotter.update_lines(
+                spectrum[mask], self.beam_former.theta_scan, labels=None
+            )
 
     def listener_callback_pose_raw(self, msg_pose_raw):
         self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
