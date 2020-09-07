@@ -37,8 +37,7 @@ METHOD_WINDOW = "tukey"
 
 # Frequency selection
 THRUST = 43000
-#METHOD_FREQUENCY = "standard"
-METHOD_FREQUENCY = "single"
+METHOD_FREQUENCY = "standard"
 METHOD_FREQUENCY_DICT = {
     "standard": {
         "min_freq": 100,
@@ -292,7 +291,7 @@ class Correlator(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    correlator = Correlator(plot_freq=True, plot_time=True)
+    correlator = Correlator(plot_freq=True, plot_time=False)
     rclpy.spin(correlator)
 
     # Destroy the node explicitly
