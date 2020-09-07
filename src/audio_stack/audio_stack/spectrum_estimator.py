@@ -33,7 +33,7 @@ class SpectrumEstimator(Node):
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
         self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, "motion/pose_raw", self.listener_callback_pose_raw, 10
+            PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
         self.latest_time_and_orientation = None
 

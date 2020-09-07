@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'audio = topic_plotter.audio:main'
+            'audio = topic_plotter.audio:main',
+            'geometry = topic_plotter.geometry:main'
         ],
     },
 )
