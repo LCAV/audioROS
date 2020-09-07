@@ -82,6 +82,8 @@ class AudioPublisher(Node):
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
+        self.start_time = time.time()
+
     def set_params(self, params):
         for param in params:
             old_value = (
@@ -105,6 +107,9 @@ class AudioPublisher(Node):
         self.Fs = Fs
         self.n_between_buffers = self.Fs // self.publish_rate
 
+    def get_time_ms(self):
+        return int(1000 * (time.time() - self.start_time))
+
     def process_signals(self, signals):
         n_buffer = signals.shape[1]
 
@@ -116,8 +121,9 @@ class AudioPublisher(Node):
             self.get_logger.warn("Did not set mic_positions.")
 
         # publishing
+
         msg = Signals()
-        msg.timestamp = self.time_idx
+        msg.timestamp = self.get_time_ms() 
         msg.fs = self.Fs
         msg.n_mics = N_MICS
         msg.n_buffer = n_buffer
@@ -139,9 +145,6 @@ class AudioPublisher(Node):
                 self.get_logger().info(f"Saved audio as {fname}")
 
         self.time_idx += 1
-        if self.time_idx >= MAX_TIMESTAMP_INT:
-            self.get_logger().error("timestamp overflow.")
-            self.time_idx = self.time_idx % MAX_TIMESTAMP_INT
 
         t2 = time.time()
         processing_time = t2 - t1
