@@ -16,7 +16,6 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw
-from audio_stack.live_plotter import LivePlotter
 from reader_crtp import ReaderCRTP
 
 logging.basicConfig(level=logging.ERROR)
@@ -47,7 +46,7 @@ PARAMETERS_TUPLES = [
 
 
 class Gateway(Node):
-    def __init__(self, reader_crtp, mic_positions=None, plot=False):
+    def __init__(self, reader_crtp, mic_positions=None):
         super().__init__("gateway")
 
         self.start_time = time.time()
@@ -60,15 +59,9 @@ class Gateway(Node):
         self.publisher_motion_pose_raw = self.create_publisher(
             PoseRaw, "geometry/pose_raw", 10
         )
-        self.plot = plot
 
         self.prev_position_x = 0
         self.prev_position_y = 0
-
-        if self.plot:
-            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-            self.plotter.ax.set_xlabel("angle [rad]")
-            self.plotter.ax.set_ylabel("magnitude [-]")
 
         self.reader_crtp = reader_crtp
 
@@ -94,8 +87,6 @@ class Gateway(Node):
             self.reader_crtp.motion_dict["published"] = True
 
     def publish_audio_dict(self):
-        self.get_logger().info(f"Publishing audio signals.")
-
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["data"]
         if signals_f_vect is None:
@@ -126,12 +117,6 @@ class Gateway(Node):
             signals_f[i].real = signals_f_vect[i :: N_MICS * 2]
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
 
-
-        # plot data
-        if self.plot:
-            labels = [f"mic{i}" for i in range(N_MICS)]
-            self.plotter.update_lines(np.abs(signals_f), frequencies, labels=labels)
-
         # send data
         msg = SignalsFreq()
         msg.frequencies = [int(f) for f in frequencies]
@@ -147,11 +132,9 @@ class Gateway(Node):
             msg.mic_positions = []
         self.publisher_signals.publish(msg)
 
-        self.get_logger().info(f"Published audio_dict.")
+        self.get_logger().info(f"Published audio data.")
 
     def publish_motion_dict(self):
-
-        self.get_logger().info(f"Publishing motion signals.")
         motion_dict = self.reader_crtp.motion_dict["data"]
 
         msg_pose_raw = PoseRaw()
@@ -159,12 +142,12 @@ class Gateway(Node):
         msg_pose_raw.dy = motion_dict["dy"]
         msg_pose_raw.z = motion_dict["z"]
         msg_pose_raw.yaw_deg = motion_dict["yaw"]
-        msg_pose_raw.source_direction_deg = 0
+        msg_pose_raw.source_direction_deg = 0.0
         msg_pose_raw.timestamp = self.reader_crtp.motion_dict["timestamp"]
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
-        r = Rotation.from_euler('z', motion_dict["yaw", degrees=True)
-        d_local = np.array((motion_dicto['dx'], motion_dicto['dy']))
+        r = Rotation.from_euler("z", motion_dict["yaw"], degrees=True)
+        d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
         d_world = r.as_matrix()[:2, :2] @ d_local
 
         msg_pose = Pose()
@@ -212,7 +195,7 @@ def main(args=None):
     from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
     import cflib.crtp
 
-    plot = False
+    verbose = False
 
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
@@ -223,8 +206,8 @@ def main(args=None):
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         # set_thrust(cf, 43000)
-        reader_crtp = ReaderCRTP(cf, verbose=False)
-        publisher = Gateway(reader_crtp, mic_positions=mic_positions, plot=plot)
+        reader_crtp = ReaderCRTP(cf, verbose=verbose)
+        publisher = Gateway(reader_crtp, mic_positions=mic_positions)
         print("done initializing")
 
         try:
