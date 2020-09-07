@@ -12,6 +12,8 @@ from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose, Point, Quaternion
 
 import numpy as np
+# TODO(FD): could replace this with tf.transformations or tf2.transformations
+from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw
 from audio_stack.live_plotter import LivePlotter
@@ -54,9 +56,9 @@ class Gateway(Node):
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
-        self.publisher_motion_pose = self.create_publisher(Pose, "motion/pose", 10)
+        self.publisher_motion_pose = self.create_publisher(Pose, "geometry/pose", 10)
         self.publisher_motion_pose_raw = self.create_publisher(
-            PoseRaw, "motion/pose_raw", 10
+            PoseRaw, "geometry/pose_raw", 10
         )
         self.plot = plot
 
@@ -148,28 +150,29 @@ class Gateway(Node):
         self.get_logger().info(f"Published audio_dict.")
 
     def publish_motion_dict(self):
+
         self.get_logger().info(f"Publishing motion signals.")
         motion_dict = self.reader_crtp.motion_dict["data"]
 
         msg_pose_raw = PoseRaw()
         msg_pose_raw.dx = motion_dict["dx"]
         msg_pose_raw.dy = motion_dict["dy"]
-        msg_pose_raw.dy = motion_dict["z"]
-        msg_pose_raw.yaw = motion_dict["yaw"]
+        msg_pose_raw.z = motion_dict["z"]
+        msg_pose_raw.yaw_deg = motion_dict["yaw"]
+        msg_pose_raw.source_direction_deg = 0
         msg_pose_raw.timestamp = self.reader_crtp.motion_dict["timestamp"]
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
-        # TODO(FD) fix the position update to consider also rotation.
+        r = Rotation.from_euler('z', motion_dict["yaw", degrees=True)
+        d_local = np.array((motion_dicto['dx'], motion_dicto['dy']))
+        d_world = r.as_matrix()[:2, :2] @ d_local
+
         msg_pose = Pose()
         msg_pose.position = Point()
-        msg_pose.position.x = motion_dict["dx"] + self.prev_position_x
-        msg_pose.position.y = motion_dict["dy"] + self.prev_position_y
+        msg_pose.position.x = d_world[0] + self.prev_position_x
+        msg_pose.position.y = d_world[1] + self.prev_position_y
         msg_pose.position.z = motion_dict["z"]
         msg_pose.orientation = Quaternion()
-        # TODO(FD): could replace this with tf.transformations or tf2.transformations
-        from scipy.spatial.transform import Rotation
-
-        r = Rotation.from_euler("z", motion_dict["yaw"], degrees=True)
         r_quat = r.as_quat()
         msg_pose.orientation.x = r_quat[0]
         msg_pose.orientation.y = r_quat[1]

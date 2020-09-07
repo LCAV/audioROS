@@ -20,15 +20,6 @@ import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Spectrum
-from .live_plotter import LivePlotter
-
-MAX_YLIM = 1  # set to inf for no effect.
-MIN_YLIM = 1e-13  # set to -inf for no effect.
-
-# for plotting only
-MIN_FREQ = 400
-MAX_FREQ = 600
-
 
 class DoaEstimator(Node):
     def __init__(self):
@@ -40,11 +31,8 @@ class DoaEstimator(Node):
         self.publisher_spectrum = self.create_publisher(
             Spectrum, "audio/combined_spectrum", 10
         )
+        # all in degrees:
         self.spectrum_orientation_list = []
-
-        self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-        self.plotter.ax.set_xlabel("angle [rad]")
-        self.plotter.ax.set_ylabel("magnitude [-]")
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("combination_n")
@@ -75,8 +63,6 @@ class DoaEstimator(Node):
         return SetParametersResult(successful=True)
 
     def listener_callback_spectrum(self, msg_spec):
-        self.get_logger().info(f"Processing spectrum: {msg_spec.timestamp}.")
-
         spectrum = np.array(msg_spec.spectrum_vect).reshape(
             (msg_spec.n_frequencies, msg_spec.n_angles)
         )
@@ -110,16 +96,7 @@ class DoaEstimator(Node):
         msg_new = msg_spec
         msg_new.spectrum_vect = list(combined_spectrum.astype(float).flatten())
         self.publisher_spectrum.publish(msg_new)
-        self.get_logger().info(f"Published spectrum.")
-
-        # plot
-        # TODO(FD): read angles vector from topic?
-        theta_scan = np.linspace(0, 360, msg_new.n_angles)
-        frequencies = np.array(msg_new.frequencies)
-        assert len(frequencies) == combined_spectrum.shape[0]
-        mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-        labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter.update_lines(combined_spectrum[mask], theta_scan, labels=labels)
+        self.get_logger().info(f"Published combined spectrum.")
 
 
 def main(args=None):
