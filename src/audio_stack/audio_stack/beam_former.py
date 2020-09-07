@@ -13,7 +13,7 @@ sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 
 import numpy as np
 
-from algos_beamforming import get_lcmv_beamformer, get_das_beamformer, get_powers
+from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
 
 class BeamFormer(object):
@@ -35,7 +35,7 @@ class BeamFormer(object):
         spectrum = np.empty((len(frequencies_hz), len(self.theta_scan)))
         for i, theta in enumerate(self.theta_scan):
             constraints = [(theta, 1)]
-            H_mvdr, *_ = get_lcmv_beamformer(
+            H_mvdr = get_lcmv_beamformer_fast(
                 R, frequencies_hz, self.mic_positions, constraints, lamda=1e-3
             )
             spectrum[:, i] = get_powers(H_mvdr, R)

@@ -34,6 +34,9 @@ MAX_FREQ = np.inf #600
 
 ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
 
+def normalize_spectrum(spectrum):
+    return (spectrum - np.min(spectrum, axis=1)[:, None]) / (np.max(spectrum, axis=1)[:, None] - np.min(spectrum, axis=1)[:, None])
+
 class SpectrumEstimator(Node):
     def __init__(self, plot=False):
         super().__init__("spectrum_estimator")
@@ -53,9 +56,13 @@ class SpectrumEstimator(Node):
         self.beam_former = None
 
         if self.plot:
-            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
+            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM, label='raw spectra')
             self.plotter.ax.set_xlabel("angle [rad]")
             self.plotter.ax.set_ylabel("magnitude [-]")
+
+            self.plotter_total = LivePlotter(np.inf, -np.inf, label='combined spectra')
+            self.plotter_total.ax.set_xlabel("angle [rad]")
+            self.plotter_total.ax.set_ylabel("magnitude [-]")
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
@@ -105,8 +112,6 @@ class SpectrumEstimator(Node):
             (len(frequencies), msg_cor.n_mics, msg_cor.n_mics)
         )
 
-        # TODO(FD): implement below more efficiently.
-        t11 = time.time()
         if self.bf_method == "mvdr":
             spectrum = self.beam_former.get_mvdr_spectrum(
                 R, frequencies
@@ -117,8 +122,6 @@ class SpectrumEstimator(Node):
             )  # n_frequencies x n_angles
         else:
             raise ValueError(self.bf_method)
-        t22 = time.time()
-        print(f"Time for beamforming: {t22-t11:.2f}")
 
         orientation = 0
         latest = self.latest_time_and_orientation
@@ -149,9 +152,24 @@ class SpectrumEstimator(Node):
         if self.plot:
             assert len(frequencies) == spectrum.shape[0]
             mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-            #labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
+            labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
             self.plotter.update_lines(
-                spectrum[mask], self.beam_former.theta_scan, labels=None
+                spectrum[mask], self.beam_former.theta_scan, labels=labels
+            )
+
+            # compute and plot combination.
+            spectrum_total = normalize_spectrum(spectrum)
+            spectrum_product = normalize_spectrum(
+                    np.product(spectrum_total, axis=0, keepdims=True)
+            )
+            spectrum_sum = normalize_spectrum(
+                    np.sum(spectrum_total, axis=0, keepdims=True)
+            )
+            spectrum_plot = np.r_[spectrum_product, spectrum_sum]
+            labels = ["product", "sum"]
+            assert spectrum_plot.shape[0] == 2
+            self.plotter_total.update_lines(
+                spectrum_plot, self.beam_former.theta_scan, labels=labels
             )
 
     def listener_callback_pose_raw(self, msg_pose_raw):
@@ -167,7 +185,7 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    estimator = SpectrumEstimator()
+    estimator = SpectrumEstimator(plot=True)
 
     rclpy.spin(estimator)
 
