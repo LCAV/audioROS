@@ -41,7 +41,24 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
 
+    def update_plotter(self, name, pose_list, yaw_deg):
+        self.plotter_dict[name].update_scatter(
+            pose_list[0, :], 
+            pose_list[1, :]
+        )
 
+        arrow_length = max(np.max(pose_list) - np.min(pose_list), 1.0) / 0.3
+        dx = arrow_length * np.cos(yaw_deg * np.pi / 180)
+        dy = arrow_length * np.sin(yaw_deg * np.pi / 180)
+        self.plotter_dict[name].update_arrow(
+            pose_list[0, -1], 
+            pose_list[1, -1],
+            dx=dx, dy=dy
+        )
+
+
+    # TODO(FD) figure out why the pose_raw topic and pose_raw topic do not yield exactly the same 
+    # position estimates.
     def listener_callback_pose_raw(self, msg_pose_raw):
         xlabel = "x [m]"
         ylabel = "y [m]"
@@ -56,10 +73,9 @@ class GeometryPlotter(Node):
 
         if self.pose_raw_list.shape[1] > MAX_LENGTH:
             self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
+        self.update_plotter("pose raw", self.pose_raw_list, yaw)
 
-        self.plotter_dict["pose raw"].update_lines(
-            self.pose_raw_list[1:2, :], self.pose_raw_list[0, :], labels=["pose raw"]
-        )
+
 
     def listener_callback_pose(self, msg_pose):
         xlabel = "x [m]"
@@ -68,9 +84,16 @@ class GeometryPlotter(Node):
 
         new_position = np.array((msg_pose.position.x, msg_pose.position.y))
         self.pose_list = np.c_[self.pose_list, new_position]
-        self.plotter_dict["pose"].update_lines(
-            self.pose_list[1:2, :], self.pose_list[0, :], labels=["pose"]
-        )
+
+        quat = [msg_pose.orientation.x, msg_pose.orientation.y, msg_pose.orientation.z, msg_pose.orientation.w]
+        r = Rotation.from_quat(quat)
+        [yaw, pitch, roll] = r.as_euler('zyx', degrees=True)
+        assert pitch == 0, pitch
+        assert roll == 0, roll
+        if self.pose_list.shape[1] > MAX_LENGTH:
+            self.pose_list = self.pose_list[:, -MAX_LENGTH:]
+
+        self.update_plotter("pose", self.pose_list, yaw)
 
 
 def main(args=None):

@@ -60,8 +60,8 @@ class Gateway(Node):
             PoseRaw, "geometry/pose_raw", 10
         )
 
-        self.prev_position_x = 0
-        self.prev_position_y = 0
+        self.prev_position_x = 0.0
+        self.prev_position_y = 0.0
 
         self.reader_crtp = reader_crtp
 
@@ -150,6 +150,9 @@ class Gateway(Node):
         d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
         d_world = r.as_matrix()[:2, :2] @ d_local
 
+        assert abs(np.linalg.norm(d_local) - np.linalg.norm(d_world)) < 1e-10, (
+                np.linalg.norm(d_local), np.linalg.norm(d_world))
+
         msg_pose = Pose()
         msg_pose.position = Point()
         msg_pose.position.x = d_world[0] + self.prev_position_x
@@ -162,10 +165,10 @@ class Gateway(Node):
         msg_pose.orientation.z = r_quat[2]
         msg_pose.orientation.w = r_quat[3]
         self.publisher_motion_pose.publish(msg_pose)
-        self.get_logger().info("Published motion data.")
 
         self.prev_position_x = msg_pose.position.x
         self.prev_position_y = msg_pose.position.y
+        self.get_logger().info("Published motion data.")
 
     def set_audio_params(self, params):
         for param in params:

@@ -14,17 +14,26 @@ matplotlib.use("TkAgg")
 MAX_YLIM = math.inf  # set to inf for no effect.
 MIN_YLIM = -math.inf  # set to -inf for no effect.
 
+MAX_XLIM = math.inf  # set to inf for no effect.
+MIN_XLIM = -math.inf  # set to -inf for no effect.
+
 
 class LivePlotter(object):
-    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM, log=True, label=''):
+    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM, log=True, label='', max_xlim=MAX_XLIM, min_xlim=MIN_XLIM):
         self.max_ylim = max_ylim
         self.min_ylim = min_ylim
+        self.max_xlim = max_xlim
+        self.min_xlim = min_xlim
         self.log = log
 
         self.fig, self.ax = plt.subplots()
         self.fig.canvas.set_window_title(label)
+
+        # containers for continuously updated data
         self.lines = {}
         self.axvlines = {}
+        self.arrows = {}
+        self.scatter = {}
 
         self.fig.canvas.mpl_connect("close_event", self.handle_close)
 
@@ -46,6 +55,25 @@ class LivePlotter(object):
             self.ax.lines.pop()
         self.lines = {}
         self.axvlines = {}
+
+    def update_arrow(self, origin_x, origin_y, dx, dy):
+        """ Update arrow coordinates. 
+        """
+        if self.arrows: # 
+            self.arrows['pointer'].set_data(origin_x + dx, origin_y + dy)
+            self.arrows['line'].set_data([origin_x, origin_x + dx], [origin_y, origin_y + dy])
+        else:
+            (line,) = self.ax.plot(
+                    origin_x+dx, origin_y+dy, color="black", marker=">"
+                )
+            self.arrows['pointer'] = line
+            (line,) = self.ax.plot(
+                    [origin_x, origin_x + dx], [origin_y, origin_y + dy], 
+                    color="black" 
+            )
+            self.arrows['line'] = line
+        # without this, the plot does not get updated live.
+        self.fig.canvas.draw()
 
     def update_lines(self, data_matrix, x_data=None, labels=None):
         """ Plot each row of data_matrix as one line.
@@ -100,6 +128,35 @@ class LivePlotter(object):
 
         # update ax.viewLim using new ax.dataLim
         self.ax.set_ylim(ymin_new, ymax_new)
+
+    def reset_xlim(self):
+        # recompute the ax.dataLim
+        self.ax.relim()
+
+        # limit xmin and xmax to chosen window.
+        xmin, xmax = self.ax.get_xlim()
+        xmax_new = min(max(self.ax.dataLim.x1, xmax), self.max_xlim)
+        xmin_new = max(min(self.ax.dataLim.x0, xmin), self.min_xlim)
+
+        # update ax.viewLim using new ax.dataLim
+        self.ax.set_xlim(xmin_new, xmax_new)
+
+
+    def update_scatter(self, x_data, y_data):
+        """ Plot x_data and y_data as scattered points.
+        """
+        if self.scatter:
+            self.scatter["line"].set_data(x_data, y_data)
+
+        else:
+            (line,) = self.ax.plot(
+                x_data, y_data, linestyle='-', marker='o'
+            )
+            self.scatter["line"] = line
+        # without this, the plot does not get updated live.
+        self.reset_xlim()
+        self.reset_ylim()
+        self.fig.canvas.draw()
 
 
 if __name__ == "__main__":
