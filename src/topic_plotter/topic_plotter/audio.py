@@ -1,12 +1,11 @@
 import rclpy
 from rclpy.node import Node
-from audio_interfaces.msg import Spectrum, Signals, SignalsFreq
 
 import numpy as np
 
+from audio_interfaces.msg import Spectrum, Signals, SignalsFreq
 from .live_plotter import LivePlotter
 
-# for plotting only
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
@@ -15,7 +14,7 @@ def normalize_spectrum(spectrum):
 
 
 class AudioPlotter(Node):
-    def __init__(self, plot=False):
+    def __init__(self):
         super().__init__("audio_plotter")
 
         self.subscription_signals_f = self.create_subscription(
@@ -30,6 +29,10 @@ class AudioPlotter(Node):
             Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10
         )
 
+        self.subscription_combined_spectrum = self.create_subscription(
+            Spectrum, "audio/combined_spectrum", self.listener_callback_combined_spectrum, 10
+        )
+
         self.plotter_dict = {}
         self.current_n_buffer = None
         self.current_n_frequencies = None
@@ -37,16 +40,16 @@ class AudioPlotter(Node):
 
     def init_plotter(self, name, xlabel='x', ylabel='y'):
         if not (name in self.plotter_dict.keys()):
-            self.plotter_dict[name] = LivePlotter(np.inf, -np.inf, name)
+            self.plotter_dict[name] = LivePlotter(np.inf, -np.inf, label=name)
             self.plotter_dict[name].ax.set_xlabel(xlabel)
             self.plotter_dict[name].ax.set_ylabel(ylabel)
 
 
-    def listener_callback_spectrum(self, msg_spec):
+    def listener_callback_spectrum(self, msg_spec, name="static"):
         xlabel = "angle [rad]"
         ylabel = "magnitude [-]"
-        self.init_plotter("raw spectra", xlabel=xlabel, ylabel=ylabel)
-        self.init_plotter("combined spectra", xlabel=xlabel, ylabel=ylabel)
+        self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel)
+        self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel)
 
         frequencies = np.array(msg_spec.frequencies) 
         spectrum = np.array(msg_spec.spectrum_vect).reshape((msg_spec.n_frequencies, msg_spec.n_angles))
@@ -55,7 +58,7 @@ class AudioPlotter(Node):
         # compute and plot combination.
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
         labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter_dict["raw spectra"].update_lines(
+        self.plotter_dict[f"{name} raw spectra"].update_lines(
             spectrum[mask], theta_scan, labels=labels
         )
 
@@ -69,10 +72,12 @@ class AudioPlotter(Node):
         )
         spectrum_plot = np.r_[spectrum_product, spectrum_sum]
         labels = ["product", "sum"]
-        self.plotter_dict["combined spectra"].update_lines(
+        self.plotter_dict[f"{name} combined spectra"].update_lines(
             spectrum_plot, theta_scan, labels=labels
         )
 
+    def listener_callback_combined_spectrum(self, msg_spec):
+        return self.listener_callback_spectrum(msg_spec, name="combined")
 
     def listener_callback_signals_f(self, msg):
         self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]")

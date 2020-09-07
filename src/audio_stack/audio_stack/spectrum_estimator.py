@@ -61,8 +61,6 @@ class SpectrumEstimator(Node):
         return SetParametersResult(successful=True)
 
     def listener_callback_correlations(self, msg_cor):
-        self.get_logger().info(f"Processing correlations: {msg_cor.timestamp}.")
-
         t1 = time.time()
 
         n_frequencies = len(msg_cor.frequencies)
@@ -123,12 +121,12 @@ class SpectrumEstimator(Node):
 
         t2 = time.time()
         processing_time = t2 - t1
-        self.get_logger().info(f"Published spectrum after {processing_time:.2f}.")
+        self.get_logger().info(f"Published spectrum after {processing_time:.2f}s.")
 
 
     def listener_callback_pose_raw(self, msg_pose_raw):
         self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
-        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
+        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw_deg)
 
 
 def main(args=None):
