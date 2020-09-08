@@ -211,13 +211,15 @@ class Correlator(Node):
 
         # Create and publish frequency message
         msg_freq = SignalsFreq()
+        msg_freq.fs = msg.fs
+        msg_freq.timestamp = msg.timestamp
         msg_freq.n_mics = msg.n_mics
         msg_freq.n_frequencies = len(freqs)
         msg_freq.mic_positions = msg.mic_positions
         msg_freq.frequencies = [int(f) for f in freqs]
-        msg_freq.signals_real_vect = list(np.real(signals_f).astype(float).flatten())
-        msg_freq.signals_imag_vect = list(np.imag(signals_f).astype(float).flatten())
-        msg_freq.timestamp = msg.timestamp
+        # important: signals_f should be of shape n_mics x n_frequencies before flatten() is called.
+        msg_freq.signals_real_vect = list(np.real(signals_f.T).astype(float).flatten())
+        msg_freq.signals_imag_vect = list(np.imag(signals_f.T).astype(float).flatten())
         self.publisher_signals_f.publish(msg_freq)
 
         # check that the above processing pipeline does not
@@ -230,7 +232,6 @@ class Correlator(Node):
 
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
-        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
         self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         # convert msg format to numpy arrays
