@@ -80,8 +80,8 @@ class FilePublisher(AudioPublisher):
 
     def publish_position(self):
         msg_pose_raw = PoseRaw()
-        msg_pose_raw.dx = 0.5 
-        msg_pose_raw.dy = 0.1
+        msg_pose_raw.dx = 0.0
+        msg_pose_raw.dy = 0.0
         msg_pose_raw.z = 0.0
         msg_pose_raw.yaw_deg = 0.0
         msg_pose_raw.source_direction_deg = 90.0 + GT_DEGREES
