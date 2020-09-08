@@ -9,10 +9,6 @@ from .live_plotter import LivePlotter
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-def normalize_spectrum(spectrum):
-    return (spectrum - np.min(spectrum, axis=1)[:, None]) / (np.max(spectrum, axis=1)[:, None] - np.min(spectrum, axis=1)[:, None])
-
-
 class AudioPlotter(Node):
     def __init__(self):
         super().__init__("audio_plotter")
@@ -63,13 +59,8 @@ class AudioPlotter(Node):
         )
 
         # compute and plot combination.
-        spectrum_total = normalize_spectrum(spectrum)
-        spectrum_product = normalize_spectrum(
-                np.product(spectrum_total, axis=0, keepdims=True)
-        )
-        spectrum_sum = normalize_spectrum(
-                np.sum(spectrum_total, axis=0, keepdims=True)
-        )
+        spectrum_product = np.product(spectrum, axis=0, keepdims=True)
+        spectrum_sum = np.sum(spectrum, axis=0, keepdims=True)
         spectrum_plot = np.r_[spectrum_product, spectrum_sum]
         labels = ["product", "sum"]
         self.plotter_dict[f"{name} combined spectra"].update_lines(

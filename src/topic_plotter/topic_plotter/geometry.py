@@ -12,7 +12,7 @@ from geometry_msgs.msg import Pose
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from audio_interfaces.msg import PoseRaw
+from audio_interfaces.msg import PoseRaw, DoaEstimates
 from .live_plotter import LivePlotter
 
 MAX_LENGTH = 10 # number of positions to plot
@@ -25,14 +25,20 @@ class GeometryPlotter(Node):
             PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
 
-        self.subscription_pose = self.create_subscription(
-            Pose, "geometry/pose", self.listener_callback_pose, 10
+        #self.subscription_pose = self.create_subscription(
+        #    Pose, "geometry/pose", self.listener_callback_pose, 10
+        #)
+
+        self.subscription_doa = self.create_subscription(
+            DoaEstimates, "geometry/doa_estimates", self.listener_callback_doa, 10
         )
 
         self.plotter_dict = {}
+        # initialize a starting position for pose_raw, as it only contains delta positions
         self.pose_raw_list = np.zeros((2, 1))
-        self.pose_list = np.empty((2, 0))
 
+        # need no starting position for pose as it has absolute positions
+        self.pose_list = np.empty((2, 0))
 
     def init_plotter(self, name, xlabel='x', ylabel='y'):
         if not (name in self.plotter_dict.keys()):
@@ -41,24 +47,21 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
 
-    def update_plotter(self, name, pose_list, yaw_deg):
+    def update_plotter(self, name, pose_list, yaw_deg, source_direction_deg=None):
         self.plotter_dict[name].update_scatter(
             pose_list[0, :], 
             pose_list[1, :]
         )
 
-        arrow_length = max(np.max(pose_list) - np.min(pose_list), 1.0) / 0.3
-        dx = arrow_length * np.cos(yaw_deg * np.pi / 180)
-        dy = arrow_length * np.sin(yaw_deg * np.pi / 180)
         self.plotter_dict[name].update_arrow(
-            pose_list[0, -1], 
-            pose_list[1, -1],
-            dx=dx, dy=dy
+                pose_list[:, -1], yaw_deg, name="yaw_deg"
         )
 
+        if source_direction_deg is not None:
+            self.plotter_dict[name].update_arrow(
+                pose_list[:, -1], source_direction_deg, name="source_direction_deg"
+            )
 
-    # TODO(FD) figure out why the pose_raw topic and pose_raw topic do not yield exactly the same 
-    # position estimates.
     def listener_callback_pose_raw(self, msg_pose_raw):
         xlabel = "x [m]"
         ylabel = "y [m]"
@@ -73,10 +76,11 @@ class GeometryPlotter(Node):
 
         if self.pose_raw_list.shape[1] > MAX_LENGTH:
             self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
-        self.update_plotter("pose raw", self.pose_raw_list, yaw)
 
+        self.update_plotter("pose raw", self.pose_raw_list, yaw, msg_pose_raw.source_direction_deg)
 
-
+    # TODO(FD) figure out why the pose_raw topic and pose_raw topic do not yield exactly the same 
+    # position estimates.
     def listener_callback_pose(self, msg_pose):
         xlabel = "x [m]"
         ylabel = "y [m]"
@@ -95,6 +99,15 @@ class GeometryPlotter(Node):
 
         self.update_plotter("pose", self.pose_list, yaw)
 
+    def listener_callback_doa(self, msg_doa):
+        xlabel = "x [m]"
+        ylabel = "y [m]"
+        self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
+
+        for i, doa_estimate in enumerate(msg_doa.doa_estimates_deg):
+            self.plotter_dict["pose raw"].update_arrow(
+                self.pose_raw_list[:, -1], doa_estimate, name=f"doa {i}"
+            )
 
 def main(args=None):
     rclpy.init(args=args)
