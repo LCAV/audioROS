@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import PoseRaw, DoaEstimates
 from .live_plotter import LivePlotter
+from audio_stack.topic_synchronizer import TopicSynchronizer
 
 MAX_LENGTH = 10 # number of positions to plot
 
@@ -39,6 +40,11 @@ class GeometryPlotter(Node):
 
         # need no starting position for pose as it has absolute positions
         self.pose_list = np.empty((2, 0))
+
+        # for error calculations
+        self.error_list = []
+        self.raw_pose_synch = TopicSynchronizer(10)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
     def init_plotter(self, name, xlabel='x', ylabel='y'):
         if not (name in self.plotter_dict.keys()):
@@ -100,14 +106,27 @@ class GeometryPlotter(Node):
         self.update_plotter("pose", self.pose_list, yaw)
 
     def listener_callback_doa(self, msg_doa):
+        # plot the doa estimates in 2D plot
         xlabel = "x [m]"
         ylabel = "y [m]"
         self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
 
-        for i, doa_estimate in enumerate(msg_doa.doa_estimates_deg):
+        doa_estimates = list(msg_doa.doa_estimates_deg)
+
+        for i, doa_estimate in enumerate(doa_estimates):
             self.plotter_dict["pose raw"].update_arrow(
                 self.pose_raw_list[:, -1], doa_estimate, name=f"doa {i}"
             )
+
+        # calculate the current error 
+        message = self.raw_pose_synch.get_latest_message(msg_doa.timestamp, self.get_logger())
+        if message is not None:
+            orientation = message.source_direction_deg
+            error = abs(orientation - doa_estimates[0])
+            self.error_list.append(error)
+            avg_error = np.mean(self.error_list)
+            self.get_logger().info(f"Current error: {error}, current average: {avg_error}")
+
 
 def main(args=None):
     rclpy.init(args=args)

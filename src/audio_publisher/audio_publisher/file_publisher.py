@@ -18,7 +18,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
 import file_parser as fp
 
-GT_DEGREES = 20
+GT_DEGREES = 0
 LOUDNESS = "high"
 SOURCE = "white_noise"
 
@@ -57,8 +57,10 @@ class FilePublisher(AudioPublisher):
             signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(gt_degrees=GT_DEGREES)
         elif file_source == "recordings_9_7_20":
             signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=GT_DEGREES)
+        else:
+            raise ValueError(file_source)
 
-        signals_full = signals_all
+        signals_full = signals_source #signals_all
         start_idx = fp.parameters[file_source]["time_index"]
         self.signals_full = signals_full[:, start_idx:]
         self.len = self.signals_full.shape[1]

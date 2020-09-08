@@ -36,8 +36,8 @@ class SpectrumEstimator(Node):
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
 
-        self.orientation_synched = TopicSynchronizer(20)
-        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.orientation_synched.listener_callback, 10)
+        self.raw_pose_synch = TopicSynchronizer(20)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
 
@@ -100,7 +100,7 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method)
 
-        message = self.orientation_synched.get_latest_message(msg_cor.timestamp, self.get_logger())
+        message = self.raw_pose_synch.get_latest_message(msg_cor.timestamp, self.get_logger())
         if message is None:
             orientation = 0
         else:

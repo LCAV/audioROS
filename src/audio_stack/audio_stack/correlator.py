@@ -20,7 +20,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
 from bin_selection import select_frequencies as embedded_select_frequencies
-from algos_beamforming import select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 

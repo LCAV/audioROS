@@ -23,6 +23,8 @@ from audio_interfaces.msg import Spectrum, DoaEstimates
 from .spectrum_estimator import normalize_each_row
 
 N_ESTIMATES = 3
+COMBINATION_N = 5
+COMBINATION_METHOD = "sum"
 
 class DoaEstimator(Node):
     def __init__(self):
@@ -42,9 +44,9 @@ class DoaEstimator(Node):
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("combination_n")
-        self.combination_n = 5
+        self.combination_n = COMBINATION_N
         self.declare_parameter("combination_method")
-        self.combination_method = "sum"
+        self.combination_method = COMBINATION_METHOD 
         parameters = [
             rclpy.parameter.Parameter(
                 "combination_method",
@@ -119,8 +121,6 @@ class DoaEstimator(Node):
         msg_doa.doa_estimates_deg = list(doa_estimates.astype(float).flatten())
         self.publisher_doa.publish(msg_doa)
         self.get_logger().info(f"Published estimates: {doa_estimates}.")
-
-
 
 
 def main(args=None):
