@@ -22,8 +22,11 @@ import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
+from .topic_synchronizer import TopicSynchronizer
 
-ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
+def normalize_each_row(matrix):
+    return (matrix - np.min(matrix, axis=1)[:, None]) / (np.max(matrix, axis=1)[:, None] - np.min(matrix, axis=1)[:, None])
+
 
 class SpectrumEstimator(Node):
     def __init__(self, plot=False):
@@ -32,10 +35,9 @@ class SpectrumEstimator(Node):
         self.subscription_correlations = self.create_subscription(
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
-        self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
-        )
-        self.latest_time_and_orientation = None
+
+        self.orientation_synched = TopicSynchronizer(20)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.orientation_synched.listener_callback, 10)
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
 
@@ -98,16 +100,14 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method)
 
-        orientation = 0
-        latest = self.latest_time_and_orientation
-        if (latest is not None) and (
-            abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS
-        ):
-            orientation = latest[1]
-        elif latest is not None:
-            self.get_logger().warn(
-                f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}"
-            )
+        message = self.orientation_synched.get_latest_message(msg_cor.timestamp)
+        if message is None:
+            self.get_logger().warn(f"Did not register message in valid time window")
+            orientation = 0
+        else:
+            orientation = message.yaw_deg
+
+        spectrum = normalize_each_row(spectrum)
 
         # publish
         msg_spec = Spectrum()
@@ -122,11 +122,6 @@ class SpectrumEstimator(Node):
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(f"Published spectrum after {processing_time:.2f}s.")
-
-
-    def listener_callback_pose_raw(self, msg_pose_raw):
-        self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
-        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw_deg)
 
 
 def main(args=None):

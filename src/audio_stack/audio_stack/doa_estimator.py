@@ -19,7 +19,10 @@ from rcl_interfaces.msg import SetParametersResult
 import matplotlib.pylab as plt
 import numpy as np
 
-from audio_interfaces.msg import Spectrum
+from audio_interfaces.msg import Spectrum, DoaEstimates
+from .spectrum_estimator import normalize_each_row
+
+N_ESTIMATES = 3
 
 class DoaEstimator(Node):
     def __init__(self):
@@ -30,6 +33,9 @@ class DoaEstimator(Node):
         )
         self.publisher_spectrum = self.create_publisher(
             Spectrum, "audio/combined_spectrum", 10
+        )
+        self.publisher_doa = self.create_publisher(
+            DoaEstimates, "geometry/doa_estimates", 10
         )
         # all in degrees:
         self.spectrum_orientation_list = []
@@ -92,11 +98,29 @@ class DoaEstimator(Node):
                 spectra_shifted, axis=0
             )  # n_frequencies x n_angles
 
+        combined_spectrum = normalize_each_row(combined_spectrum)
+
         # publish
         msg_new = msg_spec
         msg_new.spectrum_vect = list(combined_spectrum.astype(float).flatten())
         self.publisher_spectrum.publish(msg_new)
         self.get_logger().info(f"Published combined spectrum.")
+
+        # calculate and publish doa estimates
+        final_spectrum = np.product(combined_spectrum, axis=0, keepdims=True)  # n_angles
+        final_spectrum = normalize_each_row(final_spectrum)
+        angles = np.linspace(0, 360, msg_spec.n_angles)
+        sorted_indices = np.argsort(final_spectrum.flatten()) # sorts in ascending order
+        doa_estimates = angles[sorted_indices[-N_ESTIMATES:][::-1]]
+
+        msg_doa = DoaEstimates()
+        msg_doa.n_estimates = N_ESTIMATES
+        msg_doa.timestamp = msg_spec.timestamp
+        msg_doa.doa_estimates_deg = list(doa_estimates.astype(float).flatten())
+        self.publisher_doa.publish(msg_doa)
+        self.get_logger().info(f"Published estimates: {doa_estimates}.")
+
+
 
 
 def main(args=None):
