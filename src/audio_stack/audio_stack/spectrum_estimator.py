@@ -100,9 +100,8 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method)
 
-        message = self.orientation_synched.get_latest_message(msg_cor.timestamp)
+        message = self.orientation_synched.get_latest_message(msg_cor.timestamp, self.get_logger())
         if message is None:
-            self.get_logger().warn(f"Did not register message in valid time window")
             orientation = 0
         else:
             orientation = message.yaw_deg

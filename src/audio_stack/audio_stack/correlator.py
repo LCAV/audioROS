@@ -135,6 +135,9 @@ class Correlator(Node):
         self.subscription_signals_f = self.create_subscription(
             SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
         )
+        self.publisher_signals_f = self.create_publisher(
+            SignalsFreq, "audio/signals_f", 10
+        )
         self.publisher_correlations = self.create_publisher(
             Correlations, "audio/correlations", 10
         )
@@ -196,6 +199,7 @@ class Correlator(Node):
         signals_f, freqs = get_stft(
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
+
         if self.methods["frequency"] != "":
             bins = embedded_select_frequencies(
                 msg.n_buffer,
@@ -206,14 +210,23 @@ class Correlator(Node):
             freqs = freqs[bins]
             signals_f = signals_f[bins]
 
-        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
+        # Create and publish frequency message
+        msg_freq = SignalsFreq()
+        msg_freq.n_mics = msg.n_mics
+        msg_freq.n_frequencies = len(freqs)
+        msg_freq.mic_positions = msg.mic_positions
+        msg_freq.frequencies = [int(f) for f in freqs]
+        msg_freq.signals_real_vect = list(np.real(signals_f).astype(float).flatten())
+        msg_freq.signals_imag_vect = list(np.imag(signals_f).astype(float).flatten())
+        msg_freq.timestamp = msg.timestamp
+        self.publisher_signals_f.publish(msg_freq)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-                f"listener_callback_signals: Publishing after processing time {processing_time:.2f}"
+                f"listener_callback_signals: Published signals_f after {processing_time:.2f}s"
         )
 
     def listener_callback_signals_f(self, msg):
@@ -227,7 +240,6 @@ class Correlator(Node):
         )
         signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
         freqs = np.array(msg.frequencies)
-        self.get_logger().info(f"frequencies: {freqs}")
 
         self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
 
@@ -236,7 +248,7 @@ class Correlator(Node):
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-            f"listener_callback_signals_f: Publishing after processing time {processing_time}"
+                f"listener_callback_signals_f: Published correlations after {processing_time:.2f}s"
         )
 
     def process_signals_f(self, signals_f, freqs, Fs, timestamp):
