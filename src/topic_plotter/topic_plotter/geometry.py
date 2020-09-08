@@ -13,8 +13,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import PoseRaw, DoaEstimates
-from .live_plotter import LivePlotter
 from audio_stack.topic_synchronizer import TopicSynchronizer
+from .live_plotter import LivePlotter
 
 MAX_LENGTH = 10 # number of positions to plot
 
