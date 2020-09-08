@@ -9,11 +9,13 @@ class TopicSynchronizer(object):
         self.allowed_lag = allowed_lag
         self.latest_time_and_message = None
 
-    def get_latest_message(self, timestamp):
+    def get_latest_message(self, timestamp, logger=None):
         """ Get latest message since timestamp-self.allow_lag, or None if it doesn't exist. """
         latest = self.latest_time_and_message
-        if (latest is not None) and (abs(timestamp - latest[0]) < self.allowed_lag):
+        if (latest is not None) and (latest[0] >= (timestamp - self.allowed_lag)):
             return latest[1]
+        elif (latest is not None) and (logger is not None):
+            logger.warn(f"Did not register message in valid time window {timestamp-self.allowed_lag, timestamp}. Latest one: {latest[0]}")
         return None
 
     def listener_callback(self, msg):

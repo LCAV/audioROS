@@ -18,7 +18,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
 import file_parser as fp
 
-GT_DEGREES = 0
+GT_DEGREES = 20
 LOUDNESS = "high"
 SOURCE = "white_noise"
 
