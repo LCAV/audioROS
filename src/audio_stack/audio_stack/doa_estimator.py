@@ -20,11 +20,12 @@ import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
-from .spectrum_estimator import normalize_each_row
+from .spectrum_estimator import normalize_each_row, NORMALIZE
 
 N_ESTIMATES = 3
 COMBINATION_N = 5
-COMBINATION_METHOD = "sum"
+COMBINATION_METHOD = "product"
+
 
 class DoaEstimator(Node):
     def __init__(self):
@@ -100,7 +101,7 @@ class DoaEstimator(Node):
                 spectra_shifted, axis=0
             )  # n_frequencies x n_angles
 
-        combined_spectrum = normalize_each_row(combined_spectrum)
+        combined_spectrum = normalize_each_row(combined_spectrum, NORMALIZE)
 
         # publish
         msg_new = msg_spec
@@ -109,8 +110,14 @@ class DoaEstimator(Node):
         self.get_logger().info(f"Published combined spectrum.")
 
         # calculate and publish doa estimates
-        final_spectrum = np.product(combined_spectrum, axis=0, keepdims=True)  # n_angles
-        final_spectrum = normalize_each_row(final_spectrum)
+        if self.combination_method == "product":
+            # need to make sure spectrum is not too small before multiplying.
+            final_spectrum = np.product(normalize_each_row(combined_spectrum, "zero_to_one"), 
+                    axis=0, keepdims=True)  # n_angles
+        elif self.combination_method == "sum":
+            final_spectrum = np.sum(combined_spectrum, axis=0, keepdims=True)  # n_angles
+
+        final_spectrum = normalize_each_row(final_spectrum, NORMALIZE)
         angles = np.linspace(0, 360, msg_spec.n_angles)
         sorted_indices = np.argsort(final_spectrum.flatten()) # sorts in ascending order
         doa_estimates = angles[sorted_indices[-N_ESTIMATES:][::-1]]

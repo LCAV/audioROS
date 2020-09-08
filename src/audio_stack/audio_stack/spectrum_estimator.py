@@ -24,8 +24,31 @@ from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
 from .topic_synchronizer import TopicSynchronizer
 
-def normalize_each_row(matrix):
-    return (matrix - np.min(matrix, axis=1)[:, None]) / (np.max(matrix, axis=1)[:, None] - np.min(matrix, axis=1)[:, None])
+
+# Beamforming method, available: 
+# - "das": delay-and-sum
+# - "mvdr": minimum-variacne distortionless response
+BF_METHOD = "das"
+
+NORMALIZE = "zero_to_one"
+#NORMALIZE = "sum_to_one"
+
+
+def normalize_each_row(matrix, method="zero_to_one"):
+    if method == "zero_to_one":
+        normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
+        assert np.max(normalized) == 1.0
+        assert np.min(normalized) == 0.0
+        return normalized
+    elif method == "sum_to_one":
+
+        # first make sure values are between 0 and 1 (otherwise division can lead to errors)
+        denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
+        matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
+        sum_matrix = np.sum(matrix, axis=1, keepdims=True)
+        normalized = matrix / sum_matrix
+        np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
+        return normalized
 
 
 class SpectrumEstimator(Node):
@@ -45,7 +68,7 @@ class SpectrumEstimator(Node):
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
-        self.bf_method = "mvdr"
+        self.bf_method = BF_METHOD
         parameters = [
             rclpy.parameter.Parameter(
                 "bf_method", rclpy.Parameter.Type.STRING, self.bf_method
@@ -106,7 +129,7 @@ class SpectrumEstimator(Node):
         else:
             orientation = message.yaw_deg
 
-        spectrum = normalize_each_row(spectrum)
+        spectrum = normalize_each_row(spectrum, NORMALIZE)
 
         # publish
         msg_spec = Spectrum()
