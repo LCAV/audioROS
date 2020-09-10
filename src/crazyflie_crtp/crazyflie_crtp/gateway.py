@@ -33,14 +33,14 @@ N = 1024
 # Crazyflie audio parameters that can be set from here.
 PARAMETERS_TUPLES = [
     ("debug", rclpy.Parameter.Type.INTEGER, 0),
-    ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 0),
+    ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
     ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("max_freq", rclpy.Parameter.Type.INTEGER, 10000),
     ("min_freq", rclpy.Parameter.Type.INTEGER, 100),
     ("delta_freq", rclpy.Parameter.Type.INTEGER, 100),
     ("use_iir", rclpy.Parameter.Type.INTEGER, 0),
-    ("ma_window", rclpy.Parameter.Type.INTEGER, 0),
+    ("ma_window", rclpy.Parameter.Type.INTEGER, 1),
     ("alpha_iir", rclpy.Parameter.Type.DOUBLE, 0.5)
 ]
 
@@ -102,7 +102,6 @@ class Gateway(Node):
             return
 
         #This seems to be ok now
-        #self.get_logger().info(f"Read fbins: {fbins}")
         #self.get_logger().info(f"Read audio data: {signals_f_vect.reshape((8, 32))}")
 
         n_frequencies = len(fbins)
@@ -110,7 +109,12 @@ class Gateway(Node):
             f"{n_frequencies} does not match {len(signals_f_vect)}"
         all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
         #frequencies = all_frequencies[:n_frequencies]
-        frequencies = all_frequencies[fbins]
+        try:
+            frequencies = all_frequencies[fbins]
+            self.get_logger().info(f"Read fbins: {fbins}")
+        except:
+            self.get_logger().warn(f"Ignoring fbins: {fbins}")
+            return
 
         signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
         for i in range(N_MICS):
