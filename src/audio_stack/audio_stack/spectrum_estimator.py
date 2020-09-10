@@ -18,51 +18,28 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
-import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
-from .live_plotter import LivePlotter
-
-MAX_YLIM = 1  # set to inf for no effect.
-MIN_YLIM = 1e-13  # set to -inf for no effect.
-
-# for plotting only
-MIN_FREQ = -np.inf #400
-MAX_FREQ = np.inf #600
 
 ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
-
-def normalize_spectrum(spectrum):
-    return (spectrum - np.min(spectrum, axis=1)[:, None]) / (np.max(spectrum, axis=1)[:, None] - np.min(spectrum, axis=1)[:, None])
 
 class SpectrumEstimator(Node):
     def __init__(self, plot=False):
         super().__init__("spectrum_estimator")
-        
-        self.plot = plot
 
         self.subscription_correlations = self.create_subscription(
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
         self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, "motion/pose_raw", self.listener_callback_pose_raw, 10
+            PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
         self.latest_time_and_orientation = None
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
 
         self.beam_former = None
-
-        if self.plot:
-            self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM, label='raw spectra')
-            self.plotter.ax.set_xlabel("angle [rad]")
-            self.plotter.ax.set_ylabel("magnitude [-]")
-
-            self.plotter_total = LivePlotter(np.inf, -np.inf, label='combined spectra')
-            self.plotter_total.ax.set_xlabel("angle [rad]")
-            self.plotter_total.ax.set_ylabel("magnitude [-]")
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
@@ -84,8 +61,6 @@ class SpectrumEstimator(Node):
         return SetParametersResult(successful=True)
 
     def listener_callback_correlations(self, msg_cor):
-        self.get_logger().info(f"Processing correlations: {msg_cor.timestamp}.")
-
         t1 = time.time()
 
         n_frequencies = len(msg_cor.frequencies)
@@ -146,35 +121,12 @@ class SpectrumEstimator(Node):
 
         t2 = time.time()
         processing_time = t2 - t1
-        self.get_logger().info(f"Published spectrum after {processing_time:.2f}.")
+        self.get_logger().info(f"Published spectrum after {processing_time:.2f}s.")
 
-        # plot
-        if self.plot:
-            assert len(frequencies) == spectrum.shape[0]
-            mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-            labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-            self.plotter.update_lines(
-                spectrum[mask], self.beam_former.theta_scan, labels=labels
-            )
-
-            # compute and plot combination.
-            spectrum_total = normalize_spectrum(spectrum)
-            spectrum_product = normalize_spectrum(
-                    np.product(spectrum_total, axis=0, keepdims=True)
-            )
-            spectrum_sum = normalize_spectrum(
-                    np.sum(spectrum_total, axis=0, keepdims=True)
-            )
-            spectrum_plot = np.r_[spectrum_product, spectrum_sum]
-            labels = ["product", "sum"]
-            assert spectrum_plot.shape[0] == 2
-            self.plotter_total.update_lines(
-                spectrum_plot, self.beam_former.theta_scan, labels=labels
-            )
 
     def listener_callback_pose_raw(self, msg_pose_raw):
         self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
-        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
+        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw_deg)
 
 
 def main(args=None):

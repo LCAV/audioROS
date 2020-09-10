@@ -23,7 +23,6 @@ from bin_selection import select_frequencies as embedded_select_frequencies
 from algos_beamforming import select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
-from .live_plotter import LivePlotter
 
 # Denoising method.
 # METHOD_NOISE = "bandpass"
@@ -140,19 +139,6 @@ class Correlator(Node):
             Correlations, "audio/correlations", 10
         )
 
-        self.current_n_buffer = None
-        self.current_n_frequencies = None
-
-        if self.plot_freq:
-            self.plotter_freq = LivePlotter(MAX_YLIM, MIN_YLIM)
-            self.plotter_freq.ax.set_xlabel("frequency [Hz]")
-            self.plotter_freq.ax.set_ylabel("magnitude [-]")
-
-        if self.plot_time:
-            self.plotter_time = LivePlotter(MAX_YLIM, MIN_YLIM, log=False)
-            self.plotter_time.ax.set_xlabel("time idx [-]")
-            self.plotter_time.ax.set_ylabel("magnitude [-]")
-
         self.methods = {
             "noise": METHOD_NOISE,
             "window": METHOD_WINDOW,
@@ -201,20 +187,10 @@ class Correlator(Node):
 
     def listener_callback_signals(self, msg):
         t1 = time.time()
-        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
         self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         signals = np.array(msg.signals_vect)
         signals = signals.reshape((msg.n_mics, msg.n_buffer))
-
-        if self.plot_time:
-            if msg.n_buffer != self.current_n_buffer:
-                self.plotter_time.clear()
-
-            self.plotter_time.update_lines(
-                signals, range(signals.shape[1]), self.labels
-            )
-            self.current_n_buffer = msg.n_buffer
 
         # processing
         signals_f, freqs = get_stft(
@@ -269,20 +245,6 @@ class Correlator(Node):
         )
         msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
         msg_new.timestamp = timestamp
-
-        # plotting
-        if self.plot_freq:
-            if msg_new.n_frequencies != self.current_n_frequencies:
-                self.plotter_freq.clear()
-
-            # sort frequencies
-            indices = np.argsort(freqs)
-            y = np.abs(signals_f[indices, :].T)
-            x = freqs[indices]
-            self.plotter_freq.update_lines(y, x, self.labels)
-            self.plotter_freq.ax.set_title(f"time (ms): {msg_new.timestamp}")
-            self.plotter_freq.update_axvlines(freqs)
-            self.current_n_frequencies = msg_new.n_frequencies
 
         # publishing
         self.publisher_correlations.publish(msg_new)
