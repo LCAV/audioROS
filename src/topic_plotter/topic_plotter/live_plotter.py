@@ -56,22 +56,32 @@ class LivePlotter(object):
         self.lines = {}
         self.axvlines = {}
 
-    def update_arrow(self, origin_x, origin_y, dx, dy):
+    def update_arrow(self, origin, angle_deg, name="orientation"):
         """ Update arrow coordinates. 
         """
-        if self.arrows: # 
-            self.arrows['pointer'].set_data(origin_x + dx, origin_y + dy)
-            self.arrows['line'].set_data([origin_x, origin_x + dx], [origin_y, origin_y + dy])
+        xmin, xmax = self.ax.get_xlim()
+        arrow_length = (xmax - xmin) / 5
+
+        origin_x, origin_y = origin
+        dx = arrow_length * math.cos(angle_deg * math.pi / 180)
+        dy = arrow_length * math.sin(angle_deg * math.pi / 180)
+
+        if name in self.arrows.keys(): # 
+            self.arrows[name]['pointer'].set_data(origin_x + dx, origin_y + dy)
+            self.arrows[name]['line'].set_data([origin_x, origin_x + dx], [origin_y, origin_y + dy])
         else:
+            self.arrows[name] = {}
             (line,) = self.ax.plot(
-                    origin_x+dx, origin_y+dy, color="black", marker=">"
-                )
-            self.arrows['pointer'] = line
-            (line,) = self.ax.plot(
-                    [origin_x, origin_x + dx], [origin_y, origin_y + dy], 
-                    color="black" 
+                    origin_x+dx, origin_y+dy, marker=">", color=f"C{len(self.arrows)}"
             )
-            self.arrows['line'] = line
+            self.arrows[name]['pointer'] = line
+            (line,) = self.ax.plot(
+                    [origin_x, origin_x + dx], [origin_y, origin_y + dy], label=name, 
+                    color=f"C{len(self.arrows)}"
+            )
+            self.arrows[name]['line'] = line
+
+        self.ax.legend(loc="upper left")
         # without this, the plot does not get updated live.
         self.fig.canvas.draw()
 
