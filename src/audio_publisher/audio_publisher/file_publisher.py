@@ -18,7 +18,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
 import file_parser as fp
 
-GT_DEGREES = 0
+GT_DEGREES = 20
 LOUDNESS = "high"
 SOURCE = "white_noise"
 
@@ -57,6 +57,8 @@ class FilePublisher(AudioPublisher):
             signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(gt_degrees=GT_DEGREES)
         elif file_source == "recordings_9_7_20":
             signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=GT_DEGREES)
+        else:
+            raise ValueError(file_source)
 
         signals_full = signals_all
         start_idx = fp.parameters[file_source]["time_index"]
@@ -80,11 +82,11 @@ class FilePublisher(AudioPublisher):
 
     def publish_position(self):
         msg_pose_raw = PoseRaw()
-        msg_pose_raw.dx = 0.5 
-        msg_pose_raw.dy = 0.1
+        msg_pose_raw.dx = 0.0
+        msg_pose_raw.dy = 0.0
         msg_pose_raw.z = 0.0
         msg_pose_raw.yaw_deg = 0.0
-        msg_pose_raw.source_direction_deg = 90.0 + GT_DEGREES
+        msg_pose_raw.source_direction_deg = 90.0 - GT_DEGREES
         msg_pose_raw.timestamp = self.get_time_ms()
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 

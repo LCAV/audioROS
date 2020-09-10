@@ -22,8 +22,34 @@ import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
+from .topic_synchronizer import TopicSynchronizer
 
-ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
+
+# Beamforming method, available: 
+# - "das": delay-and-sum
+# - "mvdr": minimum-variacne distortionless response
+BF_METHOD = "das"
+
+NORMALIZE = "zero_to_one"
+#NORMALIZE = "sum_to_one"
+
+
+def normalize_each_row(matrix, method="zero_to_one"):
+    if method == "zero_to_one":
+        normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
+        #assert np.max(normalized) == 1.0
+        #assert np.min(normalized) == 0.0
+        return normalized
+    elif method == "sum_to_one":
+
+        # first make sure values are between 0 and 1 (otherwise division can lead to errors)
+        denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
+        matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
+        sum_matrix = np.sum(matrix, axis=1, keepdims=True)
+        normalized = matrix / sum_matrix
+        np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
+        return normalized
+
 
 class SpectrumEstimator(Node):
     def __init__(self, plot=False):
@@ -32,10 +58,9 @@ class SpectrumEstimator(Node):
         self.subscription_correlations = self.create_subscription(
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
-        self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
-        )
-        self.latest_time_and_orientation = None
+
+        self.raw_pose_synch = TopicSynchronizer(20)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
 
@@ -43,7 +68,7 @@ class SpectrumEstimator(Node):
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
-        self.bf_method = "mvdr"
+        self.bf_method = BF_METHOD
         parameters = [
             rclpy.parameter.Parameter(
                 "bf_method", rclpy.Parameter.Type.STRING, self.bf_method
@@ -98,16 +123,13 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method)
 
-        orientation = 0
-        latest = self.latest_time_and_orientation
-        if (latest is not None) and (
-            abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS
-        ):
-            orientation = latest[1]
-        elif latest is not None:
-            self.get_logger().warn(
-                f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}"
-            )
+        message = self.raw_pose_synch.get_latest_message(msg_cor.timestamp, self.get_logger())
+        if message is None:
+            orientation = 0
+        else:
+            orientation = message.yaw_deg
+
+        spectrum = normalize_each_row(spectrum, NORMALIZE)
 
         # publish
         msg_spec = Spectrum()
@@ -122,11 +144,6 @@ class SpectrumEstimator(Node):
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(f"Published spectrum after {processing_time:.2f}s.")
-
-
-    def listener_callback_pose_raw(self, msg_pose_raw):
-        self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
-        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw_deg)
 
 
 def main(args=None):

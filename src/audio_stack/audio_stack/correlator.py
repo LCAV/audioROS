@@ -20,30 +20,54 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
 from bin_selection import select_frequencies as embedded_select_frequencies
-from algos_beamforming import select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 
-# Denoising method.
+# Denoising method
 # METHOD_NOISE = "bandpass"
 METHOD_NOISE = ""
 METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 
-# Windowing method. Available:
+# Windowing method, available:
 # - "" (no window)
 # - "tukey" (flat + cosine on borders)
 METHOD_WINDOW = "tukey"
 
 # Frequency selection
 THRUST = 43000
-METHOD_FREQUENCY = "standard"
+MIN_FREQ = 100
+MAX_FREQ = 10000
+DELTA_FREQ = 100
+
+METHOD_FREQUENCY = "none"
 METHOD_FREQUENCY_DICT = {
-    "standard": {
-        "min_freq": 100,
-        "max_freq": 10000,
-        "delta_freq": 100,
+    "none": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": False,
+        "thrust": 0, 
+    },
+    "snr": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
         "filter_snr": True,
-        "thrust": THRUST,
+        "thrust": 0, 
+    },
+    "props": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": False,
+        "thrust": THRUST, 
+    },
+    "props_snr": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": True,
+        "thrust": THRUST, 
     },
     "single": {
         "min_freq": 200,
@@ -54,14 +78,9 @@ METHOD_FREQUENCY_DICT = {
     }
 }
 
-# Plotting parameters
-MIN_YLIM = 1e-3  # set to -inf for no effect.
-MAX_YLIM = 1e5  # set to inf for no effect.
-MIN_FREQ = -np.inf # set to -inf for no effect
-MAX_FREQ = +np.inf  # set to inf for no effect
 
 def verify_validity(params_dict):
-    assert all([key in params_dict.keys() for key in METHOD_FREQUENCY_DICT["standard"].keys()])
+    assert all([key in params_dict.keys() for key in METHOD_FREQUENCY_DICT[METHOD_FREQUENCY].keys()])
     assert params_dict["min_freq"] <= params_dict["max_freq"]
     assert params_dict["min_freq"] >= 0
     assert params_dict["max_freq"] >= 0
@@ -106,8 +125,6 @@ def get_stft(signals, Fs, method_window, method_noise):
 
 
 def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency):
-
-    # calculate Rs for chosen frequency bins
     R = 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
 
     msg = Correlations()
@@ -121,9 +138,7 @@ def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency
 
 class Correlator(Node):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
-
     """
-
     def __init__(self, plot_freq=False, plot_time=False):
         super().__init__("correlator")
 
@@ -134,6 +149,9 @@ class Correlator(Node):
         )
         self.subscription_signals_f = self.create_subscription(
             SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
+        )
+        self.publisher_signals_f = self.create_publisher(
+            SignalsFreq, "audio/signals_f", 10
         )
         self.publisher_correlations = self.create_publisher(
             Correlations, "audio/correlations", 10
@@ -196,6 +214,7 @@ class Correlator(Node):
         signals_f, freqs = get_stft(
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
+
         if self.methods["frequency"] != "":
             bins = embedded_select_frequencies(
                 msg.n_buffer,
@@ -206,19 +225,29 @@ class Correlator(Node):
             freqs = freqs[bins]
             signals_f = signals_f[bins]
 
-        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
+        # create and publish frequency message
+        msg_freq = SignalsFreq()
+        msg_freq.fs = msg.fs
+        msg_freq.timestamp = msg.timestamp
+        msg_freq.n_mics = msg.n_mics
+        msg_freq.n_frequencies = len(freqs)
+        msg_freq.mic_positions = msg.mic_positions
+        msg_freq.frequencies = [int(f) for f in freqs]
+        # important: signals_f should be of shape n_mics x n_frequencies before flatten() is called.
+        msg_freq.signals_real_vect = list(np.real(signals_f.T).astype(float).flatten())
+        msg_freq.signals_imag_vect = list(np.imag(signals_f.T).astype(float).flatten())
+        self.publisher_signals_f.publish(msg_freq)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-                f"listener_callback_signals: Publishing after processing time {processing_time:.2f}"
+                f"listener_callback_signals: Published signals_f after {processing_time:.2f}s"
         )
 
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
-        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
         self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         # convert msg format to numpy arrays
@@ -227,27 +256,22 @@ class Correlator(Node):
         )
         signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
         freqs = np.array(msg.frequencies)
-        self.get_logger().info(f"frequencies: {freqs}")
 
-        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
+        # create and publish correlations message
+        msg_new = create_correlations_message(
+            signals_f, freqs, msg.fs, signals_f.shape[0], self.methods["frequency"]
+        )
+        msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
+        msg_new.timestamp = msg.timestamp
+        self.publisher_correlations.publish(msg_new)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-            f"listener_callback_signals_f: Publishing after processing time {processing_time}"
+                f"listener_callback_signals_f: Published correlations after {processing_time:.2f}s"
         )
-
-    def process_signals_f(self, signals_f, freqs, Fs, timestamp):
-        msg_new = create_correlations_message(
-            signals_f, freqs, Fs, signals_f.shape[0], self.methods["frequency"]
-        )
-        msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
-        msg_new.timestamp = timestamp
-
-        # publishing
-        self.publisher_correlations.publish(msg_new)
 
 
 def main(args=None):

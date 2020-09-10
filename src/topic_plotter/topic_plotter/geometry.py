@@ -12,7 +12,8 @@ from geometry_msgs.msg import Pose
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from audio_interfaces.msg import PoseRaw
+from audio_interfaces.msg import PoseRaw, DoaEstimates
+from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
 MAX_LENGTH = 10 # number of positions to plot
@@ -25,14 +26,25 @@ class GeometryPlotter(Node):
             PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
 
-        self.subscription_pose = self.create_subscription(
-            Pose, "geometry/pose", self.listener_callback_pose, 10
+        #self.subscription_pose = self.create_subscription(
+        #    Pose, "geometry/pose", self.listener_callback_pose, 10
+        #)
+
+        self.subscription_doa = self.create_subscription(
+            DoaEstimates, "geometry/doa_estimates", self.listener_callback_doa, 10
         )
 
         self.plotter_dict = {}
+        # initialize a starting position for pose_raw, as it only contains delta positions
         self.pose_raw_list = np.zeros((2, 1))
+
+        # need no starting position for pose as it has absolute positions
         self.pose_list = np.empty((2, 0))
 
+        # for error calculations
+        self.error_list = []
+        self.raw_pose_synch = TopicSynchronizer(10)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
     def init_plotter(self, name, xlabel='x', ylabel='y'):
         if not (name in self.plotter_dict.keys()):
@@ -41,24 +53,21 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
 
-    def update_plotter(self, name, pose_list, yaw_deg):
+    def update_plotter(self, name, pose_list, yaw_deg, source_direction_deg=None):
         self.plotter_dict[name].update_scatter(
             pose_list[0, :], 
             pose_list[1, :]
         )
 
-        arrow_length = max(np.max(pose_list) - np.min(pose_list), 1.0) / 0.3
-        dx = arrow_length * np.cos(yaw_deg * np.pi / 180)
-        dy = arrow_length * np.sin(yaw_deg * np.pi / 180)
         self.plotter_dict[name].update_arrow(
-            pose_list[0, -1], 
-            pose_list[1, -1],
-            dx=dx, dy=dy
+                pose_list[:, -1], yaw_deg, name="yaw_deg"
         )
 
+        if source_direction_deg is not None:
+            self.plotter_dict[name].update_arrow(
+                pose_list[:, -1], source_direction_deg, name="source_direction_deg"
+            )
 
-    # TODO(FD) figure out why the pose_raw topic and pose_raw topic do not yield exactly the same 
-    # position estimates.
     def listener_callback_pose_raw(self, msg_pose_raw):
         xlabel = "x [m]"
         ylabel = "y [m]"
@@ -73,10 +82,11 @@ class GeometryPlotter(Node):
 
         if self.pose_raw_list.shape[1] > MAX_LENGTH:
             self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
-        self.update_plotter("pose raw", self.pose_raw_list, yaw)
 
+        self.update_plotter("pose raw", self.pose_raw_list, yaw, msg_pose_raw.source_direction_deg)
 
-
+    # TODO(FD) figure out why the pose_raw topic and pose_raw topic do not yield exactly the same 
+    # position estimates.
     def listener_callback_pose(self, msg_pose):
         xlabel = "x [m]"
         ylabel = "y [m]"
@@ -94,6 +104,28 @@ class GeometryPlotter(Node):
             self.pose_list = self.pose_list[:, -MAX_LENGTH:]
 
         self.update_plotter("pose", self.pose_list, yaw)
+
+    def listener_callback_doa(self, msg_doa):
+        # plot the doa estimates in 2D plot
+        xlabel = "x [m]"
+        ylabel = "y [m]"
+        self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
+
+        doa_estimates = list(msg_doa.doa_estimates_deg)
+
+        for i, doa_estimate in enumerate(doa_estimates):
+            self.plotter_dict["pose raw"].update_arrow(
+                self.pose_raw_list[:, -1], doa_estimate, name=f"doa {i}"
+            )
+
+        # calculate the current error 
+        message = self.raw_pose_synch.get_latest_message(msg_doa.timestamp, self.get_logger())
+        if message is not None:
+            orientation = message.source_direction_deg
+            error = abs(orientation - doa_estimates[0])
+            self.error_list.append(error)
+            avg_error = np.mean(self.error_list)
+            self.get_logger().info(f"Current error: {error}, current average: {avg_error}")
 
 
 def main(args=None):
