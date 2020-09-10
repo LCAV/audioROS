@@ -12,6 +12,7 @@ from scipy.io.wavfile import read
 import rclpy
 
 from .publisher import AudioPublisher
+from audio_interfaces.msg import PoseRaw
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
@@ -38,7 +39,11 @@ class FilePublisher(AudioPublisher):
         self.loop = loop
         self.read_file_source(file_source)
         self.file_idx = 0
-        self.create_timer(1.0 / self.publish_rate, self.publish_loop)
+        self.create_timer(1.0 / self.publish_rate, self.publish_signals)
+
+        self.publisher_motion_pose_raw = self.create_publisher(
+            PoseRaw, "geometry/pose_raw", 10
+        )
 
     def read_file_source(self, file_source):
         if file_source in ["analytical", "pyroomacoustics"]:
@@ -58,12 +63,13 @@ class FilePublisher(AudioPublisher):
         self.signals_full = signals_full[:, start_idx:]
         self.len = self.signals_full.shape[1]
 
-    def publish_loop(self):
+    def publish_signals(self):
         n_buffer = self.n_buffer
 
         signals = self.signals_full[:, self.file_idx:self.file_idx + n_buffer]
 
         self.process_signals(signals)
+        self.publish_position()
 
         self.file_idx += self.n_between_buffers
         if self.file_idx + n_buffer >= self.len:
@@ -71,6 +77,16 @@ class FilePublisher(AudioPublisher):
                 self.file_idx = 0
             else:
                 sys.exit()
+
+    def publish_position(self):
+        msg_pose_raw = PoseRaw()
+        msg_pose_raw.dx = 0.5 
+        msg_pose_raw.dy = 0.1
+        msg_pose_raw.z = 0.0
+        msg_pose_raw.yaw_deg = 0.0
+        msg_pose_raw.source_direction_deg = 90.0 + GT_DEGREES
+        msg_pose_raw.timestamp = self.get_time_ms()
+        self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
 
 def main(args=None):
