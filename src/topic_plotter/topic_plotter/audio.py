@@ -66,7 +66,7 @@ class AudioPlotter(Node):
             spectrum[mask] + eps, theta_scan, labels=labels
         )
         self.plotter_dict[f"{name} raw spectra heatmap"].update_mesh(
-            spectrum[mask] + eps, y_labels=labels
+            np.log10(spectrum[mask] + eps), y_labels=labels
         )
 
         # compute and plot combinations.

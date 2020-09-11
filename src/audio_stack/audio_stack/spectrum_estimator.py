@@ -30,8 +30,8 @@ from .topic_synchronizer import TopicSynchronizer
 # - "mvdr": minimum-variacne distortionless response
 BF_METHOD = "das"
 
-NORMALIZE = "zero_to_one_all"
-#NORMALIZE = "zero_to_one"
+#NORMALIZE = "zero_to_one_all"
+NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
 
