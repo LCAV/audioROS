@@ -30,25 +30,42 @@ from .topic_synchronizer import TopicSynchronizer
 # - "mvdr": minimum-variacne distortionless response
 BF_METHOD = "das"
 
-NORMALIZE = "zero_to_one"
+NORMALIZE = "zero_to_one_all"
+#NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
 
-def normalize_each_row(matrix, method="zero_to_one"):
+def normalize_rows(matrix, method="zero_to_one"):
     if method == "zero_to_one":
         normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
         #assert np.max(normalized) == 1.0
         #assert np.min(normalized) == 0.0
-        return normalized
+    elif method == "zero_to_one_all":
+        normalized =  (matrix - np.min(matrix)) / (np.max(matrix) - np.min(matrix))
+        #assert np.max(normalized) == 1.0
+        #assert np.min(normalized) == 0.0
     elif method == "sum_to_one":
-
         # first make sure values are between 0 and 1 (otherwise division can lead to errors)
         denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
         matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
         sum_matrix = np.sum(matrix, axis=1, keepdims=True)
         normalized = matrix / sum_matrix
         np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
-        return normalized
+    else:
+        raise ValueError(method)
+    return normalized
+
+
+def combine_rows(matrix, method="product", keepdims=False):
+    if method == "product":
+        # do the product in log domain for numerical reasons
+        # sum(log10(matrix)) = log10(product(matrix))
+        combined_matrix = np.power(10, np.sum(np.log10(matrix), axis=0, keepdims=keepdims))
+    elif method == "sum":
+        combined_matrix = np.sum(matrix, axis=0, keepdims=keepdims)
+    else:
+        raise ValueError(method)
+    return combined_matrix
 
 
 class SpectrumEstimator(Node):
@@ -129,7 +146,7 @@ class SpectrumEstimator(Node):
         else:
             orientation = message.yaw_deg
 
-        spectrum = normalize_each_row(spectrum, NORMALIZE)
+        spectrum = normalize_rows(spectrum, NORMALIZE)
 
         # publish
         msg_spec = Spectrum()
