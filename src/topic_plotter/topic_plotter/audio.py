@@ -21,17 +21,17 @@ class AudioPlotter(Node):
             SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
         )
 
-        self.subscription_signals = self.create_subscription(
-            Signals, "audio/signals", self.listener_callback_signals, 10
-        )
+        #self.subscription_signals = self.create_subscription(
+        #    Signals, "audio/signals", self.listener_callback_signals, 10
+        #)
 
         self.subscription_spectrum = self.create_subscription(
             Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10
         )
 
-        self.subscription_combined_spectrum = self.create_subscription(
-            Spectrum, "audio/combined_spectrum", self.listener_callback_combined_spectrum, 10
-        )
+        #self.subscription_dynamic_spectrum = self.create_subscription(
+        #    Spectrum, "audio/dynamic_spectrum", self.listener_callback_dynamic_spectrum, 10
+        #)
 
         self.plotter_dict = {}
         self.current_n_buffer = None
@@ -49,10 +49,11 @@ class AudioPlotter(Node):
 
 
     def listener_callback_spectrum(self, msg_spec, name="static", eps=YLIM_MIN):
-        xlabel = "angle [rad]"
+        xlabel = "angle [deg]"
         ylabel = "magnitude [-]"
         self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
         self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
+        self.init_plotter(f"{name} raw spectra heatmap", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
 
         frequencies = np.array(msg_spec.frequencies) 
         spectrum = np.array(msg_spec.spectrum_vect).reshape((msg_spec.n_frequencies, msg_spec.n_angles))
@@ -63,6 +64,9 @@ class AudioPlotter(Node):
         labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
         self.plotter_dict[f"{name} raw spectra"].update_lines(
             spectrum[mask] + eps, theta_scan, labels=labels
+        )
+        self.plotter_dict[f"{name} raw spectra heatmap"].update_mesh(
+            spectrum[mask] + eps, y_labels=labels
         )
 
         # compute and plot combinations.
@@ -86,7 +90,12 @@ class AudioPlotter(Node):
             self.plotter_dict[f"{name} raw spectra"].update_axvlines([orientation])
             self.plotter_dict[f"{name} combined spectra"].update_axvlines([orientation])
 
-    def listener_callback_combined_spectrum(self, msg_spec):
+            angles = np.linspace(0, 360, msg_spec.n_angles)
+            orientation_index = np.argmin(abs(angles - orientation))
+            self.plotter_dict[f"{name} raw spectra heatmap"].update_axvlines([orientation_index], color='orange')
+
+
+    def listener_callback_dynamic_spectrum(self, msg_spec):
         return self.listener_callback_spectrum(msg_spec, name="dynamic")
 
 
