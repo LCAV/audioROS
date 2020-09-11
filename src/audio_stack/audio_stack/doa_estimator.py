@@ -24,7 +24,7 @@ from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 
 N_ESTIMATES = 3
 COMBINATION_N = 5
-COMBINATION_METHOD = "product_old"
+COMBINATION_METHOD = "product"
 
 
 class DoaEstimator(Node):
@@ -45,17 +45,17 @@ class DoaEstimator(Node):
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("combination_n")
-        self.combination_n = COMBINATION_N
         self.declare_parameter("combination_method")
-        self.combination_method = COMBINATION_METHOD 
         parameters = [
             rclpy.parameter.Parameter(
                 "combination_method",
                 rclpy.Parameter.Type.STRING,
-                self.combination_method,
+                COMBINATION_METHOD,
             ),
             rclpy.parameter.Parameter(
-                "combination_n", rclpy.Parameter.Type.INTEGER, self.combination_n
+                "combination_n", 
+                rclpy.Parameter.Type.INTEGER, 
+                COMBINATION_N
             ),
         ]
         self.set_parameters_callback(self.set_params)
@@ -114,7 +114,7 @@ class DoaEstimator(Node):
         msg_doa.timestamp = msg_spec.timestamp
         msg_doa.doa_estimates_deg = list(doa_estimates.astype(float).flatten())
         self.publisher_doa.publish(msg_doa)
-        self.get_logger().info(f"Published estimates: {doa_estimates}.")
+        self.get_logger().info(f"Published doa estimates: {doa_estimates}.")
 
 
 def main(args=None):
