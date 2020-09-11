@@ -24,7 +24,7 @@ from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 
 N_ESTIMATES = 3
 COMBINATION_N = 5
-COMBINATION_METHOD = "product"
+COMBINATION_METHOD = "product_old"
 
 
 class DoaEstimator(Node):
