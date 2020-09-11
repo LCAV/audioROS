@@ -41,7 +41,6 @@ def normalize_each_row(matrix, method="zero_to_one"):
         #assert np.min(normalized) == 0.0
         return normalized
     elif method == "sum_to_one":
-
         # first make sure values are between 0 and 1 (otherwise division can lead to errors)
         denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
         matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
@@ -77,13 +76,9 @@ def combine_rows(matrix, method="product", keepdims=False):
     if method == "product":
         # do the product in log domain for numerical reasons
         # sum(log10(matrix)) = log10(product(matrix))
-        combined_matrix = np.power(10, np.sum(np.log(matrix), axis=0, keepdims=keepdims))
-
-    elif method == "product_old":
-        combined_matrix = np.product(normalize_rows(matrix, "zero_to_one"), 
-                                     axis=0, keepdims=keepdims)
+        combined_matrix = np.power(10, np.sum(np.log10(matrix), axis=0, keepdims=keepdims))
     elif method == "sum":
-        combined_matrix = np.sum(np.log(matrix), axis=0, keepdims=keepdims)
+        combined_matrix = np.sum(matrix, axis=0, keepdims=keepdims)
     else:
         raise ValueError(method)
     return combined_matrix
