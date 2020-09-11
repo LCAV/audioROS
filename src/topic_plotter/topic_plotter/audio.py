@@ -4,7 +4,7 @@ from rclpy.node import Node
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, Signals, SignalsFreq, PoseRaw
-from audio_stack.spectrum_estimator import normalize_each_row, NORMALIZE
+from audio_stack.spectrum_estimator import normalize_rows, NORMALIZE
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
@@ -29,9 +29,9 @@ class AudioPlotter(Node):
             Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10
         )
 
-        #self.subscription_dynamic_spectrum = self.create_subscription(
-        #    Spectrum, "audio/dynamic_spectrum", self.listener_callback_dynamic_spectrum, 10
-        #)
+        self.subscription_dynamic_spectrum = self.create_subscription(
+            Spectrum, "audio/dynamic_spectrum", self.listener_callback_dynamic_spectrum, 10
+        )
 
         self.plotter_dict = {}
         self.current_n_buffer = None
@@ -71,12 +71,12 @@ class AudioPlotter(Node):
 
         # compute and plot combinations.
         spectrum_sum = np.sum(spectrum, axis=0, keepdims=True)
-        spectrum_sum = normalize_each_row(spectrum_sum, NORMALIZE)
+        spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
 
         # need to make sure spectrum is not too small before multiplying.
-        spectrum_product = np.product(normalize_each_row(spectrum, "zero_to_one"), 
+        spectrum_product = np.product(normalize_rows(spectrum, "zero_to_one_all"), 
                 axis=0, keepdims=True)
-        spectrum_product = normalize_each_row(spectrum_product, NORMALIZE)
+        spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
 
         spectrum_plot = np.r_[spectrum_product, spectrum_sum]
         labels = ["product", "sum"]
@@ -100,7 +100,7 @@ class AudioPlotter(Node):
 
 
     def listener_callback_signals_f(self, msg):
-        self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]")
+        self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]", ymin=1e-5, ymax=10)
 
         if msg.n_frequencies != self.current_n_frequencies:
             self.plotter_dict["signals frequency"].clear()
