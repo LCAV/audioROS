@@ -5,6 +5,7 @@ import numpy as np
 
 from audio_interfaces.msg import Spectrum, Signals, SignalsFreq, PoseRaw
 from audio_stack.spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
+from audio_stack.spectrum_estimator import normalize_each_row
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
@@ -21,9 +22,9 @@ class AudioPlotter(Node):
             SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
         )
 
-        #self.subscription_signals = self.create_subscription(
-        #    Signals, "audio/signals", self.listener_callback_signals, 10
-        #)
+        self.subscription_signals = self.create_subscription(
+            Signals, "audio/signals", self.listener_callback_signals, 10
+        )
 
         self.subscription_spectrum = self.create_subscription(
             Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10

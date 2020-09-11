@@ -21,6 +21,7 @@ import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
 from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
+from .spectrum_estimator import normalize_each_row
 
 N_ESTIMATES = 3
 COMBINATION_N = 5
@@ -45,17 +46,17 @@ class DoaEstimator(Node):
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("combination_n")
+        self.combination_n = COMBINATION_N
         self.declare_parameter("combination_method")
+        self.combination_method = COMBINATION_METHOD 
         parameters = [
             rclpy.parameter.Parameter(
                 "combination_method",
                 rclpy.Parameter.Type.STRING,
-                COMBINATION_METHOD,
+                self.combination_method,
             ),
             rclpy.parameter.Parameter(
-                "combination_n", 
-                rclpy.Parameter.Type.INTEGER, 
-                COMBINATION_N
+                "combination_n", rclpy.Parameter.Type.INTEGER, self.combination_n
             ),
         ]
         self.set_parameters_callback(self.set_params)
@@ -65,7 +66,8 @@ class DoaEstimator(Node):
         for param in params:
             if param.name == "combination_method":
                 self.combination_method = param.get_parameter_value().string_value
-            elif param.name == "combination_n":
+            #TODO(FD): change this back
+            if param.name == "combination_n":
                 self.combination_n = param.get_parameter_value().integer_value
             else:
                 return SetParametersResult(successful=False)
@@ -92,9 +94,18 @@ class DoaEstimator(Node):
             # TODO(FD) use a rolling buffer (linked list or so) instead of the copies here.
             spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
 
-        dynamic_spectrum = combine_rows(spectra_shifted, self.combination_method)# n_frequencies x n_angles
-        dynamic_spectrum = normalize_rows(dynamic_spectrum, NORMALIZE)
+        #dynamic_spectrum = combine_rows(spectra_shifted, self.combination_method)# n_frequencies x n_angles
+        #dynamic_spectrum = normalize_rows(dynamic_spectrum, NORMALIZE)
+        if self.combination_method == "sum":
+            dynamic_spectrum = np.sum(
+                spectra_shifted, axis=0
+            )  # n_frequencies x n_angles
+        elif self.combination_method == "product":
+            dynamic_spectrum = np.product(
+                spectra_shifted, axis=0
+            )  # n_frequencies x n_angles
 
+        dynamic_spectrum = normalize_each_row(dynamic_spectrum, NORMALIZE)
         # publish
         msg_new = msg_spec
         msg_new.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
@@ -102,8 +113,16 @@ class DoaEstimator(Node):
         self.get_logger().info(f"Published dynamic spectrum.")
 
         # calculate and publish doa estimates
-        final_spectrum = combine_rows(dynamic_spectrum, "product_old", keepdims=True)
-        final_spectrum = normalize_rows(final_spectrum, NORMALIZE)
+        if self.combination_method == "product":
+            # need to make sure spectrum is not too small before multiplying.
+            final_spectrum = np.product(normalize_each_row(dynamic_spectrum, "zero_to_one"), 
+                    axis=0, keepdims=True)  # n_angles
+        elif self.combination_method == "sum":
+            final_spectrum = np.sum(dynamic_spectrum, axis=0, keepdims=True)  # n_angles
+
+        final_spectrum = normalize_each_row(final_spectrum, NORMALIZE)
+        #final_spectrum = combine_rows(dynamic_spectrum, "product_old", keepdims=True)
+	#final_spectrum = normalize_rows(final_spectrum, NORMALIZE)
 
         angles = np.linspace(0, 360, msg_spec.n_angles)
         sorted_indices = np.argsort(final_spectrum.flatten()) # sorts in ascending order

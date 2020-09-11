@@ -34,6 +34,22 @@ BF_METHOD = "das"
 NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
+def normalize_each_row(matrix, method="zero_to_one"):
+    if method == "zero_to_one":
+        normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
+        #assert np.max(normalized) == 1.0
+        #assert np.min(normalized) == 0.0
+        return normalized
+    elif method == "sum_to_one":
+
+        # first make sure values are between 0 and 1 (otherwise division can lead to errors)
+        denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
+        matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
+        sum_matrix = np.sum(matrix, axis=1, keepdims=True)
+        normalized = matrix / sum_matrix
+        np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
+        return normalized
+
 
 def normalize_rows(matrix, method="zero_to_one"):
     if method == "zero_to_one":
@@ -54,6 +70,8 @@ def normalize_rows(matrix, method="zero_to_one"):
     else:
         raise ValueError(method)
     return normalized
+
+
 
 def combine_rows(matrix, method="product", keepdims=False):
     if method == "product":
@@ -149,7 +167,8 @@ class SpectrumEstimator(Node):
         else:
             orientation = message.yaw_deg
 
-        spectrum = normalize_rows(spectrum, NORMALIZE)
+        #spectrum = normalize_rows(spectrum, NORMALIZE)
+        spectrum = normalize_each_row(spectrum, NORMALIZE)
 
         # publish
         msg_spec = Spectrum()
