@@ -35,7 +35,7 @@ class DoaEstimator(Node):
             Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10
         )
         self.publisher_spectrum = self.create_publisher(
-            Spectrum, "audio/combined_spectrum", 10
+            Spectrum, "audio/dynamic_spectrum", 10
         )
         self.publisher_doa = self.create_publisher(
             DoaEstimates, "geometry/doa_estimates", 10
@@ -93,29 +93,29 @@ class DoaEstimator(Node):
             spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
 
         if self.combination_method == "sum":
-            combined_spectrum = np.sum(
+            dynamic_spectrum = np.sum(
                 spectra_shifted, axis=0
             )  # n_frequencies x n_angles
         elif self.combination_method == "product":
-            combined_spectrum = np.product(
+            dynamic_spectrum = np.product(
                 spectra_shifted, axis=0
             )  # n_frequencies x n_angles
 
-        combined_spectrum = normalize_each_row(combined_spectrum, NORMALIZE)
+        dynamic_spectrum = normalize_each_row(dynamic_spectrum, NORMALIZE)
 
         # publish
         msg_new = msg_spec
-        msg_new.spectrum_vect = list(combined_spectrum.astype(float).flatten())
+        msg_new.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
         self.publisher_spectrum.publish(msg_new)
         self.get_logger().info(f"Published combined spectrum.")
 
         # calculate and publish doa estimates
         if self.combination_method == "product":
             # need to make sure spectrum is not too small before multiplying.
-            final_spectrum = np.product(normalize_each_row(combined_spectrum, "zero_to_one"), 
+            final_spectrum = np.product(normalize_each_row(dynamic_spectrum, "zero_to_one"), 
                     axis=0, keepdims=True)  # n_angles
         elif self.combination_method == "sum":
-            final_spectrum = np.sum(combined_spectrum, axis=0, keepdims=True)  # n_angles
+            final_spectrum = np.sum(dynamic_spectrum, axis=0, keepdims=True)  # n_angles
 
         final_spectrum = normalize_each_row(final_spectrum, NORMALIZE)
         angles = np.linspace(0, 360, msg_spec.n_angles)

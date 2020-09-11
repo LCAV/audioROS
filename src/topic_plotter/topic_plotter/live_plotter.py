@@ -8,6 +8,7 @@ import math
 
 import matplotlib
 import matplotlib.pylab as plt
+import numpy as np
 
 matplotlib.use("TkAgg")
 
@@ -34,6 +35,7 @@ class LivePlotter(object):
         self.axvlines = {}
         self.arrows = {}
         self.scatter = {}
+        self.meshes = {}
 
         self.fig.canvas.mpl_connect("close_event", self.handle_close)
 
@@ -117,12 +119,38 @@ class LivePlotter(object):
         # without this, the plot does not get updated live.
         self.fig.canvas.draw()
 
-    def update_axvlines(self, data_vector):
+    def update_mesh(self, data_matrix, y_labels=None, name="standard"):
+        """ Plot each row of data_matrix in an image.
+        """
+        if name in self.meshes.keys():
+            self.meshes[name].set_array(data_matrix.flatten())
+        else:
+            mesh = self.ax.pcolormesh(data_matrix)
+            self.meshes[name] = mesh
+            angles = np.linspace(0, 360, data_matrix.shape[1], dtype=str)
+            xticks = self.ax.get_xticks()
+
+            # for some reason, xticks has an extra element which is not shown on the plot
+            # so we need to exclude that from the indices.
+            new_xticks = angles[xticks[:-1].astype(int)]
+
+            self.ax.set_xticklabels(new_xticks)
+        if y_labels is not None:
+            yticks = self.ax.get_yticks()
+            new_yticks = np.array(y_labels)[yticks[:-1].astype(int)]
+            self.ax.set_yticklabels(new_yticks)
+        # without this, the plot does not get updated live.
+        self.fig.canvas.draw()
+
+
+    def update_axvlines(self, data_vector, color=None):
         for i, xcoord in enumerate(data_vector):
             if i in self.axvlines.keys():
                 self.axvlines[i].set_xdata(xcoord)
             else:
-                axvline = self.ax.axvline(xcoord, color=f"C{i % 10}", ls=":")
+                if color is None:
+                    color = f"C{i % 10}"
+                axvline = self.ax.axvline(xcoord, color=color, ls=":")
                 self.axvlines[i] = axvline
 
         self.fig.canvas.draw()
