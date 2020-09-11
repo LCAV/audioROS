@@ -34,14 +34,12 @@ N = 1024
 PARAMETERS_TUPLES = [
     ("debug", rclpy.Parameter.Type.INTEGER, 0),
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
+    ("min_freq", rclpy.Parameter.Type.INTEGER, 100),
+    ("max_freq", rclpy.Parameter.Type.INTEGER, 10000),
+    ("delta_freq", rclpy.Parameter.Type.INTEGER, 100),
+    ("n_average", rclpy.Parameter.Type.INTEGER, 1),
     ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),
-    ("max_freq", rclpy.Parameter.Type.INTEGER, 10000),
-    ("min_freq", rclpy.Parameter.Type.INTEGER, 100),
-    ("delta_freq", rclpy.Parameter.Type.INTEGER, 100),
-    ("use_iir", rclpy.Parameter.Type.INTEGER, 0),
-    ("ma_window", rclpy.Parameter.Type.INTEGER, 1),
-    ("alpha_iir", rclpy.Parameter.Type.DOUBLE, 0.5)
 ]
 
 
