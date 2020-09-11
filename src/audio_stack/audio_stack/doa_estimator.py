@@ -102,7 +102,7 @@ class DoaEstimator(Node):
         self.get_logger().info(f"Published dynamic spectrum.")
 
         # calculate and publish doa estimates
-        final_spectrum = combine_rows(dynamic_spectrum, self.combination_method, keepdims=True)
+        final_spectrum = combine_rows(dynamic_spectrum, "product_old", keepdims=True)
         final_spectrum = normalize_rows(final_spectrum, NORMALIZE)
 
         angles = np.linspace(0, 360, msg_spec.n_angles)
