@@ -5,7 +5,6 @@ import numpy as np
 
 from audio_interfaces.msg import Spectrum, Signals, SignalsFreq, PoseRaw
 from audio_stack.spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
-from audio_stack.spectrum_estimator import normalize_each_row
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
@@ -75,11 +74,9 @@ class AudioPlotter(Node):
         spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
         spectrum_product = combine_rows(spectrum, "product", keepdims=True)
         spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
-        spectrum_product_old = combine_rows(spectrum, "product_old", keepdims=True)
-        spectrum_product_old = normalize_rows(spectrum_product_old, NORMALIZE)
 
-        spectrum_plot = np.r_[spectrum_product, spectrum_product_old, spectrum_sum]
-        labels = ["product", "product_old", "sum"]
+        spectrum_plot = np.r_[spectrum_product, spectrum_sum]
+        labels = ["product", "sum"]
         self.plotter_dict[f"{name} combined spectra"].update_lines(
             spectrum_plot, theta_scan, labels=labels
         )
