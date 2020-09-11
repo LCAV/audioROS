@@ -4,7 +4,7 @@ from rclpy.node import Node
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, Signals, SignalsFreq, PoseRaw
-from audio_stack.spectrum_estimator import normalize_rows, NORMALIZE
+from audio_stack.spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
@@ -70,16 +70,15 @@ class AudioPlotter(Node):
         )
 
         # compute and plot combinations.
-        spectrum_sum = np.sum(spectrum, axis=0, keepdims=True)
+        spectrum_sum = combine_rows(spectrum, "sum", keepdims=True)
         spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
-
-        # need to make sure spectrum is not too small before multiplying.
-        spectrum_product = np.product(normalize_rows(spectrum, "zero_to_one_all"), 
-                axis=0, keepdims=True)
+        spectrum_product = combine_rows(spectrum, "product", keepdims=True)
         spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
+        spectrum_product_old = combine_rows(spectrum, "product_old", keepdims=True)
+        spectrum_product_old = normalize_rows(spectrum_product_old, NORMALIZE)
 
-        spectrum_plot = np.r_[spectrum_product, spectrum_sum]
-        labels = ["product", "sum"]
+        spectrum_plot = np.r_[spectrum_product, spectrum_product_old, spectrum_sum]
+        labels = ["product", "product_old", "sum"]
         self.plotter_dict[f"{name} combined spectra"].update_lines(
             spectrum_plot, theta_scan, labels=labels
         )

@@ -60,6 +60,10 @@ def combine_rows(matrix, method="product", keepdims=False):
         # do the product in log domain for numerical reasons
         # sum(log10(matrix)) = log10(product(matrix))
         combined_matrix = np.power(10, np.sum(np.log(matrix), axis=0, keepdims=keepdims))
+
+    elif method == "product_old":
+        combined_matrix = np.product(normalize_rows(matrix, "zero_to_one"), 
+                                     axis=0, keepdims=keepdims)
     elif method == "sum":
         combined_matrix = np.sum(np.log(matrix), axis=0, keepdims=keepdims)
     else:
