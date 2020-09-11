@@ -30,8 +30,8 @@ from .topic_synchronizer import TopicSynchronizer
 # - "mvdr": minimum-variacne distortionless response
 BF_METHOD = "das"
 
-#NORMALIZE = "zero_to_one_all"
-NORMALIZE = "zero_to_one"
+NORMALIZE = "zero_to_one_all"
+#NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
 
@@ -146,8 +146,7 @@ class SpectrumEstimator(Node):
         else:
             orientation = message.yaw_deg
 
-        #spectrum = normalize_rows(spectrum, NORMALIZE)
-        spectrum = normalize_each_row(spectrum, NORMALIZE)
+        spectrum = normalize_rows(spectrum, NORMALIZE)
 
         # publish
         msg_spec = Spectrum()

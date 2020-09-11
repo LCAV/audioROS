@@ -97,7 +97,7 @@ class AudioPlotter(Node):
 
 
     def listener_callback_signals_f(self, msg):
-        self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]", ymin=1e-5, ymax=10)
+        self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]", ymin=1e-10, ymax=1e3)
 
         if msg.n_frequencies != self.current_n_frequencies:
             self.plotter_dict["signals frequency"].clear()
