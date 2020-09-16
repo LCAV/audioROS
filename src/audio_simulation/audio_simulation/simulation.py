@@ -10,12 +10,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy as cp
 import os
+import math
 
 from scipy.spatial.transform import Rotation as R
 from scipy.io import wavfile
-from scipy.signal import decimate 
-from operator import add
-from operator import neg
 
 from audio_interfaces.msg import Signals
 from geometry_msgs.msg import Pose
@@ -43,45 +41,52 @@ class AudioSimulation(Node):
 
     def listener_callback(self, msg_received):
         
-        rotation_rx = msg_received.orientation                                          # rotation (quaternion) received
-        drone_center_rx = msg_received.position                                         # drone's center position received
+        rotation_rx = msg_received.orientation                                                  # rotation (quaternion) received
+        drone_center_rx = msg_received.position                                                 # drone's center position received
         
-        rotation = np.array([rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w])         # convertion to numpy array
+        rotation = np.array([rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w])       # convertion to numpy array
         drone_center = np.array([drone_center_rx.x, drone_center_rx.y, drone_center_rx.z])
         
         microphones = generate_mic_position_array(rotation, drone_center)
-        sim_room = simulation(microphones, self.room)                                                       # running the audio simulation
+        sim_room = simulation(microphones, self.room)                                           # running the audio simulation        
+        signal_to_send = sim_room.mic_array.signals                                             # receiving the signal which is to be sent
 
-        msg = Signals()
+        no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)                            # the number of packages which fit the buffer
+        last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER                                     # the size of the last package of data        
+
+        for i in range(no_packages):            
+            if self.time_id >= MAX_TIMESTAMP:                                                   # managing timestamp overflow
+                self.get_logger().error("timestamp overflow")
+                self.time_id = self.time_id % MAX_TIMESTAMP
         
-        if self.time_id >= MAX_TIMESTAMP:
-            self.get_logger().error("timestamp overflow")
-            self.time_id = self.time_id % MAX_TIMESTAMP
+            msg = Signals() 
+            msg.timestamp = self.time_id
+            msg.fs = self.room.fs
+            msg.n_mics = N_MICS
+            msg.mic_positions = list(microphones.flatten())
         
-        msg.timestamp = self.time_id
-        msg.fs = self.room.fs
-        msg.n_mics = N_MICS
+            if i == no_packages - 1:                                                            # if it is the last package
+                signal = np.zeros((N_MICS, last_pkg_size) dtype = float)
+            else:                                                                               # if it is a package of N_BUFFER size
+                signal = np.zeros((N_MICS, MAX_BUFFER) dtype = float)
+            
+            for j in range(N_MICS):                                                             # taking a specific range of data for the package x N_MICS
+                signal[j] = signal_to_send[j][i * MAX_BUFFER : (i+1) * MAX_BUFFER]
+            
+            msg.n_buffer = len(signal[0])
+            msg.signals_vect = list(signal.flatten())
+
+            self.publisher_signals.publish(msg)                                                 # publishing a package
+            self.get_logger().info('Package nr {i} has been sent')
+
         
-        signal = np.zeros(N_MICS, dtype = float)
-
-        #for i in range(len(sim_room.mic_array.signals[0]) % ):                                # decimating signal
-        #    
-        #   signal[i] = decimate(sim_room.mic_array.signals[i:(MAX_BUFFER - 1)], 8)
-        
-
-        #msg.n_buffer = len(signal[0])
-        
-
-        msg.signals_vect = list(signal.flatten())
-        msg.mic_positions = list(microphones.flatten())
-
-        self.publisher_signals.publish(msg)
-        self.get_logger().info('Data was sent')
-
+        self.get_logger().info('All packages of the signal nr {self.time_id} have been sent')   # the whole signal has been sent
         self.time_id += 1
 
+        
 
-def set_room(room_dim, wav_path):                                                   # setting the shoe box room
+
+def set_room(room_dim, wav_path):                                                       # setting the shoe box room
     pyroom = pra.ShoeBox(room_dim)
     fs, audio_source = wavfile.read(wav_path)
     pyroom.add_source(SOURCE_POS, signal = audio_source)
@@ -99,10 +104,10 @@ def simulation(mic_array, pyroom):
 def generate_mic_position_array(rotation, drone_center):
     rot = R.from_quat(rotation)
     
-    mic_lt = drone_center + np.array([-MIC_DISTANCE/2, MIC_DISTANCE/2, 0])    # left top
-    mic_rt = drone_center + np.array([MIC_DISTANCE/2, MIC_DISTANCE/2, 0])     # right top
-    mic_rb = drone_center + np.array([MIC_DISTANCE/2, -MIC_DISTANCE/2, 0])    # right bottom
-    mic_lb = drone_center + np.array([-MIC_DISTANCE/2, -MIC_DISTANCE/2, 0])   # left bottom
+    mic_lt = drone_center + np.array([-MIC_DISTANCE/2, MIC_DISTANCE/2, 0])              # left top
+    mic_rt = drone_center + np.array([MIC_DISTANCE/2, MIC_DISTANCE/2, 0])               # right top
+    mic_rb = drone_center + np.array([MIC_DISTANCE/2, -MIC_DISTANCE/2, 0])              # right bottom
+    mic_lb = drone_center + np.array([-MIC_DISTANCE/2, -MIC_DISTANCE/2, 0])             # left bottom
     mic_locs = [mic_lt, mic_rt, mic_rb, mic_lb]
      
     # getting mic_new_position = (mic_vector - drone_center_vector) * rotation + drone_center_vector
