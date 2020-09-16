@@ -27,23 +27,26 @@ from .topic_synchronizer import TopicSynchronizer
 
 # Beamforming method, available: 
 # - "das": delay-and-sum
-# - "mvdr": minimum-variacne distortionless response
+# - "mvdr": minimum-variance distortionless response
 BF_METHOD = "das"
 
-#NORMALIZE = "zero_to_one_all"
-NORMALIZE = "zero_to_one"
+NORMALIZE = "zero_to_one_all"
+#NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
 
 def normalize_rows(matrix, method="zero_to_one"):
     if method == "zero_to_one":
         normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
-        #assert np.max(normalized) == 1.0
-        #assert np.min(normalized) == 0.0
+        np.testing.assert_allclose(np.max(normalized, axis=1), 1)
+        np.testing.assert_allclose(np.min(normalized, axis=1), 0)
     elif method == "zero_to_one_all":
-        normalized =  (matrix - np.min(matrix)) / (np.max(matrix) - np.min(matrix))
-        #assert np.max(normalized) == 1.0
-        #assert np.min(normalized) == 0.0
+        denom = np.max(matrix) - np.min(matrix)
+        if denom == 0.0:
+            return matrix 
+        normalized =  (matrix - np.min(matrix)) / denom
+        assert np.max(normalized) == 1, np.max(normalized)
+        assert np.min(normalized) == 0, np.min(normalized)
     elif method == "sum_to_one":
         # first make sure values are between 0 and 1 (otherwise division can lead to errors)
         denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
@@ -53,6 +56,9 @@ def normalize_rows(matrix, method="zero_to_one"):
         np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
     else:
         raise ValueError(method)
+
+    if np.any(np.isnan(normalized)):
+        print("Warning: problem in normalization")
     return normalized
 
 

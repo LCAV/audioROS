@@ -66,14 +66,15 @@ class AudioPlotter(Node):
             spectrum[mask] + eps, theta_scan, labels=labels
         )
         self.plotter_dict[f"{name} raw spectra heatmap"].update_mesh(
-            np.log10(spectrum[mask] + eps), y_labels=labels
+            spectrum[mask] + eps, y_labels=labels
         )
 
         # compute and plot combinations.
         spectrum_sum = combine_rows(spectrum, "sum", keepdims=True)
         spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
-        spectrum_product = combine_rows(spectrum, "product", keepdims=True)
+        spectrum_product = combine_rows(spectrum + 1e-1, "product", keepdims=True)
         spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
+        #print("spectrum_product:", np.min(spectrum_product), np.max(spectrum_product))
 
         spectrum_plot = np.r_[spectrum_product, spectrum_sum]
         labels = ["product", "sum"]
