@@ -12,12 +12,6 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <!--  <exec_depend>audio_interfaces.msg</exec_depend>
-  
-  <exec_depend>numpy</exec_depend>
-  <exec_depend>matplotlib</exec_depend>
-  <exec_depend>scipy</exec_depend>
-  <exec_depend>operator</exec_depend>-->
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
