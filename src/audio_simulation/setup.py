@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'simulation = audio_simulation.simulation:main',
+            'crazyflie = audio_simulation.crazyflie:main',
         ],
     },
 )
