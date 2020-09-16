@@ -108,16 +108,24 @@ class Gateway(Node):
         all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
         #frequencies = all_frequencies[:n_frequencies]
         try:
+            assert np.any(fbins>0)
             frequencies = all_frequencies[fbins]
-            self.get_logger().info(f"Read fbins: {fbins}")
+            self.get_logger().info(f"Read fbins: {fbins[:5]}")
+            if len(set(fbins)) < len(fbins):
+                self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
         except:
-            self.get_logger().warn(f"Ignoring fbins: {fbins}")
+            self.get_logger().warn(f"Ignoring fbins: {fbins[:5]}")
             return
 
         signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
         for i in range(N_MICS):
             signals_f[i].real = signals_f_vect[i :: N_MICS * 2]
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
+
+        abs_signals_f = np.abs(signals_f)
+        if np.any(abs_signals_f[:3, :] > 1e5) or np.any(abs_signals_f[:3, :] < 1e-10):
+            self.get_logger().warn(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
+            return
 
         # send data
         msg = SignalsFreq()
