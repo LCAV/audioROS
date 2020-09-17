@@ -31,7 +31,7 @@ FS = 32000
 N = 1024
 
 # Crazyflie audio parameters that can be set from here.
-PARAMETERS_TUPLES = [
+AUDIO_PARAMETERS_TUPLES = [
     ("debug", rclpy.Parameter.Type.INTEGER, 0),
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
     ("min_freq", rclpy.Parameter.Type.INTEGER, 100),
@@ -40,6 +40,14 @@ PARAMETERS_TUPLES = [
     ("n_average", rclpy.Parameter.Type.INTEGER, 1),
     ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),
+]
+
+MOTOR_PARAMETERS_TUPLES = [
+    ("m1", rclpy.Parameter.Type.INTEGER, 0),
+    ("m2", rclpy.Parameter.Type.INTEGER, 0),
+    ("m3", rclpy.Parameter.Type.INTEGER, 0),
+    ("m4", rclpy.Parameter.Type.INTEGER, 0),
+    ("enable", rclpy.Parameter.Type.INTEGER, 0),
 ]
 
 
@@ -64,11 +72,18 @@ class Gateway(Node):
         self.reader_crtp = reader_crtp
 
         parameters = []
-        for param in PARAMETERS_TUPLES:
+
+        for param in AUDIO_PARAMETERS_TUPLES:
             self.declare_parameter(param[0])
             param_rclpy = rclpy.parameter.Parameter(*param)
             parameters.append(param_rclpy)
-        self.set_parameters_callback(self.set_audio_params)
+
+        for param in MOTOR_PARAMETERS_TUPLES:
+            self.declare_parameter(param[0])
+            param_rclpy = rclpy.parameter.Parameter(*param)
+            parameters.append(param_rclpy)
+
+        self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
         # choose high publish rate so that we introduce as little
@@ -109,12 +124,12 @@ class Gateway(Node):
         #frequencies = all_frequencies[:n_frequencies]
         try:
             assert np.any(fbins>0)
-            frequencies = all_frequencies[fbins]
-            self.get_logger().info(f"Read fbins: {fbins[:5]}")
             if len(set(fbins)) < len(fbins):
-                self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
+                #self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
+                return
+            frequencies = all_frequencies[fbins]
         except:
-            self.get_logger().warn(f"Ignoring fbins: {fbins[:5]}")
+            #self.get_logger().warn(f"Ignoring fbins: {fbins[:5]}")
             return
 
         signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
@@ -124,7 +139,7 @@ class Gateway(Node):
 
         abs_signals_f = np.abs(signals_f)
         if np.any(abs_signals_f[:3, :] > 1e5) or np.any(abs_signals_f[:3, :] < 1e-10):
-            self.get_logger().warn(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
+            #self.get_logger().warn(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
             return
 
         # send data
@@ -142,7 +157,7 @@ class Gateway(Node):
             msg.mic_positions = []
         self.publisher_signals.publish(msg)
 
-        self.get_logger().info(f"Published audio data.")
+        self.get_logger().info(f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]}")
 
     def publish_motion_dict(self):
         motion_dict = self.reader_crtp.motion_dict["data"]
@@ -178,30 +193,44 @@ class Gateway(Node):
 
         self.prev_position_x = msg_pose.position.x
         self.prev_position_y = msg_pose.position.y
-        self.get_logger().info("Published motion data.")
+        self.get_logger().info(f"{msg_pose_raw.timestamp}: Published motion data.")
 
-    def set_audio_params(self, params):
-        for param in params:
-            param_tuples = [p for p in PARAMETERS_TUPLES if p[0] == param.name]
-            assert len(param_tuples) == 1
-            if param_tuples[0][1] == rclpy.Parameter.Type.INTEGER:
-                old_value = (
-                    self.get_parameter(param.name).get_parameter_value().integer_value
-                )
-                new_value = param.get_parameter_value().integer_value
-            elif param_tuples[0][1] == rclpy.Parameter.Type.DOUBLE:
-                old_value = (
-                    self.get_parameter(param.name).get_parameter_value().double_value
-                )
-                new_value = param.get_parameter_value().double_value
+    def set_params(self, params):
+        for param in params: 
+            param_tuples_audio = [p for p in AUDIO_PARAMETERS_TUPLES if p[0] == param.name]
+            param_tuples_motor = [p for p in MOTOR_PARAMETERS_TUPLES if p[0] == param.name]
+
+            if len(param_tuples_audio) == 1:
+                self.set_param(param, param_tuples_audio[0], "audio")
+            elif len(param_tuples_motor) == 1:
+                self.set_param(param, param_tuples_motor[0], "motorPowerSet")
+                if param.get_parameter_value().integer_value > 0:
+                    self.reader_crtp.cf.param.set_value(f"motorPowerSet.enable", 1)
             else:
-                raise ValueError(param_tuple)
+                raise ValueError(param)
 
-            self.reader_crtp.cf.param.set_value(f"audio.{param.name}", new_value)
-            self.get_logger().info(
-                f"changing {param.name} from {old_value} to {new_value}"
-            )
         return SetParametersResult(successful=True)
+
+    def set_param(self, param, param_tuple, param_class):
+        if param_tuple[1] == rclpy.Parameter.Type.INTEGER:
+            old_value = (
+                self.get_parameter(param.name).get_parameter_value().integer_value
+            )
+            new_value = param.get_parameter_value().integer_value
+        elif param_tuple[1] == rclpy.Parameter.Type.DOUBLE:
+            old_value = (
+                self.get_parameter(param.name).get_parameter_value().double_value
+            )
+            new_value = param.get_parameter_value().double_value
+        else:
+            raise ValueError(param_tuple)
+
+        self.reader_crtp.cf.param.set_value(f"{param_class}.{param.name}", new_value)
+        self.get_logger().info(
+            f"changing {param.name} from {old_value} to {new_value}"
+        )
+        return SetParametersResult(successful=True)
+
 
 
 def main(args=None):
@@ -230,8 +259,10 @@ def main(args=None):
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("unset audio.send_audio_enable")
             cf.param.set_value("audio.send_audio_enable", 0)
+            cf.param.set_value("motorPowerSet.enable", 0)
+            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            time.sleep(1)
 
     publisher.destroy_node()
     rclpy.shutdown()
