@@ -129,6 +129,7 @@ class Gateway(Node):
                 #self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
                 return
             frequencies = all_frequencies[fbins]
+            self.get_logger().info(f"Read fbins: {fbins}")
         except:
             #self.get_logger().warn(f"Ignoring fbins: {fbins[:5]}")
             return
