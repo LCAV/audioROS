@@ -34,15 +34,16 @@ N = 1024
 AUDIO_PARAMETERS_TUPLES = [
     ("debug", rclpy.Parameter.Type.INTEGER, 0),
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
-    ("min_freq", rclpy.Parameter.Type.INTEGER, 100),
-    ("max_freq", rclpy.Parameter.Type.INTEGER, 10000),
-    ("delta_freq", rclpy.Parameter.Type.INTEGER, 100),
-    ("n_average", rclpy.Parameter.Type.INTEGER, 1),
+    ("min_freq", rclpy.Parameter.Type.INTEGER, 200),
+    ("max_freq", rclpy.Parameter.Type.INTEGER, 7000),
+    ("delta_freq", rclpy.Parameter.Type.INTEGER, 40),
+    ("n_average", rclpy.Parameter.Type.INTEGER, 5),
     ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),
 ]
 
 MOTOR_PARAMETERS_TUPLES = [
+    ("all", rclpy.Parameter.Type.INTEGER, 0),
     ("m1", rclpy.Parameter.Type.INTEGER, 0),
     ("m2", rclpy.Parameter.Type.INTEGER, 0),
     ("m3", rclpy.Parameter.Type.INTEGER, 0),
@@ -203,12 +204,21 @@ class Gateway(Node):
             if len(param_tuples_audio) == 1:
                 self.set_param(param, param_tuples_audio[0], "audio")
             elif len(param_tuples_motor) == 1:
-                self.set_param(param, param_tuples_motor[0], "motorPowerSet")
-                if param.get_parameter_value().integer_value > 0:
-                    self.reader_crtp.cf.param.set_value(f"motorPowerSet.enable", 1)
+                # TODO(FD) find more elegant way to do this
+                #for motor in [f"m{i}" for i in range(1, 5)]:
+                #    param = self.get_parameter(motor)
+                value = param.get_parameter_value().integer_value
+                if param.name == "all":
+                    [self.reader_crtp.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
+                    self.get_logger().info( f"changing all motors to {value}")
+                else:
+                    self.reader_crtp.cf.param.set_value(f"motorPowerSet.{param.name}", value)
+                    self.get_logger().info(f"changing {param.name} to {value}")
+                if value > 0:
+                    print("changing motorPowerSet.enable to 1")
+                    self.reader_crtp.cf.param.set_value("motorPowerSet.enable", 1)
             else:
                 raise ValueError(param)
-
         return SetParametersResult(successful=True)
 
     def set_param(self, param, param_tuple, param_class):
@@ -229,7 +239,7 @@ class Gateway(Node):
         self.get_logger().info(
             f"changing {param.name} from {old_value} to {new_value}"
         )
-        return SetParametersResult(successful=True)
+        return 
 
 
 

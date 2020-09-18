@@ -1,0 +1,16 @@
+rosbag2_bagfile_information:
+  version: 2
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - motors_snr_props_source_45/motors_snr_props_source_45_0.db3
+  duration:
+    nanoseconds: 35988325421
+  starting_time:
+    nanoseconds_since_epoch: 1600356799864266037
+  message_count: 219
+  topics_with_message_count:
+    - topic_metadata:
+        name: /audio/signals_f
+        type: audio_interfaces/msg/SignalsFreq
+        serialization_format: cdr
+      message_count: 219
