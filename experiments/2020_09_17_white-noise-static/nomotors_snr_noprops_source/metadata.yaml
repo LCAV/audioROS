@@ -1,0 +1,16 @@
+rosbag2_bagfile_information:
+  version: 2
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - nomotors_snr_noprops_source/nomotors_snr_noprops_source_0.db3
+  duration:
+    nanoseconds: 36795948293
+  starting_time:
+    nanoseconds_since_epoch: 1600353083404690124
+  message_count: 228
+  topics_with_message_count:
+    - topic_metadata:
+        name: /audio/signals_f
+        type: audio_interfaces/msg/SignalsFreq
+        serialization_format: cdr
+      message_count: 228
