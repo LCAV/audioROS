@@ -74,7 +74,6 @@ class AudioPlotter(Node):
         spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
         spectrum_product = combine_rows(spectrum + 1e-1, "product", keepdims=True)
         spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
-        #print("spectrum_product:", np.min(spectrum_product), np.max(spectrum_product))
 
         spectrum_plot = np.r_[spectrum_product, spectrum_sum]
         labels = ["product", "sum"]
