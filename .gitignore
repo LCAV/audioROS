@@ -57,3 +57,4 @@ debug/
 stash/
 #pycharm:
 .idea/
+notebooks/.ipynb_checkpoints
