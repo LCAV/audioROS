@@ -58,3 +58,5 @@ stash/
 #pycharm:
 .idea/
 notebooks/.ipynb_checkpoints
+*.db3-shm
+*.db3-wal
