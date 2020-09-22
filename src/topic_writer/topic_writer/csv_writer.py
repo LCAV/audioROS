@@ -24,9 +24,9 @@ class CsvWriter(Node):
 
         self.declare_parameter("filename")
         self.declare_parameter("dirname")
+        self.set_parameters_callback(self.set_params)
         parameter1 = rclpy.parameter.Parameter("filename", rclpy.Parameter.Type.STRING, filename)
         parameter2 = rclpy.parameter.Parameter("dirname", rclpy.Parameter.Type.STRING, dirname)
-        self.set_parameters_callback(self.set_params)
         self.set_parameters([parameter1, parameter2])
         
         self.header = {"index", "topic"}
@@ -79,18 +79,20 @@ class CsvWriter(Node):
             filename = filename + '.csv'
 
         self.fullname = os.path.join(dirname, filename)
-        print(f"will write {self.fullname} on KeyboardInterrupt.") 
+        self.get_logger().info(f"will write {self.fullname} on KeyboardInterrupt.") 
         return SetParametersResult(successful=True)
 
     def write_file(self):
         if not self.rows:
-            print("empty rows, not saving.")
+            self.get_logger().info("empty rows, not saving.")
             return
 
         with open(self.fullname, "a+") as f:
             csv_writer = csv.DictWriter(f, self.header)
             csv_writer.writeheader()
             csv_writer.writerows(self.rows)
+
+        self.get_logger().info(f"Wrote {self.fullname}")
 
 
 def main(args=None):
