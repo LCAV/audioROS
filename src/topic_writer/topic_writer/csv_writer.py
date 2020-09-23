@@ -1,3 +1,4 @@
+import argparse
 import csv
 import os
 
@@ -9,9 +10,15 @@ import numpy as np
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw
 
+# Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
+# Used to automate the process of bag file conversion (CTRL+C does not work for some reason)
+TIMEOUT_S = 45 # seconds
+
+FILENAME = "test"
+DIRNAME = "csv_files/"
 
 class CsvWriter(Node):
-    def __init__(self, filename="test.csv", dirname="experiments/"):
+    def __init__(self, filename=FILENAME, dirname=DIRNAME):
         super().__init__("csv_writer")
 
         self.subscription_signals_f = self.create_subscription(
@@ -79,7 +86,7 @@ class CsvWriter(Node):
             filename = filename + '.csv'
 
         self.fullname = os.path.join(dirname, filename)
-        self.get_logger().info(f"will write {self.fullname} on KeyboardInterrupt.") 
+        #self.get_logger().debug(f"will write {self.fullname} on KeyboardInterrupt.") 
         return SetParametersResult(successful=True)
 
     def write_file(self):
@@ -87,27 +94,37 @@ class CsvWriter(Node):
             self.get_logger().info("empty rows, not saving.")
             return
 
-        with open(self.fullname, "a+") as f:
+        with open(self.fullname, "w+") as f:
             csv_writer = csv.DictWriter(f, self.header)
             csv_writer.writeheader()
             csv_writer.writerows(self.rows)
 
-        self.get_logger().info(f"Wrote {self.fullname}")
+        self.get_logger().info(f"Wrote {self.fullname}.")
+
+    #def destroy_node(self):
+    #    print("custom destroy")
+    #    self.write_file()
+    #    super().destroy_node()
 
 
 def main(args=None):
+    import time 
     rclpy.init(args=args)
 
     writer = CsvWriter()
 
     try:
-        rclpy.spin(writer)
+        start_time = time.time()
+        while (time.time() - start_time) < TIMEOUT_S:
+            rclpy.spin_once(writer)
+        writer.get_logger().info("timeout occured. writing...")
+        writer.write_file()
     except KeyboardInterrupt:
+        writer.get_logger().info("KeyboardInterrupt occured. writing...")
         writer.write_file()
 
     writer.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
