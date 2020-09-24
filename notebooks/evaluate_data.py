@@ -85,6 +85,7 @@ def evaluate_data(fname=""):
             "method",
             "spectrum",
             "spectrum_raw",
+            "frequencies",
         ]
     )
 
@@ -142,6 +143,7 @@ def evaluate_data(fname=""):
                             "method": method,
                             "spectrum": spectrum,
                             "spectrum_raw": spectrum_raw,
+                            "frequencies": freqs,
                         }
 
         if fname != "":
