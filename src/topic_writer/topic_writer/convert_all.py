@@ -26,6 +26,8 @@ def main(*args, **kwargs):
             # remove the "./" from beginning of filename.
             filename = subdir.replace("./", "").replace("/", "")
 
+        print(f"========= treating {filename} ==========")
+
         # TODO(FD) fix below.
         #process = subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer', '--ros-args', '-p', f'filename:={filename}'])
         subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
@@ -38,7 +40,6 @@ def main(*args, **kwargs):
         while (time.time() - start_time) < TIMEOUT_S:
             pass
         subprocess.run(['sudo', 'pkill', 'csv_writer'])
-        print('convert_all: processing next file after timeout...')
 
 if __name__ == '__main__':
     main()

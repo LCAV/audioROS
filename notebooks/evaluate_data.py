@@ -15,10 +15,10 @@ props_list = [True, False]
 snr_list = [True, False]
 motors_list = [True, False]
 combine_list = ["product", "sum"]
-normalize_list = ["none", "zero_to_one", "zero_to_one_all"]
+normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
 
-def read_csv(fname):
+def read_df(degree=0, props=True, snr=True, motors=True, source=True):
     def convert(row):
         arrays = ["signals_real_vect", "signals_imag_vect", "frequencies"]
         ints = ["n_mics", "n_frequencies", "timestamp"]
@@ -36,13 +36,6 @@ def read_csv(fname):
         row["signals_f"] = signals_f
         return row
 
-    df = pd.read_csv(fname)
-    df = df.apply(convert, axis=1)
-    df.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True)
-    return df
-
-
-def read_df(degree=0, props=True, snr=True, motors=True, source=True):
     ending = "" if degree == 0 else f"_{degree}"
     props_flag = "" if props else "no"
     motors_flag = "" if motors else "no"
@@ -50,7 +43,10 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True):
     snr_flag = "" if snr else "no"
     fname = f"{CSV_DIRNAME}/{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}source{ending}.csv"
     print("reading", fname)
-    df = read_csv(fname)
+
+    df = pd.read_csv(fname)
+    df = df.apply(convert, axis=1)
+    df.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True)
     return df
 
 
@@ -71,6 +67,7 @@ def add_soundlevel(df, threshold=1e-2, duration=1000):
 
 def evaluate_data(fname=""):
     duration = 20 * 1e3  # miliseconds
+
     # TODO(FD) will be read from the topic in the future
     mic_d = 0.108  # distance between mics (meters)
     mic_positions = mic_d / 2 * np.c_[[1, 1], [1, -1], [-1, 1], [-1, -1]].T
@@ -87,11 +84,12 @@ def evaluate_data(fname=""):
             "normalize",
             "method",
             "spectrum",
+            "spectrum_raw",
         ]
     )
 
     for degree, props, snr, motors in itertools.product(
-        degree_list, motors_list, props_list, snr_list
+        degree_list, props_list, snr_list, motors_list
     ):
         try:
             df = read_df(
@@ -100,6 +98,7 @@ def evaluate_data(fname=""):
         except FileNotFoundError:
             print("skipping!")
             continue
+
         add_soundlevel(df, duration=duration)
         df = df[(df.timestamp_s > 0) & (df.timestamp_s <= (duration / 1000))]
 
@@ -116,21 +115,21 @@ def evaluate_data(fname=""):
             for method in method_list:
                 if method == "mvdr":
                     # n_frequencies x n_thetas
-                    spectrum_all = beam_former.get_mvdr_spectrum(R, freqs)
+                    spectrum_raw = beam_former.get_mvdr_spectrum(R, freqs)
                 elif method == "das":
                     # n_frequencies x n_thetas
-                    spectrum_all = beam_former.get_das_spectrum(R, freqs)
+                    spectrum_raw = beam_former.get_das_spectrum(R, freqs)
                 else:
                     raise ValueError(method)
 
                 for normalize in normalize_list:
                     if normalize != "none":
-                        spectrum_all_norm = normalize_rows(spectrum_all, method=normalize)
+                        spectrum_norm = normalize_rows(spectrum_raw, method=normalize)
                     else:
-                        spectrum_all_norm = spectrum_all
+                        spectrum_norm = spectrum_raw
 
                     for combine in combine_list:
-                        spectrum_column = combine_rows(spectrum_all_norm, method=combine)
+                        spectrum = combine_rows(spectrum_norm, method=combine)
 
                         result_df.loc[len(result_df), :] = {
                             "index": i,
@@ -141,7 +140,8 @@ def evaluate_data(fname=""):
                             "combine": combine,
                             "normalize": normalize,
                             "method": method,
-                            "spectrum": spectrum_column,
+                            "spectrum": spectrum,
+                            "spectrum_raw": spectrum_raw,
                         }
 
         if fname != "":
@@ -151,5 +151,5 @@ def evaluate_data(fname=""):
 
 
 if __name__ == "__main__":
-    fname = f"results/static_spectra.pkl"
+    fname = f"results/static_spectra_raw.pkl"
     result_df = evaluate_data(fname)

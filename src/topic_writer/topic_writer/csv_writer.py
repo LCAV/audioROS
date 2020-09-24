@@ -96,7 +96,7 @@ class CsvWriter(Node):
             return
 
         with open(self.fullname, "w+") as f:
-            csv_writer = csv.DictWriter(f, self.header)
+            csv_writer = csv.DictWriter(f, sorted(self.header))
             csv_writer.writeheader()
             csv_writer.writerows(self.rows)
 
