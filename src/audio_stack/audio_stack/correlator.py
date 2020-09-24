@@ -16,6 +16,8 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
+from .beam_former import BeamFormer
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
@@ -124,18 +126,6 @@ def get_stft(signals, Fs, method_window, method_noise):
     return signals_f, freqs
 
 
-def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency):
-    R = 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
-
-    msg = Correlations()
-    msg.n_mics = int(signals_f.shape[1])
-    msg.n_frequencies = len(freqs)
-    msg.frequencies = [int(f) for f in freqs]
-    msg.corr_real_vect = [float(f) for f in R.real.flatten()]
-    msg.corr_imag_vect = [float(f) for f in R.imag.flatten()]
-    return msg
-
-
 class Correlator(Node):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
     """
@@ -178,6 +168,8 @@ class Correlator(Node):
 
         self.set_parameters(parameters)
         self.set_parameters_callback(self.set_params)
+
+        self.beam_former = BeamFormer()
 
     def set_params(self, params):
         new_params = self.frequency_params.copy()
@@ -258,11 +250,17 @@ class Correlator(Node):
         freqs = np.array(msg.frequencies)
 
         # create and publish correlations message
-        msg_new = create_correlations_message(
-            signals_f, freqs, msg.fs, signals_f.shape[0], self.methods["frequency"]
-        )
+        R = self.beam_former.get_correlation(signals_f)
+
+        msg_new = Correlations()
+        msg_new.n_mics = int(R.shape[0])
+        msg_new.n_frequencies = len(freqs)
+        msg_new.frequencies = [int(f) for f in freqs]
+        msg_new.corr_real_vect = [float(f) for f in R.real.flatten()]
+        msg_new.corr_imag_vect = [float(f) for f in R.imag.flatten()]
         msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
         msg_new.timestamp = msg.timestamp
+
         self.publisher_correlations.publish(msg_new)
 
         # check that the above processing pipeline does not

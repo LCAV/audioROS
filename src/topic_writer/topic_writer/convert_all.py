@@ -14,7 +14,6 @@ import time
 from .csv_writer import TIMEOUT_S
 
 def main(*args, **kwargs):
-
     parser = argparse.ArgumentParser(description='description')
     parser.add_argument('--dirname', dest='dirname', default='.') 
     args = parser.parse_args()
@@ -25,7 +24,7 @@ def main(*args, **kwargs):
             continue
         else:
             # remove the "./" from beginning of filename.
-            filename = subdir[2:] 
+            filename = subdir.replace("./", "").replace("/", "")
 
         # TODO(FD) fix below.
         #process = subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer', '--ros-args', '-p', f'filename:={filename}'])

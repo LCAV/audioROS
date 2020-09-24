@@ -17,12 +17,14 @@ from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_
 
 
 class BeamFormer(object):
-    def __init__(self, mic_positions):
+    def __init__(self, mic_positions=None):
         """
         :param mic_positions: array of mic positions, n_mics x dimension
         """
         self.mic_positions = mic_positions
-        self.n_mics = mic_positions.shape[0]
+
+        if mic_positions is not None:
+            self.n_mics = mic_positions.shape[0]
 
         self.theta_scan = np.linspace(0, 360, 181) * np.pi / 180.0
 
@@ -51,3 +53,12 @@ class BeamFormer(object):
             H_das = get_das_beamformer(theta, frequencies, self.mic_positions)
             spectrum[:, i] = get_powers(H_das, R)
         return spectrum
+
+    def get_correlation(self, signals_f):
+        """ Get autocorrelation tensor. 
+        :param signals_f: frequency response (n_frequencies x n_mics)
+        """
+        if signals_f.shape[0] < signals_f.shape[1]:
+            print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
+        return 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
+
