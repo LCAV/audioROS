@@ -24,7 +24,6 @@ from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
 from .beam_former import BeamFormer
 from .topic_synchronizer import TopicSynchronizer
 
-
 # Beamforming method, available: 
 # - "das": delay-and-sum
 # - "mvdr": minimum-variance distortionless response

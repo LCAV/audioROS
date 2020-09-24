@@ -51,6 +51,7 @@ class CsvWriter(Node):
           "frequencies": np.array(msg.frequencies),
           "signals_real_vect": np.array(msg.signals_real_vect),
           "signals_imag_vect": np.array(msg.signals_imag_vect),
+          "mic_positions": np.array(msg.mic_positions),
         }
 
         self.header = set(row_dict.keys()).union(self.header)

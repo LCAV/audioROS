@@ -254,7 +254,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     mic_d = 0.108  # distance between mics (meters)
-    mic_positions = mic_d / 2 * np.c_[[1, 1], [1, -1], [-1, 1], [-1, -1]].T  #  #  #  #
+    mic_positions = mic_d / 2 * np.c_[[1, 1], [1, -1], [-1, 1], [-1, -1]].T
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
