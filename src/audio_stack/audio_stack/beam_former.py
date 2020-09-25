@@ -14,7 +14,6 @@ sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 import numpy as np
 
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
-from audio_stack.spectrum_estimator import combine_rows, normalize_rows
 
 
 class BeamFormer(object):
@@ -84,11 +83,17 @@ class BeamFormer(object):
 
         :return: spectrum estimate of shape (n_angles,)
         """
+        from audio_stack.spectrum_estimator import combine_rows, normalize_rows
+
         # the combined spectrum is going to be in the coordinate frame of the latest
         # spectrum.
         spectra_shifted = [self.spectrum_orientation_list[-1][0]]  # latest element.
         o_ref = self.spectrum_orientation_list[-1][1]
         n_angles = spectra_shifted[0].shape[1]
+
+        if len(self.spectrum_orientation_list) < self.combination_n:
+            print(f"Warning: using only {len(self.spectrum_orientation_list)}/{self.combination_n}")
+
         for spectrum, orientation in self.spectrum_orientation_list[:-1]:
             # TODO(FD) do interpolation rather than nearest neighbor.
             # Note that index can be both positive and negative, both will work.
