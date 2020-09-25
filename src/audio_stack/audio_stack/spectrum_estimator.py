@@ -21,8 +21,8 @@ from rcl_interfaces.msg import SetParametersResult
 import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
-from .beam_former import BeamFormer
-from .topic_synchronizer import TopicSynchronizer
+from audio_stack.beam_former import BeamFormer
+from audio_stack.topic_synchronizer import TopicSynchronizer
 
 # Beamforming method, available: 
 # - "das": delay-and-sum
@@ -53,6 +53,8 @@ def normalize_rows(matrix, method="zero_to_one"):
         sum_matrix = np.sum(matrix, axis=1, keepdims=True)
         normalized = matrix / sum_matrix
         np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
+    elif method in ["none", None]:
+        return matrix
     else:
         raise ValueError(method)
 

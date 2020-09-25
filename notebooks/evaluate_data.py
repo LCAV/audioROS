@@ -114,20 +114,16 @@ def evaluate_data(fname=""):
             R = beam_former.get_correlation(signals_f.T)
 
             for method in method_list:
+                # spectrum_raw is of shape n_frequencies x n_thetas
                 if method == "mvdr":
-                    # n_frequencies x n_thetas
                     spectrum_raw = beam_former.get_mvdr_spectrum(R, freqs)
                 elif method == "das":
-                    # n_frequencies x n_thetas
                     spectrum_raw = beam_former.get_das_spectrum(R, freqs)
                 else:
                     raise ValueError(method)
 
                 for normalize in normalize_list:
-                    if normalize != "none":
-                        spectrum_norm = normalize_rows(spectrum_raw, method=normalize)
-                    else:
-                        spectrum_norm = spectrum_raw
+                    spectrum_norm = normalize_rows(spectrum_raw, method=normalize)
 
                     for combine in combine_list:
                         spectrum = combine_rows(spectrum_norm, method=combine)
