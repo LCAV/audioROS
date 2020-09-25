@@ -53,6 +53,8 @@ def normalize_rows(matrix, method="zero_to_one"):
         sum_matrix = np.sum(matrix, axis=1, keepdims=True)
         normalized = matrix / sum_matrix
         np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
+    elif method in ["none", None]:
+        return matrix
     else:
         raise ValueError(method)
 

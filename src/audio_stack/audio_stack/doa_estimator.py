@@ -20,11 +20,12 @@ import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
+from audio_stack.beam_former import BeamFormer
 from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 
-N_ESTIMATES = 3
-COMBINATION_N = 5
-COMBINATION_METHOD = "product"
+N_ESTIMATES = 3 # number of peaks to detect
+COMBINATION_N = 5 # number of spectra to combine
+COMBINATION_METHOD = "product" # way to combine spectra
 
 
 class DoaEstimator(Node):
@@ -61,6 +62,9 @@ class DoaEstimator(Node):
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
+        self.beam_former = BeamFormer()
+        self.beam_former.init_dynamic_estimates(self.combination_n, self.combination_method)
+
     def set_params(self, params):
         for param in params:
             if param.name == "combination_method":
@@ -69,30 +73,20 @@ class DoaEstimator(Node):
                 self.combination_n = param.get_parameter_value().integer_value
             else:
                 return SetParametersResult(successful=False)
+
+        self.beam_former.init_dynamic_estimates(self.combination_n, self.combination_method)
         return SetParametersResult(successful=True)
 
     def listener_callback_spectrum(self, msg_spec):
+
+        # add latest spectrum and orientation to dynamic estimate
         spectrum = np.array(msg_spec.spectrum_vect).reshape(
             (msg_spec.n_frequencies, msg_spec.n_angles)
         )
-        self.spectrum_orientation_list.append((spectrum, msg_spec.orientation))
+        self.beam_former.add_to_dynamic_estimates(spectrum, msg_spec.orientation)
 
-        # remove outdated spectra
-        while len(self.spectrum_orientation_list) >= self.combination_n:
-            self.spectrum_orientation_list.pop(0)
-
-        # the combined spectrum is going to be in the coordinate frame of the latest
-        # spectrum.
-        spectra_shifted = [self.spectrum_orientation_list[-1][0]]  # latest element.
-        o_ref = self.spectrum_orientation_list[-1][1]
-        for spectrum, orientation in self.spectrum_orientation_list[:-1]:
-            # TODO(FD) do interpolation rather than nearest neighbor.
-            # Note that index can be both positive and negative, both will work.
-            index = round((orientation - o_ref) * (msg_spec.n_angles - 1) / 360)
-            # TODO(FD) use a rolling buffer (linked list or so) instead of the copies here.
-            spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
-
-        dynamic_spectrum = combine_rows(spectra_shifted, self.combination_method, keepdims=False) # n_frequencies x n_angles
+        # retrieve current estimate
+        dynamic_spectrum = self.beam_former.get_dynamic_estimate()
         dynamic_spectrum = normalize_rows(dynamic_spectrum, NORMALIZE)
 
         # publish
