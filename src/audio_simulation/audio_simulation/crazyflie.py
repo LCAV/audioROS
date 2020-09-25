@@ -48,12 +48,13 @@ class AudioSimulation(Node):
         drone_center = np.array([drone_center_rx.x, drone_center_rx.y, drone_center_rx.z])
         
         microphones = generate_mic_position_array(rotation, drone_center)
+        #room = set_room(ROOM_DIM, WAV_PATH)                                             # creating the room with the audio source
         sim_room = simulation(microphones, self.room)                                           # running the audio simulation        
         signal_to_send = sim_room.mic_array.signals                                             # receiving the signal which is to be sent
 
         no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)                            # the number of packages which fit the buffer
         last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER                                     # the size of the last package of data        
-
+        
         for i in range(no_packages):            
             if self.time_id >= MAX_TIMESTAMP:                                                   # managing timestamp overflow
                 self.get_logger().error("timestamp overflow")
@@ -66,9 +67,9 @@ class AudioSimulation(Node):
             msg.mic_positions = list(microphones.flatten())
         
             if i == no_packages - 1:                                                            # if it is the last package
-                signal = np.zeros((N_MICS, last_pkg_size) dtype = float)
+                signal = np.zeros((N_MICS, last_pkg_size), dtype = float)
             else:                                                                               # if it is a package of N_BUFFER size
-                signal = np.zeros((N_MICS, MAX_BUFFER) dtype = float)
+                signal = np.zeros((N_MICS, MAX_BUFFER), dtype = float)
             
             for j in range(N_MICS):                                                             # taking a specific range of data for the package x N_MICS
                 signal[j] = signal_to_send[j][i * MAX_BUFFER : (i+1) * MAX_BUFFER]
@@ -77,10 +78,10 @@ class AudioSimulation(Node):
             msg.signals_vect = list(signal.flatten())
 
             self.publisher_signals.publish(msg)                                                 # publishing a package
-            self.get_logger().info('Package nr {i} has been sent')
+            self.get_logger().info('Package nr ' + str(i) + ' has been sent')
 
         
-        self.get_logger().info('All packages of the signal nr {self.time_id} have been sent')   # the whole signal has been sent
+        self.get_logger().info('All packages of the signal nr ' + str(self.time_id) + ' have been sent')   # the whole signal has been sent
         self.time_id += 1
 
         
@@ -114,8 +115,10 @@ def generate_mic_position_array(rotation, drone_center):
     
     for i in range(len(mic_locs)):
         mic_locs[i] = rot.apply(mic_locs[i] - drone_center) + drone_center 
-    
-    return mic_locs
+   
+    mics = np.array(mic_locs)
+
+    return mics
 
 
 
