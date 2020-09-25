@@ -97,7 +97,7 @@ class BeamFormer(object):
         for spectrum, orientation in self.spectrum_orientation_list[:-1]:
             # TODO(FD) do interpolation rather than nearest neighbor.
             # Note that index can be both positive and negative, both will work.
-            index = round((orientation - o_ref) * (n_angles - 1) / 360)
+            index = int(round((orientation - o_ref) * (n_angles - 1) / 360))
             spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
 
         spectra_shifted = normalize_rows(spectra_shifted, method=self.normalization_method)
