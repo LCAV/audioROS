@@ -48,7 +48,7 @@ class AudioSimulation(Node):
         drone_center = np.array([drone_center_rx.x, drone_center_rx.y, drone_center_rx.z])
         
         microphones = generate_mic_position_array(rotation, drone_center)
-        sim_room = simulation(microphones, self.room)                                           # running the audio simulation        
+        sim_room = self.simulation(microphones)                                                 # running the audio simulation        
         signal_to_send = sim_room.mic_array.signals                                             # receiving the signal which is to be sent
 
         no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)                            # the number of packages which fit the buffer
@@ -84,6 +84,19 @@ class AudioSimulation(Node):
         self.time_id += 1
 
         
+    def simulation(self, mic_array):
+        mic_arr = np.c_[mic_array[0], mic_array[1], mic_array[2], mic_array[3],]            # applying contatenation
+        pyroom_copy = self.copy_room()                                                      # creating a copy of the class' room
+        pyroom_copy.add_microphone_array(mic_arr)                                           # adding microphones
+        pyroom_copy.simulate()
+        return pyroom_copy
+
+    def copy_room(self):
+        pyroom_cp = pra.ShoeBox(self.room.shoebox_dim)
+        for i in range(len(self.room.sources)):
+            pyroom_cp.add_source(self.room.sources[i].position, signal = self.room.sources[i].signal)
+        return pyroom_cp
+
 
 
 def set_room(room_dim, wav_path_list, source_position_list):                                     # setting the shoe box room
@@ -92,14 +105,6 @@ def set_room(room_dim, wav_path_list, source_position_list):                    
         fs, audio_source = wavfile.read(wav_path_list[i])
         pyroom.add_source(source_position_list[i], signal = audio_source)
     return pyroom
-
-
-def simulation(mic_array, pyroom):
-    mic_arr = np.c_[mic_array[0], mic_array[1], mic_array[2], mic_array[3],]            # applying contatenation
-    pyroom_copy = copy_room(pyroom)                                                     # creating a copy of the class' room
-    pyroom_copy.add_microphone_array(mic_arr)                                           # adding microphones
-    pyroom_copy.simulate()
-    return pyroom_copy
 
 
 def generate_mic_position_array(rotation, drone_center):
@@ -120,11 +125,6 @@ def generate_mic_position_array(rotation, drone_center):
 
     return mics
 
-def copy_room(pyroom):
-    pyroom_cp = pra.ShoeBox(pyroom.shoebox_dim)
-    for i in range(len(pyroom.sources)):
-        pyroom_cp.add_source(pyroom.sources[i].position, signal = pyroom.sources[i].signal)
-    return pyroom_cp
 
 
 def main(args=None):
