@@ -25,17 +25,17 @@ ROOM_DIM = [2, 2, 2]                                                            
 SOURCE_POS = [1, 1, 1]                                                                                  # source position
 WAV_PATH = os.getcwd() + "/src/audio_simulation/audio_simulation/audio_source/white_noise.wav"          # source .wav file
 MAX_TIMESTAMP = pow(2, 32) - 1                                                                          # max value of uint32
-MAX_BUFFER = 1000 #TEMPORARY VALUE!!!!                                                                  # max value of float64
+MAX_BUFFER = 1024                                                                                       # max value of our buffer
 
 class AudioSimulation(Node):
 
     def __init__(self):
         super().__init__('audio_simulation')
         
-        self.room = set_room(ROOM_DIM, WAV_PATH)                                             # creating the room with the audio source
+        self.room = set_room(ROOM_DIM, [WAV_PATH,], [SOURCE_POS,])                              # creating the room with the audio source
         self.time_id = 0
 
-        self.publisher_signals = self.create_publisher(Signals, 'OK_NOK', 10)
+        self.publisher_signals = self.create_publisher(Signals, 'simulated_signals', 10)
         self.subscription_position = self.create_subscription(Pose, 'crazyflie_position', self.listener_callback, 10)
 
 
@@ -48,7 +48,6 @@ class AudioSimulation(Node):
         drone_center = np.array([drone_center_rx.x, drone_center_rx.y, drone_center_rx.z])
         
         microphones = generate_mic_position_array(rotation, drone_center)
-        #room = set_room(ROOM_DIM, WAV_PATH)                                             # creating the room with the audio source
         sim_room = simulation(microphones, self.room)                                           # running the audio simulation        
         signal_to_send = sim_room.mic_array.signals                                             # receiving the signal which is to be sent
 
@@ -87,16 +86,17 @@ class AudioSimulation(Node):
         
 
 
-def set_room(room_dim, wav_path):                                                       # setting the shoe box room
+def set_room(room_dim, wav_path_list, source_position_list):                                     # setting the shoe box room
     pyroom = pra.ShoeBox(room_dim)
-    fs, audio_source = wavfile.read(wav_path)
-    pyroom.add_source(SOURCE_POS, signal = audio_source)
+    for i in range(len(wav_path_list)):
+        fs, audio_source = wavfile.read(wav_path_list[i])
+        pyroom.add_source(source_position_list[i], signal = audio_source)
     return pyroom
 
 
 def simulation(mic_array, pyroom):
     mic_arr = np.c_[mic_array[0], mic_array[1], mic_array[2], mic_array[3],]            # applying contatenation
-    pyroom_copy = cp.copy(pyroom)                                                       # creating a copy of the class' room
+    pyroom_copy = copy_room(pyroom)                                                     # creating a copy of the class' room
     pyroom_copy.add_microphone_array(mic_arr)                                           # adding microphones
     pyroom_copy.simulate()
     return pyroom_copy
@@ -120,6 +120,11 @@ def generate_mic_position_array(rotation, drone_center):
 
     return mics
 
+def copy_room(pyroom):
+    pyroom_cp = pra.ShoeBox(pyroom.shoebox_dim)
+    for i in range(len(pyroom.sources)):
+        pyroom_cp.add_source(pyroom.sources[i].position, signal = pyroom.sources[i].signal)
+    return pyroom_cp
 
 
 def main(args=None):
