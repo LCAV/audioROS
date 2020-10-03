@@ -1,5 +1,5 @@
 """
-crazyflie.py:
+crazyflie.py: Publish simulated audio signals for a given crazyflie's position
 """
 
 import rclpy
@@ -32,30 +32,30 @@ class AudioSimulation(Node):
     def __init__(self):
         super().__init__('audio_simulation')
         
-        self.room = set_room(ROOM_DIM, [WAV_PATH,], [SOURCE_POS,])                              # creating the room with the audio source
+        self.room = set_room(ROOM_DIM, [WAV_PATH,], [SOURCE_POS,])
         self.time_id = 0
 
-        self.publisher_signals = self.create_publisher(Signals, 'simulated_signals', 10)
-        self.subscription_position = self.create_subscription(Pose, 'crazyflie_position', self.listener_callback, 10)
+        self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
+        self.subscription_position = self.create_subscription(Pose, 'geometry/pose', self.listener_callback, 10)
 
-
-    def listener_callback(self, msg_received):
+    # run a simulation and send the audio signal in packets when a message is received 
+    def listener_callback(self, msg_received):      
         
-        rotation_rx = msg_received.orientation                                                  # rotation (quaternion) received
-        drone_center_rx = msg_received.position                                                 # drone's center position received
+        rotation_rx = msg_received.orientation                                                 
+        drone_center_rx = msg_received.position                                                
         
-        rotation = np.array([rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w])       # convertion to numpy array
+        rotation = np.array([rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w])
         drone_center = np.array([drone_center_rx.x, drone_center_rx.y, drone_center_rx.z])
         
         microphones = generate_mic_position_array(rotation, drone_center)
-        sim_room = self.simulation(microphones)                                                 # running the audio simulation        
-        signal_to_send = sim_room.mic_array.signals                                             # receiving the signal which is to be sent
+        sim_room = self.simulation(microphones)         
+        signal_to_send = sim_room.mic_array.signals
 
-        no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)                            # the number of packages which fit the buffer
-        last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER                                     # the size of the last package of data        
+        no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)
+        last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER        
         
         for i in range(no_packages):            
-            if self.time_id >= MAX_TIMESTAMP:                                                   # managing timestamp overflow
+            if self.time_id >= MAX_TIMESTAMP:
                 self.get_logger().error("timestamp overflow")
                 self.time_id = self.time_id % MAX_TIMESTAMP
         
@@ -65,41 +65,42 @@ class AudioSimulation(Node):
             msg.n_mics = N_MICS
             msg.mic_positions = list(microphones.flatten())
         
-            if i == no_packages - 1:                                                            # if it is the last package
+            if i == no_packages - 1:
                 signal = np.zeros((N_MICS, last_pkg_size), dtype = float)
-            else:                                                                               # if it is a package of N_BUFFER size
+            else:
                 signal = np.zeros((N_MICS, MAX_BUFFER), dtype = float)
             
-            for j in range(N_MICS):                                                             # taking a specific range of data for the package x N_MICS
+            for j in range(N_MICS):
                 signal[j] = signal_to_send[j][i * MAX_BUFFER : (i+1) * MAX_BUFFER]
             
             msg.n_buffer = len(signal[0])
             msg.signals_vect = list(signal.flatten())
 
-            self.publisher_signals.publish(msg)                                                 # publishing a package
+            self.publisher_signals.publish(msg)
             self.get_logger().info('Package nr ' + str(i) + ' has been sent')
 
         
-        self.get_logger().info('All packages of the signal nr ' + str(self.time_id) + ' have been sent')   # the whole signal has been sent
+        self.get_logger().info('All packages of the signal nr ' + str(self.time_id) + ' have been sent')
         self.time_id += 1
 
-        
-    def simulation(self, mic_array):
-        mic_arr = np.c_[mic_array[0], mic_array[1], mic_array[2], mic_array[3],]            # applying contatenation
-        pyroom_copy = self.copy_room()                                                      # creating a copy of the class' room
-        pyroom_copy.add_microphone_array(mic_arr)                                           # adding microphones
+    # run a pyroomacoustics simulation on a copy of the pyroom attribute of an AudioSimulation object
+    def simulation(self, mic_array):            
+        mic_arr = np.c_[mic_array[0], mic_array[1], mic_array[2], mic_array[3],]
+        pyroom_copy = self.copy_room()
+        pyroom_copy.add_microphone_array(mic_arr)
         pyroom_copy.simulate()
         return pyroom_copy
 
-    def copy_room(self):
+    # copy the pyroom attribute of an AudioSimulation object
+    def copy_room(self):                        
         pyroom_cp = pra.ShoeBox(self.room.shoebox_dim)
         for i in range(len(self.room.sources)):
             pyroom_cp.add_source(self.room.sources[i].position, signal = self.room.sources[i].signal)
         return pyroom_cp
 
 
-
-def set_room(room_dim, wav_path_list, source_position_list):                                     # setting the shoe box room
+# setting the shoe box room with specified dimensions and sources
+def set_room(room_dim, wav_path_list, source_position_list):        
     pyroom = pra.ShoeBox(room_dim)
     for i in range(len(wav_path_list)):
         fs, audio_source = wavfile.read(wav_path_list[i])
@@ -107,7 +108,8 @@ def set_room(room_dim, wav_path_list, source_position_list):                    
     return pyroom
 
 
-def generate_mic_position_array(rotation, drone_center):
+# calculate current mics' postion based on the drone's center coords and rotation
+def generate_mic_position_array(rotation, drone_center):        
     rot = R.from_quat(rotation)
     
     mic_lt = drone_center + np.array([-MIC_DISTANCE/2, MIC_DISTANCE/2, 0])              # left top
@@ -115,8 +117,6 @@ def generate_mic_position_array(rotation, drone_center):
     mic_rb = drone_center + np.array([MIC_DISTANCE/2, -MIC_DISTANCE/2, 0])              # right bottom
     mic_lb = drone_center + np.array([-MIC_DISTANCE/2, -MIC_DISTANCE/2, 0])             # left bottom
     mic_locs = [mic_lt, mic_rt, mic_rb, mic_lb]
-     
-    # getting mic_new_position = (mic_vector - drone_center_vector) * rotation + drone_center_vector
     
     for i in range(len(mic_locs)):
         mic_locs[i] = rot.apply(mic_locs[i] - drone_center) + drone_center 
@@ -134,7 +134,6 @@ def main(args=None):
 
     rclpy.spin(new_pubsub)
 
-    # Destroy the node explicitly (otherwise it will be done automatically when the garbage collector destroys the node object)
     new_pubsub.destroy_node()
     rclpy.shutdown()
 
