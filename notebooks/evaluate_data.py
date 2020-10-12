@@ -52,14 +52,15 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True):
 
 def get_spectrogram(df):
     stft = np.array([*df.loc[:, "signals_f"]])  # n_times x n_mics x n_freqs
-    return np.mean(np.abs(stft), axis=1).T  # average over n_mics, n_freqs x n_times
+    return np.mean(np.abs(stft), axis=1).T  # average over n_mics: n_freqs x n_times
 
 
-def add_soundlevel(df, threshold=1e-2, duration=1000):
-    # detect the end time and cut fixed time before it
+def add_soundlevel(df, threshold=1e-4, duration=1000):
     spectrogram = get_spectrogram(df)  # n_freqs x n_times
-    sound_level = np.mean(spectrogram, axis=0)  # average over n_frequencies
+    sound_level = np.mean(spectrogram**2, axis=0)  # average over n_frequencies
     df.loc[:, "sound_level"] = sound_level
+
+    # detect the end time and cut fixed time before it
     end_index = np.where(sound_level > threshold)[0][-1]
     end_time = df.timestamp[end_index]
     df.loc[:, "timestamp_s"] = (df.timestamp - end_time + duration) / 1000
