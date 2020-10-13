@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-messages.py: ROS message to and from numpy array conversions.
+messages.py: ROS-message to and from numpy-array conversions.
 """
 
 import numpy as np
@@ -24,7 +24,6 @@ def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
             np.linalg.norm(d_local), np.linalg.norm(d_world))
 
     msg = Pose()
-    msg = create_pose_message(motion_dict)
     msg.position = Point()
     msg.position.x = d_world[0] + prev_x
     msg.position.y = d_world[1] + prev_y
