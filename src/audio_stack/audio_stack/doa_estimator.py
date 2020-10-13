@@ -44,26 +44,28 @@ class DoaEstimator(Node):
         # all in degrees:
         self.spectrum_orientation_list = []
 
+        self.beam_former = BeamFormer()
+
         # create ROS parameters that can be changed from command line.
+        self.combination_n = COMBINATION_N
+        self.combination_method = COMBINATION_METHOD
         self.declare_parameter("combination_n")
         self.declare_parameter("combination_method")
         parameters = [
             rclpy.parameter.Parameter(
                 "combination_method",
                 rclpy.Parameter.Type.STRING,
-                COMBINATION_METHOD,
+                self.combination_method
             ),
             rclpy.parameter.Parameter(
                 "combination_n", 
                 rclpy.Parameter.Type.INTEGER, 
-                COMBINATION_N
+                self.combination_n 
             ),
         ]
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
-        self.beam_former = BeamFormer()
-        self.beam_former.init_dynamic_estimates(self.combination_n, self.combination_method)
 
     def set_params(self, params):
         for param in params:
@@ -74,15 +76,13 @@ class DoaEstimator(Node):
             else:
                 return SetParametersResult(successful=False)
 
-        self.beam_former.init_dynamic_estimates(self.combination_n, self.combination_method)
+        self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
         return SetParametersResult(successful=True)
 
     def listener_callback_spectrum(self, msg_spec):
 
+        spectrum, *_ = read_spectrum_message(msg_psec)
         # add latest spectrum and orientation to dynamic estimate
-        spectrum = np.array(msg_spec.spectrum_vect).reshape(
-            (msg_spec.n_frequencies, msg_spec.n_angles)
-        )
         self.beam_former.add_to_dynamic_estimates(spectrum, msg_spec.orientation)
 
         # retrieve current estimate
@@ -103,10 +103,7 @@ class DoaEstimator(Node):
         sorted_indices = np.argsort(final_spectrum.flatten()) # sorts in ascending order
         doa_estimates = angles[sorted_indices[-N_ESTIMATES:][::-1]]
 
-        msg_doa = DoaEstimates()
-        msg_doa.n_estimates = N_ESTIMATES
-        msg_doa.timestamp = msg_spec.timestamp
-        msg_doa.doa_estimates_deg = list(doa_estimates.astype(float).flatten())
+        msg_doa = create_doa_message(doa_estimates, msg_spec.timestamp)
         self.publisher_doa.publish(msg_doa)
         self.get_logger().info(f"Published doa estimates: {doa_estimates}.")
 
@@ -123,9 +120,6 @@ def main(args=None):
 
     rclpy.spin(estimator)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     estimator.destroy_node()
     rclpy.shutdown()
 

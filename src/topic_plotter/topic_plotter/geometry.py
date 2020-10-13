@@ -73,33 +73,27 @@ class GeometryPlotter(Node):
         ylabel = "y [m]"
         self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
 
-        d_local = np.array((msg_pose_raw.dx, msg_pose_raw.dy))
-        yaw = msg_pose_raw.yaw_deg
-        r = Rotation.from_euler('z', yaw, degrees=True)
-        d_world = r.as_matrix()[:2, :2] @ d_local
-        previous_position = self.pose_raw_list[:, -1]
-        self.pose_raw_list = np.c_[self.pose_raw_list, previous_position + d_world]
+        d_world = read_pose_raw_message(msg_pose_raw)
+        new_position = self.pose_raw_list[:, -1] + d_world
+        self.pose_raw_list = np.c_[self.pose_raw_list, new_position]
 
         if self.pose_raw_list.shape[1] > MAX_LENGTH:
             self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
 
         self.update_plotter("pose raw", self.pose_raw_list, yaw, msg_pose_raw.source_direction_deg)
 
-    # TODO(FD) figure out why the pose_raw topic and pose_raw topic do not yield exactly the same 
+    # TODO(FD) figure out why the pose_raw topic and pose topic do not yield exactly the same 
     # position estimates.
     def listener_callback_pose(self, msg_pose):
         xlabel = "x [m]"
         ylabel = "y [m]"
         self.init_plotter("pose", xlabel=xlabel, ylabel=ylabel)
 
-        new_position = np.array((msg_pose.position.x, msg_pose.position.y))
-        self.pose_list = np.c_[self.pose_list, new_position]
-
-        quat = [msg_pose.orientation.x, msg_pose.orientation.y, msg_pose.orientation.z, msg_pose.orientation.w]
-        r = Rotation.from_quat(quat)
-        [yaw, pitch, roll] = r.as_euler('zyx', degrees=True)
+        new_position, yaw, pitch, roll = read_pose_message(msg_pose)
         assert pitch == 0, pitch
         assert roll == 0, roll
+        self.pose_list = np.c_[self.pose_list, new_position]
+
         if self.pose_list.shape[1] > MAX_LENGTH:
             self.pose_list = self.pose_list[:, -MAX_LENGTH:]
 

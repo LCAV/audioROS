@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
-correlator.py: 
+correlator.py: Calculate correlations based on raw time or frequency signals.
+
 """
 
 import os
@@ -24,6 +24,7 @@ from noise_cancellation import filter_iir_bandpass
 from bin_selection import select_frequencies as embedded_select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
+from audio_interfaces_py.messages import create_correlations_message, create_signals_freq_message, read_signals_freq_message, read_signals_message
 
 # Denoising method
 # METHOD_NOISE = "bandpass"
@@ -79,7 +80,6 @@ METHOD_FREQUENCY_DICT = {
         "thrust": 0,
     }
 }
-
 
 def verify_validity(params_dict):
     assert all([key in params_dict.keys() for key in METHOD_FREQUENCY_DICT[METHOD_FREQUENCY].keys()])
@@ -197,10 +197,8 @@ class Correlator(Node):
 
     def listener_callback_signals(self, msg):
         t1 = time.time()
-        self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
-        signals = np.array(msg.signals_vect)
-        signals = signals.reshape((msg.n_mics, msg.n_buffer))
+        self.mic_positions, signals = read_signals_message(msg)
 
         # processing
         signals_f, freqs = get_stft(
@@ -217,17 +215,7 @@ class Correlator(Node):
             freqs = freqs[bins]
             signals_f = signals_f[bins]
 
-        # create and publish frequency message
-        msg_freq = SignalsFreq()
-        msg_freq.fs = msg.fs
-        msg_freq.timestamp = msg.timestamp
-        msg_freq.n_mics = msg.n_mics
-        msg_freq.n_frequencies = len(freqs)
-        msg_freq.mic_positions = msg.mic_positions
-        msg_freq.frequencies = [int(f) for f in freqs]
-        # important: signals_f should be of shape n_mics x n_frequencies before flatten() is called.
-        msg_freq.signals_real_vect = list(np.real(signals_f.T).astype(float).flatten())
-        msg_freq.signals_imag_vect = list(np.imag(signals_f.T).astype(float).flatten())
+        msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, msg.fs)
         self.publisher_signals_f.publish(msg_freq)
 
         # check that the above processing pipeline does not
@@ -240,27 +228,10 @@ class Correlator(Node):
 
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
-        self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
-        # convert msg format to numpy arrays
-        signals_f = np.array(msg.signals_real_vect) + 1j * np.array(
-            msg.signals_imag_vect
-        )
-        signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
-        freqs = np.array(msg.frequencies)
-
-        # create and publish correlations message
+        self.mic_positions, signals_f, freqs = read_signals_freq_message(msg)
         R = self.beam_former.get_correlation(signals_f)
-
-        msg_new = Correlations()
-        msg_new.n_mics = int(R.shape[0])
-        msg_new.n_frequencies = len(freqs)
-        msg_new.frequencies = [int(f) for f in freqs]
-        msg_new.corr_real_vect = [float(f) for f in R.real.flatten()]
-        msg_new.corr_imag_vect = [float(f) for f in R.imag.flatten()]
-        msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
-        msg_new.timestamp = msg.timestamp
-
+        msg_new = create_correlations_message(R, freqs, self.mic_positions, msg.timestamp)
         self.publisher_correlations.publish(msg_new)
 
         # check that the above processing pipeline does not

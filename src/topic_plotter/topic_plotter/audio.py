@@ -4,6 +4,7 @@ from rclpy.node import Node
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, Signals, SignalsFreq, PoseRaw
+from audio_interfaces_py.messages import read_signals_message, read_signals_freq_message, read_spectrum_message
 from audio_stack.spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
@@ -55,9 +56,7 @@ class AudioPlotter(Node):
         self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
         self.init_plotter(f"{name} raw spectra heatmap", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
 
-        frequencies = np.array(msg_spec.frequencies) 
-        spectrum = np.array(msg_spec.spectrum_vect).reshape((msg_spec.n_frequencies, msg_spec.n_angles))
-        theta_scan = np.linspace(0, 360, msg_spec.n_angles)
+        spectrum, frequencies, theta_scan = read_spectrum_message(msg_spec)
 
         # compute and plot combination.
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
@@ -87,8 +86,7 @@ class AudioPlotter(Node):
             self.plotter_dict[f"{name} raw spectra"].update_axvlines([orientation])
             self.plotter_dict[f"{name} combined spectra"].update_axvlines([orientation])
 
-            angles = np.linspace(0, 360, msg_spec.n_angles)
-            orientation_index = np.argmin(abs(angles - orientation))
+            orientation_index = np.argmin(abs(theta_scan - orientation))
             self.plotter_dict[f"{name} raw spectra heatmap"].update_axvlines([orientation_index], color='orange')
 
 
@@ -102,11 +100,9 @@ class AudioPlotter(Node):
         if msg.n_frequencies != self.current_n_frequencies:
             self.plotter_dict["signals frequency"].clear()
 
-        # sort frequencies
-        freqs = np.array(msg.frequencies)
-        signals_f = np.array(msg.signals_real_vect) + 1j * np.array(msg.signals_imag_vect)
-        signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
+        __, signals_f, freqs = read_signals_freq_message(msg)
 
+        # sort frequencies
         indices = np.argsort(freqs)
         y = np.abs(signals_f[indices, :].T)
         x = freqs[indices]
@@ -120,7 +116,7 @@ class AudioPlotter(Node):
     def listener_callback_signals(self, msg):
         self.init_plotter("signals time", xlabel="time idx [-]", ylabel="magnitude [-]", log=False)
 
-        signals = np.array(msg.signals_vect).reshape((msg.n_mics, msg.n_buffer))
+        __, signals = read_signals_message(msg)
         labels = [f"mic {i}" for i in range(1, 1+msg.n_mics)]
 
         if msg.n_buffer != self.current_n_buffer:

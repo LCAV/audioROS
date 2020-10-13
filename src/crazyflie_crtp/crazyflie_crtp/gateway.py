@@ -3,19 +3,17 @@ import os
 import sys
 import time
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
+import numpy as np
 
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
-from geometry_msgs.msg import Pose, Point, Quaternion
-
-import numpy as np
-# TODO(FD): could replace this with tf.transformations or tf2.transformations
-from scipy.spatial.transform import Rotation
+from geometry_msgs.msg import Pose 
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw
+from audio_interfaces_py.messages import create_signals_freq_message, create_pose_message, create_pose_raw_message
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from reader_crtp import ReaderCRTP
 
 logging.basicConfig(level=logging.ERROR)
@@ -129,7 +127,6 @@ class Gateway(Node):
                 #self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
                 return
             frequencies = all_frequencies[fbins]
-            self.get_logger().info(f"Read fbins: {fbins}")
         except:
             #self.get_logger().warn(f"Ignoring fbins: {fbins[:5]}")
             return
@@ -144,58 +141,26 @@ class Gateway(Node):
             #self.get_logger().warn(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
             return
 
-        # send data
-        msg = SignalsFreq()
-        msg.frequencies = [int(f) for f in frequencies]
-        msg.signals_real_vect = list(signals_f.real.flatten())
-        msg.signals_imag_vect = list(signals_f.imag.flatten())
-        msg.timestamp = self.reader_crtp.audio_dict["timestamp"]
-        msg.n_mics = N_MICS
-        msg.n_frequencies = n_frequencies
-
-        if self.mic_positions is not None:
-            msg.mic_positions = list(self.mic_positions.flatten().astype(float))
-        else:
-            msg.mic_positions = []
+        msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
+                self.reader_crtp.audio_dict["timestamp"], 
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]}")
 
     def publish_motion_dict(self):
         motion_dict = self.reader_crtp.motion_dict["data"]
+        timestamp = self.reader_crtp.motion_dict["timestamp"]
 
-        msg_pose_raw = PoseRaw()
-        msg_pose_raw.dx = motion_dict["dx"]
-        msg_pose_raw.dy = motion_dict["dy"]
-        msg_pose_raw.z = motion_dict["z"]
-        msg_pose_raw.yaw_deg = motion_dict["yaw"]
-        msg_pose_raw.source_direction_deg = 0.0
-        msg_pose_raw.timestamp = self.reader_crtp.motion_dict["timestamp"]
+        msg_pose_raw = create_pose_raw_message(motion_dict, timestamp)
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
-        r = Rotation.from_euler("z", motion_dict["yaw"], degrees=True)
-        d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
-        d_world = r.as_matrix()[:2, :2] @ d_local
-
-        assert abs(np.linalg.norm(d_local) - np.linalg.norm(d_world)) < 1e-10, (
-                np.linalg.norm(d_local), np.linalg.norm(d_world))
-
-        msg_pose = Pose()
-        msg_pose.position = Point()
-        msg_pose.position.x = d_world[0] + self.prev_position_x
-        msg_pose.position.y = d_world[1] + self.prev_position_y
-        msg_pose.position.z = motion_dict["z"]
-        msg_pose.orientation = Quaternion()
-        r_quat = r.as_quat()
-        msg_pose.orientation.x = r_quat[0]
-        msg_pose.orientation.y = r_quat[1]
-        msg_pose.orientation.z = r_quat[2]
-        msg_pose.orientation.w = r_quat[3]
+        msg_pose = create_pose_message(motion_dict, 
+                self.previous_position_x, self.previous_position_y, timestamp)
         self.publisher_motion_pose.publish(msg_pose)
 
         self.prev_position_x = msg_pose.position.x
         self.prev_position_y = msg_pose.position.y
-        self.get_logger().info(f"{msg_pose_raw.timestamp}: Published motion data.")
+        self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
         for param in params: 
@@ -249,6 +214,7 @@ def main(args=None):
     import cflib.crtp
 
     verbose = False
+    log_motion = True # get position logging from Crazyflie.
 
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
@@ -259,7 +225,7 @@ def main(args=None):
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         # set_thrust(cf, 43000)
-        reader_crtp = ReaderCRTP(cf, verbose=verbose)
+        reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion)
         publisher = Gateway(reader_crtp, mic_positions=mic_positions)
         print("done initializing")
 
