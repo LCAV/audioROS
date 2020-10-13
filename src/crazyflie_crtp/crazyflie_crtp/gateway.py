@@ -142,7 +142,7 @@ class Gateway(Node):
             return
 
         msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
-                self.reader_crtp.audio_dict["timestamp"], 
+                self.reader_crtp.audio_dict["timestamp"], FS)
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]}")
@@ -155,7 +155,7 @@ class Gateway(Node):
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         msg_pose = create_pose_message(motion_dict, 
-                self.previous_position_x, self.previous_position_y, timestamp)
+                self.prev_position_x, self.prev_position_y, timestamp)
         self.publisher_motion_pose.publish(msg_pose)
 
         self.prev_position_x = msg_pose.position.x
