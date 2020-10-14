@@ -34,7 +34,7 @@ AUDIO_PARAMETERS_TUPLES = [
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
     ("min_freq", rclpy.Parameter.Type.INTEGER, 200),
     ("max_freq", rclpy.Parameter.Type.INTEGER, 7000),
-    ("delta_freq", rclpy.Parameter.Type.INTEGER, 40),
+    ("delta_freq", rclpy.Parameter.Type.INTEGER, 100),
     ("n_average", rclpy.Parameter.Type.INTEGER, 5),
     ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
     ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),

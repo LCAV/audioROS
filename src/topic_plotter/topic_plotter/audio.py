@@ -12,7 +12,9 @@ from .live_plotter import LivePlotter
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-YLIM_MIN = 1e-10
+YLIM_MIN = 1e-1 #
+
+PLOT_LINES = False # make lineplots of spectra (not very readible, can be removed eventually)
 
 class AudioPlotter(Node):
     def __init__(self):
@@ -52,39 +54,40 @@ class AudioPlotter(Node):
     def listener_callback_spectrum(self, msg_spec, name="static", eps=YLIM_MIN):
         xlabel = "angle [deg]"
         ylabel = "magnitude [-]"
-        self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
         self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
         self.init_plotter(f"{name} raw spectra heatmap", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
+        if PLOT_LINES: 
+            self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
 
         spectrum, frequencies, theta_scan = read_spectrum_message(msg_spec)
 
         # compute and plot combination.
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
         labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter_dict[f"{name} raw spectra"].update_lines(
-            spectrum[mask] + eps, theta_scan, labels=labels
-        )
         self.plotter_dict[f"{name} raw spectra heatmap"].update_mesh(
-            spectrum[mask] + eps, y_labels=labels
+            spectrum[mask], y_labels=labels, log=True
         )
+        if PLOT_LINES: 
+            self.plotter_dict[f"{name} raw spectra"].update_lines(
+                spectrum[mask], theta_scan, labels=labels
+            )
 
         # compute and plot combinations.
         spectrum_sum = combine_rows(spectrum, "sum", keepdims=True)
         spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
-        spectrum_product = combine_rows(spectrum + 1e-1, "product", keepdims=True)
-        spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
 
-        spectrum_plot = np.r_[spectrum_product, spectrum_sum]
-        labels = ["product", "sum"]
+        labels = ["sum"]
         self.plotter_dict[f"{name} combined spectra"].update_lines(
-            spectrum_plot, theta_scan, labels=labels
+            spectrum_sum, theta_scan, labels=labels
         )
 
+        # plot the ground truth orientation
         message = self.raw_pose_synch.get_latest_message(msg_spec.timestamp, self.get_logger())
         if message is not None:
             orientation = message.source_direction_deg
-            self.plotter_dict[f"{name} raw spectra"].update_axvlines([orientation])
             self.plotter_dict[f"{name} combined spectra"].update_axvlines([orientation])
+            if PLOT_LINES: 
+                self.plotter_dict[f"{name} raw spectra"].update_axvlines([orientation])
 
             orientation_index = np.argmin(abs(theta_scan - orientation))
             self.plotter_dict[f"{name} raw spectra heatmap"].update_axvlines([orientation_index], color='orange')

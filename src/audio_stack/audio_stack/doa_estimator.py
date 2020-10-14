@@ -26,7 +26,7 @@ from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 
 N_ESTIMATES = 3 # number of peaks to detect
 COMBINATION_N = 5 # number of spectra to combine
-COMBINATION_METHOD = "product" # way to combine spectra
+COMBINATION_METHOD = "sum" # way to combine spectra
 
 
 class DoaEstimator(Node):
