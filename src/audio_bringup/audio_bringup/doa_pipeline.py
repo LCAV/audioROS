@@ -12,22 +12,27 @@ import subprocess
 import sys
 import time
 
+import numpy as np
+from scipy.io import wavfile
+
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 EXTRA_DIRNAME = 'testing'
+#EXTRA_DIRNAME = '2020_10_14_static'
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
+WAV_DIRNAME = "export/"
 
 THRUST = 3000
 DEGREE_LIST = [0, 20, 45]
 SOURCE_LIST = ['random_linear', 'mono_linear']
 
 # sound card settings
-DURATION = 5 # seconds
+DURATION = 5 # 30 # seconds
 FS_SOUNDCARD = 44100 # hz
 N_MEAS_MICS = 1 # number of measurement mics
 
@@ -60,16 +65,17 @@ def get_active_nodes():
 
 
 if __name__ == "__main__":
-    # calibration:
-    params_list = [
-        {'motors': 0, 'snr': False, 'props': False, 'source':None, 'degree':0},
-        {'motors': THRUST, 'snr': False, 'props': False, 'source':None, 'degree':0},
-    ]
 
     active_nodes = get_active_nodes()
     assert '/csv_writer' in active_nodes
     assert '/gateway' in active_nodes
 
+    # calibration:
+    params_list = [
+        {'motors': 0, 'snr': False, 'props': False, 'source':None, 'degree':0},
+        {'motors': THRUST, 'snr': False, 'props': False, 'source':None, 'degree':0},
+    ]
+    # other experiments: 
     for degree in DEGREE_LIST:
         for source in SOURCE_LIST: 
             params_list += [
@@ -85,19 +91,17 @@ if __name__ == "__main__":
 
     extra_dirname = input(f'Enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
     exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
-    print('saving under', exp_dirname)
-    if not os.path.exists(exp_dirname):
-        os.makedirs(exp_dirname)
-        print(f'created {exp_dirname}')
-
     csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
-    if not os.path.exists(csv_dirname):
-        os.makedirs(csv_dirname)
-        print(f'created {csv_dirname}')
+    wav_dirname = os.path.join(exp_dirname, WAV_DIRNAME)
+
+    for dirname in [exp_dirname, csv_dirname, wav_dirname]:
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+            print(f'created {dirname}')
+        print(f'saving under {dirname}')
 
     # reset the csv writer
     timestamp = int(time.time())
-
     for params in params_list:
         answer = ''
         while not (answer in ['y', 'n']):
@@ -140,7 +144,9 @@ if __name__ == "__main__":
         answer = ''
         while not (answer in ['y', 'n']):
             try:
+                print('recording...')
                 recording = sd.playrec(out_signal, blocking=True)
+                print('...done')
                 answer = 'y'
             except ValueError:
                 answer = input('Make sure the audio is correctly connected! Press enter to try again. (or enter "n" to abort)')
@@ -158,3 +164,10 @@ if __name__ == "__main__":
         # set thrust to 0 (or stop hover)
         if not set_param('/gateway', 'all', '0'):
             sys.exit()
+
+        # save wav file.
+        recording_float32 = recording.astype(np.float32)
+        wav_filename = os.path.join(wav_dirname, filename) + '.wav'
+
+        wavfile.write(wav_filename, FS_SOUNDCARD, recording_float32)
+        print('wrote wav file as', wav_filename)
