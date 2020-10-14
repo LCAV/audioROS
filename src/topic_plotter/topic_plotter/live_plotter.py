@@ -87,7 +87,7 @@ class LivePlotter(object):
         # without this, the plot does not get updated live.
         self.fig.canvas.draw()
 
-    def update_lines(self, data_matrix, x_data=None, labels=None):
+    def update_lines(self, data_matrix, x_data=None, labels=None, linestyle='-', marker=''):
         """ Plot each row of data_matrix as one line.
         """
         for i in range(data_matrix.shape[0]):
@@ -105,23 +105,25 @@ class LivePlotter(object):
                 label = labels[i] if labels is not None else None
                 if self.log:
                     (line,) = self.ax.semilogy(
-                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label
+                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, linestyle=linestyle, marker=marker
                     )
                 else:
                     (line,) = self.ax.plot(
-                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label
+                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, linestyle=linestyle, marker=marker
                     )
                 self.lines[i] = line
 
         self.ax.legend(loc="upper right")
+
+        self.reset_xlim()
         self.reset_ylim()
 
         # without this, the plot does not get updated live.
         self.fig.canvas.draw()
 
+
     def update_mesh(self, data_matrix, y_labels=None, name="standard"):
-        """ Plot each row of data_matrix in an image.
-        """
+        """ Plot each row of data_matrix in an image. """
         if name in self.meshes.keys():
             self.meshes[name].set_array(data_matrix.flatten())
         else:
@@ -155,6 +157,7 @@ class LivePlotter(object):
 
         self.fig.canvas.draw()
 
+
     def reset_ylim(self):
         # recompute the ax.dataLim
         self.ax.relim()
@@ -166,6 +169,7 @@ class LivePlotter(object):
 
         # update ax.viewLim using new ax.dataLim
         self.ax.set_ylim(ymin_new, ymax_new)
+
 
     def reset_xlim(self):
         # recompute the ax.dataLim
@@ -191,9 +195,10 @@ class LivePlotter(object):
                 x_data, y_data, linestyle='-', marker='o'
             )
             self.scatter["line"] = line
-        # without this, the plot does not get updated live.
         self.reset_xlim()
         self.reset_ylim()
+
+        # without this, the plot does not get updated live.
         self.fig.canvas.draw()
 
 
