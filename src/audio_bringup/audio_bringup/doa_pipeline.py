@@ -21,7 +21,7 @@ from signals import generate_signal
 
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = 'testing'
-EXTRA_DIRNAME = '2020_10_14_static'
+EXTRA_DIRNAME = '2020_10_14_static_new'
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
@@ -29,7 +29,7 @@ WAV_DIRNAME = "export/"
 
 THRUST = 43000
 DEGREE_LIST = [0] #, 20, 45]
-SOURCE_LIST = ['mono_linear']#, 'random_linear']
+SOURCE_LIST = ['mono_linear', 'random_linear']
 
 # sound card settings
 DURATION = 30 # seconds
@@ -68,7 +68,6 @@ def get_active_nodes():
 
 
 if __name__ == "__main__":
-
     active_nodes = get_active_nodes()
     assert '/csv_writer' in active_nodes
     assert '/gateway' in active_nodes
