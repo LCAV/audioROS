@@ -20,10 +20,11 @@ from audio_stack.topic_synchronizer import TopicSynchronizer
 # Beamforming method, available: 
 # - "das": delay-and-sum
 # - "mvdr": minimum-variance distortionless response
-BF_METHOD = "das"
+#BF_METHOD = "das"
+BF_METHOD = "mvdr"
 
-NORMALIZE = "zero_to_one_all"
-#NORMALIZE = "zero_to_one"
+#NORMALIZE = "zero_to_one_all"
+NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
 

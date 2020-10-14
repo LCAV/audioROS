@@ -6,8 +6,8 @@ import pandas as pd
 from audio_stack.spectrum_estimator import combine_rows, normalize_rows
 from audio_stack.beam_former import BeamFormer
 
-#EXP_NAME = "2020_09_17_white-noise-static"
-EXP_NAME = "2020_10_14_static"
+EXP_NAME = "2020_09_17_white-noise-static"
+#EXP_NAME = "2020_10_14_static"
 CSV_DIRNAME = f"../experiments/{EXP_NAME}/csv_files"
 WAV_DIRNAME = f"../experiments/{EXP_NAME}/export"
 FS = 32000

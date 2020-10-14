@@ -119,13 +119,13 @@ class LivePlotter(object):
         # without this, the plot does not get updated live.
         self.fig.canvas.draw()
 
-    def update_mesh(self, data_matrix, y_labels=None, name="standard"):
+    def update_mesh(self, data_matrix, y_labels=None, name="standard", log=False):
         """ Plot each row of data_matrix in an image.
         """
         if name in self.meshes.keys():
-            self.meshes[name].set_array(data_matrix.flatten())
+            self.meshes[name].set_array(np.log10(data_matrix.flatten()))
         else:
-            mesh = self.ax.pcolormesh(data_matrix)
+            mesh = self.ax.pcolormesh(np.log10(data_matrix))
             self.meshes[name] = mesh
             angles = np.linspace(0, 360, data_matrix.shape[1], dtype=str)
             xticks = self.ax.get_xticks()
