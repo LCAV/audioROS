@@ -13,7 +13,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import PoseRaw, DoaEstimates
+from audio_interfaces_py.messages import read_pose_raw_message, read_pose_message
 from audio_stack.topic_synchronizer import TopicSynchronizer
+
 from .live_plotter import LivePlotter
 
 MAX_LENGTH = 10 # number of positions to plot
@@ -73,7 +75,7 @@ class GeometryPlotter(Node):
         ylabel = "y [m]"
         self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
 
-        d_world = read_pose_raw_message(msg_pose_raw)
+        d_world, yaw = read_pose_raw_message(msg_pose_raw)
         new_position = self.pose_raw_list[:, -1] + d_world
         self.pose_raw_list = np.c_[self.pose_raw_list, new_position]
 

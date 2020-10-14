@@ -13,6 +13,8 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations, Spectrum, DoaEstimates
 from audio_interfaces.msg import PoseRaw
 
+N_MICS = 4
+N_FREQS = 32
 
 def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     """ Create Pose message. """
@@ -55,6 +57,8 @@ def create_signals_message(signals, mic_positions, timestamp, fs):
     msg.timestamp = timestamp
     msg.fs = fs 
     msg.n_mics = signals.shape[0]
+    # TODO(FD) remove this debugging check
+    assert msg.n_mics == N_MICS
     msg.n_buffer = signals.shape[1]
     msg.signals_vect = list(signals.flatten().astype(float))
     if mic_positions is not None:
@@ -77,7 +81,11 @@ def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, fs):
     msg.fs = fs
     msg.timestamp = timestamp
     msg.n_mics = signals_f.shape[1] 
+    # TODO(FD) remove this debugging check
+    assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
+    # TODO(FD) remove this debugging check
+    assert msg.n_frequencies == N_FREQS
     msg.frequencies = [int(f) for f in freqs]
     # important: signals_f should be of shape n_mics x n_frequencies before flatten() is called.
     msg.signals_real_vect = list(np.real(signals_f.T).astype(float).flatten())
@@ -95,8 +103,12 @@ def create_correlations_message(R, freqs, mic_positions, timestamp):
 
     """
     msg = Correlations()
-    msg.n_mics = int(R.shape[0])
+    msg.n_mics = int(R.shape[1])
+    # TODO(FD) remove this debugging check
+    assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
+    # TODO(FD) remove this debugging check
+    assert msg.n_frequencies == N_FREQS
     msg.frequencies = [int(f) for f in freqs]
     msg.corr_real_vect = list(R.real.astype(float).flatten())
     msg.corr_imag_vect = list(R.imag.astype(float).flatten())
@@ -110,6 +122,8 @@ def create_spectrum_message(spectrum, frequencies, timestamp, orientation):
     msg = Spectrum()
     msg.timestamp = timestamp
     msg.n_frequencies = len(frequencies) 
+    # TODO(FD) remove this debugging check
+    assert msg.n_frequencies == N_FREQS
     msg.n_angles = spectrum.shape[1]
     msg.orientation = float(orientation)
     msg.frequencies = list(frequencies)
@@ -141,7 +155,7 @@ def read_pose_raw_message(msg):
     yaw = msg.yaw_deg
     r = Rotation.from_euler('z', yaw, degrees=True)
     d_world = r.as_matrix()[:2, :2] @ d_local
-    return d_world
+    return d_world, yaw
 
 
 def read_signals_message(msg):
@@ -176,7 +190,7 @@ def read_correlations_message(msg):
 def read_spectrum_message(msg):
     """ Read Spectrum message. """
     spectrum = np.array(msg.spectrum_vect).reshape(
-            (msg.n_frequencies, msg_spec.n_angles)
+            (msg.n_frequencies, msg.n_angles)
     )
     frequencies = np.array(msg.frequencies) 
     theta_scan = np.linspace(0, 360, msg.n_angles)
