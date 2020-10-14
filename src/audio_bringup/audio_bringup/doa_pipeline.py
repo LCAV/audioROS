@@ -16,13 +16,24 @@ sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 
-BAG_DIRNAME = os.getcwd() + "/experiments/"
-#TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/poseraw']
-TOPICS_TO_RECORD = ['--all'] 
-CSV_DIRNAME = os.getcwd() + "/csv_files/"
+EXP_DIRNAME = os.getcwd() + "/experiments/"
+EXTRA_DIRNAME = 'testing'
+TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
+#TOPICS_TO_RECORD = ['--all'] 
+CSV_DIRNAME = "csv_files/"
+
+THRUST = 3000
+DEGREE_LIST = [0, 20, 45]
+SOURCE_LIST = ['random_linear', 'mono_linear']
+
+# sound card settings
+DURATION = 5 # seconds
+FS_SOUNDCARD = 44100 # hz
+N_MEAS_MICS = 1 # number of measurement mics
+
 
 def get_filename(**params):
-    source_flag = params.get("source") 
+    source_flag = "None" if params.get("source") is None else params.get("source")
     props_flag = "" if params.get("props") else "no"
     snr_flag = "" if params.get("snr") else "no"
     motors_flag = "" if params.get("motors")>0 else "no"
@@ -33,96 +44,117 @@ def get_filename(**params):
 def set_param(node_name, param_name, param_value):
     param_pid = subprocess.Popen(['ros2', 'param', 'set', node_name, param_name, param_value], stdout=subprocess.PIPE)
     print('waiting to set params')
-    out, err = param_pid.communicate()
-    print('done:', out, err)
-    return
+    out_bytes, err = param_pid.communicate()
+    out_string = out_bytes.decode("utf-8").strip()
+    if out_string == "Set parameter successful":
+        return True
+    else:
+        print("error:", out_string)
+        return False
+
+def get_active_nodes():
+    param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
+    out_bytes, err = param_pid.communicate()
+    out_string = out_bytes.decode("utf-8").strip()
+    return out_string
+
 
 if __name__ == "__main__":
+    # calibration:
     params_list = [
-            {'motors': 3000, 'snr': False, 'props': False, 'source':'random', 'degree':0},
+        {'motors': 0, 'snr': False, 'props': False, 'source':None, 'degree':0},
+        {'motors': THRUST, 'snr': False, 'props': False, 'source':None, 'degree':0},
     ]
 
-    fs = 44100 # hz
-    duration = 5 # seconds
-    n_channels = 1 # number of measurement mics
-    sd = get_usb_soundcard_ubuntu(fs, n_channels)
+    active_nodes = get_active_nodes()
+    assert '/csv_writer' in active_nodes
+    assert '/gateway' in active_nodes
 
-    extra_dirname = input(f'Enter experiment folder: (appended to {BAG_DIRNAME})') 
-    BAG_DIRNAME = os.path.join(BAG_DIRNAME, extra_dirname)
-    print('saving under', BAG_DIRNAME)
-    if not os.path.exists(BAG_DIRNAME):
-        os.makedirs(BAG_DIRNAME)
-        print(f'created {BAG_DIRNAME}')
-    if not os.path.exists(CSV_DIRNAME):
-        os.makedirs(CSV_DIRNAME)
-        print(f'created {CSV_DIRNAME}')
+    for degree in DEGREE_LIST:
+        for source in SOURCE_LIST: 
+            params_list += [
+                {'motors': 0, 'snr': True, 'props': False, 'source':source, 'degree':degree},
+                {'motors': 0, 'snr': False, 'props': False, 'source':source, 'degree':degree},
+                {'motors': THRUST, 'snr': False, 'props': False, 'source':source, 'degree':degree},
+                {'motors': THRUST, 'snr': True, 'props': False, 'source':source, 'degree':degree},
+                {'motors': THRUST, 'snr': False, 'props': True, 'source':source, 'degree':degree},
+                {'motors': THRUST, 'snr': True, 'props': True, 'source':source, 'degree':degree},
+            ]
 
+    sd = get_usb_soundcard_ubuntu(FS_SOUNDCARD, N_MEAS_MICS)
 
-    csv_pid = subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
-    print('waiting to start csv wrtier')
-    time.sleep(1)
+    extra_dirname = input(f'Enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
+    exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
+    print('saving under', exp_dirname)
+    if not os.path.exists(exp_dirname):
+        os.makedirs(exp_dirname)
+        print(f'created {exp_dirname}')
 
-    set_param('/csv_writer', 'dirname', CSV_DIRNAME)
+    csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
+    if not os.path.exists(csv_dirname):
+        os.makedirs(csv_dirname)
+        print(f'created {csv_dirname}')
+
+    # reset the csv writer
+    timestamp = int(time.time())
 
     for params in params_list:
         answer = ''
         while not (answer in ['y', 'n']):
             answer = input(f'Start experiment with {params}? ([y]/n)') or 'y'
-
         if answer == 'n':
             sys.exit() 
 
         filename = get_filename(**params)
-        bag_filename = os.path.join(BAG_DIRNAME, filename)
-        out_signal = generate_signal(fs, duration, signal_type=params['source'])
+        bag_filename = os.path.join(exp_dirname, filename)
+        csv_filename = os.path.join(csv_dirname, filename)
+        out_signal = generate_signal(FS_SOUNDCARD, DURATION, signal_type=params['source'])
 
         while os.path.exists(bag_filename):
-            timestamp = int(time.time())
             answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to exit)') or timestamp
 
             if answer == 'n':
                 sys.exit()
 
             filename = f'{filename}_{answer}'
-            bag_filename = os.path.join(BAG_DIRNAME, filename)
+            bag_filename = os.path.join(exp_dirname, filename)
+            csv_filename = os.path.join(csv_dirname, filename)
 
-        # set thrust (or start hover)
-        # ros2 param set /gateway all 43000 
-        set_param('/gateway', 'all', str(params['motors']))
+        # TODO(FD) csv file and bag file will not be perfectly synchronized.
+        # if that is necessary, we need to rewrite this section.
 
-        ########### OPTION 1 ###########
-        # start playing sound + recording
-        #recording = sd.playrec(out_signal, blocking=False)
-        #start_time = time.time()
+        # reset csv writer
+        if not set_param('/csv_writer', 'filename', ''):
+            sys.exit()
 
-        # start recording bag file
-        #bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', filename] + TOPICS_TO_RECORD)
-        #while (time.time() - start_time) < duration:
-        #    pass
-        ################################
-
-        ########### OPTION 2 ###########
         # start recording bag file
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('waiting to start bag record')
         time.sleep(1)
+
+        # set thrust (or start hover)
+        # ros2 param set /gateway all 43000 
+        if not set_param('/gateway', 'all', str(params['motors'])):
+            sys.exit()
         
-        recording = sd.playrec(out_signal, blocking=True)
-        #################################
+        answer = ''
+        while not (answer in ['y', 'n']):
+            try:
+                recording = sd.playrec(out_signal, blocking=True)
+                answer = 'y'
+            except ValueError:
+                answer = input('Make sure the audio is correctly connected! Press enter to try again. (or enter "n" to abort)')
+
+        if answer == 'n':
+            sys.exit()
 
         # when done playing sound: stop bag file
         bag_pid.send_signal(signal.SIGINT)
-        print('waiting to stop bag file')
-        time.sleep(1)
 
-        set_param('/csv_writer', 'filename', filename)
+        # record the csv file
+        if not set_param('/csv_writer', 'filename', csv_filename):
+            sys.exit()
 
         # set thrust to 0 (or stop hover)
-        set_param('/gateway', 'all', '0')
-
-    # TODO(FD) for some reason we do not manage to stop the csv writer
-    # by running the below command. The correct way of doing this
-    # would probably be through a life cycle node
-    csv_pid.send_signal(signal.SIGINT)
-    print('waiting to stop csv file')
-    time.sleep(1)
+        if not set_param('/gateway', 'all', '0'):
+            sys.exit()

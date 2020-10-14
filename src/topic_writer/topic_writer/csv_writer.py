@@ -27,7 +27,6 @@ class CsvWriter(Node):
         )
 
         self.declare_parameter("filename")
-        self.declare_parameter("dirname")
         self.set_parameters_callback(self.set_params)
         
         self.reset()
@@ -71,19 +70,18 @@ class CsvWriter(Node):
 
     def set_params(self, params):
         """ Set the parameter. If filename is set, we save the current rows and reset. """
-        for param in params:
-            if param.name == "dirname":
-                return SetParametersResult(successful=True)
+        param = params[0] # only one parameter possible.
+        filename = param.get_parameter_value().string_value
 
-            elif param.name == "filename":
-                filename = param.get_parameter_value().string_value
-                dirname = self.get_parameter("dirname").get_parameter_value().string_value
+        if filename == '':
+            self.get_logger().info('resetting csv_writer')
+            self.reset()
+            return SetParametersResult(successful=True)
 
         if filename[-4:] != '.csv':
             filename = filename + '.csv'
 
-        fullname = os.path.join(dirname, filename)
-        self.write_file(fullname)
+        self.write_file(filename)
         return SetParametersResult(successful=True)
 
     def write_file(self, fullname):
@@ -95,7 +93,7 @@ class CsvWriter(Node):
             with open(fullname, "w+") as f:
                 csv_writer = csv.DictWriter(f, sorted(self.header))
                 csv_writer.writeheader()
-            print(f"Wrote header in new file {fullname}.")
+            self.get_logger().info(f"Wrote header in new file {fullname}.")
 
         with open(fullname, "a") as f:
             csv_writer = csv.DictWriter(f, sorted(self.header))
