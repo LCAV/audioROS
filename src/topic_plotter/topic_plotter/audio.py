@@ -12,7 +12,10 @@ from .live_plotter import LivePlotter
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-YLIM_MIN = 1e-1 #
+YMIN_SPEC = 1e-10
+YMAX_SPEC = 2
+XMIN_FREQ = 200 # min plotting frequency in Hz
+XMAX_FREQ = 3000 # max plotting frequency in Hz
 
 PLOT_LINES = False # make lineplots of spectra (not very readible, can be removed eventually)
 
@@ -44,20 +47,20 @@ class AudioPlotter(Node):
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
 
-    def init_plotter(self, name, xlabel='x', ylabel='y', log=True, ymin=-np.inf, ymax=np.inf):
+    def init_plotter(self, name, xlabel='x', ylabel='y', log=True, ymin=-np.inf, ymax=np.inf, xmin=-np.inf, xmax=np.inf):
         if not (name in self.plotter_dict.keys()):
-            self.plotter_dict[name] = LivePlotter(ymax, ymin, label=name, log=log)
+            self.plotter_dict[name] = LivePlotter(ymax, ymin, label=name, log=log, max_xlim=xmax, min_xlim=xmin)
             self.plotter_dict[name].ax.set_xlabel(xlabel)
             self.plotter_dict[name].ax.set_ylabel(ylabel)
 
 
-    def listener_callback_spectrum(self, msg_spec, name="static", eps=YLIM_MIN):
+    def listener_callback_spectrum(self, msg_spec, name="static"):
         xlabel = "angle [deg]"
         ylabel = "magnitude [-]"
-        self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
-        self.init_plotter(f"{name} raw spectra heatmap", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
+        self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
+        self.init_plotter(f"{name} raw spectra heatmap", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
         if PLOT_LINES: 
-            self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=eps, ymax=2)
+            self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
 
         spectrum, frequencies, theta_scan = read_spectrum_message(msg_spec)
 
@@ -81,7 +84,6 @@ class AudioPlotter(Node):
             spectrum_sum, theta_scan, labels=labels
         )
 
-        # plot the ground truth orientation
         message = self.raw_pose_synch.get_latest_message(msg_spec.timestamp, self.get_logger())
         if message is not None:
             orientation = message.source_direction_deg
@@ -98,7 +100,7 @@ class AudioPlotter(Node):
 
 
     def listener_callback_signals_f(self, msg):
-        self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]", ymin=1e-10, ymax=1e3)
+        self.init_plotter("signals frequency", xlabel="frequency [Hz]", ylabel="magnitude [-]", ymin=1e-10, ymax=1e3, xmin=XMIN_FREQ, xmax=XMAX_FREQ)
 
         if msg.n_frequencies != self.current_n_frequencies:
             self.plotter_dict["signals frequency"].clear()
@@ -110,7 +112,7 @@ class AudioPlotter(Node):
         y = np.abs(signals_f[indices, :].T)
         x = freqs[indices]
         labels = [f"mic {i}" for i in range(y.shape[1])]
-        self.plotter_dict["signals frequency"].update_lines(y, x, labels)
+        self.plotter_dict["signals frequency"].update_lines(y, x, labels, linestyle='-', marker='o')
         self.plotter_dict["signals frequency"].ax.set_title(f"time (ms): {msg.timestamp}")
         self.plotter_dict["signals frequency"].update_axvlines(freqs)
         self.current_n_frequencies = msg.n_frequencies

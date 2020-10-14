@@ -26,7 +26,7 @@ MIN_YLIM = 1e-13  # set to -inf for no effect.
 
 N_MICS = 4
 FS = 32000
-N = 1024
+N = 2048
 
 # Crazyflie audio parameters that can be set from here.
 AUDIO_PARAMETERS_TUPLES = [
