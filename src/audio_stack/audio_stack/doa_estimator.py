@@ -20,6 +20,7 @@ import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
+from audio_interfaces_py.messages import read_spectrum_message, create_doa_message
 from audio_stack.beam_former import BeamFormer
 from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 
@@ -81,7 +82,7 @@ class DoaEstimator(Node):
 
     def listener_callback_spectrum(self, msg_spec):
 
-        spectrum, *_ = read_spectrum_message(msg_psec)
+        spectrum, *_ = read_spectrum_message(msg_spec)
         # add latest spectrum and orientation to dynamic estimate
         self.beam_former.add_to_dynamic_estimates(spectrum, msg_spec.orientation)
 

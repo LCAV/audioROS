@@ -231,6 +231,8 @@ class Correlator(Node):
 
         self.mic_positions, signals_f, freqs = read_signals_freq_message(msg)
         R = self.beam_former.get_correlation(signals_f)
+        print(R.shape)
+        print(self.mic_positions.shape)
         msg_new = create_correlations_message(R, freqs, self.mic_positions, msg.timestamp)
         self.publisher_correlations.publish(msg_new)
 

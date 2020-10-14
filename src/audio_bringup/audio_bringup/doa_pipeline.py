@@ -32,7 +32,7 @@ DEGREE_LIST = [0, 20, 45]
 SOURCE_LIST = ['random_linear', 'mono_linear']
 
 # sound card settings
-DURATION = 5 # 30 # seconds
+DURATION = 30 # seconds
 FS_SOUNDCARD = 44100 # hz
 N_MEAS_MICS = 1 # number of measurement mics
 
