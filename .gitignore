@@ -63,5 +63,5 @@ stash/
 #evaluation
 *.pk
 notebooks/.ipynb_checkpoints
-notebooks/results/*
 experiments/testing/*
+experiments/*/results/
