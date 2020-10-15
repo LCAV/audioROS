@@ -49,6 +49,7 @@ def get_filename(**params):
     fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
     return fname
 
+
 def set_param(node_name, param_name, param_value):
     param_pid = subprocess.Popen(['ros2', 'param', 'set', node_name, param_name, param_value], stdout=subprocess.PIPE)
     print('waiting to set params')
@@ -59,6 +60,7 @@ def set_param(node_name, param_name, param_value):
     else:
         print("error:", out_string)
         return False
+
 
 def get_active_nodes():
     param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
@@ -75,7 +77,9 @@ if __name__ == "__main__":
     # calibration:
     params_list = [
         {'motors': 0, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
+        {'motors': 0, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
+        {'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':0},
     ]
     # other experiments: 
     for degree in DEGREE_LIST:
