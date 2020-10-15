@@ -38,9 +38,11 @@ class AudioSimulation(Node):
         self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
         self.subscription_position = self.create_subscription(Pose, 'geometry/pose', self.listener_callback, 10)
 
-    # run a simulation and send the audio signal in packets when a message is received 
     def listener_callback(self, msg_received):      
-        
+        """
+        Run a simulation and send the audio signal in packets when a message is received 
+        """
+
         rotation_rx = msg_received.orientation                                                 
         drone_center_rx = msg_received.position                                                
         
@@ -50,7 +52,10 @@ class AudioSimulation(Node):
         microphones = generate_mic_position_array(rotation, drone_center)
         sim_room = self.simulation(microphones)         
         signal_to_send = sim_room.mic_array.signals
-
+        print(signal_to_send[0])
+        print(signal_to_send[1])
+        print(signal_to_send[2])
+        print(signal_to_send[3])
         no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)
         last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER        
         
@@ -83,24 +88,33 @@ class AudioSimulation(Node):
         self.get_logger().info('All packages of the signal nr ' + str(self.time_id) + ' have been sent')
         self.time_id += 1
 
-    # run a pyroomacoustics simulation on a copy of the pyroom attribute of an AudioSimulation object
     def simulation(self, mic_array):            
+        """
+        Run a pyroomacoustics simulation on a copy of the pyroom attribute of an AudioSimulation object
+        """
+        
         mic_arr = np.c_[mic_array[0], mic_array[1], mic_array[2], mic_array[3],]
         pyroom_copy = self.copy_room()
         pyroom_copy.add_microphone_array(mic_arr)
         pyroom_copy.simulate()
         return pyroom_copy
 
-    # copy the pyroom attribute of an AudioSimulation object
     def copy_room(self):                        
+        """
+        Copy the pyroom attribute of an AudioSimulation object
+        """
+        
         pyroom_cp = pra.ShoeBox(self.room.shoebox_dim)
         for i in range(len(self.room.sources)):
             pyroom_cp.add_source(self.room.sources[i].position, signal = self.room.sources[i].signal)
         return pyroom_cp
 
 
-# setting the shoe box room with specified dimensions and sources
 def set_room(room_dim, wav_path_list, source_position_list):        
+    """
+    Set the shoe box room with specified dimensions and sources
+    """
+    
     pyroom = pra.ShoeBox(room_dim)
     for i in range(len(wav_path_list)):
         fs, audio_source = wavfile.read(wav_path_list[i])
@@ -108,8 +122,11 @@ def set_room(room_dim, wav_path_list, source_position_list):
     return pyroom
 
 
-# calculate current mics' postion based on the drone's center coords and rotation
 def generate_mic_position_array(rotation, drone_center):        
+    """
+    Calculate current mics' postion based on the drone's center coords and rotation
+    """
+    
     rot = R.from_quat(rotation)
     
     mic_lt = drone_center + np.array([-MIC_DISTANCE/2, MIC_DISTANCE/2, 0])              # left top
