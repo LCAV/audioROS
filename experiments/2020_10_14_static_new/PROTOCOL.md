@@ -11,6 +11,11 @@ Recorded on the next day with a slightly different mic position, so it is normal
 - motors_snr_props_None/
 - nomotors_nosnr_noprops_None/
 
+SNL calibration: 
+- motors_nosnr_noprops_None_calib/: ca. 90
+- nomotors_nosnr_noprops_random_linear_calib/: ca. 40 to 70
+- nomotors_nosnr_noprops_mono_linear_calib2/: ca. 50 to 80
+
 __Time__: Day DD.MM.YYYY
 
 __Recorded by__: First Last, ...

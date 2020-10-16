@@ -76,12 +76,16 @@ if __name__ == "__main__":
 
     # calibration:
     params_list = [
-        {'motors': 0, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
         {'motors': 0, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
+        {'motors': 0, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 1, 'props': 1, 'source':None, 'degree':0},
+    ]
+    params_list = [
+        {'motors': 43000, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
+        #{'motors': 0, 'snr': 0, 'props': 0, 'source':'mono_linear', 'degree':0},
     ]
     # other experiments: 
     for degree in DEGREE_LIST:
