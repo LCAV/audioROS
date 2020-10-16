@@ -64,8 +64,9 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True):
     df_audio = df_audio.apply(convert_audio, axis=1)
     df_audio.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True)
 
-    df_pose = df.loc[df.topic=='geometry/pose_raw', ['dx', 'dy', 'yaw_deg', 'source_direction-deg', 'timestamp', 'index', 'topic']]
-    df_pose.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
+    if 'source_direction-deg' in df.columns:
+        df.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
+    df_pose = df.loc[df.topic=='geometry/pose_raw', ['dx', 'dy', 'yaw_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']]
     return df_audio, df_pose
 
 
