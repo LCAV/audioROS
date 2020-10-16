@@ -78,8 +78,10 @@ if __name__ == "__main__":
     params_list = [
         {'motors': 0, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
         {'motors': 0, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
+        {'motors': THRUST, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
         {'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':0},
+        {'motors': THRUST, 'snr': 1, 'props': 1, 'source':None, 'degree':0},
     ]
     # other experiments: 
     for degree in DEGREE_LIST:
@@ -121,15 +123,19 @@ if __name__ == "__main__":
         out_signal = generate_signal(FS_SOUNDCARD, DURATION, signal_type=params['source'], 
                                      frequency_hz=FREQ_SOURCE, min_dB=MIN_DB, max_dB=MAX_DB)
 
+        answer = 'y'
         while os.path.exists(bag_filename):
-            answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to exit)') or timestamp
+            answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
 
             if answer == 'n':
-                sys.exit()
+                break
 
             filename = f'{filename}_{answer}'
             bag_filename = os.path.join(exp_dirname, filename)
             csv_filename = os.path.join(csv_dirname, filename)
+
+        if answer == 'n':
+            continue
 
         # TODO(FD) csv file and bag file will not be perfectly synchronized.
         # if that is necessary, we need to rewrite this section.
