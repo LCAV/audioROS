@@ -39,6 +39,7 @@ set(msg_files
   "msg/Signals.msg"
   "msg/SignalsFreq.msg"
   "msg/PoseRaw.msg"
+  "msg/DoaEstimates.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

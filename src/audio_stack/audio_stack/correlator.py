@@ -16,57 +16,79 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
+from .beam_former import BeamFormer
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
-from algos_beamforming import select_frequencies
+from bin_selection import select_frequencies as embedded_select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
-from .live_plotter import LivePlotter
 
-# Denoising method.
-METHOD_NOISE = "bandpass"
+# Denoising method
+# METHOD_NOISE = "bandpass"
+METHOD_NOISE = ""
 METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 
-# Windowing method. Available:
+# Windowing method, available:
 # - "" (no window)
 # - "tukey" (flat + cosine on borders)
 METHOD_WINDOW = "tukey"
 
 # Frequency selection
-N_FREQUENCIES = 10
-METHOD_FREQUENCY = "uniform"
+THRUST = 43000
+MIN_FREQ = 100
+MAX_FREQ = 10000
+DELTA_FREQ = 100
+
+METHOD_FREQUENCY = "none"
 METHOD_FREQUENCY_DICT = {
-    "uniform": {  # uniform frequencies between min and max
-        "num_frequencies": N_FREQUENCIES,
+    "none": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": False,
+        "thrust": 0, 
+    },
+    "snr": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": True,
+        "thrust": 0, 
+    },
+    "props": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": False,
+        "thrust": THRUST, 
+    },
+    "props_snr": {
+        "min_freq": MIN_FREQ,
+        "max_freq": MAX_FREQ,
+        "delta_freq": DELTA_FREQ,
+        "filter_snr": True,
+        "thrust": THRUST, 
+    },
+    "single": {
         "min_freq": 200,
-        "max_freq": 500,
-    },
-    "single": {  # one single frequency (beam width between min and max)
-        "num_frequencies": 1,
-        "min_freq": 150,
-        "max_freq": 250,
-    },
-    "between": {  # random, between propeller frequencies
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
-        "delta": 1,
-    },
-    "between_snr": {  # choose highest snr between propeller frequencies
-        "num_frequencies": N_FREQUENCIES,
-        "min_freq": 100,
-        "max_freq": 1000,
-        "amp_ratio": 1,
-        "delta": 1,
-    },
+        "max_freq": 200,
+        "delta_freq": 100,
+        "filter_snr": False,
+        "thrust": 0,
+    }
 }
 
-# Plotting parameters
-MIN_YLIM = 1e-3  # set to -inf for no effect.
-MAX_YLIM = 1e5  # set to inf for no effect.
-MIN_FREQ = 100  # set to -inf for no effect
-MAX_FREQ = 800  # set to inf for no effect
+
+def verify_validity(params_dict):
+    assert all([key in params_dict.keys() for key in METHOD_FREQUENCY_DICT[METHOD_FREQUENCY].keys()])
+    assert params_dict["min_freq"] <= params_dict["max_freq"]
+    assert params_dict["min_freq"] >= 0
+    assert params_dict["max_freq"] >= 0
+    assert params_dict["thrust"] >= 0
+    assert params_dict["filter_snr"] in [0, 1]
+    return True
 
 
 def get_stft(signals, Fs, method_window, method_noise):
@@ -104,24 +126,9 @@ def get_stft(signals, Fs, method_window, method_noise):
     return signals_f, freqs
 
 
-def create_correlations_message(signals_f, freqs, Fs, n_buffer, method_frequency):
-
-    # calculate Rs for chosen frequency bins
-    R = 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
-
-    msg = Correlations()
-    msg.n_mics = int(signals_f.shape[1])
-    msg.n_frequencies = len(freqs)
-    msg.frequencies = [int(f) for f in freqs]
-    msg.corr_real_vect = [float(f) for f in R.real.flatten()]
-    msg.corr_imag_vect = [float(f) for f in R.imag.flatten()]
-    return msg
-
-
 class Correlator(Node):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
     """
-
     def __init__(self, plot_freq=False, plot_time=False):
         super().__init__("correlator")
 
@@ -133,22 +140,12 @@ class Correlator(Node):
         self.subscription_signals_f = self.create_subscription(
             SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
         )
+        self.publisher_signals_f = self.create_publisher(
+            SignalsFreq, "audio/signals_f", 10
+        )
         self.publisher_correlations = self.create_publisher(
             Correlations, "audio/correlations", 10
         )
-
-        self.current_n_buffer = None
-        self.current_n_frequencies = None
-
-        if self.plot_freq:
-            self.plotter_freq = LivePlotter(MAX_YLIM, MIN_YLIM)
-            self.plotter_freq.ax.set_xlabel("frequency [Hz]")
-            self.plotter_freq.ax.set_ylabel("magnitude [-]")
-
-        if self.plot_time:
-            self.plotter_time = LivePlotter(MAX_YLIM, MIN_YLIM, log=False)
-            self.plotter_time.ax.set_xlabel("time idx [-]")
-            self.plotter_time.ax.set_ylabel("magnitude [-]")
 
         self.methods = {
             "noise": METHOD_NOISE,
@@ -161,62 +158,88 @@ class Correlator(Node):
             parameters.append(
                 rclpy.parameter.Parameter(key, rclpy.Parameter.Type.STRING, value)
             )
-        self.set_parameters_callback(self.set_params)
+
+        self.frequency_params = METHOD_FREQUENCY_DICT[METHOD_FREQUENCY]
+        for key, value in self.frequency_params.items():
+            self.declare_parameter(key)
+            parameters.append(
+                rclpy.parameter.Parameter(key, rclpy.Parameter.Type.INTEGER, value)
+            )
+
         self.set_parameters(parameters)
+        self.set_parameters_callback(self.set_params)
+
+        self.beam_former = BeamFormer()
 
     def set_params(self, params):
+        new_params = self.frequency_params.copy()
         for param in params:
             if param.name in self.methods.keys():
-                self.methods[param.name] = param.get_parameter_value().string_value
+                # set high-level parameters
+                value = param.get_parameter_value().string_value
+                self.methods[param.name] = value
+
+                if param.name == "frequency":
+                    for key in new_params.keys():
+                        new_params[key] = METHOD_FREQUENCY_DICT[value][key]
             else:
-                return SetParametersResult(successful=False)
-        return SetParametersResult(successful=True)
+                # set low-level parameters
+                self.methods["frequency"] = "custom"
+                value = param.get_parameter_value().integer_value
+
+                new_params[param.name] = value
+
+        if verify_validity(new_params):
+            self.frequency_params = new_params
+            return SetParametersResult(successful=True)
+        else:
+            return SetParametersResult(successful=False)
 
     def listener_callback_signals(self, msg):
         t1 = time.time()
-        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
         self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         signals = np.array(msg.signals_vect)
         signals = signals.reshape((msg.n_mics, msg.n_buffer))
 
-        if self.plot_time:
-            if msg.n_buffer != self.current_n_buffer:
-                self.plotter_time.clear()
-
-            self.plotter_time.update_lines(
-                signals, range(signals.shape[1]), self.labels
-            )
-            self.current_n_buffer = msg.n_buffer
-
         # processing
         signals_f, freqs = get_stft(
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
+
         if self.methods["frequency"] != "":
-            bins = select_frequencies(
+            bins = embedded_select_frequencies(
                 msg.n_buffer,
                 msg.fs,
-                self.methods["frequency"],
-                buffer_f=signals_f,
-                **METHOD_FREQUENCY_DICT[self.methods["frequency"]],
+                buffer_f=signals_f.T,
+                **self.frequency_params,
             )
             freqs = freqs[bins]
             signals_f = signals_f[bins]
 
-        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
+        # create and publish frequency message
+        msg_freq = SignalsFreq()
+        msg_freq.fs = msg.fs
+        msg_freq.timestamp = msg.timestamp
+        msg_freq.n_mics = msg.n_mics
+        msg_freq.n_frequencies = len(freqs)
+        msg_freq.mic_positions = msg.mic_positions
+        msg_freq.frequencies = [int(f) for f in freqs]
+        # important: signals_f should be of shape n_mics x n_frequencies before flatten() is called.
+        msg_freq.signals_real_vect = list(np.real(signals_f.T).astype(float).flatten())
+        msg_freq.signals_imag_vect = list(np.imag(signals_f.T).astype(float).flatten())
+        self.publisher_signals_f.publish(msg_freq)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-            f"listener_callback_signals: Publishing after processing time {processing_time}"
+                f"listener_callback_signals: Published signals_f after {processing_time:.2f}s"
         )
 
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
-        self.labels = [f"mic{i}" for i in range(msg.n_mics)]
         self.mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
 
         # convert msg format to numpy arrays
@@ -226,49 +249,33 @@ class Correlator(Node):
         signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
         freqs = np.array(msg.frequencies)
 
-        # TODO(FD): will move this scheme to the microprocessor eventually.
-        mask = (freqs < MAX_FREQ) & (freqs > MIN_FREQ)
-        freqs = freqs[mask]
-        signals_f = signals_f[mask]
+        # create and publish correlations message
+        R = self.beam_former.get_correlation(signals_f)
 
-        if not len(freqs):
-            self.get_logger().error(
-                f"no frequency bins in range {MIN_FREQ}, {MAX_FREQ}"
-            )
+        msg_new = Correlations()
+        msg_new.n_mics = int(R.shape[0])
+        msg_new.n_frequencies = len(freqs)
+        msg_new.frequencies = [int(f) for f in freqs]
+        msg_new.corr_real_vect = [float(f) for f in R.real.flatten()]
+        msg_new.corr_imag_vect = [float(f) for f in R.imag.flatten()]
+        msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
+        msg_new.timestamp = msg.timestamp
 
-        self.process_signals_f(signals_f, freqs, msg.fs, msg.timestamp)
+        self.publisher_correlations.publish(msg_new)
 
         # check that the above processing pipeline does not
         # take too long compared to the desired publish rate.
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-            f"listener_callback_signals_f: Publishing after processing time {processing_time}"
+                f"listener_callback_signals_f: Published correlations after {processing_time:.2f}s"
         )
-
-    def process_signals_f(self, signals_f, freqs, Fs, timestamp):
-        msg_new = create_correlations_message(
-            signals_f, freqs, Fs, signals_f.shape[0], self.methods["frequency"]
-        )
-        msg_new.mic_positions = list(self.mic_positions.astype(float).flatten())
-        msg_new.timestamp = timestamp
-
-        # plotting
-        if self.plot_freq:
-            if msg_new.n_frequencies != self.current_n_frequencies:
-                self.plotter_freq.clear()
-            self.plotter_freq.update_lines(np.abs(signals_f.T), freqs, self.labels)
-            self.plotter_freq.ax.set_title(f"time (ms): {msg_new.timestamp}")
-            self.plotter_freq.update_axvlines(freqs)
-            self.current_n_frequencies = msg_new.n_frequencies
-        # publishing
-        self.publisher_correlations.publish(msg_new)
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    correlator = Correlator(plot_freq=True, plot_time=True)
+    correlator = Correlator(plot_freq=True, plot_time=False)
     rclpy.spin(correlator)
 
     # Destroy the node explicitly

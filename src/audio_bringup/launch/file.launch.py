@@ -31,7 +31,7 @@ def generate_launch_description():
 
 
 def main(argv=sys.argv[1:]):
-    ld = generate_launch_description(node_config, log_level=LOG_LEVEL)
+    ld = generate_launch_description()
     ls = launch.LaunchService(argv=argv)
     ls.include_launch_description(ld)
     return ls.run()

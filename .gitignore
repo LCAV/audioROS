@@ -57,3 +57,11 @@ debug/
 stash/
 #pycharm:
 .idea/
+#bagfile stuff
+*.db3-shm
+*.db3-wal
+#evaluation
+*.pk
+notebooks/.ipynb_checkpoints
+experiments/testing/*
+experiments/*/results/
