@@ -47,18 +47,18 @@ class StreamPublisher(AudioPublisher):
         if blocking:
             self.stream = sd.InputStream(channels=self.n_mics, blocksize=n_buffer)
             self.stream.start()
-            self.create_timer(1.0 / self.publish_rate, self.publish_loop)
+            self.create_timer(1.0 / self.publish_rate, self.publish_signals_timer)
 
         # non-blocking stream, less ROS-like, problematic for plotting. But we do not lose samples.
         else:
             with sd.InputStream(
-                channels=self.n_mics, callback=self.publish_stream, blocksize=n_buffer
+                channels=self.n_mics, callback=self.publish_signals_callback, blocksize=n_buffer
             ) as stream:
                 sd.sleep(self.duration_ms)
                 # need below return or we will stay in this context forever
                 return
 
-    def publish_stream(self, signals_T, frames, time_stream, status):
+    def publish_signals_callback(self, signals_T, frames, time_stream, status):
         self.get_logger().debug(f"buffer start time: {time_stream.inputBufferAdcTime}")
         self.get_logger().debug(f"currentTime: {time_stream.currentTime}")
 
@@ -67,7 +67,7 @@ class StreamPublisher(AudioPublisher):
 
         self.process_signals(signals_T.T)
 
-    def publish_loop(self):
+    def publish_signals_timer(self):
         n_buffer = self.n_buffer
 
         n_available = self.stream.read_available

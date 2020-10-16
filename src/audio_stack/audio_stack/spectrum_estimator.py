@@ -12,50 +12,87 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
-import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
-from .beam_former import BeamFormer
-from .live_plotter import LivePlotter
+from audio_stack.beam_former import BeamFormer
+from audio_stack.topic_synchronizer import TopicSynchronizer
 
-MAX_YLIM = 1  # set to inf for no effect.
-MIN_YLIM = 1e-13  # set to -inf for no effect.
+# Beamforming method, available: 
+# - "das": delay-and-sum
+# - "mvdr": minimum-variance distortionless response
+BF_METHOD = "das"
 
-# for plotting only
-MIN_FREQ = 400
-MAX_FREQ = 600
+NORMALIZE = "zero_to_one_all"
+#NORMALIZE = "zero_to_one"
+#NORMALIZE = "sum_to_one"
 
-ALLOWED_LAG_MS = 20  # allowed lag between pose and audio message
+
+def normalize_rows(matrix, method="zero_to_one"):
+    if method == "zero_to_one":
+        normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
+        np.testing.assert_allclose(np.max(normalized, axis=1), 1)
+        np.testing.assert_allclose(np.min(normalized, axis=1), 0)
+    elif method == "zero_to_one_all":
+        denom = np.max(matrix) - np.min(matrix)
+        if denom == 0.0:
+            return matrix 
+        normalized =  (matrix - np.min(matrix)) / denom
+        assert np.max(normalized) == 1, np.max(normalized)
+        assert np.min(normalized) == 0, np.min(normalized)
+    elif method == "sum_to_one":
+        # first make sure values are between 0 and 1 (otherwise division can lead to errors)
+        denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
+        matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
+        sum_matrix = np.sum(matrix, axis=1, keepdims=True)
+        normalized = matrix / sum_matrix
+        np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
+    elif method in ["none", None]:
+        return matrix
+    else:
+        raise ValueError(method)
+
+    if np.any(np.isnan(normalized)):
+        print("Warning: problem in normalization")
+    return normalized
+
+
+def combine_rows(matrix, method="product", keepdims=False):
+    if method == "product":
+        # do the product in log domain for numerical reasons
+        # sum(log10(matrix)) = log10(product(matrix))
+        combined_matrix = np.power(10, np.sum(np.log10(matrix), axis=0, keepdims=keepdims))
+    elif method == "sum":
+        combined_matrix = np.sum(matrix, axis=0, keepdims=keepdims)
+    else:
+        raise ValueError(method)
+    return combined_matrix
 
 
 class SpectrumEstimator(Node):
-    def __init__(self):
+    def __init__(self, plot=False):
         super().__init__("spectrum_estimator")
 
         self.subscription_correlations = self.create_subscription(
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
-        self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, "motion/pose_raw", self.listener_callback_pose_raw, 10
-        )
-        self.latest_time_and_orientation = None
+
+        self.raw_pose_synch = TopicSynchronizer(20)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
 
         self.beam_former = None
 
-        self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-        self.plotter.ax.set_xlabel("angle [rad]")
-        self.plotter.ax.set_ylabel("magnitude [-]")
-
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("bf_method")
-        self.bf_method = "mvdr"
+        self.bf_method = BF_METHOD
         parameters = [
             rclpy.parameter.Parameter(
                 "bf_method", rclpy.Parameter.Type.STRING, self.bf_method
@@ -73,7 +110,7 @@ class SpectrumEstimator(Node):
         return SetParametersResult(successful=True)
 
     def listener_callback_correlations(self, msg_cor):
-        self.get_logger().info(f"Processing correlations: {msg_cor.timestamp}.")
+        t1 = time.time()
 
         n_frequencies = len(msg_cor.frequencies)
         if n_frequencies >= 2 ** 8:
@@ -110,16 +147,13 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method)
 
-        orientation = 0
-        latest = self.latest_time_and_orientation
-        if (latest is not None) and (
-            abs(msg_cor.timestamp - latest[0]) < ALLOWED_LAG_MS
-        ):
-            orientation = latest[1]
-        elif latest is not None:
-            self.get_logger().warn(
-                f"Did not register valid position estimate: latest correlation at {msg_cor.timestamp}, latest orientation at {latest[0]}"
-            )
+        message = self.raw_pose_synch.get_latest_message(msg_cor.timestamp, self.get_logger())
+        if message is None:
+            orientation = 0
+        else:
+            orientation = message.yaw_deg
+
+        spectrum = normalize_rows(spectrum, NORMALIZE)
 
         # publish
         msg_spec = Spectrum()
@@ -130,19 +164,10 @@ class SpectrumEstimator(Node):
         msg_spec.frequencies = list(frequencies)
         msg_spec.spectrum_vect = list(spectrum.flatten())
         self.publisher_spectrum.publish(msg_spec)
-        self.get_logger().info(f"Published spectrum.")
 
-        # plot
-        assert len(frequencies) == spectrum.shape[0]
-        mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-        labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter.update_lines(
-            spectrum[mask], self.beam_former.theta_scan, labels=labels
-        )
-
-    def listener_callback_pose_raw(self, msg_pose_raw):
-        self.get_logger().info(f"Processing pose: {msg_pose_raw.timestamp}.")
-        self.latest_time_and_orientation = (msg_pose_raw.timestamp, msg_pose_raw.yaw)
+        t2 = time.time()
+        processing_time = t2 - t1
+        self.get_logger().info(f"Published spectrum after {processing_time:.2f}s.")
 
 
 def main(args=None):
@@ -153,7 +178,7 @@ def main(args=None):
 
     rclpy.init(args=args)
 
-    estimator = SpectrumEstimator()
+    estimator = SpectrumEstimator(plot=True)
 
     rclpy.spin(estimator)
 

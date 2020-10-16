@@ -19,15 +19,13 @@ from rcl_interfaces.msg import SetParametersResult
 import matplotlib.pylab as plt
 import numpy as np
 
-from audio_interfaces.msg import Spectrum
-from .live_plotter import LivePlotter
+from audio_interfaces.msg import Spectrum, DoaEstimates
+from audio_stack.beam_former import BeamFormer
+from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 
-MAX_YLIM = 1  # set to inf for no effect.
-MIN_YLIM = 1e-13  # set to -inf for no effect.
-
-# for plotting only
-MIN_FREQ = 400
-MAX_FREQ = 600
+N_ESTIMATES = 3 # number of peaks to detect
+COMBINATION_N = 5 # number of spectra to combine
+COMBINATION_METHOD = "product" # way to combine spectra
 
 
 class DoaEstimator(Node):
@@ -38,88 +36,79 @@ class DoaEstimator(Node):
             Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10
         )
         self.publisher_spectrum = self.create_publisher(
-            Spectrum, "audio/combined_spectrum", 10
+            Spectrum, "audio/dynamic_spectrum", 10
         )
+        self.publisher_doa = self.create_publisher(
+            DoaEstimates, "geometry/doa_estimates", 10
+        )
+        # all in degrees:
         self.spectrum_orientation_list = []
-
-        self.plotter = LivePlotter(MAX_YLIM, MIN_YLIM)
-        self.plotter.ax.set_xlabel("angle [rad]")
-        self.plotter.ax.set_ylabel("magnitude [-]")
 
         # create ROS parameters that can be changed from command line.
         self.declare_parameter("combination_n")
-        self.combination_n = 5
         self.declare_parameter("combination_method")
-        self.combination_method = "sum"
         parameters = [
             rclpy.parameter.Parameter(
                 "combination_method",
                 rclpy.Parameter.Type.STRING,
-                self.combination_method,
+                COMBINATION_METHOD,
             ),
             rclpy.parameter.Parameter(
-                "combination_n", rclpy.Parameter.Type.INTEGER, self.combination_n
+                "combination_n", 
+                rclpy.Parameter.Type.INTEGER, 
+                COMBINATION_N
             ),
         ]
         self.set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
+        self.beam_former = BeamFormer()
+        self.beam_former.init_dynamic_estimates(self.combination_n, self.combination_method)
+
     def set_params(self, params):
         for param in params:
             if param.name == "combination_method":
                 self.combination_method = param.get_parameter_value().string_value
-            if param.name == "combination_n":
+            elif param.name == "combination_n":
                 self.combination_n = param.get_parameter_value().integer_value
             else:
                 return SetParametersResult(successful=False)
+
+        self.beam_former.init_dynamic_estimates(self.combination_n, self.combination_method)
         return SetParametersResult(successful=True)
 
     def listener_callback_spectrum(self, msg_spec):
-        self.get_logger().info(f"Processing spectrum: {msg_spec.timestamp}.")
 
+        # add latest spectrum and orientation to dynamic estimate
         spectrum = np.array(msg_spec.spectrum_vect).reshape(
             (msg_spec.n_frequencies, msg_spec.n_angles)
         )
-        self.spectrum_orientation_list.append((spectrum, msg_spec.orientation))
+        self.beam_former.add_to_dynamic_estimates(spectrum, msg_spec.orientation)
 
-        # remove outdated spectra
-        while len(self.spectrum_orientation_list) >= self.combination_n:
-            self.spectrum_orientation_list.pop(0)
-
-        # the combined spectrum is going to be in the coordinate frame of the latest
-        # spectrum.
-        spectra_shifted = [self.spectrum_orientation_list[-1][0]]  # latest element.
-        o_ref = self.spectrum_orientation_list[-1][1]
-        for spectrum, orientation in self.spectrum_orientation_list[:-1]:
-            # TODO(FD) do interpolation rather than nearest neighbor.
-            # Note that index can be both positive and negative, both will work.
-            index = round((orientation - o_ref) * (msg_spec.n_angles - 1) / 360)
-            # TODO(FD) use a rolling buffer (linked list or so) instead of the copies here.
-            spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
-
-        if self.combination_method == "sum":
-            combined_spectrum = np.sum(
-                spectra_shifted, axis=0
-            )  # n_frequencies x n_angles
-        elif self.combination_method == "product":
-            combined_spectrum = np.product(
-                spectra_shifted, axis=0
-            )  # n_frequencies x n_angles
+        # retrieve current estimate
+        dynamic_spectrum = self.beam_former.get_dynamic_estimate()
+        dynamic_spectrum = normalize_rows(dynamic_spectrum, NORMALIZE)
 
         # publish
         msg_new = msg_spec
-        msg_new.spectrum_vect = list(combined_spectrum.astype(float).flatten())
+        msg_new.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
         self.publisher_spectrum.publish(msg_new)
-        self.get_logger().info(f"Published spectrum.")
+        self.get_logger().info(f"Published dynamic spectrum.")
 
-        # plot
-        # TODO(FD): read angles vector from topic?
-        theta_scan = np.linspace(0, 360, msg_new.n_angles)
-        frequencies = np.array(msg_new.frequencies)
-        assert len(frequencies) == combined_spectrum.shape[0]
-        mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
-        labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter.update_lines(combined_spectrum[mask], theta_scan, labels=labels)
+        # calculate and publish doa estimates
+        final_spectrum = combine_rows(dynamic_spectrum, self.combination_method, keepdims=True)
+        final_spectrum = normalize_rows(final_spectrum, NORMALIZE)
+
+        angles = np.linspace(0, 360, msg_spec.n_angles)
+        sorted_indices = np.argsort(final_spectrum.flatten()) # sorts in ascending order
+        doa_estimates = angles[sorted_indices[-N_ESTIMATES:][::-1]]
+
+        msg_doa = DoaEstimates()
+        msg_doa.n_estimates = N_ESTIMATES
+        msg_doa.timestamp = msg_spec.timestamp
+        msg_doa.doa_estimates_deg = list(doa_estimates.astype(float).flatten())
+        self.publisher_doa.publish(msg_doa)
+        self.get_logger().info(f"Published doa estimates: {doa_estimates}.")
 
 
 def main(args=None):
