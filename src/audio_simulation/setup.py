@@ -21,7 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'crazyflie = audio_simulation.crazyflie:main',
-            'const_pub = audio_simulation.constant_pose_publisher:main',
+            'constant_pose_publisher = audio_simulation.constant_pose_publisher:main',
         ],
     },
 )
