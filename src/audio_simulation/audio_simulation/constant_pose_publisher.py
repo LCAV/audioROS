@@ -31,7 +31,7 @@ class ConstantPosePublisher(Node):
         msg.position.z=1.0
         
         self.publisher_pose.publish(msg)
-        self.get_logger().info('Opublikowano pozycje')
+        self.get_logger().info('Pose has been published')
 
 def main(args=None):
     rclpy.init(args=args)

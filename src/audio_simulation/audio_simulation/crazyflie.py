@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy as cp
 import os
+import sys
 import math
 
 from scipy.spatial.transform import Rotation as R
@@ -19,11 +20,14 @@ from audio_interfaces.msg import Signals
 from geometry_msgs.msg import Pose
 from std_msgs.msg import String
 
-N_MICS = 4
+sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
+from signals import generate_signal_random
+
+NUM_SAMPLES = 2048                                                                                      # number of samples which will be send in one go
+N_MICS = 4                                                                                              # number of microphones in the room
 MIC_DISTANCE = 0.108                                                                                    # distance between microphones
 ROOM_DIM = [2, 2, 2]                                                                                    # room dimensions
 SOURCE_POS = [1, 1, 1]                                                                                  # source position
-WAV_PATH = os.getcwd() + "/src/audio_simulation/audio_simulation/audio_source/white_noise.wav"          # source .wav file
 MAX_TIMESTAMP = pow(2, 32) - 1                                                                          # max value of uint32
 MAX_BUFFER = 1024                                                                                       # max value of our buffer
 
@@ -32,7 +36,7 @@ class AudioSimulation(Node):
     def __init__(self):
         super().__init__('audio_simulation')
         
-        self.room = set_room(ROOM_DIM, [WAV_PATH,], [SOURCE_POS,])
+        self.room = set_room(ROOM_DIM, NUM_SAMPLES, [SOURCE_POS,])
         self.time_id = 0
 
         self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
@@ -51,11 +55,12 @@ class AudioSimulation(Node):
         
         microphones = generate_mic_position_array(rotation, drone_center)
         sim_room = self.simulation(microphones)         
-        signal_to_send = sim_room.mic_array.signals
-        print(signal_to_send[0])
-        print(signal_to_send[1])
-        print(signal_to_send[2])
-        print(signal_to_send[3])
+        signals_in_room = sim_room.mic_array.signals
+        signal_to_send = np.zeros((N_MICS, NUM_SAMPLES), dtype = float)
+
+        for i in range(len(signals_in_room)):
+            signal_to_send[i] = signals_in_room[i][0:NUM_SAMPLES]
+       
         no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)
         last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER        
         
@@ -70,7 +75,7 @@ class AudioSimulation(Node):
             msg.n_mics = N_MICS
             msg.mic_positions = list(microphones.flatten())
         
-            if i == no_packages - 1:
+            if i == no_packages - 1 and last_pkg_size != 0:
                 signal = np.zeros((N_MICS, last_pkg_size), dtype = float)
             else:
                 signal = np.zeros((N_MICS, MAX_BUFFER), dtype = float)
@@ -110,14 +115,14 @@ class AudioSimulation(Node):
         return pyroom_cp
 
 
-def set_room(room_dim, wav_path_list, source_position_list):        
+def set_room(room_dim, nr_samples, source_position_list):        
     """
     Set the shoe box room with specified dimensions and sources
     """
     
     pyroom = pra.ShoeBox(room_dim)
-    for i in range(len(wav_path_list)):
-        fs, audio_source = wavfile.read(wav_path_list[i])
+    audio_source = generate_signal_random(nr_samples)
+    for i in range(len(source_position_list)):
         pyroom.add_source(source_position_list[i], signal = audio_source)
     return pyroom
 
