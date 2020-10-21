@@ -23,7 +23,7 @@ def rotate_mics(mics, orientation_deg=0):
     :return mics_rotated: (n_mics, 2)
     """
     rot = Rotation.from_euler('z', orientation_deg, degrees=True)
-    R = rot.as_matrix() # 3x3
+    R = rot.as_matrix() # 3 x 3
     mics_aug = np.c_[mics, np.ones(mics.shape[0])].T # 3 x 4
     mics_rotated = R.dot(mics_aug)[:2, :] # 2 x 4
     return mics_rotated.T
