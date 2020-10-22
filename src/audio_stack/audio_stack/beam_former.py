@@ -73,8 +73,23 @@ class BeamFormer(object):
         :param signals_f: frequency response (n_frequencies x n_mics)
         """
         if signals_f.shape[0] < signals_f.shape[1]:
-            print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
+            #print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
+            pass
         return 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
+
+    def shift_spectrum(self, spectrum, delta_deg):
+        """ shift spectrum by delta_deg. 
+
+        :param spectrum: spatial spectrum (n_frequencies x n_angles)
+        :param delta_deg: by how many angles to shfit the spectrum
+
+        """
+
+        # TODO(FD) do interpolation rather than nearest neighbor.
+        # Note that index can be both positive and negative, both will work.
+        n_angles = len(self.theta_scan) 
+        index = int(round(delta_deg * (n_angles - 1) / 360))
+        return np.c_[spectrum[:, index:], spectrum[:, :index]]
 
     def init_dynamic_estimate(self, combination_n, combination_method, normalization_method='zero_to_one'):
         self.spectrum_orientation_list = []
@@ -99,20 +114,16 @@ class BeamFormer(object):
         """
         from audio_stack.spectrum_estimator import combine_rows, normalize_rows
 
-        # the combined spectrum is going to be in the coordinate frame of the latest
+        # the combined spectrum is going to be in the coordinate frame of the earliest 
         # spectrum.
-        spectra_shifted = [self.spectrum_orientation_list[-1][0]]  # latest element.
-        o_ref = self.spectrum_orientation_list[-1][1]
-        n_angles = spectra_shifted[0].shape[1]
+        spectra_shifted = [self.spectrum_orientation_list[0][0]]  
+        o_ref = self.spectrum_orientation_list[0][1]
 
         if len(self.spectrum_orientation_list) < self.combination_n:
             print(f"Warning: using only {len(self.spectrum_orientation_list)}/{self.combination_n}")
 
-        for spectrum, orientation in self.spectrum_orientation_list[:-1]:
-            # TODO(FD) do interpolation rather than nearest neighbor.
-            # Note that index can be both positive and negative, both will work.
-            index = int(round((orientation - o_ref) * (n_angles - 1) / 360))
-            spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
+        for spectrum, orientation in self.spectrum_orientation_list[1:]:
+            spectra_shifted.append(self.shift_spectrum(spectrum, o_ref - orientation))
 
         spectra_shifted = normalize_rows(spectra_shifted, method=self.normalization_method)
         return combine_rows(spectra_shifted, self.combination_method, keepdims=False) # n_frequencies x n_angles
