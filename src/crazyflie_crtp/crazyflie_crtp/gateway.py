@@ -113,22 +113,20 @@ class Gateway(Node):
             self.get_logger().warn("Empty fbins. Not publishing")
             return
 
-        #This seems to be ok now
-        #self.get_logger().info(f"Read audio data: {signals_f_vect.reshape((8, 32))}")
-
         n_frequencies = len(fbins)
         assert n_frequencies == len(signals_f_vect) / (N_MICS * 2), \
             f"{n_frequencies} does not match {len(signals_f_vect)}"
+
         all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
-        #frequencies = all_frequencies[:n_frequencies]
+
         try:
             assert np.any(fbins>0)
             if len(set(fbins)) < len(fbins):
-                #self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
+                self.get_logger().debug(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
                 return
             frequencies = all_frequencies[fbins]
         except:
-            #self.get_logger().warn(f"Ignoring fbins: {fbins[:5]}")
+            self.get_logger().debug(f"Ignoring fbins: {fbins[:5]}")
             return
 
         signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
@@ -138,9 +136,10 @@ class Gateway(Node):
 
         abs_signals_f = np.abs(signals_f)
         if np.any(abs_signals_f[:3, :] > 1e5) or np.any(abs_signals_f[:3, :] < 1e-10):
-            #self.get_logger().warn(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
+            self.get_logger().debug(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
             return
 
+        # TODO(FD) maybe use reader_crtp.audio_timestamp here to avoid confusion. 
         msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
                 self.reader_crtp.audio_dict["timestamp"], FS)
         self.publisher_signals.publish(msg)
@@ -206,7 +205,6 @@ class Gateway(Node):
             f"changing {param.name} from {old_value} to {new_value}"
         )
         return 
-
 
 
 def main(args=None):
