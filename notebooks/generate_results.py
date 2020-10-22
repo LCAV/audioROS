@@ -13,7 +13,7 @@ from constants import SPEED_OF_SOUND
 
 FS = 32000  # Hz, sampling frequency
 DURATION = 5  # seconds, should be long enough to account for delays 
-COMBINATION_METHOD = "sum"
+COMBINATION_METHOD = "product"
 NORMALIZATION_METHOD = "none"
 
 def generate_signals_pyroom(source, source_signal, mics_rotated, time, noise=0, ax=None):
