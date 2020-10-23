@@ -11,7 +11,7 @@ from scipy.io.wavfile import read
 
 import rclpy
 
-from .publisher import AudioPublisher
+from audio_publisher.publisher import AudioPublisher
 from audio_interfaces.msg import PoseRaw
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
