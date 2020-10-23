@@ -18,8 +18,8 @@ node_config = {
         "params": [{"n_buffer": 2 ** 8, "publish_rate": 100}],
         "pkg": "audio_publisher",
     },
-    "doa_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
-    "correlator": {
+    "spectrum_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
+    "processor": {
         "params": [{"noise": "", "frequency": "uniform", "window": "tukey"}],
         "pkg": "audio_stack",
     },

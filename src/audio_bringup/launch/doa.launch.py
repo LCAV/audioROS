@@ -14,8 +14,6 @@ from audio_bringup.helpers import get_launch_description
 LOG_LEVEL = "warn"
 
 node_config = {
-    "correlator": {"pkg": "audio_stack"},
-    "doa_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
     "spectrum_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
     "doa_estimator": {"params": [{"combination_n": 3, "combination_method": "sum"}], "pkg": "audio_stack"},
     "audio": {"pkg": "topic_plotter"},
