@@ -1,6 +1,12 @@
+# Sampling frequency in Hz
 uint16 fs
+# ROS timestamp in miliseconds
 uint32 timestamp
+# Audio timestamp in microseconds
+uint32 audio_timestamp
+# Number of microphones
 uint8 n_mics
+# Number of frequencies
 uint16 n_frequencies
 
 # List of frequencies, in Hz

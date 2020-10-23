@@ -68,7 +68,7 @@ def create_signals_message(signals, mic_positions, timestamp, fs):
     return msg
 
 
-def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, fs):
+def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, audio_timestamp, fs):
     """ Create SignalsFreq message. """
     msg = SignalsFreq()
 
@@ -78,8 +78,12 @@ def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, fs):
     else:
         msg.mic_positions = []
 
+    if audio_timestamp is None:
+        audio_timestamp = timestamp * 1000 # ms to us
+
     msg.fs = fs
     msg.timestamp = timestamp
+    msg.audio_timestamp = audio_timestamp
     msg.n_mics = signals_f.shape[1] 
     # TODO(FD) remove this debugging check
     assert msg.n_mics == N_MICS
@@ -87,6 +91,9 @@ def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, fs):
     # TODO(FD) remove this debugging check
     assert msg.n_frequencies == N_FREQS
     msg.frequencies = [int(f) for f in freqs]
+
+    assert signals_f.shape[0] == msg.n_frequencies
+    assert signals_f.shape[1] == msg.n_mics
     # important: signals_f should be of shape n_mics x n_frequencies before flatten() is called.
     msg.signals_real_vect = list(np.real(signals_f.T).astype(float).flatten())
     msg.signals_imag_vect = list(np.imag(signals_f.T).astype(float).flatten())

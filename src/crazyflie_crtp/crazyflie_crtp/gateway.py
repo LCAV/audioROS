@@ -30,7 +30,6 @@ N = 2048
 
 # Crazyflie audio parameters that can be set from here.
 AUDIO_PARAMETERS_TUPLES = [
-    ("debug", rclpy.Parameter.Type.INTEGER, 0),
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
     ("min_freq", rclpy.Parameter.Type.INTEGER, 200),
     ("max_freq", rclpy.Parameter.Type.INTEGER, 7000),
@@ -100,15 +99,13 @@ class Gateway(Node):
 
     def publish_audio_dict(self):
         # read audio
-        signals_f_vect = self.reader_crtp.audio_dict["data"]
+        signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
             self.get_logger().warn("Empty audio. Not publishing")
             return
 
         # read frequencies
-        if self.reader_crtp.fbins_dict["published"]:
-            self.get_logger().error("Synchronization issue: already published fbins")
-        fbins = self.reader_crtp.fbins_dict["data"]
+        fbins = self.reader_crtp.audio_dict["fbins"]
         if fbins is None:
             self.get_logger().warn("Empty fbins. Not publishing")
             return
@@ -141,10 +138,10 @@ class Gateway(Node):
 
         # TODO(FD) maybe use reader_crtp.audio_timestamp here to avoid confusion. 
         msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
-                self.reader_crtp.audio_dict["timestamp"], FS)
+                self.reader_crtp.audio_dict["timestamp"], self.reader_crtp.audio_dict["audio_timestamp"], FS)
         self.publisher_signals.publish(msg)
 
-        self.get_logger().info(f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]}")
+        self.get_logger().info(f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}")
 
     def publish_motion_dict(self):
         motion_dict = self.reader_crtp.motion_dict["data"]
