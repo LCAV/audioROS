@@ -30,7 +30,7 @@ def get_launch_description(node_config, log_level=LOG_LEVEL):
                         launch.substitutions.LaunchConfiguration("node_prefix"),
                         f"name_{executable}",
                     ],
-                    parameters=dict_["params"],
+                    parameters=dict_.get("params", []),
                     # TODO not deprecated but doesn't work
                     # arguments=[(f'--ros-args --log-level {str.upper(log_level)}')])
                     # TODO deprecated but works

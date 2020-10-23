@@ -4,6 +4,7 @@ from rclpy.node import Node
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, Signals, SignalsFreq, PoseRaw
+from audio_interfaces_py.messages import read_signals_message, read_signals_freq_message, read_spectrum_message
 from audio_stack.spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
@@ -15,6 +16,8 @@ YMIN_SPEC = 1e-10
 YMAX_SPEC = 2
 XMIN_FREQ = 200 # min plotting frequency in Hz
 XMAX_FREQ = 3000 # max plotting frequency in Hz
+
+PLOT_LINES = False # make lineplots of spectra (not very readible, can be removed eventually)
 
 class AudioPlotter(Node):
     def __init__(self):
@@ -54,44 +57,41 @@ class AudioPlotter(Node):
     def listener_callback_spectrum(self, msg_spec, name="static"):
         xlabel = "angle [deg]"
         ylabel = "magnitude [-]"
-        self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
         self.init_plotter(f"{name} combined spectra", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
         self.init_plotter(f"{name} raw spectra heatmap", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
+        if PLOT_LINES: 
+            self.init_plotter(f"{name} raw spectra", xlabel=xlabel, ylabel=ylabel, ymin=YMIN_SPEC, ymax=YMAX_SPEC)
 
-        frequencies = np.array(msg_spec.frequencies) 
-        spectrum = np.array(msg_spec.spectrum_vect).reshape((msg_spec.n_frequencies, msg_spec.n_angles))
-        theta_scan = np.linspace(0, 360, msg_spec.n_angles)
+        spectrum, frequencies, theta_scan = read_spectrum_message(msg_spec)
 
         # compute and plot combination.
         mask = (frequencies <= MAX_FREQ) & (frequencies >= MIN_FREQ)
         labels = [f"f={f:.0f}Hz" for f in frequencies[mask]]
-        self.plotter_dict[f"{name} raw spectra"].update_lines(
-            spectrum[mask], theta_scan, labels=labels
-        )
         self.plotter_dict[f"{name} raw spectra heatmap"].update_mesh(
-            spectrum[mask], y_labels=labels
+            spectrum[mask], y_labels=labels, log=True
         )
+        if PLOT_LINES: 
+            self.plotter_dict[f"{name} raw spectra"].update_lines(
+                spectrum[mask], theta_scan, labels=labels
+            )
 
         # compute and plot combinations.
         spectrum_sum = combine_rows(spectrum, "sum", keepdims=True)
         spectrum_sum = normalize_rows(spectrum_sum, NORMALIZE)
-        spectrum_product = combine_rows(spectrum + 1e-1, "product", keepdims=True)
-        spectrum_product = normalize_rows(spectrum_product, NORMALIZE)
 
-        spectrum_plot = np.r_[spectrum_product, spectrum_sum]
-        labels = ["product", "sum"]
+        labels = ["sum"]
         self.plotter_dict[f"{name} combined spectra"].update_lines(
-            spectrum_plot, theta_scan, labels=labels
+            spectrum_sum, theta_scan, labels=labels
         )
 
         message = self.raw_pose_synch.get_latest_message(msg_spec.timestamp, self.get_logger())
         if message is not None:
             orientation = message.source_direction_deg
-            self.plotter_dict[f"{name} raw spectra"].update_axvlines([orientation])
             self.plotter_dict[f"{name} combined spectra"].update_axvlines([orientation])
+            if PLOT_LINES: 
+                self.plotter_dict[f"{name} raw spectra"].update_axvlines([orientation])
 
-            angles = np.linspace(0, 360, msg_spec.n_angles)
-            orientation_index = np.argmin(abs(angles - orientation))
+            orientation_index = np.argmin(abs(theta_scan - orientation))
             self.plotter_dict[f"{name} raw spectra heatmap"].update_axvlines([orientation_index], color='orange')
 
 
@@ -105,11 +105,9 @@ class AudioPlotter(Node):
         if msg.n_frequencies != self.current_n_frequencies:
             self.plotter_dict["signals frequency"].clear()
 
-        # sort frequencies
-        freqs = np.array(msg.frequencies)
-        signals_f = np.array(msg.signals_real_vect) + 1j * np.array(msg.signals_imag_vect)
-        signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
+        __, signals_f, freqs = read_signals_freq_message(msg)
 
+        # sort frequencies
         indices = np.argsort(freqs)
         y = np.abs(signals_f[indices, :].T)
         x = freqs[indices]
@@ -123,7 +121,7 @@ class AudioPlotter(Node):
     def listener_callback_signals(self, msg):
         self.init_plotter("signals time", xlabel="time idx [-]", ylabel="magnitude [-]", log=False)
 
-        signals = np.array(msg.signals_vect).reshape((msg.n_mics, msg.n_buffer))
+        __, signals = read_signals_message(msg)
         labels = [f"mic {i}" for i in range(1, 1+msg.n_mics)]
 
         if msg.n_buffer != self.current_n_buffer:
