@@ -215,7 +215,7 @@ class Correlator(Node):
             freqs = freqs[bins]
             signals_f = signals_f[bins]
 
-        msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, msg.fs)
+        msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, None, msg.fs)
         self.publisher_signals_f.publish(msg_freq)
 
         # check that the above processing pipeline does not
