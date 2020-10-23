@@ -77,7 +77,7 @@ class SpectrumEstimator(Node):
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
 
-        self.raw_pose_synch = TopicSynchronizer(20)
+        self.raw_pose_synch = TopicSynchronizer(allowed_lag=20)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
