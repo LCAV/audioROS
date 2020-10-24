@@ -14,6 +14,7 @@ import sys
 import math
 
 from scipy.spatial.transform import Rotation as R
+from numpy.linalg import norm as distance
 from scipy.io import wavfile
 
 from audio_interfaces.msg import Signals
@@ -30,13 +31,15 @@ ROOM_DIM = [2, 2, 2]                                                            
 SOURCE_POS = [1, 1, 1]                                                                                  # source position
 MAX_TIMESTAMP = pow(2, 32) - 1                                                                          # max value of uint32
 MAX_BUFFER = 1024                                                                                       # max value of our buffer
+SPEED_OF_SOUND = 343.0                                                                                  # speed of sound in [m/s]
+FS = 8000                                                                                               # sampling frequency [Hz]
 
 class AudioSimulation(Node):
 
     def __init__(self):
         super().__init__('audio_simulation')
         
-        self.room = set_room(ROOM_DIM, NUM_SAMPLES, [SOURCE_POS,])
+        self.room = set_room(ROOM_DIM, NUM_SAMPLES, [SOURCE_POS,], FS)
         self.time_id = 0
 
         self.publisher_signals = self.create_publisher(Signals, 'audio/signals', 10)
@@ -55,12 +58,14 @@ class AudioSimulation(Node):
         
         microphones = generate_mic_position_array(rotation, drone_center)
         sim_room = self.simulation(microphones)         
+        start_sample = starting_sample_nr(sim_room, microphones)
         signals_in_room = sim_room.mic_array.signals
-        signal_to_send = np.zeros((N_MICS, NUM_SAMPLES), dtype = float)
+        signal_to_send = np.zeros((N_MICS, NUM_SAMPLES-start_sample), dtype = float)
 
         for i in range(len(signals_in_room)):
-            signal_to_send[i] = signals_in_room[i][0:NUM_SAMPLES]
+            signal_to_send[i] = signals_in_room[i][start_sample:NUM_SAMPLES]
        
+        print(len(signal_to_send[0]))
         no_packages = math.ceil(len(signal_to_send[0]) / MAX_BUFFER)
         last_pkg_size = len(signal_to_send[0]) % MAX_BUFFER        
         
@@ -115,12 +120,31 @@ class AudioSimulation(Node):
         return pyroom_cp
 
 
-def set_room(room_dim, nr_samples, source_position_list):        
+def starting_sample_nr(pyroom, mic_array):
     """
-    Set the shoe box room with specified dimensions and sources
+    Calculate the number of sample, from which on all mics signals register audio from sources
     """
     
-    pyroom = pra.ShoeBox(room_dim)
+    n_sources = pyroom.n_sources
+    n_mics = len(mic_array)
+    dist_array = np.empty([n_mics, 1])
+    tmp_dist = np.empty([n_sources, 1])
+
+    for i in range(n_mics):
+        for j in range(n_sources):
+            tmp_dist[j] = distance(pyroom.sources[j].position - mic_array[i])
+        dist_array[i] = np.max(tmp_dist)
+    
+    max_distance = np.max(dist_array)
+    max_sample = int(np.ceil((max_distance/SPEED_OF_SOUND) * pyroom.fs) + 1)
+    return max_sample
+
+def set_room(room_dim, nr_samples, source_position_list, fs):        
+    """
+    Set the shoe box room with specified dimensions, sampling frequency and sources
+    """
+    
+    pyroom = pra.ShoeBox(room_dim, fs=fs)
     audio_source = generate_signal_random(nr_samples)
     for i in range(len(source_position_list)):
         pyroom.add_source(source_position_list[i], signal = audio_source)
