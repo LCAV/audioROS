@@ -12,6 +12,7 @@ from geometry_msgs.msg import Pose
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw
 from audio_interfaces_py.messages import create_signals_freq_message, create_pose_message, create_pose_raw_message
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from reader_crtp import ReaderCRTP
@@ -86,7 +87,8 @@ class Gateway(Node):
 
         # choose high publish rate so that we introduce as little
         # waiting time as possible
-        self.create_timer(0.001, self.publish_current_data)
+        self.desired_rate = 1000
+        self.create_timer(1/self.desired_rate, self.publish_current_data)
 
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:
@@ -116,15 +118,14 @@ class Gateway(Node):
 
         all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
 
-        try:
-            assert np.any(fbins>0)
-            if len(set(fbins)) < len(fbins):
-                self.get_logger().debug(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
-                return
-            frequencies = all_frequencies[fbins]
-        except:
-            self.get_logger().debug(f"Ignoring fbins: {fbins[:5]}")
+        if len(set(fbins)) < len(fbins):
+            self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
             return
+        elif not np.any(fbins > 0): 
+            self.get_logger().warn(f"Empty fbins!")
+            return
+
+        frequencies = all_frequencies[fbins]
 
         signals_f = np.zeros((N_MICS, n_frequencies), dtype=np.complex128)
         for i in range(N_MICS):
@@ -133,10 +134,12 @@ class Gateway(Node):
 
         abs_signals_f = np.abs(signals_f)
         if np.any(abs_signals_f[:3, :] > 1e5) or np.any(abs_signals_f[:3, :] < 1e-10):
-            self.get_logger().debug(f"Ignoring audio: {abs_signals_f.flatten()[:5]}")
-            return
+            self.get_logger().warn("Possibly in valid audio:")
+            self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
+            self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
+            self.get_logger().warn(f"mic 2 {abs_signals_f[2, :5]}")
+            self.get_logger().warn(f"mic 3 {abs_signals_f[3, :5]}")
 
-        # TODO(FD) maybe use reader_crtp.audio_timestamp here to avoid confusion. 
         msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
                 self.reader_crtp.audio_dict["timestamp"], self.reader_crtp.audio_dict["audio_timestamp"], FS)
         self.publisher_signals.publish(msg)
