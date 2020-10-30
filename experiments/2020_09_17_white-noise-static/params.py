@@ -1,3 +1,7 @@
+# TODO(FD) below parameters were reconstructed and might not correspond to the actual
+# parameters with which the experiments were ran! At the time the pipeline was not as 
+# automated yet. 
+
 global_params = {
     'duration':30, # seconds
     'fs_soundcard':44100, # hz
@@ -8,8 +12,8 @@ global_params = {
 }
 
 THRUST = 43000
-DEGREE_LIST = [0, 20, 45]
-SOURCE_LIST = ['mono_linear', 'random_linear']
+DEGREE_LIST = [0, 20, 45] 
+SOURCE_LIST = [True, False]
 
 # calibration:
 params_list = [
