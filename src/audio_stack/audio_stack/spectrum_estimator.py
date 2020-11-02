@@ -12,7 +12,7 @@ from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 
-from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
+from audio_interfaces.msg import Correlations, Spectrum, SignalsFreq, PoseRaw
 from audio_interfaces_py.messages import create_spectrum_message, read_signals_freq_message 
 from audio_stack.beam_former import BeamFormer
 from audio_stack.topic_synchronizer import TopicSynchronizer
@@ -83,6 +83,7 @@ class SpectrumEstimator(Node):
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.publisher_spectrum_raw = self.create_publisher(Spectrum, "audio/spectrum_raw", 10)
+        self.publisher_spectrum_combined = self.create_publisher(Spectrum, "audio/spectrum_combined", 10)
 
         self.beam_former = None
 
@@ -123,7 +124,8 @@ class SpectrumEstimator(Node):
             else:
                 return SetParametersResult(successful=False)
 
-        self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
+        if self.beam_former is not None:
+            self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
         return SetParametersResult(successful=True)
 
     def listener_callback_signals_f(self, msg):
@@ -138,6 +140,7 @@ class SpectrumEstimator(Node):
         if self.beam_former is None:
             if mic_positions is not None:
                 self.beam_former = BeamFormer(mic_positions)
+                self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
             else:
                 self.get_logger().error(
                     "need to set send mic_positions in Correlation to do DOA"
@@ -159,7 +162,7 @@ class SpectrumEstimator(Node):
 
         # publish raw spectrum
         msg_spec = create_spectrum_message(spectrum, frequencies, msg.timestamp)
-        self.publisher_spectrum.publish(msg_spec)
+        self.publisher_spectrum_raw.publish(msg_spec)
 
         t2 = time.time()
         processing_time = t2 - t1
