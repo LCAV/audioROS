@@ -1,17 +1,9 @@
-# Copyright 2016 Open Source Robotics Foundation, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+spectrum_estimator.py: Calcualte spatial beamforming spectrum based on correlations.
 
+"""
 import time
 
 import rclpy
@@ -21,16 +13,18 @@ from rcl_interfaces.msg import SetParametersResult
 import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, PoseRaw
+from audio_interfaces_py.messages import read_correlations_message, create_spectrum_message
 from audio_stack.beam_former import BeamFormer
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
 # Beamforming method, available: 
 # - "das": delay-and-sum
 # - "mvdr": minimum-variance distortionless response
-BF_METHOD = "das"
+#BF_METHOD = "das"
+BF_METHOD = "mvdr"
 
-NORMALIZE = "zero_to_one_all"
-#NORMALIZE = "zero_to_one"
+#NORMALIZE = "zero_to_one_all"
+NORMALIZE = "zero_to_one"
 #NORMALIZE = "sum_to_one"
 
 
@@ -83,7 +77,7 @@ class SpectrumEstimator(Node):
             Correlations, "audio/correlations", self.listener_callback_correlations, 10
         )
 
-        self.raw_pose_synch = TopicSynchronizer(20)
+        self.raw_pose_synch = TopicSynchronizer(allowed_lag=20)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.publisher_spectrum = self.create_publisher(Spectrum, "audio/spectrum", 10)
@@ -112,29 +106,20 @@ class SpectrumEstimator(Node):
     def listener_callback_correlations(self, msg_cor):
         t1 = time.time()
 
-        n_frequencies = len(msg_cor.frequencies)
+        mic_positions, R, frequencies = read_correlations_message(msg_cor)
+        n_frequencies = msg_cor.n_frequencies
+
         if n_frequencies >= 2 ** 8:
             self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
             return
 
         if self.beam_former is None:
-            if msg_cor.mic_positions:
-                mic_positions = np.array(msg_cor.mic_positions).reshape(
-                    (msg_cor.n_mics, -1)
-                )
+            if mic_positions is not None:
                 self.beam_former = BeamFormer(mic_positions)
             else:
                 self.get_logger().error(
                     "need to set send mic_positions in Correlation to do DOA"
                 )
-
-        frequencies = np.array(msg_cor.frequencies).astype(np.float)  # [10, 100, 1000]
-        real_vect = np.array(msg_cor.corr_real_vect)
-        imag_vect = np.array(msg_cor.corr_imag_vect)
-
-        R = (real_vect + 1j * imag_vect).reshape(
-            (len(frequencies), msg_cor.n_mics, msg_cor.n_mics)
-        )
 
         if self.bf_method == "mvdr":
             spectrum = self.beam_former.get_mvdr_spectrum(
@@ -156,13 +141,7 @@ class SpectrumEstimator(Node):
         spectrum = normalize_rows(spectrum, NORMALIZE)
 
         # publish
-        msg_spec = Spectrum()
-        msg_spec.timestamp = msg_cor.timestamp
-        msg_spec.n_frequencies = n_frequencies
-        msg_spec.n_angles = spectrum.shape[1]
-        msg_spec.orientation = float(orientation)
-        msg_spec.frequencies = list(frequencies)
-        msg_spec.spectrum_vect = list(spectrum.flatten())
+        msg_spec = create_spectrum_message(spectrum, frequencies, msg_cor.timestamp, orientation)
         self.publisher_spectrum.publish(msg_spec)
 
         t2 = time.time()

@@ -5,16 +5,28 @@
 beam_former.py: 
 """
 
+from copy import deepcopy
 import sys
 import os
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
+#current_dir = os.path.dirname(os.path.abspath(__file__))
+#sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
+def rotate_mics(mics, orientation_deg=0):
+    """
+    :param mics: mic positions (n_mics, 2)
+    :return mics_rotated: (n_mics, 2)
+    """
+    rot = Rotation.from_euler('z', orientation_deg, degrees=True)
+    R = rot.as_matrix() # 3 x 3
+    mics_aug = np.c_[mics, np.ones(mics.shape[0])].T # 3 x 4
+    mics_rotated = R.dot(mics_aug)[:2, :] # 2 x 4
+    return mics_rotated.T
 
 class BeamFormer(object):
     def __init__(self, mic_positions=None):
@@ -33,6 +45,8 @@ class BeamFormer(object):
 
         :param R: autocorrelation tensor (n_frequencies x n_mics x n_mics)
         :param frequencies_hz: list of frequencies (in Hz)
+
+        :return: spectrum of shape (n_frequencies x n_angles)
         """
         spectrum = np.empty((len(frequencies_hz), len(self.theta_scan)))
         for i, theta in enumerate(self.theta_scan):
@@ -59,8 +73,23 @@ class BeamFormer(object):
         :param signals_f: frequency response (n_frequencies x n_mics)
         """
         if signals_f.shape[0] < signals_f.shape[1]:
-            print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
+            #print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
+            pass
         return 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
+
+    def shift_spectrum(self, spectrum, delta_deg):
+        """ shift spectrum by delta_deg. 
+
+        :param spectrum: spatial spectrum (n_frequencies x n_angles)
+        :param delta_deg: by how many angles to shfit the spectrum
+
+        """
+
+        # TODO(FD) do interpolation rather than nearest neighbor.
+        # Note that index can be both positive and negative, both will work.
+        n_angles = len(self.theta_scan) 
+        index = int(round(delta_deg * (n_angles - 1) / 360))
+        return np.c_[spectrum[:, index:], spectrum[:, :index]]
 
     def init_dynamic_estimate(self, combination_n, combination_method, normalization_method='zero_to_one'):
         self.spectrum_orientation_list = []
@@ -85,20 +114,42 @@ class BeamFormer(object):
         """
         from audio_stack.spectrum_estimator import combine_rows, normalize_rows
 
-        # the combined spectrum is going to be in the coordinate frame of the latest
+        # the combined spectrum is going to be in the coordinate frame of the earliest 
         # spectrum.
-        spectra_shifted = [self.spectrum_orientation_list[-1][0]]  # latest element.
-        o_ref = self.spectrum_orientation_list[-1][1]
-        n_angles = spectra_shifted[0].shape[1]
+        spectra_shifted = [self.spectrum_orientation_list[0][0]]  
+        o_ref = self.spectrum_orientation_list[0][1]
 
         if len(self.spectrum_orientation_list) < self.combination_n:
             print(f"Warning: using only {len(self.spectrum_orientation_list)}/{self.combination_n}")
 
-        for spectrum, orientation in self.spectrum_orientation_list[:-1]:
-            # TODO(FD) do interpolation rather than nearest neighbor.
-            # Note that index can be both positive and negative, both will work.
-            index = int(round((orientation - o_ref) * (n_angles - 1) / 360))
-            spectra_shifted.append(np.c_[spectrum[:, index:], spectrum[:, :index]])
+        for spectrum, orientation in self.spectrum_orientation_list[1:]:
+            spectra_shifted.append(self.shift_spectrum(spectrum, o_ref - orientation))
 
         spectra_shifted = normalize_rows(spectra_shifted, method=self.normalization_method)
         return combine_rows(spectra_shifted, self.combination_method, keepdims=False) # n_frequencies x n_angles
+
+    def init_multi_estimate(self, frequencies):
+        self.frequencies = frequencies
+        self.signals_f_aligned = np.empty((len(frequencies), 0)) 
+        self.initial_positions = deepcopy(self.mic_positions)
+        self.mic_positions = np.empty((0, self.mic_positions.shape[1]))
+
+    def add_to_multi_estimate(self, signals_f, frequencies, time_sec, orientation_deg):
+        np.testing.assert_allclose(frequencies, self.frequencies)
+
+        # delay the signals according to recording times
+        exp_factor = np.exp(1j * 2 * np.pi * frequencies * time_sec)
+        signals_f_aligned = np.multiply(signals_f, exp_factor[:, np.newaxis])  # frequencies x n_mics
+        self.signals_f_aligned = np.c_[self.signals_f_aligned, signals_f_aligned]
+
+        # add the new microphone position according to "orientation" 
+        moved_mic_positions = rotate_mics(self.initial_positions, orientation_deg)
+        self.mic_positions = np.r_[self.mic_positions, moved_mic_positions]
+
+    def get_multi_estimate(self):
+        """ Get current estimate
+
+        :return: spectrum of shape (n_frequencies x n_angles)
+        """
+        Rtot = self.get_correlation(self.signals_f_aligned)
+        return self.get_mvdr_spectrum(Rtot, self.frequencies)
