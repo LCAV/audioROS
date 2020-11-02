@@ -1,8 +1,10 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
-convert.py: 
+convert.py:  Convert bag file to csv file. 
+
+This module is deprecated, use topic_writer/convert_all.py instead.
+
 """
 
 import sys
@@ -13,7 +15,6 @@ import launch.substitutions
 import launch_ros.actions
 
 FILENAME = "motors_snr_props_source_45"
-
 LOG_LEVEL = "info"
 DIRNAME = "csv_files/"
 
@@ -27,7 +28,7 @@ def generate_launch_description(filename=FILENAME, dirname=DIRNAME, log_level=LO
             parameters=[{"filename":filename, "dirname":dirname}],
             arguments=[(f"--ros-args --log-level {log_level}")],
         ),
-        # TODO(FD): find out how to set the parameters correctly from the # launch file.  
+        # TODO(FD): find out how to set the parameters correctly from the launch file.  
         # set parameters because above does not work.
         #launch.actions.ExecuteProcess(
         #    cmd=['ros2', 'param', 'set', 'csv_writer', 'filename', filename],

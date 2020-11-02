@@ -29,6 +29,7 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
 from audio_interfaces.msg import Signals
+from audio_interfaces_py.messages import create_signals_message
 
 N_MICS = 4
 
@@ -121,17 +122,8 @@ class AudioPublisher(Node):
             self.get_logger.warn("Did not set mic_positions.")
 
         # publishing
+        msg = create_signals_message(signals, self.mic_positions, self.get_time_ms(), self.Fs)
 
-        msg = Signals()
-        msg.timestamp = self.get_time_ms() 
-        msg.fs = self.Fs
-        msg.n_mics = N_MICS
-        msg.n_buffer = n_buffer
-        msg.signals_vect = list(signals.flatten().astype(float))
-        if self.mic_positions is not None:
-            msg.mic_positions = list(self.mic_positions.flatten().astype(float))
-        else:
-            msg.mic_positions = []
         self.publisher_signals.publish(msg)
 
         if self.time_idx < MAX_BUFFERS:
