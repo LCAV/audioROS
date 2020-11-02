@@ -132,8 +132,8 @@ def create_spectrum_message(spectrum, frequencies, timestamp):
     # TODO(FD) remove this debugging check
     assert msg.n_frequencies == N_FREQS
     msg.n_angles = spectrum.shape[1]
-    msg.frequencies = list(frequencies)
-    msg.spectrum_vect = list(spectrum.flatten())
+    msg.frequencies = list(frequencies.astype(float))
+    msg.spectrum_vect = list(spectrum.astype(float).flatten())
     return msg
 
 

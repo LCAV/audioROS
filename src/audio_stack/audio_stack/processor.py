@@ -41,13 +41,13 @@ METHOD_WINDOW = "tukey"
 
 # Frequency selection
 THRUST = 43000
-MIN_FREQ = 100
-MAX_FREQ = 10000
+MIN_FREQ = 200
+MAX_FREQ = 7000
 DELTA_FREQ = 100
 
-METHOD_FREQUENCY = "none"
+METHOD_FREQUENCY = ""
 METHOD_FREQUENCY_DICT = {
-    "none": {
+    "": {
         "min_freq": MIN_FREQ,
         "max_freq": MAX_FREQ,
         "delta_freq": DELTA_FREQ,
@@ -140,14 +140,8 @@ class Processor(Node):
         self.subscription_signals = self.create_subscription(
             Signals, "audio/signals", self.listener_callback_signals, 10
         )
-        self.subscription_signals_f = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
-        )
         self.publisher_signals_f = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
-        )
-        self.publisher_correlations = self.create_publisher(
-            Correlations, "audio/correlations", 10
         )
 
         self.methods = {
@@ -208,15 +202,14 @@ class Processor(Node):
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
 
-        if self.methods["frequency"] != "":
-            bins = embedded_select_frequencies(
-                msg.n_buffer,
-                msg.fs,
-                buffer_f=signals_f.T,
-                **self.frequency_params,
-            )
-            freqs = freqs[bins]
-            signals_f = signals_f[bins]
+        bins = embedded_select_frequencies(
+            msg.n_buffer,
+            msg.fs,
+            buffer_f=signals_f.T,
+            **self.frequency_params,
+        )
+        freqs = freqs[bins]
+        signals_f = signals_f[bins]
 
         msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, None, msg.fs)
         self.publisher_signals_f.publish(msg_freq)
