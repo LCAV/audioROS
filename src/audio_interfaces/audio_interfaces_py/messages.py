@@ -57,9 +57,10 @@ def create_signals_message(signals, mic_positions, timestamp, fs):
     msg.timestamp = timestamp
     msg.fs = fs 
     msg.n_mics = signals.shape[0]
-    # TODO(FD) remove this debugging check
-    assert msg.n_mics == N_MICS
     msg.n_buffer = signals.shape[1]
+    # this is very unlikely to happen and is
+    # probably due to signals having the wrong shape.
+    assert msg.n_mics < msg.n_buffer 
     msg.signals_vect = list(signals.flatten().astype(float))
     if mic_positions is not None:
         msg.mic_positions = list(mic_positions.flatten().astype(float))

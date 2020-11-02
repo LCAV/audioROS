@@ -37,7 +37,7 @@ SOURCE_POS = [1, 1, 1]  # source position
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
 MAX_BUFFER = 2048  # number of samples in audio buffer
 NUM_REFLECTIONS = 5 # number of reflections to consider in pyroomacoustis.
-FS = 8000  # sampling frequency [Hz]
+FS = 32000  # sampling frequency [Hz]
 
 
 class AudioSimulation(Node):
@@ -51,6 +51,10 @@ class AudioSimulation(Node):
         self.subscription_position = self.create_subscription(
             Pose, "geometry/pose", self.pose_listener_callback, 10
         )
+
+        # TODO(FD) read this from audio_description package (see comment above). 
+        self.mic_positions = MIC_DISTANCE / 2 * np.c_[[1, -1], [-1, -1], [1, 1], [-1, 1]].T # n_mics x 2
+
 
     def pose_listener_callback(self, msg_pose):
         """
@@ -67,28 +71,29 @@ class AudioSimulation(Node):
             [drone_center_rx.x, drone_center_rx.y, drone_center_rx.z]
         )
 
-        microphones = generate_mic_position_array(rotation, drone_center)
-        sim_room = self.simulation(microphones)
+        mic_positions_global = global_mic_positions(self.mic_positions, rotation, drone_center)
+        sim_room = self.simulation(mic_positions_global)
 
         # TODO(FD): for the moment, we send the first non-zero signal at this position, and 
         # we do not take into account the timestamp of the pose. In a more realistic simulation, 
         # we should send the signal that corresponds to the actual current time, given by 
         # the timestamp of the pose. 
-        start_sample = starting_sample_nr(sim_room, microphones)
+        start_sample = starting_sample_nr(sim_room, mic_positions_global)
 
         signal_to_send = np.zeros((N_MICS, MAX_BUFFER), dtype=float)
 
         for i in range(N_MICS):
             signal_to_send[i] = sim_room.mic_array.signals[i][start_sample:start_sample+MAX_BUFFER]
 
-        msg = create_signals_message(signal_to_send, microphones, self.time_idx, sim_room.fs)
+        msg = create_signals_message(signal_to_send, self.mic_positions, self.time_idx, sim_room.fs)
 
         self.publisher_signals.publish(msg)
+
         self.get_logger().info(f"{self.time_idx}: Published audio signal")
         self.time_idx += 1
 
         if self.time_idx >= MAX_TIMESTAMP:
-            self.get_logger().error("timestamp overflow")
+            self.get_logger().warn("timestamp overflow")
             self.time_idx = self.time_idx % MAX_TIMESTAMP
 
 
@@ -101,11 +106,12 @@ class AudioSimulation(Node):
         pyroom_copy.simulate()
         return pyroom_copy
 
+
     def copy_room(self):
         """
         Copy the pyroom attribute of an AudioSimulation object.
         """
-        pyroom_cp = pra.ShoeBox(self.room.shoebox_dim)
+        pyroom_cp = pra.ShoeBox(self.room.shoebox_dim, fs=self.room.fs)
         for i in range(len(self.room.sources)):
             pyroom_cp.add_source(
                 self.room.sources[i].position, signal=self.room.sources[i].signal
@@ -150,21 +156,19 @@ def set_room(room_dim, nr_samples, source_position_list, fs):
     return pyroom
 
 
-def generate_mic_position_array(rotation, drone_center):
+def global_mic_positions(mic_positions, rotation, drone_center):
     """
     Calculate current mic postions based on the drone's pose. 
     """
 
     rot = R.from_quat(rotation)
 
-    # TODO(FD) read this from audio_description package (see comment above). 
-    mic_locs = MIC_DISTANCE / 2 * np.c_[[1, -1], [-1, -1], [1, 1], [-1, 1]].T # n_mics x 2
-    mic_locs = np.c_[mic_locs, np.full(mic_locs.shape[0], HEIGHT_MIC_ARRAY)] 
+    mic_positions_global = np.c_[mic_positions, np.full(mic_positions.shape[0], HEIGHT_MIC_ARRAY)] 
 
-    for i in range(mic_locs.shape[0]):
-        mic_locs[i, :] = rot.apply(mic_locs[i, :] - drone_center) + drone_center
+    for i in range(mic_positions.shape[0]):
+        mic_positions_global[i, :] = rot.apply(mic_positions_global[i, :] - drone_center) + drone_center
 
-    return mic_locs
+    return mic_positions_global
 
 
 def main(args=None):
