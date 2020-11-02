@@ -20,14 +20,19 @@ MIN_XLIM = -math.inf  # set to -inf for no effect.
 
 
 class LivePlotter(object):
-    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM, log=True, label='', max_xlim=MAX_XLIM, min_xlim=MIN_XLIM):
+    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM, log=True, label='', max_xlim=MAX_XLIM, min_xlim=MIN_XLIM, ax=None, fig=None):
         self.max_ylim = max_ylim
         self.min_ylim = min_ylim
         self.max_xlim = max_xlim
         self.min_xlim = min_xlim
         self.log = log
 
-        self.fig, self.ax = plt.subplots()
+        if (fig is None) and (ax is None):
+            self.fig, self.ax = plt.subplots()
+        else:
+            self.fig = fig
+            self.ax = ax
+
         self.fig.canvas.set_window_title(label)
 
         # containers for continuously updated data
@@ -84,8 +89,9 @@ class LivePlotter(object):
             self.arrows[name]['line'] = line
 
         self.ax.legend(loc="upper left")
+
         # without this, the plot does not get updated live.
-        self.fig.canvas.draw()
+        # self.fig.canvas.draw()
 
     def update_lines(self, data_matrix, x_data=None, labels=None, linestyle='-', marker=''):
         """ Plot each row of data_matrix as one line.
@@ -118,9 +124,6 @@ class LivePlotter(object):
         self.reset_xlim()
         self.reset_ylim()
 
-        # without this, the plot does not get updated live.
-        self.fig.canvas.draw()
-
     def update_mesh(self, data_matrix, y_labels=None, name="standard", log=False):
         """ Plot each row of data_matrix in an image. """
         if name in self.meshes.keys():
@@ -147,8 +150,6 @@ class LivePlotter(object):
             yticks = self.ax.get_yticks()
             new_yticks = np.array(y_labels)[yticks[:-1].astype(int)]
             self.ax.set_yticklabels(new_yticks)
-        # without this, the plot does not get updated live.
-        self.fig.canvas.draw()
 
 
     def update_axvlines(self, data_vector, color=None):
@@ -161,7 +162,20 @@ class LivePlotter(object):
                 axvline = self.ax.axvline(xcoord, color=color, ls=":")
                 self.axvlines[i] = axvline
 
-        self.fig.canvas.draw()
+
+    def update_scatter(self, x_data, y_data):
+        """ Plot x_data and y_data as scattered points.
+        """
+        if self.scatter:
+            self.scatter["line"].set_data(x_data, y_data)
+
+        else:
+            (line,) = self.ax.plot(
+                x_data, y_data, linestyle='-', marker='o'
+            )
+            self.scatter["line"] = line
+        self.reset_xlim()
+        self.reset_ylim()
 
 
     def reset_ylim(self):
@@ -188,24 +202,6 @@ class LivePlotter(object):
 
         # update ax.viewLim using new ax.dataLim
         self.ax.set_xlim(xmin_new, xmax_new)
-
-
-    def update_scatter(self, x_data, y_data):
-        """ Plot x_data and y_data as scattered points.
-        """
-        if self.scatter:
-            self.scatter["line"].set_data(x_data, y_data)
-
-        else:
-            (line,) = self.ax.plot(
-                x_data, y_data, linestyle='-', marker='o'
-            )
-            self.scatter["line"] = line
-        self.reset_xlim()
-        self.reset_ylim()
-
-        # without this, the plot does not get updated live.
-        self.fig.canvas.draw()
 
 
 if __name__ == "__main__":
