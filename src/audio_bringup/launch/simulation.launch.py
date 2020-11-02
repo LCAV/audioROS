@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-file.launch.py: Launch the processing pipeline from a prerecorded file. 
+simulation.launch.py: Launch the processing pipeline from simulation. 
 """
 
 import sys
