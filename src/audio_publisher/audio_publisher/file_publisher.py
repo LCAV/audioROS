@@ -22,6 +22,8 @@ GT_DEGREES = 20
 LOUDNESS = "high"
 SOURCE = "white_noise"
 
+N_BUFFER = 2024
+
 class FilePublisher(AudioPublisher):
     def __init__(
         self, file_source, Fs, loop=False, n_buffer=256, publish_rate=None, mic_positions=None
@@ -94,8 +96,6 @@ class FilePublisher(AudioPublisher):
 def main(args=None):
     rclpy.init(args=args)
 
-    n_buffer = 2 ** 10
-
     #file_source = "analytical"
     #file_source = "pyroomacoustics"
     #file_source = "recordings_9_7_20"
@@ -105,13 +105,13 @@ def main(args=None):
     Fs = fp.parameters[file_source]["Fs"]
     mic_positions = fp.parameters[file_source]["mic_positions"]
 
-    publish_rate = int(Fs / n_buffer)  # 11 # in Hz
+    publish_rate = int(Fs / N_BUFFER)  # 11 # in Hz
     print(f"Publishing audio data from file at {publish_rate}Hz.")
         
     publisher = FilePublisher(
         file_source,
         Fs=Fs,
-        n_buffer=n_buffer,
+        n_buffer=N_BUFFER,
         publish_rate=publish_rate,
         loop=True,
         mic_positions=mic_positions,
