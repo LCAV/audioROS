@@ -219,7 +219,7 @@ class Processor(Node):
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(
-                f"listener_callback_signals: Published signals_f after {processing_time:.2f}s"
+                f"listener_callback_signals: Published signals_f after {processing_time:.2e}s"
         )
 
 
