@@ -2,19 +2,19 @@
 # -*- coding: utf-8 -*-
 
 """
-beam_former.py: 
+beam_former.py: Beamformer class for direction-of-arrival (DOA) estimation.
 """
 
 from copy import deepcopy
 import sys
 import os
 
-#current_dir = os.path.dirname(os.path.abspath(__file__))
-#sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
 def rotate_mics(mics, orientation_deg=0):

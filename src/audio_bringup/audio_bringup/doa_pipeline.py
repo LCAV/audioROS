@@ -27,10 +27,6 @@ TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 CSV_DIRNAME = "csv_files/"
 WAV_DIRNAME = "export/"
 
-THRUST = 43000
-DEGREE_LIST = [0] #, 20, 45]
-SOURCE_LIST = ['mono_linear', 'random_linear']
-
 # sound card settings
 DURATION = 30 # seconds
 FS_SOUNDCARD = 44100 # hz
@@ -70,41 +66,20 @@ def get_active_nodes():
 
 
 if __name__ == "__main__":
-    active_nodes = get_active_nodes()
-    assert '/csv_writer' in active_nodes
-    assert '/gateway' in active_nodes
-
-    # calibration:
-    params_list = [
-        {'motors': 0, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
-        {'motors': 0, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
-        {'motors': THRUST, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
-        {'motors': THRUST, 'snr': 0, 'props': 1, 'source':None, 'degree':0},
-        {'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':0},
-        {'motors': THRUST, 'snr': 1, 'props': 1, 'source':None, 'degree':0},
-    ]
-    params_list = [
-        {'motors': 43000, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
-        #{'motors': 0, 'snr': 0, 'props': 0, 'source':'mono_linear', 'degree':0},
-    ]
-    # other experiments: 
-    for degree in DEGREE_LIST:
-        for source in SOURCE_LIST: 
-            params_list += [
-                {'motors': 0, 'snr': 1, 'props': 0, 'source':source, 'degree':degree},
-                {'motors': 0, 'snr': 0, 'props': 0, 'source':source, 'degree':degree},
-                {'motors': THRUST, 'snr': 0, 'props': 0, 'source':source, 'degree':degree},
-                {'motors': THRUST, 'snr': 1, 'props': 0, 'source':source, 'degree':degree},
-                {'motors': THRUST, 'snr': 0, 'props': 1, 'source':source, 'degree':degree},
-                {'motors': THRUST, 'snr': 1, 'props': 1, 'source':source, 'degree':degree},
-            ]
-
     sd = get_usb_soundcard_ubuntu(FS_SOUNDCARD, N_MEAS_MICS)
 
-    extra_dirname = input(f'Enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
+    extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
     exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
     csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
     wav_dirname = os.path.join(exp_dirname, WAV_DIRNAME)
+
+    sys.path.append(exp_dirname)
+    from params import params_list
+    print(f'loaded parameters from {exp_dirname}/params.py')
+
+    active_nodes = get_active_nodes()
+    assert '/csv_writer' in active_nodes
+    assert '/gateway' in active_nodes
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
         if not os.path.exists(dirname):
@@ -117,7 +92,7 @@ if __name__ == "__main__":
     for params in params_list:
         answer = ''
         while not (answer in ['y', 'n']):
-            answer = input(f'Start experiment with {params}? ([y]/n)') or 'y'
+            answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
             continue
 
