@@ -15,14 +15,18 @@ LOG_LEVEL = "warn"
 
 node_config = {
     "file": {
-        "params": [{"n_buffer": 2 ** 8, "publish_rate": 100}],
+        "params": [{"n_buffer": 2048, "publish_rate": 100}],
         "pkg": "audio_publisher",
     },
-    "spectrum_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
     "processor": {
-        "params": [{"noise": "", "frequency": "uniform", "window": "tukey"}],
+        "params": [{"noise": "", "frequency": "uniform", "window": ""}],
         "pkg": "audio_stack",
     },
+    "spectrum_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
+    "doa_estimator": {"pkg": "audio_stack"},
+    "audio": {"pkg": "topic_plotter"},
+    "doa": {"pkg": "topic_plotter"},
+    "geometry": {"pkg": "topic_plotter"},
 }
 
 
