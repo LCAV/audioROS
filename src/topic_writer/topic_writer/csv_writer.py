@@ -42,6 +42,7 @@ class CsvWriter(Node):
           "topic": "audio/signals_f",
           # TODO(FD): can we read these fields automatically?  
           "timestamp": msg.timestamp,
+          "audio_timestamp": msg.audio_timestamp,
           "n_mics": msg.n_mics,
           "n_frequencies": msg.n_frequencies,
           "frequencies": np.array(msg.frequencies),

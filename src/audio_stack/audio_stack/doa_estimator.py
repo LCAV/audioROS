@@ -21,83 +21,30 @@ import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
 from audio_interfaces_py.messages import read_spectrum_message, create_doa_message
-from audio_stack.beam_former import BeamFormer
-from .spectrum_estimator import normalize_rows, combine_rows, NORMALIZE
+from audio_stack.spectrum_estimator import combine_rows, normalize_rows
 
 N_ESTIMATES = 3 # number of peaks to detect
-COMBINATION_N = 5 # number of spectra to combine
-COMBINATION_METHOD = "sum" # way to combine spectra
-
+COMBINATION_METHOD = "sum" # way to combine across frequencies
+NORMALIZE = "zero_to_one"
 
 class DoaEstimator(Node):
     def __init__(self):
         super().__init__("doa_estimator")
 
+        # TODO(FD) create subscribers to other spectrum estimates
         self.subscription_spectrum = self.create_subscription(
-            Spectrum, "audio/spectrum", self.listener_callback_spectrum, 10
+            Spectrum, "audio/spectrum_raw", self.listener_callback_spectrum, 10
         )
-        self.publisher_spectrum = self.create_publisher(
-            Spectrum, "audio/dynamic_spectrum", 10
-        )
+
         self.publisher_doa = self.create_publisher(
             DoaEstimates, "geometry/doa_estimates", 10
         )
-        # all in degrees:
-        self.spectrum_orientation_list = []
-
-        self.beam_former = BeamFormer()
-
-        # create ROS parameters that can be changed from command line.
-        self.combination_n = COMBINATION_N
-        self.combination_method = COMBINATION_METHOD
-        self.declare_parameter("combination_n")
-        self.declare_parameter("combination_method")
-        parameters = [
-            rclpy.parameter.Parameter(
-                "combination_method",
-                rclpy.Parameter.Type.STRING,
-                self.combination_method
-            ),
-            rclpy.parameter.Parameter(
-                "combination_n", 
-                rclpy.Parameter.Type.INTEGER, 
-                self.combination_n 
-            ),
-        ]
-        self.set_parameters_callback(self.set_params)
-        self.set_parameters(parameters)
-
-
-    def set_params(self, params):
-        for param in params:
-            if param.name == "combination_method":
-                self.combination_method = param.get_parameter_value().string_value
-            elif param.name == "combination_n":
-                self.combination_n = param.get_parameter_value().integer_value
-            else:
-                return SetParametersResult(successful=False)
-
-        self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
-        return SetParametersResult(successful=True)
 
     def listener_callback_spectrum(self, msg_spec):
-
         spectrum, *_ = read_spectrum_message(msg_spec)
-        # add latest spectrum and orientation to dynamic estimate
-        self.beam_former.add_to_dynamic_estimates(spectrum, msg_spec.orientation)
-
-        # retrieve current estimate
-        dynamic_spectrum = self.beam_former.get_dynamic_estimate()
-        dynamic_spectrum = normalize_rows(dynamic_spectrum, NORMALIZE)
-
-        # publish
-        msg_new = msg_spec
-        msg_new.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
-        self.publisher_spectrum.publish(msg_new)
-        self.get_logger().info(f"Published dynamic spectrum.")
 
         # calculate and publish doa estimates
-        final_spectrum = combine_rows(dynamic_spectrum, self.combination_method, keepdims=True)
+        final_spectrum = combine_rows(spectrum, COMBINATION_METHOD, keepdims=True)
         final_spectrum = normalize_rows(final_spectrum, NORMALIZE)
 
         angles = np.linspace(0, 360, msg_spec.n_angles)

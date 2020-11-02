@@ -124,7 +124,7 @@ def create_correlations_message(R, freqs, mic_positions, timestamp):
     return msg
 
 
-def create_spectrum_message(spectrum, frequencies, timestamp, orientation):
+def create_spectrum_message(spectrum, frequencies, timestamp):
     """ Create Spectrum message. """
     msg = Spectrum()
     msg.timestamp = timestamp
@@ -132,9 +132,8 @@ def create_spectrum_message(spectrum, frequencies, timestamp, orientation):
     # TODO(FD) remove this debugging check
     assert msg.n_frequencies == N_FREQS
     msg.n_angles = spectrum.shape[1]
-    msg.orientation = float(orientation)
-    msg.frequencies = list(frequencies)
-    msg.spectrum_vect = list(spectrum.flatten())
+    msg.frequencies = list(frequencies.astype(float))
+    msg.spectrum_vect = list(spectrum.astype(float).flatten())
     return msg
 
 

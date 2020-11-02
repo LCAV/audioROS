@@ -1,7 +1,10 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-correlator.py: Calculate correlations based on raw time or frequency signals.
+processor.py: Process raw audio signals and publish frequency bins signals_f 
+
+This is the digital twin of what the microphone board does. 
+Warning: not currently maintained as not actviely used.
 
 """
 
@@ -38,13 +41,13 @@ METHOD_WINDOW = "tukey"
 
 # Frequency selection
 THRUST = 43000
-MIN_FREQ = 100
-MAX_FREQ = 10000
+MIN_FREQ = 200
+MAX_FREQ = 7000
 DELTA_FREQ = 100
 
-METHOD_FREQUENCY = "none"
+METHOD_FREQUENCY = ""
 METHOD_FREQUENCY_DICT = {
-    "none": {
+    "": {
         "min_freq": MIN_FREQ,
         "max_freq": MAX_FREQ,
         "delta_freq": DELTA_FREQ,
@@ -126,25 +129,19 @@ def get_stft(signals, Fs, method_window, method_noise):
     return signals_f, freqs
 
 
-class Correlator(Node):
+class Processor(Node):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
     """
     def __init__(self, plot_freq=False, plot_time=False):
-        super().__init__("correlator")
+        super().__init__("processor")
 
         self.plot_freq = plot_freq
         self.plot_time = plot_time
         self.subscription_signals = self.create_subscription(
             Signals, "audio/signals", self.listener_callback_signals, 10
         )
-        self.subscription_signals_f = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
-        )
         self.publisher_signals_f = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
-        )
-        self.publisher_correlations = self.create_publisher(
-            Correlations, "audio/correlations", 10
         )
 
         self.methods = {
@@ -205,15 +202,14 @@ class Correlator(Node):
             signals, msg.fs, self.methods["window"], self.methods["noise"]
         )  # n_samples x n_mics
 
-        if self.methods["frequency"] != "":
-            bins = embedded_select_frequencies(
-                msg.n_buffer,
-                msg.fs,
-                buffer_f=signals_f.T,
-                **self.frequency_params,
-            )
-            freqs = freqs[bins]
-            signals_f = signals_f[bins]
+        bins = embedded_select_frequencies(
+            msg.n_buffer,
+            msg.fs,
+            buffer_f=signals_f.T,
+            **self.frequency_params,
+        )
+        freqs = freqs[bins]
+        signals_f = signals_f[bins]
 
         msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, None, msg.fs)
         self.publisher_signals_f.publish(msg_freq)
@@ -226,31 +222,15 @@ class Correlator(Node):
                 f"listener_callback_signals: Published signals_f after {processing_time:.2f}s"
         )
 
-    def listener_callback_signals_f(self, msg):
-        t1 = time.time()
-
-        self.mic_positions, signals_f, freqs = read_signals_freq_message(msg)
-        R = self.beam_former.get_correlation(signals_f)
-        msg_new = create_correlations_message(R, freqs, self.mic_positions, msg.timestamp)
-        self.publisher_correlations.publish(msg_new)
-
-        # check that the above processing pipeline does not
-        # take too long compared to the desired publish rate.
-        t2 = time.time()
-        processing_time = t2 - t1
-        self.get_logger().info(
-                f"listener_callback_signals_f: Published correlations after {processing_time:.2f}s"
-        )
-
 
 def main(args=None):
     rclpy.init(args=args)
 
-    correlator = Correlator(plot_freq=True, plot_time=False)
-    rclpy.spin(correlator)
+    processor = Processor(plot_freq=True, plot_time=False)
+    rclpy.spin(processor)
 
     # Destroy the node explicitly
-    correlator.destroy_node()
+    processor.destroy_node()
     rclpy.shutdown()
 
 
