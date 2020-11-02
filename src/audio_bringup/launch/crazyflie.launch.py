@@ -15,11 +15,11 @@ LOG_LEVEL = "warn"
 
 node_config = {
     "gateway": {"params": [], "pkg": "crazyflie_crtp"},
-    "doa_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
-    "correlator": {
-        "params": [{"noise": "", "frequency": "uniform", "window": "tukey"}],
-        "pkg": "audio_stack",
-    },
+    "spectrum_estimator": {"params": [{"bf_method": "mvdr"}], "pkg": "audio_stack"},
+    "doa_estimator": {"pkg": "audio_stack"},
+    "audio": {"pkg": "topic_plotter"},
+    "doa": {"pkg": "topic_plotter"},
+    "geometry": {"pkg": "topic_plotter"},
 }
 
 
