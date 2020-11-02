@@ -3,7 +3,7 @@
 <package format="3">
   <name>audio_stack</name>
   <version>0.0.1</version>
-  <description>Processing of live audio data</description>
+  <description>Processing and plotting of live audio data</description>
   <maintainer email="frederike.duembgen@epfl.ch">duembgen</maintainer>
   <license>Apache License 2.0</license>
 
