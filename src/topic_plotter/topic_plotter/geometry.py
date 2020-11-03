@@ -83,6 +83,7 @@ class GeometryPlotter(Node):
             self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
 
         self.update_plotter("pose raw", self.pose_raw_list, yaw, msg_pose_raw.source_direction_deg)
+        self.plotter_dict["pose raw"].fig.canvas.draw()
 
     # TODO(FD) figure out why the pose_raw topic and pose topic do not yield exactly the same 
     # position estimates.
@@ -100,6 +101,7 @@ class GeometryPlotter(Node):
             self.pose_list = self.pose_list[:, -MAX_LENGTH:]
 
         self.update_plotter("pose", self.pose_list, yaw)
+        self.plotter_dict["pose"].fig.canvas.draw()
 
     def listener_callback_doa(self, msg_doa):
         # plot the doa estimates in 2D plot
@@ -113,6 +115,7 @@ class GeometryPlotter(Node):
             self.plotter_dict["pose raw"].update_arrow(
                 self.pose_raw_list[:, -1], doa_estimate, name=f"doa {i}"
             )
+        self.plotter_dict["pose raw"].fig.canvas.draw()
 
         # calculate the current error 
         message = self.raw_pose_synch.get_latest_message(msg_doa.timestamp, self.get_logger())

@@ -97,7 +97,7 @@ class BeamFormer(object):
         return np.c_[spectrum[:, index:], spectrum[:, :index]]
 
     def init_dynamic_estimate(self, combination_n, combination_method, normalization_method='zero_to_one'):
-        self.spectrum_orientation_list = []
+        self.spectra_shifted = []
         self.combination_n = combination_n
         self.combination_method = combination_method
         self.normalization_method = normalization_method
@@ -108,9 +108,9 @@ class BeamFormer(object):
         :param spectrum: spatial spectrum of shape (n_frequencies, n_angles)
         :param orientation_deg: drone orientation_deg in degrees
         """
-        self.spectrum_orientation_list.append((spectrum, orientation_deg))
-        while len(self.spectrum_orientation_list) > self.combination_n:
-            self.spectrum_orientation_list.pop(0)
+        self.spectra_shifted.append(self.shift_spectrum(spectrum, -orientation_deg))
+        while len(self.spectra_shifted) > self.combination_n:
+            self.spectra_shifted.pop(0)
 
     def get_dynamic_estimate(self):
         """ Get current estimate
@@ -118,19 +118,10 @@ class BeamFormer(object):
         :return: spectrum estimate of shape (n_angles,)
         """
         from audio_stack.spectrum_estimator import combine_rows, normalize_rows
+        if len(self.spectra_shifted) < self.combination_n:
+            print(f"Warning: using only {len(self.spectra_shifted)}/{self.combination_n} spectra")
 
-        # the combined spectrum is going to be in the coordinate frame of the earliest 
-        # spectrum.
-        spectra_shifted = [self.spectrum_orientation_list[0][0]]  
-        o_ref = self.spectrum_orientation_list[0][1]
-
-        if len(self.spectrum_orientation_list) < self.combination_n:
-            print(f"Warning: using only {len(self.spectrum_orientation_list)}/{self.combination_n}")
-
-        for spectrum, orientation in self.spectrum_orientation_list[1:]:
-            spectra_shifted.append(self.shift_spectrum(spectrum, o_ref - orientation))
-
-        spectra_shifted = normalize_rows(spectra_shifted, method=self.normalization_method)
+        spectra_shifted = normalize_rows(self.spectra_shifted, method=self.normalization_method)
         return combine_rows(spectra_shifted, self.combination_method, keepdims=False) # n_frequencies x n_angles
 
     def init_multi_estimate(self, frequencies):
