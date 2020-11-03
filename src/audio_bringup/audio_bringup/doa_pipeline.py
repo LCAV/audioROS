@@ -19,6 +19,7 @@ sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 
+
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_14_static_new'
 #EXTRA_DIRNAME = '2020_10_30_dynamic_test'
@@ -84,8 +85,8 @@ if __name__ == "__main__":
     # reset the csv writer
     timestamp = int(time.time())
     for params in params_list:
-        answer = ''
-        #answer = 'y'
+        #answer = ''
+        answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
