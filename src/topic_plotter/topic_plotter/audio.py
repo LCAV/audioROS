@@ -28,21 +28,24 @@ class AudioPlotter(Node):
             Signals, "audio/signals", self.listener_callback_signals, 10
         )
 
-        self.fig, self.ax = plt.subplots()
-        self.axs = {}
+        self.fig, axs = plt.subplots(2)
+        self.axs = {
+            "signals frequency": axs[0],
+            "signals time": axs[1]
+        }
+        self.fig.set_size_inches(7, 10)
         self.plotter_dict = {}
         self.current_n_buffer = None
         self.current_n_frequencies = None
 
 
     def init_plotter(self, name, xlabel='x', ylabel='y', log=True, ymin=-np.inf, ymax=np.inf, xmin=-np.inf, xmax=np.inf):
+
         if not (name in self.plotter_dict.keys()):
-            self.axs[name] = self.fig.add_subplot(self.ax)
             self.plotter_dict[name] = LivePlotter(ymax, ymin, label=name, log=log, max_xlim=xmax, min_xlim=xmin, ax=self.axs[name], fig=self.fig)
             self.plotter_dict[name].ax.set_xlabel(xlabel)
             self.plotter_dict[name].ax.set_ylabel(ylabel)
 
-        self.fig.set_size_inches(7, 5*len(self.plotter_dict))
 
     def listener_callback_signals_f(self, msg):
         self.init_plotter("signals frequency", 
