@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='duembgen',
     maintainer_email='frederike.duembgen@epfl.ch',
-    description='Write topics to csv file',
-    license='Apache License 2.0',
+    description='TODO: Package description',
+    license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
