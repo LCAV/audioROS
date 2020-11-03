@@ -152,10 +152,7 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
 def evaluate_data(fname=""):
     duration = DURATION_SEC * 1e3  # miliseconds
 
-    # TODO(FD) will be read from the topic in the future
-    mic_d = 0.108  # distance between mics (meters)
-    mic_positions = mic_d / 2 * np.c_[[1, 1], [1, -1], [-1, 1], [-1, -1]].T
-    beam_former = BeamFormer(mic_positions=mic_positions)
+    beam_former = None 
 
     result_df = pd.DataFrame(
         columns=[
@@ -191,6 +188,13 @@ def evaluate_data(fname=""):
         for i, row in df.iterrows():
             signals_f = row.signals_f
             freqs = row.frequencies
+            if (beam_former is None) and ('mic_positions' in row.index): 
+                beam_former = BeamFormer(mic_positions=row.mic_positions)
+                print("Created beamformer with published mic_positions.")
+            elif beam_former is None:
+                from crazyflie_description_py.parameters import MIC_POSITIONS
+                beam_fomer = BeamFormer(mic_positions=np.array(MIC_POSITIONS))
+                print("Created beamformer from crazyflie_description_py.")
 
             arg_idx = np.argsort(freqs)
             freqs = freqs[arg_idx]
@@ -237,5 +241,6 @@ def evaluate_data(fname=""):
 
 
 if __name__ == "__main__":
-    fname = f"{RES_DIRNAME}/static_spectra.pkl"
+    #fname = f"{RES_DIRNAME}/static_spectra.pkl"
+    fname = ""
     result_df = evaluate_data(fname)
