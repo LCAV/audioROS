@@ -10,34 +10,35 @@ import launch.actions
 import launch.substitutions
 import launch_ros.actions
 
-LOG_LEVEL = "warn"
+LOG_LEVEL = "info"
 
+TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 
-def get_launch_description(node_config, log_level=LOG_LEVEL):
-    return launch.LaunchDescription(
-        [
-            launch.actions.DeclareLaunchArgument(
-                "node_prefix",
-                default_value=[launch.substitutions.EnvironmentVariable("USER"), "_"],
-                description="Prefix for node names",
-            ),
-            *[
-                launch_ros.actions.Node(
-                    package=dict_["pkg"],
-                    node_executable=executable,
-                    output="screen",
-                    node_name=[
-                        launch.substitutions.LaunchConfiguration("node_prefix"),
-                        f"name_{executable}",
-                    ],
-                    parameters=dict_.get("params", []),
-                    # TODO not deprecated but doesn't work
-                    # arguments=[(f'--ros-args --log-level {str.upper(log_level)}')])
-                    # TODO deprecated but works
-                    arguments=[(f"__log_level:={log_level}")],
-                )
-                for executable, dict_ in node_config.items()
-            ],
-        ]
-    )
+def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
+    logger = launch.substitutions.LaunchConfiguration("log_level")
+    launch_arguments = [
+        launch.actions.DeclareLaunchArgument(
+                "log_level",
+                default_value=[log_level],
+                description="Logging level",
+        )
+    ]
 
+    if bag_filename != "":
+        launch_arguments.append(
+                launch.actions.ExecuteProcess(
+                    cmd=['ros2', 'bag', 'record', '-o'] + TOPICS_TO_RECORD,
+                    output='screen'
+                    )
+        )
+    launch_arguments += [
+        launch_ros.actions.Node(
+            package=dict_["pkg"],
+            node_executable=executable,
+            output="screen",
+            parameters=dict_.get("params", []),
+            arguments=['--ros-args', '--log-level', logger],
+        )
+        for executable, dict_ in node_config.items()
+    ]
+    return launch.LaunchDescription(launch_arguments)
