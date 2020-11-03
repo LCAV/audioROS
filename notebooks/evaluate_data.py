@@ -1,5 +1,6 @@
 import itertools
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -7,29 +8,70 @@ import pandas as pd
 from audio_stack.spectrum_estimator import combine_rows, normalize_rows
 from audio_stack.beam_former import BeamFormer
 
-#EXP_NAME = "2020_09_17_white-noise-static"
+EXP_NAME = "2020_09_17_white-noise-static"
 #EXP_NAME = "2020_10_14_static"
-EXP_NAME = "2020_10_14_static_new"
-CSV_DIRNAME = f"../experiments/{EXP_NAME}/csv_files"
-WAV_DIRNAME = f"../experiments/{EXP_NAME}/export"
-RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
-FS = 32000
-DURATION_SEC = 30 # duration before end to be kept
+#EXP_NAME = "2020_10_14_static_new"
+#EXP_NAME = "2020_10_30_dynamic"
 
-degree_list = [0]# 20, 45]
+RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
+
+sys.path.append(f"../experiments/{EXP_NAME}/")
+from params import global_params, SOURCE_LIST, DEGREE_LIST
+
+FS = 32000
+DURATION_SEC = global_params['duration'] # duration before end to be kept
+
+# expeirments
+source_list = SOURCE_LIST
+degree_list = DEGREE_LIST
 props_list = [True, False]
 snr_list = [True, False]
 motors_list = [True, False]
+
+# results
 combine_list = ["product", "sum"]
 normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
-source_list=["mono_linear", "random_linear"]
 
-def read_df(degree=0, props=True, snr=True, motors=True, source=True):
+def get_fname(degree, props, snr, motors, source):
+    ending = "" if degree == 0 else f"_{degree}"
+    props_flag = "" if props else "no"
+    motors_flag = "" if motors else "no"
+    if source == "None":
+        source_flag = "nosource"
+    elif source == True:
+        source_flag = "source"
+    elif source == False:
+        source_flag = "nosource"
+    elif source is None:
+        source_flag = "None"
+    else:
+        source_flag = source
+    snr_flag = "" if snr else "no"
+    return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
+
+
+def get_fname_old(degree, props, snr, motors, source):
+    ending = "" if degree == 0 else f"_{degree}"
+    props_flag = "" if props else "no"
+    motors_flag = "" if motors else "no"
+    if (source == None) or (source == False):
+        source_flag = "nosource"
+    else:
+        source_flag = "source"
+    snr_flag = "" if snr else "no"
+    return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
+
+
+def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
     def convert_audio(row):
-        arrays = ["signals_real_vect", "signals_imag_vect", "frequencies"]
-        ints = ["n_mics", "n_frequencies", "timestamp"]
+        arrays = ["signals_real_vect", "signals_imag_vect", "frequencies", "mic_positions"]
+        ints = ["n_mics", "n_frequencies", "timestamp", "audio_timestamp"]
+
+        arrays = [a for a in arrays if a in row.index]
+        ints = [i for i in ints if i in row.index]
         for array_name in arrays:
+            
             row[array_name] = np.fromstring(
                 row[array_name].replace("[", "").replace("]", ""),
                 sep=" ",
@@ -39,25 +81,22 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True):
         for int_name in ints:
             row[int_name] = int(row[int_name])
 
-        signals_f = row.signals_real_vect + 1j * row.signals_imag_vect
-        signals_f = signals_f.reshape((row.n_mics, row.n_frequencies))
-        row["signals_f"] = signals_f
+        if 'signals_real_vect' in row.index:
+            signals_f = row.signals_real_vect + 1j * row.signals_imag_vect
+            signals_f = signals_f.reshape((row.n_mics, row.n_frequencies))
+            row["signals_f"] = signals_f
+
+        if 'mic_positions' in row.index: 
+            mic_positions = row.mic_positions.reshape((row.n_mics, -1))
+            row["mic_positions"] = mic_positions
         return row
 
-    ending = "" if degree == 0 else f"_{degree}"
-    props_flag = "" if props else "no"
-    motors_flag = "" if motors else "no"
-    source_flag = "source" if source==True else source
-    if source == True:
-        source_flag = "source"
-    elif source == False:
-        source_flag = "nosource"
-    elif source is None:
-        source_flag = "None"
+    CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
+    if exp_name == "2020_09_17_white-noise-static":
+        filename = get_fname_old(degree, props, snr, motors, source)
     else:
-        source_flag = source
-    snr_flag = "" if snr else "no"
-    fname = f"{CSV_DIRNAME}/{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}.csv"
+        filename = get_fname(degree, props, snr, motors, source)
+    fname = f"{CSV_DIRNAME}/{filename}.csv"
     df = pd.read_csv(fname)
     print('read', fname)
     df_audio = df.loc[df.topic=='audio/signals_f']
@@ -66,8 +105,29 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True):
 
     if 'source_direction-deg' in df.columns:
         df.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
-    df_pose = df.loc[df.topic=='geometry/pose_raw', ['dx', 'dy', 'yaw_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']]
+
+    pose_columns = [p for p in ['dx', 'dy', 'yaw_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']
+                    if p in df.columns]
+    df_pose = df.loc[df.topic=='geometry/pose_raw', pose_columns]
     return df_audio, df_pose
+
+
+def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
+    from scipy.signal import stft
+    from scipy.io import wavfile
+
+    WAV_DIRNAME = f"../experiments/{exp_name}/export"
+    filename = get_fname(degree, props, snr, motors, source)
+    fname = f"{WAV_DIRNAME}/{filename}.wav"
+
+    fs, source_data = wavfile.read(fname)
+    
+    n_buffer = 1024
+    
+    f, t, source_stft = stft(source_data, fs, nperseg=n_buffer, axis=0)
+    mask = (f > 200) & (f < 7000)
+    source_stft = source_stft[mask, :]
+    return f[mask], t, source_stft
 
 
 def get_spectrogram(df):

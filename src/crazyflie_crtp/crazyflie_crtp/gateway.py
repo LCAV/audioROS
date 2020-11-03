@@ -17,6 +17,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from reader_crtp import ReaderCRTP
 
+from crazyflie_crtp.parameters import MIC_POSITIONS, N_MICS, FS, N
+
 logging.basicConfig(level=logging.ERROR)
 id = "radio://0/80/2M"
 #id = "radio://0/48/2M"
@@ -24,10 +26,6 @@ id = "radio://0/80/2M"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
-
-N_MICS = 4
-FS = 32000
-N = 2048
 
 # Crazyflie audio parameters that can be set from here.
 AUDIO_PARAMETERS_TUPLES = [
@@ -51,11 +49,10 @@ MOTOR_PARAMETERS_TUPLES = [
 
 
 class Gateway(Node):
-    def __init__(self, reader_crtp, mic_positions=None):
+    def __init__(self, reader_crtp):
         super().__init__("gateway")
 
         self.start_time = time.time()
-        self.mic_positions = mic_positions
 
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
@@ -140,7 +137,7 @@ class Gateway(Node):
             self.get_logger().warn(f"mic 2 {abs_signals_f[2, :5]}")
             self.get_logger().warn(f"mic 3 {abs_signals_f[3, :5]}")
 
-        msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
+        msg = create_signals_freq_message(signals_f.T, frequencies, MIC_POSITIONS, 
                 self.reader_crtp.audio_dict["timestamp"], self.reader_crtp.audio_dict["audio_timestamp"], FS)
         self.publisher_signals.publish(msg)
 
@@ -217,14 +214,11 @@ def main(args=None):
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
 
-    mic_d = 0.108  # distance between mics (meters)
-    mic_positions = mic_d / 2 * np.c_[[1, 1], [1, -1], [-1, 1], [-1, -1]].T
-
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         # set_thrust(cf, 43000)
         reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion)
-        publisher = Gateway(reader_crtp, mic_positions=mic_positions)
+        publisher = Gateway(reader_crtp)
         print("done initializing")
 
         try:
