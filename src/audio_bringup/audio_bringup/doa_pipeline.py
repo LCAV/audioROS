@@ -24,7 +24,7 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_30_dynamic_test'
 #EXTRA_DIRNAME = '2020_10_30_dynamic'
 #EXTRA_DIRNAME = '2020_10_30_dynamic_move'
-EXTRA_DIRNAME = 'test'
+EXTRA_DIRNAME = '2020_11_03_sweep'
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
@@ -38,6 +38,7 @@ def get_filename(**params):
     ending = "" if params.get("degree") == 0 else f"_{params.get('degree')}"
     fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
     return fname
+
 
 def set_param(node_name, param_name, param_value):
     param_pid = subprocess.Popen(['ros2', 'param', 'set', node_name, param_name, param_value], stdout=subprocess.PIPE)
@@ -84,6 +85,7 @@ if __name__ == "__main__":
     timestamp = int(time.time())
     for params in params_list:
         answer = ''
+        #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
@@ -124,7 +126,6 @@ if __name__ == "__main__":
             sys.exit()
 
         # set thrust (or start hover)
-        # ros2 param set /gateway all 43000 
         if not set_param('/gateway', 'all', str(params['motors'])):
             sys.exit()
 
@@ -161,12 +162,10 @@ if __name__ == "__main__":
         bag_pid.send_signal(signal.SIGINT)
 
         # record the csv file
-        if not set_param('/csv_writer', 'filename', csv_filename):
-            sys.exit()
+        set_param('/csv_writer', 'filename', csv_filename)
 
         # set thrust to 0 (or stop hover)
-        if not set_param('/gateway', 'all', '0'):
-            sys.exit()
+        set_param('/gateway', 'all', '0')
 
         # save wav file.
         if global_params['n_meas_mics'] > 0:

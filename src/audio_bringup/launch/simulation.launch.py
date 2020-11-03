@@ -11,7 +11,7 @@ import launch
 
 from audio_bringup.helpers import get_launch_description
 
-LOG_LEVEL = "warn"
+LOG_LEVEL = "info"
 
 node_config = {
     "crazyflie": {"pkg": "audio_simulation"},

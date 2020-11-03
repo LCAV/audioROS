@@ -47,6 +47,9 @@ MOTOR_PARAMETERS_TUPLES = [
     ("enable", rclpy.Parameter.Type.INTEGER, 0),
 ]
 
+# TODO(FD) figure out from where we can read this
+SOURCE_DIRECTION_DEG = 90.0
+
 
 class Gateway(Node):
     def __init__(self, reader_crtp):
@@ -149,6 +152,7 @@ class Gateway(Node):
         timestamp = self.reader_crtp.motion_dict["timestamp"]
 
         msg_pose_raw = create_pose_raw_message(motion_dict, timestamp)
+        msg_pose_raw.source_direction_deg = SOURCE_DIRECTION_DEG
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         msg_pose = create_pose_message(motion_dict, 
