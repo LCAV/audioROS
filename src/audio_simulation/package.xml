@@ -7,11 +7,11 @@
   <maintainer email="emiliaszym@gmail.com">emilia-szymanska</maintainer>
   <license>Apache License 2.0</license>
   
-  <depend>pyroomacoustics</depend>
-
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
+
+  <exec_depend>pyroomacoustics</exec_depend>
+  <exec_depend>python-numpy</exec_depend>
+  <exec_depend>python-scipy</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

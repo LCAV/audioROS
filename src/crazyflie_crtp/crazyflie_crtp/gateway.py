@@ -17,7 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from reader_crtp import ReaderCRTP
 
-from crazyflie_crtp.parameters import MIC_POSITIONS, N_MICS, FS, N
+from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
 id = "radio://0/80/2M"
@@ -113,7 +113,7 @@ class Gateway(Node):
         assert n_frequencies == len(signals_f_vect) / (N_MICS * 2), \
             f"{n_frequencies} does not match {len(signals_f_vect)}"
 
-        all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
+        all_frequencies = np.fft.rfftfreq(n=N_BUFFER, d=1/FS)
 
         if len(set(fbins)) < len(fbins):
             self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
@@ -137,7 +137,8 @@ class Gateway(Node):
             self.get_logger().warn(f"mic 2 {abs_signals_f[2, :5]}")
             self.get_logger().warn(f"mic 3 {abs_signals_f[3, :5]}")
 
-        msg = create_signals_freq_message(signals_f.T, frequencies, MIC_POSITIONS, 
+        mic_positions_arr = np.array(MIC_POSITIONS)
+        msg = create_signals_freq_message(signals_f.T, frequencies, mic_positions_arr, 
                 self.reader_crtp.audio_dict["timestamp"], self.reader_crtp.audio_dict["audio_timestamp"], FS)
         self.publisher_signals.publish(msg)
 
