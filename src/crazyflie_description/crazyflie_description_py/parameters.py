@@ -12,3 +12,4 @@ MIC_POSITIONS = [[MIC_D / 2 * m for m in mics] for mics in MIC_POSITIONS_UNIT] #
 N_MICS = 4 # number of mics
 FS = 32000 # sampling frequency [Hz]
 N_BUFFER = 2048 # number of samples in audio buffer
+FFTSIZE = 32 # number of frequency bins that are sent. 
