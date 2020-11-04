@@ -9,7 +9,7 @@ global_params = {
 
 THRUST = 43000
 SOURCE_LIST = ['sweep', 'mono_linear']
-DEGREE = 90
+DEGREE = 0
 
 # calibration:
 params_list = [
