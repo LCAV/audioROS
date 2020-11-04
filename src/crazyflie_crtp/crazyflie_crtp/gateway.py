@@ -27,6 +27,8 @@ id = "radio://0/80/2M"
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
+# TODO(FD) make sure that we overwrite these parameters
+# from a params.yaml file when we start (for better tractability)
 # Crazyflie audio parameters that can be set from here.
 AUDIO_PARAMETERS_TUPLES = [
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
@@ -47,7 +49,7 @@ MOTOR_PARAMETERS_TUPLES = [
     ("enable", rclpy.Parameter.Type.INTEGER, 0),
 ]
 
-# TODO(FD) figure out from where we can read this
+# TODO(FD) figure out from where we can read this. Make it a parameter? 
 SOURCE_DIRECTION_DEG = 90.0
 
 

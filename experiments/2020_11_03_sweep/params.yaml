@@ -1,0 +1,15 @@
+gateway:
+  __ros_parameters:
+    send_audio_enable : 1
+    min_freq : 200
+    max_freq : 7000
+    delta_freq : 100
+    n_average : 5
+    filter_snr_enable : 0
+    filter_prop_enable : 0
+    all : 0
+    m1 : 0
+    m2 : 0
+    m3 : 0
+    m4 : 0
+    enable : 0
