@@ -29,6 +29,9 @@ def rotate_mics(mics, orientation_deg=0):
     return mics_rotated.T
 
 class BeamFormer(object):
+    # TODO(FD): make this somewhat more flexible
+    theta_scan = np.linspace(0, 360, 181) * np.pi / 180.0
+
     def __init__(self, mic_positions=None):
         """
         :param mic_positions: array of mic positions, n_mics x dimension
@@ -38,8 +41,7 @@ class BeamFormer(object):
         if mic_positions is not None:
             self.n_mics = mic_positions.shape[0]
 
-        # TODO(FD): theta_scan 
-        self.theta_scan = np.linspace(0, 360, 181) * np.pi / 180.0
+        self.theta_scan = BeamFormer.theta_scan
 
     def get_mvdr_spectrum(self, R, frequencies_hz, mic_positions=None):
         """ Get MVDR spatial spectrum.
