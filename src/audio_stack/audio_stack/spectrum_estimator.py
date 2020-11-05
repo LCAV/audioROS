@@ -84,6 +84,7 @@ class SpectrumEstimator(Node):
 
         self.publisher_spectrum_raw = self.create_publisher(Spectrum, "audio/spectrum_raw", 10)
         self.publisher_spectrum_combined = self.create_publisher(Spectrum, "audio/spectrum_combined", 10)
+        self.publisher_spectrum_multi = self.create_publisher(Spectrum, "audio/spectrum_multi", 10)
 
         self.beam_former = None
 
@@ -168,7 +169,7 @@ class SpectrumEstimator(Node):
         processing_time = t2 - t1
         self.get_logger().info(f"Published raw spectrum after {processing_time:.2f}s.")
 
-        #### delayed specra
+        #### multi-spectra
         #TODO(FD) fill in 
 
         #### combined specra

@@ -3,12 +3,9 @@ crazyflie.py: Publish simulated audio signals for the Crazyflie drone in a room.
 
 """
 
-import copy as cp
 import os
 import sys
-import math
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pyroomacoustics as pra
 from scipy.spatial.transform import Rotation as R
@@ -17,34 +14,27 @@ from scipy.io import wavfile
 import rclpy
 from rclpy.node import Node
 
+from geometry_msgs.msg import Pose
+
 from audio_interfaces.msg import Signals
 from audio_interfaces_py.messages import create_signals_message
-from geometry_msgs.msg import Pose
-from std_msgs.msg import String
+from crazyflie_description_py.parameters import MIC_POSITIONS, FS, N_BUFFER, N_MICS, HEIGHT_MIC_ARRAY
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from signals import generate_signal_random
 
-# TODO(FD) make sure that this is consistent with the rest of the audio processing
-# pipeline. Probably we want to add an extra package with the physical parameters
-# of the audio deck, for example in "audio_description".  
-N_MICS = 4  # number of microphones on Crazyflie
-MIC_DISTANCE = 0.108  # distance between microphones
-HEIGHT_MIC_ARRAY = 0.0 # height of mic array with respect to drone center (in meters)
 
 ROOM_DIM = [2, 2, 2]  # room dimensions
 SOURCE_POS = [1, 1, 1]  # source position
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
-MAX_BUFFER = 2048  # number of samples in audio buffer
 NUM_REFLECTIONS = 5 # number of reflections to consider in pyroomacoustis.
-FS = 32000  # sampling frequency [Hz]
 
 
 class AudioSimulation(Node):
     def __init__(self):
         super().__init__("audio_simulation")
 
-        self.room = set_room(ROOM_DIM, MAX_BUFFER, [SOURCE_POS,], FS)
+        self.room = set_room(ROOM_DIM, N_BUFFER, [SOURCE_POS,], FS)
         self.time_idx = 0
 
         self.publisher_signals = self.create_publisher(Signals, "audio/signals", 10)
@@ -52,8 +42,7 @@ class AudioSimulation(Node):
             Pose, "geometry/pose", self.pose_listener_callback, 10
         )
 
-        # TODO(FD) read this from audio_description package (see comment above). 
-        self.mic_positions = MIC_DISTANCE / 2 * np.c_[[1, -1], [-1, -1], [1, 1], [-1, 1]].T # n_mics x 2
+        self.mic_positions = np.array(MIC_POSITIONS)
 
 
     def pose_listener_callback(self, msg_pose):
@@ -80,10 +69,10 @@ class AudioSimulation(Node):
         # the timestamp of the pose. 
         start_sample = starting_sample_nr(sim_room, mic_positions_global)
 
-        signal_to_send = np.zeros((N_MICS, MAX_BUFFER), dtype=float)
+        signal_to_send = np.zeros((N_MICS, N_BUFFER), dtype=float)
 
         for i in range(N_MICS):
-            signal_to_send[i] = sim_room.mic_array.signals[i][start_sample:start_sample+MAX_BUFFER]
+            signal_to_send[i] = sim_room.mic_array.signals[i][start_sample:start_sample+N_BUFFER]
 
         msg = create_signals_message(signal_to_send, self.mic_positions, self.time_idx, sim_room.fs)
 

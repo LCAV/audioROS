@@ -17,6 +17,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from reader_crtp import ReaderCRTP
 
+from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
+
 logging.basicConfig(level=logging.ERROR)
 id = "radio://0/80/2M"
 #id = "radio://0/48/2M"
@@ -25,10 +27,8 @@ id = "radio://0/80/2M"
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
-N_MICS = 4
-FS = 32000
-N = 2048
-
+# TODO(FD) make sure that we overwrite these parameters
+# from a params.yaml file when we start (for better tractability)
 # Crazyflie audio parameters that can be set from here.
 AUDIO_PARAMETERS_TUPLES = [
     ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
@@ -49,13 +49,15 @@ MOTOR_PARAMETERS_TUPLES = [
     ("enable", rclpy.Parameter.Type.INTEGER, 0),
 ]
 
+# TODO(FD) figure out from where we can read this. Make it a parameter? 
+SOURCE_DIRECTION_DEG = 90.0
+
 
 class Gateway(Node):
-    def __init__(self, reader_crtp, mic_positions=None):
+    def __init__(self, reader_crtp):
         super().__init__("gateway")
 
         self.start_time = time.time()
-        self.mic_positions = mic_positions
 
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
@@ -116,7 +118,7 @@ class Gateway(Node):
         assert n_frequencies == len(signals_f_vect) / (N_MICS * 2), \
             f"{n_frequencies} does not match {len(signals_f_vect)}"
 
-        all_frequencies = np.fft.rfftfreq(n=N, d=1/FS)
+        all_frequencies = np.fft.rfftfreq(n=N_BUFFER, d=1/FS)
 
         if len(set(fbins)) < len(fbins):
             self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
@@ -140,7 +142,8 @@ class Gateway(Node):
             self.get_logger().warn(f"mic 2 {abs_signals_f[2, :5]}")
             self.get_logger().warn(f"mic 3 {abs_signals_f[3, :5]}")
 
-        msg = create_signals_freq_message(signals_f.T, frequencies, self.mic_positions, 
+        mic_positions_arr = np.array(MIC_POSITIONS)
+        msg = create_signals_freq_message(signals_f.T, frequencies, mic_positions_arr, 
                 self.reader_crtp.audio_dict["timestamp"], self.reader_crtp.audio_dict["audio_timestamp"], FS)
         self.publisher_signals.publish(msg)
 
@@ -151,6 +154,7 @@ class Gateway(Node):
         timestamp = self.reader_crtp.motion_dict["timestamp"]
 
         msg_pose_raw = create_pose_raw_message(motion_dict, timestamp)
+        msg_pose_raw.source_direction_deg = SOURCE_DIRECTION_DEG
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         msg_pose = create_pose_message(motion_dict, 
@@ -217,14 +221,11 @@ def main(args=None):
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
 
-    mic_d = 0.108  # distance between mics (meters)
-    mic_positions = mic_d / 2 * np.c_[[1, 1], [1, -1], [-1, 1], [-1, -1]].T
-
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         # set_thrust(cf, 43000)
         reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion)
-        publisher = Gateway(reader_crtp, mic_positions=mic_positions)
+        publisher = Gateway(reader_crtp)
         print("done initializing")
 
         try:
