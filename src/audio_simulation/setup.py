@@ -4,7 +4,7 @@ package_name = 'audio_simulation'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='0.0.1',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'simulation = audio_simulation.simulation:main',
+            'crazyflie = audio_simulation.crazyflie:main',
+            'constant_pose_publisher = audio_simulation.constant_pose_publisher:main',
         ],
     },
 )
