@@ -93,7 +93,7 @@ def inner_loop(mics_drone, degrees, times_noisy, signals_f_list, signals_f_multi
         spectrum_multimic = beam_former.get_das_spectrum(R_multimic, frequencies)
 
     ## combined spectrum
-    beam_former = BeamFormer(mic_positions=mics_clean[0])
+    beam_former = BeamFormer(mic_positions=mics_drone)
     Rs = [beam_former.get_correlation(sig_f) for sig_f in signals_f_list]
     if use_mvdr:
         spectra = [beam_former.get_mvdr_spectrum(R, frequencies) for R in Rs]
@@ -113,9 +113,11 @@ def inner_loop(mics_drone, degrees, times_noisy, signals_f_list, signals_f_multi
         beam_former.add_to_multi_estimate(sig_f, frequencies, time, degrees[i])
     Rtot = beam_former.get_correlation(beam_former.signals_f_aligned)
     if use_mvdr:
-        spectrum_raw = beam_former.get_mvdr_spectrum(Rtot, beam_former.frequencies)
+        spectrum_raw = beam_former.get_mvdr_spectrum(Rtot, beam_former.frequencies, 
+                                                     beam_former.multi_mic_positions)
     else:
-        spectrum_raw = beam_former.get_das_spectrum(Rtot, beam_former.frequencies)
+        spectrum_raw = beam_former.get_das_spectrum(Rtot, beam_former.frequencies, 
+                                                    beam_former.multi_mic_positions)
     return spectrum_combined, spectrum_raw, spectrum_multimic
 
 if __name__ == "__main__":
