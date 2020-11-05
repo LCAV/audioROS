@@ -27,7 +27,7 @@ def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
     if bag_filename != "":
         launch_arguments.append(
                 launch.actions.ExecuteProcess(
-                    cmd=['ros2', 'bag', 'record', '-o'] + TOPICS_TO_RECORD,
+                    cmd=['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD,
                     output='screen'
                     )
         )
