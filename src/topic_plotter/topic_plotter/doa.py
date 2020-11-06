@@ -7,7 +7,7 @@ import matplotlib.pylab as plt
 from audio_interfaces.msg import Spectrum, PoseRaw
 from audio_interfaces_py.messages import read_spectrum_message
 
-from audio_stack.spectrum_estimator import normalize_rows, combine_rows
+from audio_stack.beam_former import normalize_rows, combine_rows
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 

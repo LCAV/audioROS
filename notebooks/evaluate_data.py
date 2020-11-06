@@ -5,8 +5,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from audio_stack.spectrum_estimator import combine_rows, normalize_rows
-from audio_stack.beam_former import BeamFormer
+from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
 
 EXP_NAME = "2020_09_17_white-noise-static"
 #EXP_NAME = "2020_10_14_static"
