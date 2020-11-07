@@ -177,12 +177,7 @@ class BeamFormer(object):
         spectra_aligned = normalize_rows(self.spectra_aligned, method=self.params['dynamic']['normalization_method'])
         return combine_rows(spectra_aligned, self.params['dynamic']['combination_method'], keepdims=False) # n_frequencies x n_angles
 
-    def init_multi_estimate(self, frequencies):
-        self.frequencies = frequencies
-        self.signals_f_aligned = np.empty((len(frequencies), 0)) 
-        self.multi_mic_positions = np.empty((0, self.mic_positions.shape[1]))
-
-    def init_multi_estimate_new(self, frequencies, combination_n):
+    def init_multi_estimate(self, frequencies, combination_n):
         self.frequencies_multi = frequencies
         self.signals_f_aligned_new = np.full((len(frequencies), combination_n * self.mic_positions.shape[0]), np.nan, dtype=np.complex)
         self.multi_mic_positions_new = np.full((combination_n * self.mic_positions.shape[0], self.mic_positions.shape[1]), np.nan)
@@ -192,18 +187,6 @@ class BeamFormer(object):
         )
 
     def add_to_multi_estimate(self, signals_f, frequencies, time_sec, orientation_deg):
-        np.testing.assert_allclose(frequencies, self.frequencies)
-
-        # delay the signals according to recording times
-        exp_factor = np.exp(1j * 2 * np.pi * frequencies * time_sec)
-        signals_f_aligned = np.multiply(signals_f, exp_factor[:, np.newaxis])  # frequencies x n_mics
-        self.signals_f_aligned = np.c_[self.signals_f_aligned, signals_f_aligned]
-
-        # add the new microphone position according to "orientation" 
-        moved_mic_positions = rotate_mics(self.mic_positions, orientation_deg)
-        self.multi_mic_positions = np.r_[self.multi_mic_positions, moved_mic_positions]
-
-    def add_to_multi_estimate_new(self, signals_f, frequencies, time_sec, orientation_deg):
         np.testing.assert_allclose(frequencies, self.frequencies_multi)
 
         # delay the signals according to recording times
@@ -220,19 +203,6 @@ class BeamFormer(object):
         self.index_multi = (self.index_multi + 1) % self.params['multi']['combination_n']
 
     def get_multi_estimate(self, method='mvdr'):
-        """ Get current estimate
-
-        :return: spectrum of shape (n_frequencies x n_angles)
-        """
-        Rtot = self.get_correlation(self.signals_f_aligned)
-        if method == 'mvdr':
-            return self.get_mvdr_spectrum(Rtot, self.frequencies, self.multi_mic_positions)
-        elif method == 'das':
-            return self.get_das_spectrum(Rtot, self.frequencies, self.multi_mic_positions)
-        else:
-            raise ValueError(method)
-
-    def get_multi_estimate_new(self, method='mvdr'):
         """ Get current estimate
 
         :return: spectrum of shape (n_frequencies x n_angles)
