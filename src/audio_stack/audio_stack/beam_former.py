@@ -17,6 +17,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
+LAMDA = 1e-3
+
 
 def normalize_rows(matrix, method):
     """ Normalizes last dimension of matrix (can be more than 2-dimensional) """ 
@@ -88,7 +90,7 @@ class BeamFormer(object):
         self.theta_scan = BeamFormer.theta_scan
         self.params = {}
 
-    def get_mvdr_spectrum(self, R, frequencies_hz, mic_positions=None):
+    def get_mvdr_spectrum(self, R, frequencies_hz, mic_positions=None, lamda=LAMDA):
         """ Get MVDR spatial spectrum.
 
         :param R: autocorrelation tensor (n_frequencies x n_mics x n_mics)
@@ -102,7 +104,7 @@ class BeamFormer(object):
         for i, theta in enumerate(self.theta_scan):
             constraints = [(theta, 1)]
             H_mvdr = get_lcmv_beamformer_fast(
-                R, frequencies_hz, mic_positions, constraints, lamda=1e-3
+                R, frequencies_hz, mic_positions, constraints, lamda=lamda
             )
             spectrum[:, i] = get_powers(H_mvdr, R)
         return spectrum
@@ -170,17 +172,17 @@ class BeamFormer(object):
 
         :return: spectrum estimate of shape (n_angles,)
         """
-        if np.any(np.isnan(self.spectra_aligned)):
-            print('Warning: not done yet filling self.spectra_aligned')
-            # don't need to treat nan cases, as they are taken care of by standard numpy nanmin, nanmax, nansum etc. 
+        # don't need to treat nan cases, as they are taken care of by standard numpy nanmin, nanmax, nansum etc. 
+        #if np.any(np.isnan(self.spectra_aligned)):
+        #    pass
 
         spectra_aligned = normalize_rows(self.spectra_aligned, method=self.params['dynamic']['normalization_method'])
         return combine_rows(spectra_aligned, self.params['dynamic']['combination_method'], keepdims=False) # n_frequencies x n_angles
 
     def init_multi_estimate(self, frequencies, combination_n):
         self.frequencies_multi = frequencies
-        self.signals_f_aligned_new = np.full((len(frequencies), combination_n * self.mic_positions.shape[0]), np.nan, dtype=np.complex)
-        self.multi_mic_positions_new = np.full((combination_n * self.mic_positions.shape[0], self.mic_positions.shape[1]), np.nan)
+        self.signals_f_aligned = np.full((len(frequencies), combination_n * self.mic_positions.shape[0]), np.nan, dtype=np.complex)
+        self.multi_mic_positions = np.full((combination_n * self.mic_positions.shape[0], self.mic_positions.shape[1]), np.nan)
         self.index_multi = 0
         self.params['multi'] = dict(
             combination_n=combination_n,
@@ -194,32 +196,38 @@ class BeamFormer(object):
         signals_f_aligned = np.multiply(signals_f, exp_factor[:, np.newaxis])  # frequencies x n_mics
 
         n_mics = self.mic_positions.shape[0]
-        self.signals_f_aligned_new[:, n_mics * self.index_multi : n_mics * (self.index_multi + 1)] = signals_f_aligned
+        self.signals_f_aligned[:, n_mics * self.index_multi : n_mics * (self.index_multi + 1)] = signals_f_aligned
 
         # add the new microphone position according to "orientation" 
         moved_mic_positions = rotate_mics(self.mic_positions, orientation_deg)
-        self.multi_mic_positions_new[n_mics * self.index_multi : n_mics * (self.index_multi + 1), :] = moved_mic_positions
+        self.multi_mic_positions[n_mics * self.index_multi : n_mics * (self.index_multi + 1), :] = moved_mic_positions
 
         self.index_multi = (self.index_multi + 1) % self.params['multi']['combination_n']
 
-    def get_multi_estimate(self, method='mvdr'):
+    def get_multi_R(self):
+        if np.any(np.isnan(self.signals_f_aligned)):
+            #print('Warning: not done yet filling self.signals_f_aligned')
+            # need to filter out nan rows (not filled yet), because otherwise the rest of the method 
+            # will not work.
+            signals_f_aligned = self.signals_f_aligned[:, np.all(~np.isnan(self.signals_f_aligned), axis=0)]
+        else:
+            signals_f_aligned = self.signals_f_aligned
+        return self.get_correlation(signals_f_aligned)
+
+    def get_multi_estimate(self, method='mvdr', lamda=LAMDA):
         """ Get current estimate
 
         :return: spectrum of shape (n_frequencies x n_angles)
         """
-        if np.any(np.isnan(self.signals_f_aligned_new)):
-            print('Warning: not done yet filling self.signals_f_aligned_new')
-            # need to filter out nan rows (not filled yet), because otherwise the rest of the method 
-            # will not work.
-            signals_f_aligned = self.signals_f_aligned_new[:, np.all(~np.isnan(self.signals_f_aligned_new), axis=0)]
-            multi_mic_positions = self.multi_mic_positions_new[np.all(~np.isnan(self.multi_mic_positions_new), axis=1), :]
-        else:
-            signals_f_aligned = self.signals_f_aligned_new
-            multi_mic_positions = self.multi_mic_positions_new
+        Rtot = self.get_multi_R()
 
-        Rtot = self.get_correlation(signals_f_aligned)
+        if np.any(np.isnan(self.multi_mic_positions)):
+            multi_mic_positions = self.multi_mic_positions[np.all(~np.isnan(self.multi_mic_positions), axis=1), :]
+        else:
+            multi_mic_positions = self.multi_mic_positions
+
         if method == 'mvdr':
-            return self.get_mvdr_spectrum(Rtot, self.frequencies_multi, multi_mic_positions)
+            return self.get_mvdr_spectrum(Rtot, self.frequencies_multi, multi_mic_positions, lamda=lamda)
         elif method == 'das':
             return self.get_das_spectrum(Rtot, self.frequencies_multi, multi_mic_positions)
         else:
