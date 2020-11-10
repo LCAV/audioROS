@@ -14,7 +14,7 @@ from audio_interfaces.msg import Signals, SignalsFreq, Correlations, Spectrum, D
 from audio_interfaces.msg import PoseRaw
 
 N_MICS = 4
-N_FREQS = 32
+#N_FREQS = 32
 
 def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     """ Create Pose message. """
@@ -89,8 +89,6 @@ def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, audi
     # TODO(FD) remove this debugging check
     assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
-    # TODO(FD) remove this debugging check
-    assert msg.n_frequencies == N_FREQS
     msg.frequencies = [int(f) for f in freqs]
 
     assert signals_f.shape[0] == msg.n_frequencies
@@ -115,8 +113,6 @@ def create_correlations_message(R, freqs, mic_positions, timestamp):
     # TODO(FD) remove this debugging check
     assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
-    # TODO(FD) remove this debugging check
-    assert msg.n_frequencies == N_FREQS
     msg.frequencies = [int(f) for f in freqs]
     msg.corr_real_vect = list(R.real.astype(float).flatten())
     msg.corr_imag_vect = list(R.imag.astype(float).flatten())
@@ -130,8 +126,6 @@ def create_spectrum_message(spectrum, frequencies, timestamp):
     msg = Spectrum()
     msg.timestamp = timestamp
     msg.n_frequencies = len(frequencies) 
-    # TODO(FD) remove this debugging check
-    assert msg.n_frequencies == N_FREQS
     msg.n_angles = spectrum.shape[1]
     msg.frequencies = list(frequencies.astype(float))
     msg.spectrum_vect = list(spectrum.astype(float).flatten())
