@@ -12,7 +12,7 @@ import launch
 from audio_bringup.helpers import get_launch_description
 
 LOG_LEVEL = "info"
-BAG_FILE = "test_bagfile"
+BAG_FILE = ""
 
 PARAMS_GATEWAY = [
     {
