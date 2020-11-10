@@ -27,7 +27,8 @@ COMBINATION_N = 5 # number of spectra to combine
 COMBINATION_METHOD = "sum" # way to combine spectra
 
 #NORMALIZE = "zero_to_one_all"
-NORMALIZE = "zero_to_one"
+#NORMALIZE = "zero_to_one"
+NORMALIZE = "none"
 #NORMALIZE = "sum_to_one"
 
 class SpectrumEstimator(Node):
@@ -84,14 +85,16 @@ class SpectrumEstimator(Node):
             else:
                 return SetParametersResult(successful=False)
 
-        if self.beam_former is not None:
-            self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
+        self.beam_former = None
         return SetParametersResult(successful=True)
 
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
 
         mic_positions, signals_f, frequencies = read_signals_freq_message(msg)
+
+        signals_f = signals_f[frequencies > 0, :]
+        frequencies = frequencies[frequencies > 0]
 
         if msg.n_frequencies >= 2 ** 8:
             self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
@@ -100,7 +103,7 @@ class SpectrumEstimator(Node):
         if self.beam_former is None:
             if mic_positions is not None:
                 self.beam_former = BeamFormer(mic_positions)
-                self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
+                self.beam_former.init_dynamic_estimate(frequencies, self.combination_n, self.combination_method)
             else:
                 self.get_logger().error(
                     "need to set send mic_positions in Correlation to do DOA"

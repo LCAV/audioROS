@@ -25,7 +25,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_30_dynamic_test'
 #EXTRA_DIRNAME = '2020_10_30_dynamic'
 #EXTRA_DIRNAME = '2020_10_30_dynamic_move'
-EXTRA_DIRNAME = '2020_11_03_sweep'
+#EXTRA_DIRNAME = '2020_11_03_sweep'
+EXTRA_DIRNAME = '2020_11_10_buzzer'
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
@@ -74,7 +75,7 @@ if __name__ == "__main__":
     assert '/csv_writer' in active_nodes
     assert '/gateway' in active_nodes
 
-    sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
+    #sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
         if not os.path.exists(dirname):
@@ -85,8 +86,8 @@ if __name__ == "__main__":
     # reset the csv writer
     timestamp = int(time.time())
     for params in params_list:
-        #answer = ''
-        answer = 'y'
+        answer = ''
+        #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
@@ -140,7 +141,8 @@ if __name__ == "__main__":
             try:
                 if global_params['n_meas_mics'] > 0:
                     print('playing and recording sound...')
-                    recording = sd.playrec(out_signal, blocking=True)
+                    time.sleep(global_params['duration'])
+                    #recording = sd.playrec(out_signal, blocking=True)
                 else:
                     print('playing (not recording) sound...')
                     sd.play(out_signal, blocking=True)
@@ -169,7 +171,7 @@ if __name__ == "__main__":
         set_param('/gateway', 'all', '0')
 
         # save wav file.
-        if global_params['n_meas_mics'] > 0:
+        if False: #global_params['n_meas_mics'] > 0:
             recording_float32 = recording.astype(np.float32)
             wav_filename = os.path.join(wav_dirname, filename) + '.wav'
             wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
