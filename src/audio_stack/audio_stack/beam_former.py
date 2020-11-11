@@ -17,7 +17,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
+
 LAMDA = 1e-3
+#INVERSE = 'pinv' # use standard pseudoinverse
+INVERSE = 'low-rank' # use own low-rank inverse (rank in each freq bin is assuemd one)
 
 
 def normalize_rows(matrix, method):
@@ -90,7 +93,7 @@ class BeamFormer(object):
         self.theta_scan = BeamFormer.theta_scan
         self.params = {}
 
-    def get_mvdr_spectrum(self, R, frequencies_hz, mic_positions=None, lamda=LAMDA):
+    def get_mvdr_spectrum(self, R, frequencies_hz, mic_positions=None, lamda=LAMDA, inverse=INVERSE):
         """ Get MVDR spatial spectrum.
 
         :param R: autocorrelation tensor (n_frequencies x n_mics x n_mics)
@@ -104,7 +107,7 @@ class BeamFormer(object):
         for i, theta in enumerate(self.theta_scan):
             constraints = [(theta, 1)]
             H_mvdr = get_lcmv_beamformer_fast(
-                R, frequencies_hz, mic_positions, constraints, lamda=lamda
+                R, frequencies_hz, mic_positions, constraints, lamda=lamda, inverse=inverse
             )
             spectrum[:, i] = get_powers(H_mvdr, R)
         return spectrum
