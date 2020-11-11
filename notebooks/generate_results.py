@@ -69,9 +69,9 @@ def generate_signals(source, gt_angle_rad, mics_rotated, frequency_hz, time, noi
 def from_0_to_2pi(angle):
     angle = (angle + np.pi) % (2 * np.pi) - np.pi # -pi to pi
     if (type(angle) == float) or (angle.ndim == 0):
-        angle = angle + 2 * np.pi if angle < 0 else angle
+        angle = angle + 2 * np.pi if angle <= 0 else angle
     else:
-        angle[angle < 0] += 2 * np.pi
+        angle[angle <= 0] += 2 * np.pi
     return angle
 
 

@@ -55,7 +55,7 @@ Timing:
 
 ### Observations
 
-- Needed to redo experiment at 0 degrees with motors on because drone flew away
+- Needed to redo experiment at 0 degrees with motors on because drone flew away. Renamed the file afterwards.
 
 <!--
 Anything unusual that happened during the experiments, such as

@@ -53,8 +53,8 @@ if __name__ == "__main__":
     #exp_name = '2020_10_30_dynamic_test'; degree=0; start_idx=0 #degree=90; 
     #exp_name = '2020_10_30_dynamic_move'; degree=0; start_idx=0
     #exp_name = '2020_11_03_sweep_old'; degree=90; start_idx = 20
-
-    exp_name = '2020_11_03_sweep'; degree=90; start_idx=20
+    #exp_name = '2020_11_03_sweep'; degree=90; start_idx=20
+    exp_name = '2020_11_10_buzzer'; degree=None; start_idx=0
 
     fname = f'DynamicAnalaysis_{exp_name}.pkl'
 
@@ -63,7 +63,7 @@ if __name__ == "__main__":
         props = False,
         snr = False,
         motors = None,
-        source = 'mono_linear',
+        source = None,
         exp_name = exp_name
     )
 
@@ -84,7 +84,8 @@ if __name__ == "__main__":
 
     ##### variables
     motors_list = [True, False]
-    combination_n_list = [1, 2, 5, 10] #range(1, 11)
+    degree_list = [0, 45, 90] if degree is None else [degree]
+    combination_n_list = [1, 2] #, 5, 10] #range(1, 11)
     method_list = ["das"]
     covariance_averaging_list = ['ma']
 
@@ -92,12 +93,13 @@ if __name__ == "__main__":
     n_columns = None  # means we will use all dataset
     combination_method = "sum"
     normalization_method = "none"
-    bin_selection = "fixed"; selected_hz = [800]
+    bin_selection = "fixed"; selected_hz = [4100]
     lamda = 1e-3 # for mvdr
-    alpha = 0.5
+    alpha = 0.5 # for iir
 
-    for motors in motors_list:
+    for motors, degree in itertools.product(motors_list, degree_list):
         params['motors'] = motors
+        params['degree'] = degree
 
         #### dataset reading and preprocessing
         df, df_pos = read_df(**params)
