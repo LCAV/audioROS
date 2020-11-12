@@ -20,8 +20,8 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/90/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -46,6 +46,12 @@ MOTOR_PARAMETERS_TUPLES = [
     ("m3", rclpy.Parameter.Type.INTEGER, 0),
     ("m4", rclpy.Parameter.Type.INTEGER, 0),
     ("enable", rclpy.Parameter.Type.INTEGER, 0),
+]
+
+COMMAND_PARAMETERS_TUPLES = [
+    ("hover_height", rclpy.Parameter.Type.DOUBLE, 0.0),
+    ("turn_angle", rclpy.Parameter.Type.INTEGER, 0),
+    ("land_velocity", rclpy.Parameter.Type.DOUBLE, 0.0),
 ]
 
 # TODO(FD) figure out from where we can read this. Make it a parameter? 
@@ -73,12 +79,7 @@ class Gateway(Node):
 
         parameters = []
 
-        for param in AUDIO_PARAMETERS_TUPLES:
-            self.declare_parameter(param[0])
-            param_rclpy = rclpy.parameter.Parameter(*param)
-            parameters.append(param_rclpy)
-
-        for param in MOTOR_PARAMETERS_TUPLES:
+        for param in AUDIO_PARAMETERS_TUPLES + MOTOR_PARAMETERS_TUPLES + COMMAND_PARAMETERS_TUPLES:
             self.declare_parameter(param[0])
             param_rclpy = rclpy.parameter.Parameter(*param)
             parameters.append(param_rclpy)
@@ -165,27 +166,44 @@ class Gateway(Node):
 
     def set_params(self, params):
         for param in params: 
-            param_tuples_audio = [p for p in AUDIO_PARAMETERS_TUPLES if p[0] == param.name]
-            param_tuples_motor = [p for p in MOTOR_PARAMETERS_TUPLES if p[0] == param.name]
 
-            if len(param_tuples_audio) == 1:
-                self.set_param(param, param_tuples_audio[0], "audio")
-            elif len(param_tuples_motor) == 1:
-                # TODO(FD) find more elegant way to do this
-                #for motor in [f"m{i}" for i in range(1, 5)]:
-                #    param = self.get_parameter(motor)
-                value = param.get_parameter_value().integer_value
-                if param.name == "all":
-                    [self.reader_crtp.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
-                    self.get_logger().info( f"changing all motors to {value}")
-                else:
-                    self.reader_crtp.cf.param.set_value(f"motorPowerSet.{param.name}", value)
-                    self.get_logger().info(f"changing {param.name} to {value}")
-                if value > 0:
-                    print("changing motorPowerSet.enable to 1")
-                    self.reader_crtp.cf.param.set_value("motorPowerSet.enable", 1)
+            # send motor commands
+            if param.name == 'hover_height':
+                height = param.get_parameter_value().double_value
+                if height > 0:
+                    self.reader_crtp.send_hover_command(height)
+            elif param.name == 'turn_angle':
+                angle = param.get_parameter_value().integer_value
+                if angle > 0:
+                    self.reader_crtp.send_turn_command(angle)
+            elif param.name == 'land_velocity':
+                velocity = param.get_parameter_value().double_value
+                if velocity > 0:
+                    self.reader_crtp.send_land_command()
+
             else:
-                raise ValueError(param)
+
+                param_tuples_audio = [p for p in AUDIO_PARAMETERS_TUPLES if p[0] == param.name]
+                param_tuples_motor = [p for p in MOTOR_PARAMETERS_TUPLES if p[0] == param.name]
+
+                if len(param_tuples_audio) == 1:
+                    self.set_param(param, param_tuples_audio[0], "audio")
+                elif len(param_tuples_motor) == 1:
+                    # TODO(FD) find more elegant way to do this
+                    value = param.get_parameter_value().integer_value
+                    if param.name == "all":
+                        [self.reader_crtp.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
+                        self.get_logger().info( f"changing all motors to {value}")
+                    else:
+                        self.reader_crtp.cf.param.set_value(f"motorPowerSet.{param.name}", value)
+                        self.get_logger().info(f"changing {param.name} to {value}")
+                    if value > 0:
+                        print("changing motorPowerSet.enable to 1")
+                        self.reader_crtp.cf.param.set_value("motorPowerSet.enable", 1)
+
+
+                else:
+                    raise ValueError(param)
         return SetParametersResult(successful=True)
 
     def set_param(self, param, param_tuple, param_class):
@@ -221,7 +239,6 @@ def main(args=None):
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
-        # set_thrust(cf, 43000)
         reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion)
         publisher = Gateway(reader_crtp)
         print("done initializing")

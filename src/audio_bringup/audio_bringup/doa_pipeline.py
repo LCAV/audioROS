@@ -29,7 +29,9 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_10_buzzer'
 
 #EXTRA_DIRNAME = '2020_11_12_buzzer360'
-EXTRA_DIRNAME = '2020_11_12_speaker360'
+#EXTRA_DIRNAME = '2020_11_12_speaker360'
+EXTRA_DIRNAME = '2020_11_12_motors'
+
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
@@ -39,7 +41,8 @@ def get_filename(**params):
     source_flag = "None" if params.get("source") is None else params.get("source")
     props_flag = "" if params.get("props")==1 else "no"
     snr_flag = "" if params.get("snr")==1 else "no"
-    motors_flag = "" if params.get("motors")>0 else "no"
+    motors = params.get("motors")
+    motors_flag = "" if ((type(motors) == str) or (motors > 0)) else "no"
     ending = "" if params.get("degree") == 0 else f"_{params.get('degree')}"
     fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
     return fname
@@ -47,7 +50,7 @@ def get_filename(**params):
 
 def set_param(node_name, param_name, param_value):
     param_pid = subprocess.Popen(['ros2', 'param', 'set', node_name, param_name, param_value], stdout=subprocess.PIPE)
-    print('waiting to set params')
+    print('waiting to set params:', param_name, param_value)
     out_bytes, err = param_pid.communicate()
     out_string = out_bytes.decode("utf-8").strip()
     if out_string == "Set parameter successful":
@@ -100,10 +103,11 @@ if __name__ == "__main__":
         #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
-            if params['source'] == 'buzzer':
-                answer = input(f'Make sure buzzer is on!') or 'y'
         if answer == 'n':
             continue
+
+        if params['source'] == 'buzzer':
+            input(f'make sure buzzer is on! Enter to continue')
 
         filename = get_filename(**params)
         bag_filename = os.path.join(exp_dirname, filename)
@@ -142,7 +146,8 @@ if __name__ == "__main__":
         set_param('/gateway', 'filter_prop_enable', str(params['props']))
 
         # set thrust (or start hover)
-        set_param('/gateway', 'all', str(params['motors']))
+        if type(params['motors']) == int:
+            set_param('/gateway', 'all', str(params['motors']))
 
         # start recording bag file
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
@@ -171,9 +176,10 @@ if __name__ == "__main__":
             else:
                 print(f'waiting for {global_params["duration"]} seconds...')
                 if type(params['motors']) == str:
-                    # TODO(FD): execute the sequence of motor commands.
-                    raise NotImplementedError(params['motors'])
-                    pass
+                    for command in global_params[params['motors']]:
+                        node, parameter, value = command[:3]
+                        set_param(node, parameter, str(value))
+                        time.sleep(command[3])
                 else:
                     time.sleep(global_params['duration'])
         print('...done')
