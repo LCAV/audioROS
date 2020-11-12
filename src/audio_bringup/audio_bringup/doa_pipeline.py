@@ -82,7 +82,10 @@ if __name__ == "__main__":
     source_type = global_params.get('source_type', 'soundcard')
     if (source_type == 'soundcard'):
         sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
-        # TODO(FD) test that soundcard is connected
+
+        sound = np.zeros(10, dtype=float)
+        print('playing zero test sound...')
+        sd.play(sound, blocking=True)
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
         if not os.path.exists(dirname):
