@@ -26,7 +26,10 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_30_dynamic'
 #EXTRA_DIRNAME = '2020_10_30_dynamic_move'
 #EXTRA_DIRNAME = '2020_11_03_sweep'
-EXTRA_DIRNAME = '2020_11_10_buzzer'
+#EXTRA_DIRNAME = '2020_11_10_buzzer'
+
+#EXTRA_DIRNAME = '2020_11_12_buzzer360'
+EXTRA_DIRNAME = '2020_11_12_speaker360'
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
@@ -75,7 +78,11 @@ if __name__ == "__main__":
     assert '/csv_writer' in active_nodes
     assert '/gateway' in active_nodes
 
-    #sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
+
+    source_type = global_params.get('source_type', 'soundcard')
+    if (source_type == 'soundcard'):
+        sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
+        # TODO(FD) test that soundcard is connected
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
         if not os.path.exists(dirname):
@@ -90,14 +97,22 @@ if __name__ == "__main__":
         #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
+            if params['source'] == 'buzzer':
+                answer = input(f'Make sure buzzer is on!') or 'y'
         if answer == 'n':
             continue
 
         filename = get_filename(**params)
         bag_filename = os.path.join(exp_dirname, filename)
         csv_filename = os.path.join(csv_dirname, filename)
-        out_signal = generate_signal(global_params['fs_soundcard'], global_params['duration'], signal_type=params['source'], 
-                                     frequency_hz=global_params['freq_source'], min_dB=global_params['min_dB'], max_dB=global_params['max_dB'])
+
+        if source_type == 'soundcard':
+            out_signal = generate_signal(global_params['fs_soundcard'], 
+                    global_params['duration'], 
+                    signal_type=params['source'], 
+                    frequency_hz=global_params['freq_source'], 
+                    min_dB=global_params['min_dB'], 
+                    max_dB=global_params['max_dB'])
 
         answer = 'y'
         while os.path.exists(bag_filename):
@@ -117,49 +132,48 @@ if __name__ == "__main__":
         # if that is necessary, we need to rewrite this section.
 
         # reset csv writer
-        if not set_param('/csv_writer', 'filename', ''):
-            sys.exit()
+        set_param('/csv_writer', 'filename', '')
 
-
-        # set all parameters
-        if not set_param('/gateway', 'filter_snr_enable', str(params['snr'])):
-            sys.exit()
-        if not set_param('/gateway', 'filter_prop_enable', str(params['props'])):
-            sys.exit()
+        # set audio parameters
+        set_param('/gateway', 'filter_snr_enable', str(params['snr']))
+        set_param('/gateway', 'filter_prop_enable', str(params['props']))
 
         # set thrust (or start hover)
-        if not set_param('/gateway', 'all', str(params['motors'])):
-            sys.exit()
+        set_param('/gateway', 'all', str(params['motors']))
 
         # start recording bag file
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('waiting to start bag record')
         time.sleep(1)
         
-        answer = ''
-        while not (answer in ['y', 'n']):
-            try:
-                if global_params['n_meas_mics'] > 0:
-                    print('playing and recording sound...')
-                    time.sleep(global_params['duration'])
-                    #recording = sd.playrec(out_signal, blocking=True)
+        print('source type:', source_type)
+        if source_type == 'soundcard':
+            if global_params['n_meas_mics'] > 0:
+                print('playing and recording sound...')
+                recording = sd.playrec(out_signal, blocking=True)
+            else:
+                print('playing (not recording) sound...')
+                sd.play(out_signal, blocking=True)
+        # when we use the buzzer, we only record what the measurement mics get.    
+        elif source_type == 'buzzer':
+            if global_params['n_meas_mics'] > 0:
+
+                # TODO(FD) test this earlier.
+                if type(params['motors']) == str:
+                    raise ValueError('motors and source_type parameters incompatible')
+
+                print(f'recording sound for {global_params["duration"]} seconds...')
+                n_frames = global_params['duration'] * global_params['fs_soundcard']
+                recording = sd.rec(n_frames, blocking=True)
+            else:
+                print(f'waiting for {global_params["duration"]} seconds...')
+                if type(params['motors']) == str:
+                    # TODO(FD): execute the sequence of motor commands.
+                    raise NotImplementedError(params['motors'])
+                    pass
                 else:
-                    print('playing (not recording) sound...')
-                    sd.play(out_signal, blocking=True)
-                print('...done')
-                answer = 'y'
-            except ValueError:
-                answer = input('make sure the audio is correctly connected! Press enter to try again. (or enter "n" to abort, "r" to raise the exception)')
-                if answer == 'r':
-                    raise
-                if answer == '':
-                    sd = get_usb_soundcard_ubuntu(
-                            global_params['fs_soundcard'], 
-                            global_params['n_meas_mics'])
-
-
-        if answer == 'n':
-            sys.exit()
+                    time.sleep(global_params['duration'])
+        print('...done')
 
         # when done playing sound: stop bag file
         bag_pid.send_signal(signal.SIGINT)
@@ -171,7 +185,7 @@ if __name__ == "__main__":
         set_param('/gateway', 'all', '0')
 
         # save wav file.
-        if False: #global_params['n_meas_mics'] > 0:
+        if (global_params['n_meas_mics'] > 0):
             recording_float32 = recording.astype(np.float32)
             wav_filename = os.path.join(wav_dirname, filename) + '.wav'
             wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
