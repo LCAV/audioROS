@@ -141,8 +141,6 @@ class Gateway(Node):
             self.get_logger().warn("Possibly in valid audio:")
             self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
             self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
-            self.get_logger().warn(f"mic 2 {abs_signals_f[2, :5]}")
-            self.get_logger().warn(f"mic 3 {abs_signals_f[3, :5]}")
 
         mic_positions_arr = np.array(MIC_POSITIONS)
         msg = create_signals_freq_message(signals_f.T, frequencies, mic_positions_arr, 
