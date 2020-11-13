@@ -42,6 +42,12 @@ A diagram of the interactions of the different packages is shown below.
 
 ![Diagram showing package interactions](https://app.lucidchart.com/publicSegments/view/8da32e75-dd1a-45f2-a5a3-6a195968585d/image.png)
 
+## Requirements (WIP)
+
+
+List of requirements to run all nodes in this repo 
+- pyserial (for turntable handling)
+
 ## Credits
 
 We took inspiration from [this](https://roboticsbackend.com/package-organization-for-a-ros-stack-best-practices/) helpful article for the structure of this repo. 
