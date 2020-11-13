@@ -29,7 +29,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_10_buzzer'
 
 #EXTRA_DIRNAME = '2020_11_12_buzzer360'
-EXTRA_DIRNAME = '2020_11_12_speaker360'
+#EXTRA_DIRNAME = '2020_11_12_speaker360'
+EXTRA_DIRNAME = '2020_11_13_speaker360'
 #EXTRA_DIRNAME = '2020_11_12_motors'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
@@ -39,7 +40,7 @@ WAV_DIRNAME = "export/"
 
 # Ubuntu:
 # to find serial port, run python -m serial.tools.list_ports
-SERIAL_PORT = "/dev/ttyACM1"
+SERIAL_PORT = "/dev/ttyACM0"
 
 def get_filename(**params):
     source_flag = "None" if params.get("source") is None else params.get("source")
@@ -105,8 +106,8 @@ if __name__ == "__main__":
     # reset the csv writer
     timestamp = int(time.time())
     for params in params_list:
-        answer = ''
-        #answer = 'y'
+        #answer = ''
+        answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
