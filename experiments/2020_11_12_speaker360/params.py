@@ -12,15 +12,14 @@ THRUST = 43000
 SOURCE = 'mono' # need to set this to None for buzzer 
 
 params_list = [
-    # calibration:
-    {'motors': 0, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
-    {'motors': THRUST, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
+    # dynamic:
+    {'motors': 0, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':360},
+    {'motors': THRUST, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':360},
     # static:
     {'motors': 0, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':0},
-    {'motors': 0, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':90},
     {'motors': THRUST, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':0},
+    {'motors': 0, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':90},
     {'motors': THRUST, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':90},
-    # dynamic:
-    {'motors': 0, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':45},
-    {'motors': THRUST, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':45},
+    # calibration:
+    {'motors': THRUST, 'snr': 0, 'props': 0, 'source':None, 'degree':0},
 ]

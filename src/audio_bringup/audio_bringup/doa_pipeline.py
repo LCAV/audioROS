@@ -29,13 +29,17 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_10_buzzer'
 
 #EXTRA_DIRNAME = '2020_11_12_buzzer360'
-#EXTRA_DIRNAME = '2020_11_12_speaker360'
-EXTRA_DIRNAME = '2020_11_12_motors'
+EXTRA_DIRNAME = '2020_11_12_speaker360'
+#EXTRA_DIRNAME = '2020_11_12_motors'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
 WAV_DIRNAME = "export/"
+
+# Ubuntu:
+# to find serial port, run python -m serial.tools.list_ports
+SERIAL_PORT = "/dev/ttyACM1"
 
 def get_filename(**params):
     source_flag = "None" if params.get("source") is None else params.get("source")
@@ -68,6 +72,8 @@ def get_active_nodes():
 
 
 if __name__ == "__main__":
+    import serial
+
     extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
     exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
     csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
@@ -135,6 +141,9 @@ if __name__ == "__main__":
         if answer == 'n':
             continue
 
+        if params['degree'] in (360, 90):
+            SerialIn = serial.Serial(SERIAL_PORT, 115200)
+
         # TODO(FD) csv file and bag file will not be perfectly synchronized.
         # if that is necessary, we need to rewrite this section.
 
@@ -153,36 +162,51 @@ if __name__ == "__main__":
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('waiting to start bag record')
         time.sleep(1)
+
+        if params['degree'] == 360:
+            commands = [(b"i", 0), (b"j", 0)] # each command takes ca. 25 seconds
+        elif params['degree'] == 90:
+            commands = [(b"o", 8), (b"k", 8)]
+        else:
+            commands = [None, None]
         
-        print('source type:', source_type)
-        if source_type == 'soundcard':
-            if global_params['n_meas_mics'] > 0:
-                print('playing and recording sound...')
-                recording = sd.playrec(out_signal, blocking=True)
-            else:
-                print('playing (not recording) sound...')
-                sd.play(out_signal, blocking=True)
-        # when we use the buzzer, we only record what the measurement mics get.    
-        elif source_type == 'buzzer':
-            if global_params['n_meas_mics'] > 0:
-
-                # TODO(FD) test this earlier.
-                if type(params['motors']) == str:
-                    raise ValueError('motors and source_type parameters incompatible')
-
-                print(f'recording sound for {global_params["duration"]} seconds...')
-                n_frames = global_params['duration'] * global_params['fs_soundcard']
-                recording = sd.rec(n_frames, blocking=True)
-            else:
-                print(f'waiting for {global_params["duration"]} seconds...')
-                if type(params['motors']) == str:
-                    for command in global_params[params['motors']]:
-                        node, parameter, value = command[:3]
-                        set_param(node, parameter, str(value))
-                        time.sleep(command[3])
+        for command in commands: 
+            if command is not None:
+                print('writing to serial:', command[0])
+                SerialIn.write(command[0])
+                print(f'sleeping for {command[1]} seconds...')
+                time.sleep(command[1])
+        
+            print('source type:', source_type)
+            if source_type == 'soundcard':
+                if global_params['n_meas_mics'] > 0:
+                    print('playing and recording sound...')
+                    recording = sd.playrec(out_signal, blocking=True)
                 else:
-                    time.sleep(global_params['duration'])
-        print('...done')
+                    print('playing (not recording) sound...')
+                    sd.play(out_signal, blocking=True)
+
+            # when we use the buzzer, we only record what the measurement mics get.    
+            elif source_type == 'buzzer':
+                if global_params['n_meas_mics'] > 0:
+
+                    # TODO(FD) test this earlier.
+                    if type(params['motors']) == str:
+                        raise ValueError('motors and source_type parameters incompatible')
+
+                    print(f'recording sound for {global_params["duration"]} seconds...')
+                    n_frames = global_params['duration'] * global_params['fs_soundcard']
+                    recording = sd.rec(n_frames, blocking=True)
+                else:
+                    print(f'waiting for {global_params["duration"]} seconds...')
+                    if type(params['motors']) == str:
+                        for command in global_params[params['motors']]:
+                            node, parameter, value = command[:3]
+                            set_param(node, parameter, str(value))
+                            time.sleep(command[3])
+                    else:
+                        time.sleep(global_params['duration'])
+            print('...done')
 
         # when done playing sound: stop bag file
         bag_pid.send_signal(signal.SIGINT)

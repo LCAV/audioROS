@@ -7,6 +7,10 @@ __Recorded by__: First Last, ...
 
 __Place__: Place, if necessary temperature etc. 
 
+## Notes 
+
+<!-- quick and dirty notes, to be written out later -->
+
 ## Description
 
 ###  Hardware
