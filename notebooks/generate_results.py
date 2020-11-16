@@ -8,7 +8,8 @@ import sys
 import numpy as np
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../crazyflie-audio/python/')
-from algos_beamforming import get_mic_delays
+from algos_basics import get_mic_delays_near
+from signals import generate_signal_mono
 from constants import SPEED_OF_SOUND
 
 FS = 44100  # Hz, sampling frequency
@@ -16,39 +17,45 @@ DURATION = 5  # seconds, should be long enough to account for delays
 COMBINATION_METHOD = "product"
 NORMALIZATION_METHOD = "none"
 
-def generate_signals_pyroom(source, source_signal, mics_rotated, time, noise=0, ax=None):
+def generate_signals_pyroom(source, mics_rotated, frequency_hz, time, noise=0, ax=None):
+    """
+    :param mics_rotated: shape n_mics x 2
+    """
     import pyroomacoustics as pra
+
+    source_signal = generate_signal_mono(FS, DURATION, frequency_hz=frequency_hz) 
 
     speed_of_sound = pra.parameters.Physics().get_sound_speed()
     if (speed_of_sound != SPEED_OF_SOUND):
         print('discrepancy of speed of sound with pyroomacoustics:', speed_of_sound, SPEED_OF_SOUND)
 
     room = pra.AnechoicRoom(fs=FS, dim=2)
-    room.add_source(source, signal=source_signal, name=f"source")
+    room.add_source(source, signal=source_signal)
 
-    beam_former = pra.Beamformer(mics_rotated, FS)
+    beam_former = pra.Beamformer(mics_rotated.T, FS)
     room.add_microphone_array(beam_former)
     room.simulate()
     
-    time_idx = int(round(time * FS))
-    print(time, FS, time_idx)
-    print('error:', time_idx / FS, time, (time_idx / FS) - time)
+    start_idx = int(round(time * FS))
+    print(f'sampling time error: have {start_idx / FS} want {time} error {(start_idx / FS) - time}')
     
     signals = deepcopy(room.mic_array.signals)
     if noise > 0:
         signals += np.random.normal(scale=noise, size=signals.shape)
-    print('shifted signals by', time_idx, signals.shape)
+
+    signals = signals[:, start_idx:]
     
     if ax is not None:
         for i in range(signals.shape[0]):
-            ax.plot(signals[i])
-        ax.axvline(x=time_idx)
-    return signals[:, time_idx:]
+            ax.plot(signals[i], label=f"mic{i}", color=f"C{i}")
+    return signals
 
 
-def generate_signals_analytical(source, gt_angle_rad, mics_rotated, frequency_hz, time, noise=0, ax=None):
-
-    delays_relative = get_mic_delays(mics_rotated, gt_angle_rad)
+def generate_signals_analytical(source, mics_rotated, frequency_hz, time, noise=0, ax=None):
+    """
+    :param mics_rotated: shape n_mics x 2
+    """
+    delays_relative = get_mic_delays_near(mics_rotated, source)
     delays = np.linalg.norm(mics_rotated[0] - source)/SPEED_OF_SOUND + delays_relative
 
     times = np.arange(time, time+DURATION, step=1/FS) # n_times
@@ -60,8 +67,7 @@ def generate_signals_analytical(source, gt_angle_rad, mics_rotated, frequency_hz
 
     if ax is not None:
         for i in range(signals.shape[0]):
-            ax.plot(signals[i])
-        #ax.set_xlim(0, 100)
+            ax.plot(signals[i], label=f"mic{i}", color=f"C{i}")
     return signals
 
 
@@ -118,6 +124,7 @@ def inner_loop(mics_drone, degrees, times_noisy, signals_f_list, signals_f_multi
         spectrum_raw = beam_former.get_das_spectrum(Rtot, beam_former.frequencies_multi, 
                                                     beam_former.multi_mic_positions)
     return spectrum_combined, spectrum_raw, spectrum_multimic
+
 
 if __name__ == "__main__":
     from mic_array import get_square_array, get_uniform_array
