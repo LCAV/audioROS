@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)) + '/../crazyflie-aud
 from algos_beamforming import get_mic_delays
 from constants import SPEED_OF_SOUND
 
-FS = 32000  # Hz, sampling frequency
+FS = 44100  # Hz, sampling frequency
 DURATION = 5  # seconds, should be long enough to account for delays 
 COMBINATION_METHOD = "product"
 NORMALIZATION_METHOD = "none"
@@ -46,15 +46,14 @@ def generate_signals_pyroom(source, source_signal, mics_rotated, time, noise=0, 
     return signals[:, time_idx:]
 
 
-def generate_signals(source, gt_angle_rad, mics_rotated, frequency_hz, time, noise=0, ax=None):
-    n_mics = mics_rotated.shape[0]
+def generate_signals_analytical(source, gt_angle_rad, mics_rotated, frequency_hz, time, noise=0, ax=None):
 
     delays_relative = get_mic_delays(mics_rotated, gt_angle_rad)
     delays = np.linalg.norm(mics_rotated[0] - source)/SPEED_OF_SOUND + delays_relative
 
-    times = np.arange(0, DURATION, step=1/FS) # n_times
-    signals = np.sin(2*np.pi*frequency_hz*(times[None, :] - delays[:, None] - time)) # n_mics x n_times
-    signals[times[None, :] < delays[:, None]] = 0.0
+    times = np.arange(time, time+DURATION, step=1/FS) # n_times
+    signals = np.sin(2*np.pi*frequency_hz*(times[None, :] - delays[:, None])) # n_mics x n_times
+    #signals[times[None, :] < delays[:, None]] = 0.0
 
     if noise > 0:
         signals += np.random.normal(scale=noise, size=signals.shape)

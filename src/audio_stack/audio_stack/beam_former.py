@@ -79,7 +79,8 @@ def rotate_mics(mics, orientation_deg=0):
 
 class BeamFormer(object):
     # TODO(FD): make this somewhat more flexible
-    theta_scan = np.linspace(0, 360, 181) * np.pi / 180.0
+    theta_scan_deg = np.linspace(0, 360, 361) 
+    theta_scan = theta_scan_deg * np.pi / 180.0
 
     def __init__(self, mic_positions=None):
         """
@@ -170,6 +171,21 @@ class BeamFormer(object):
         self.spectra_aligned[self.index_dynamic, :, :] = self.shift_spectrum(spectrum, -orientation_deg)
         self.index_dynamic = (self.index_dynamic + 1) % self.params['dynamic']['combination_n']
 
+    def add_signals_to_dynamic_estimates(self, signals_f, frequencies, orientation_deg=0, method='das'):
+        """ Add new spectrum to list and remove outdated ones.
+
+        :param orientation_deg: drone orientation_deg in degrees
+        """
+        R = self.get_correlation(signals_f)
+        if method == 'das':
+            spectrum = self.get_das_spectrum(R, frequencies)
+        elif method == 'mvdr':
+            spectrum = self.get_mvdr_spectrum(R, frequencies)
+
+        self.spectra_aligned[self.index_dynamic, :, :] = self.shift_spectrum(spectrum, -orientation_deg)
+        self.index_dynamic = (self.index_dynamic + 1) % self.params['dynamic']['combination_n']
+        return self.shift_spectrum(spectrum, -orientation_deg)
+
     def get_dynamic_estimate(self):
         """ Get current estimate
 
@@ -195,7 +211,7 @@ class BeamFormer(object):
         np.testing.assert_allclose(frequencies, self.frequencies_multi)
 
         # delay the signals according to recording times
-        exp_factor = np.exp(1j * 2 * np.pi * frequencies * time_sec)
+        exp_factor = np.exp(-2j * np.pi * frequencies * time_sec)
         signals_f_aligned = np.multiply(signals_f, exp_factor[:, np.newaxis])  # frequencies x n_mics
 
         n_mics = self.mic_positions.shape[0]
