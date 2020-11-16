@@ -19,8 +19,8 @@ from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_
 
 
 LAMDA = 1e-3
-#INVERSE = 'pinv' # use standard pseudoinverse
-INVERSE = 'low-rank' # use own low-rank inverse (rank in each freq bin is assuemd one)
+INVERSE = 'pinv' # use standard pseudoinverse
+#INVERSE = 'low-rank' # use own low-rank inverse (rank in each freq bin is assuemd one)
 
 
 def normalize_rows(matrix, method):

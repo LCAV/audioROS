@@ -13,17 +13,17 @@ from signals import generate_signal_mono
 from constants import SPEED_OF_SOUND
 
 FS = 44100  # Hz, sampling frequency
-DURATION = 5  # seconds, should be long enough to account for delays 
+DURATION = 7  # seconds, should be long enough to account for delays 
 COMBINATION_METHOD = "product"
 NORMALIZATION_METHOD = "none"
 
-def generate_signals_pyroom(source, mics_rotated, frequency_hz, time, noise=0, ax=None):
+def generate_signals_pyroom(source, mics_rotated, frequency_hz, time, noise=0, ax=None, phase_offset=0):
     """
     :param mics_rotated: shape n_mics x 2
     """
     import pyroomacoustics as pra
 
-    source_signal = generate_signal_mono(FS, DURATION, frequency_hz=frequency_hz) 
+    source_signal = generate_signal_mono(FS, DURATION, frequency_hz=frequency_hz, phase_offset=phase_offset) 
 
     speed_of_sound = pra.parameters.Physics().get_sound_speed()
     if (speed_of_sound != SPEED_OF_SOUND):
@@ -37,7 +37,8 @@ def generate_signals_pyroom(source, mics_rotated, frequency_hz, time, noise=0, a
     room.simulate()
     
     start_idx = int(round(time * FS))
-    print(f'sampling time error: have {start_idx / FS} want {time} error {(start_idx / FS) - time}')
+    if abs((start_idx / FS) - time) > 1e-3:
+        print(f'sampling time error: have {start_idx / FS} want {time} error {(start_idx / FS) - time}')
     
     signals = deepcopy(room.mic_array.signals)
     if noise > 0:
@@ -51,7 +52,7 @@ def generate_signals_pyroom(source, mics_rotated, frequency_hz, time, noise=0, a
     return signals
 
 
-def generate_signals_analytical(source, mics_rotated, frequency_hz, time, noise=0, ax=None):
+def generate_signals_analytical(source, mics_rotated, frequency_hz, time, noise=0, ax=None, phase_offset=0):
     """
     :param mics_rotated: shape n_mics x 2
     """
@@ -59,7 +60,7 @@ def generate_signals_analytical(source, mics_rotated, frequency_hz, time, noise=
     delays = np.linalg.norm(mics_rotated[0] - source)/SPEED_OF_SOUND + delays_relative
 
     times = np.arange(time, time+DURATION, step=1/FS) # n_times
-    signals = np.sin(2*np.pi*frequency_hz*(times[None, :] - delays[:, None])) # n_mics x n_times
+    signals = np.sin(2*np.pi*frequency_hz*(times[None, :] - delays[:, None]) + phase_offset) # n_mics x n_times
     #signals[times[None, :] < delays[:, None]] = 0.0
 
     if noise > 0:
@@ -99,31 +100,31 @@ def inner_loop(mics_drone, degrees, times_noisy, signals_f_list, signals_f_multi
 
     ## combined spectrum
     beam_former = BeamFormer(mic_positions=mics_drone)
-    Rs = [beam_former.get_correlation(sig_f) for sig_f in signals_f_list]
-    if use_mvdr:
-        spectra = [beam_former.get_mvdr_spectrum(R, frequencies) for R in Rs]
-    else:
-        spectra = [beam_former.get_das_spectrum(R, frequencies) for R in Rs]
     beam_former.init_dynamic_estimate(frequencies, combination_n=len(degrees), 
                                       combination_method=COMBINATION_METHOD, 
                                       normalization_method=NORMALIZATION_METHOD)
-    for spectrum, degree in zip(spectra, degrees):
+    for sig_f, degree in zip(signals_f_list, degrees):
+        R = beam_former.get_correlation(sig_f)
+        if use_mvdr:
+            spectrum = beam_former.get_mvdr_spectrum(R, frequencies)
+        else:
+            spectrum = beam_former.get_das_spectrum(R, frequencies)
         beam_former.add_to_dynamic_estimates(spectrum, degree)
-    spectrum_combined = beam_former.get_dynamic_estimate()
+    spectrum_dynamic = beam_former.get_dynamic_estimate()
 
     ## combined raw signals
     beam_former = BeamFormer(mic_positions=mics_drone)
-    beam_former.init_multi_estimate(frequencies, len(degrees))
+    beam_former.init_multi_estimate(frequencies, combination_n=len(degrees))
     for i, (sig_f, time) in enumerate(zip(signals_f_list, times_noisy)):
         beam_former.add_to_multi_estimate(sig_f, frequencies, time, degrees[i])
     Rtot = beam_former.get_correlation(beam_former.signals_f_aligned)
     if use_mvdr:
-        spectrum_raw = beam_former.get_mvdr_spectrum(Rtot, beam_former.frequencies_multi, 
+        spectrum_delayed = beam_former.get_mvdr_spectrum(Rtot, beam_former.frequencies_multi, 
                                                      beam_former.multi_mic_positions)
     else:
-        spectrum_raw = beam_former.get_das_spectrum(Rtot, beam_former.frequencies_multi, 
+        spectrum_delayed = beam_former.get_das_spectrum(Rtot, beam_former.frequencies_multi, 
                                                     beam_former.multi_mic_positions)
-    return spectrum_combined, spectrum_raw, spectrum_multimic
+    return spectrum_dynamic, spectrum_delayed, spectrum_multimic
 
 
 if __name__ == "__main__":
@@ -133,8 +134,9 @@ if __name__ == "__main__":
     import pandas as pd
 
     np.random.seed(1)
-    #saveas = 'first_test.pkl'
-    saveas = 'square_test.pkl'
+    #saveas = 'results/first_test.pkl'
+    #saveas = 'results/square_test.pkl'
+    saveas = 'results/new_square_test.pkl'
 
     ##################### constants
     use_mvdr = True # use MVDR (otherwise use DAS)
@@ -165,7 +167,7 @@ if __name__ == "__main__":
     # variables
     degree_noise_list = np.arange(0, 22, step=2) # noise added to each degree position, in degrees
 
-    df = pd.DataFrame(columns=['it', 'seed', 'spectrum_multimic', 'spectrum_combined', 'spectrum_raw', 'degree_noise'])
+    df = pd.DataFrame(columns=['it', 'seed', 'spectrum_multimic', 'spectrum_dynamic', 'spectrum_delayed', 'degree_noise'])
 
     seed = 0
     for degree_noise in degree_noise_list: 
@@ -202,26 +204,27 @@ if __name__ == "__main__":
             signals_f_list = []
             mics_list_noisy = [rotate_mics(mics_drone_noisy, orientation_deg=degree) for degree in degrees_noisy]
             for mics, time in zip(mics_list_noisy, times_noisy):
-                signals_received =  generate_signals(source, gt_angle_rad, mics, frequency_hz, time, noise=signal_noise) 
-                #signals_received = generate_signals_pyroom(source, source_signal, mics.T, time, noise=signal_noise)
+                signals_received =  generate_signals_analytical(source, mics, frequency_hz, time, noise=signal_noise) 
+                #signals_received = generate_signals_pyroom(source, mics, frequency_hz, time, noise=signal_noise)
                 buffer_ = signals_received[:, time_index:time_index + n_buffer]
                 signals_f = np.fft.rfft(buffer_).T 
                 signals_f_list.append(signals_f[indices, :])
 
             ### generate "real" multi-mic signals 
             mics_array_noisy = np.concatenate([*mics_list_noisy])
-            signals_multimic = generate_signals(source, gt_angle_rad, mics_array_noisy, frequency_hz, time=0, noise=signal_noise)
-            #signals_multimic = generate_signals_pyroom(source, source_signal, mics_array.T, time=0, noise=signal_noise)
+            signals_multimic = generate_signals_analytical(source, mics_array_noisy, frequency_hz, time=0, noise=signal_noise)
+            #signals_multimic = generate_signals_pyroom(source, mics_array.T, frequency_hz, time=0, noise=signal_noise)
             buffer_multimic = signals_multimic[:, time_index:time_index + n_buffer]
             signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[indices, :]
 
-            spectrum_combined, spectrum_raw, spectrum_multimic =  inner_loop(
+            spectrum_dynamic, spectrum_delayed, spectrum_multimic =  inner_loop(
                 mics_drone, degrees, times, signals_f_list, signals_f_multimic, frequencies)
+
             df.loc[len(df), :] = dict(
                     it=it,
                     seed=seed,
-                    spectrum_combined=spectrum_combined,
-                    spectrum_raw=spectrum_raw,
+                    spectrum_dynamic=spectrum_dynamic,
+                    spectrum_delayed=spectrum_delayed,
                     spectrum_multimic=spectrum_multimic,
                     degree_noise=degree_noise
             )
