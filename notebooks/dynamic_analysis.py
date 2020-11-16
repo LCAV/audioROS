@@ -54,7 +54,8 @@ if __name__ == "__main__":
     #exp_name = '2020_10_30_dynamic_move'; degree=0; start_idx=0
     #exp_name = '2020_11_03_sweep_old'; degree=90; start_idx = 20
     #exp_name = '2020_11_03_sweep'; degree=90; start_idx=20
-    exp_name = '2020_11_10_buzzer'; degree=None; start_idx=0
+    #exp_name = '2020_11_10_buzzer'; degree=None; start_idx=20
+    exp_name = '2020_11_12_speaker360'; degree=360; start_idx=20
 
     fname = f'DynamicAnalaysis_{exp_name}.pkl'
 
@@ -84,10 +85,11 @@ if __name__ == "__main__":
 
     ##### variables
     motors_list = [True, False]
-    degree_list = [0, 45, 90] if degree is None else [degree]
-    combination_n_list = [1, 2] #, 5, 10] #range(1, 11)
+    #degree_list = [0, 45, 90] if degree is None else [degree]
+    degree_list = [0, 90, 360] if degree is None else [degree]
+    combination_n_list = [1, 2, 5] #, 5, 10] #range(1, 11)
     method_list = ["das"]
-    covariance_averaging_list = ['ma']
+    covariance_averaging_list = ['none'] #['ma']
 
     ###### constants
     n_columns = None  # means we will use all dataset
@@ -159,6 +161,7 @@ if __name__ == "__main__":
                         # TODO(FD): implement this
                         pass
 
+                    # TODO(FD) read this orientation estimate from stepper motor
                     orientation_deg = row.yaw_deg
                     timestamp = row.timestamp
                     
@@ -172,6 +175,9 @@ if __name__ == "__main__":
                         R_list[R_idx] = R_new
                         R_idx = (R_idx + 1) % combination_n
                         R = np.mean([R_elem for R_elem in R_list if len(R_elem)], axis=0)
+                    elif covariance_averaging == 'none':
+                        R = R_new
+
                     
                     if method == 'mvdr':
                         raw_spectrum = beam_former.get_mvdr_spectrum(R, freqs, lamda=lamda)
