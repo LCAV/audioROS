@@ -46,6 +46,7 @@ def create_pose_raw_message(motion_dict, timestamp):
     msg.dy = motion_dict["dy"]
     msg.z = motion_dict["z"]
     msg.yaw_deg = motion_dict["yaw"]
+    msg.yaw_rate_deg = motion_dict["yaw_rate"]
     msg.source_direction_deg = 0.0
     msg.timestamp = timestamp
     return msg
@@ -154,9 +155,10 @@ def read_pose_raw_message(msg):
     """ Read PoseRaw message.  """
     d_local = np.array((msg.dx, msg.dy))
     yaw = msg.yaw_deg
+    yaw_rate = msg.yaw_rate_deg
     r = Rotation.from_euler('z', yaw, degrees=True)
     d_world = r.as_matrix()[:2, :2] @ d_local
-    return d_world, yaw
+    return d_world, yaw, yaw_rate
 
 
 def read_signals_message(msg):
