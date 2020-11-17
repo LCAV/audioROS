@@ -75,7 +75,8 @@ class GeometryPlotter(Node):
         ylabel = "y [m]"
         self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
 
-        d_world, yaw = read_pose_raw_message(msg_pose_raw)
+        # TODO(FD) figure out what to do with yaw rate here
+        d_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
         new_position = self.pose_raw_list[:, -1] + d_world
         self.pose_raw_list = np.c_[self.pose_raw_list, new_position]
 

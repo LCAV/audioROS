@@ -64,6 +64,7 @@ class CsvWriter(Node):
           "dy": msg.dy,
           "z": msg.z,
           "yaw_deg": msg.yaw_deg,
+          "yaw_rate_deg": msg.yaw_rate_deg,
           "source_direction_deg": msg.source_direction_deg,
         }
         self.header = set(row_dict.keys()).union(self.header)
