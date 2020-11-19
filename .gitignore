@@ -60,9 +60,12 @@ stash/
 #bagfile stuff
 *.db3-shm
 *.db3-wal
+*.db3
 #evaluation
 *.pk
 notebooks/.ipynb_checkpoints
 notebooks/*.pkl
+notebooks/figures/
+notebooks/results/
 experiments/testing/*
 experiments/*/results/
