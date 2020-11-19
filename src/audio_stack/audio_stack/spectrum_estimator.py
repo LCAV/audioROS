@@ -14,7 +14,7 @@ import numpy as np
 
 from audio_interfaces.msg import Correlations, Spectrum, SignalsFreq, PoseRaw
 from audio_interfaces_py.messages import create_spectrum_message, read_signals_freq_message 
-from audio_stack.beam_former import BeamFormer
+from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
 # Beamforming method, available: 
@@ -27,49 +27,9 @@ COMBINATION_N = 5 # number of spectra to combine
 COMBINATION_METHOD = "sum" # way to combine spectra
 
 #NORMALIZE = "zero_to_one_all"
-NORMALIZE = "zero_to_one"
+#NORMALIZE = "zero_to_one"
+NORMALIZE = "none"
 #NORMALIZE = "sum_to_one"
-
-def normalize_rows(matrix, method="zero_to_one"):
-    if method == "zero_to_one":
-        normalized =  (matrix - np.min(matrix, axis=1, keepdims=True)) / (np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True))
-        np.testing.assert_allclose(np.max(normalized, axis=1), 1)
-        np.testing.assert_allclose(np.min(normalized, axis=1), 0)
-    elif method == "zero_to_one_all":
-        denom = np.max(matrix) - np.min(matrix)
-        if denom == 0.0:
-            return matrix 
-        normalized =  (matrix - np.min(matrix)) / denom
-        assert np.max(normalized) == 1, np.max(normalized)
-        assert np.min(normalized) == 0, np.min(normalized)
-    elif method == "sum_to_one":
-        # first make sure values are between 0 and 1 (otherwise division can lead to errors)
-        denom = np.max(matrix, axis=1, keepdims=True) - np.min(matrix, axis=1, keepdims=True)
-        matrix =  (matrix - np.min(matrix, axis=1, keepdims=True)) / denom 
-        sum_matrix = np.sum(matrix, axis=1, keepdims=True)
-        normalized = matrix / sum_matrix
-        np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
-    elif method in ["none", None]:
-        return matrix
-    else:
-        raise ValueError(method)
-
-    if np.any(np.isnan(normalized)):
-        print("Warning: problem in normalization")
-    return normalized
-
-
-def combine_rows(matrix, method="product", keepdims=False):
-    if method == "product":
-        # do the product in log domain for numerical reasons
-        # sum(log10(matrix)) = log10(product(matrix))
-        combined_matrix = np.power(10, np.sum(np.log10(matrix), axis=0, keepdims=keepdims))
-    elif method == "sum":
-        combined_matrix = np.sum(matrix, axis=0, keepdims=keepdims)
-    else:
-        raise ValueError(method)
-    return combined_matrix
-
 
 class SpectrumEstimator(Node):
     def __init__(self, plot=False):
@@ -125,14 +85,16 @@ class SpectrumEstimator(Node):
             else:
                 return SetParametersResult(successful=False)
 
-        if self.beam_former is not None:
-            self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
+        self.beam_former = None
         return SetParametersResult(successful=True)
 
     def listener_callback_signals_f(self, msg):
         t1 = time.time()
 
         mic_positions, signals_f, frequencies = read_signals_freq_message(msg)
+
+        signals_f = signals_f[frequencies > 0, :]
+        frequencies = frequencies[frequencies > 0]
 
         if msg.n_frequencies >= 2 ** 8:
             self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
@@ -141,7 +103,7 @@ class SpectrumEstimator(Node):
         if self.beam_former is None:
             if mic_positions is not None:
                 self.beam_former = BeamFormer(mic_positions)
-                self.beam_former.init_dynamic_estimate(self.combination_n, self.combination_method)
+                self.beam_former.init_dynamic_estimate(frequencies, self.combination_n, self.combination_method)
             else:
                 self.get_logger().error(
                     "need to set send mic_positions in Correlation to do DOA"
@@ -191,7 +153,6 @@ class SpectrumEstimator(Node):
         msg_new.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
         self.publisher_spectrum_combined.publish(msg_new)
         self.get_logger().info(f"Published dynamic spectrum.")
-
 
 
 def main(args=None):

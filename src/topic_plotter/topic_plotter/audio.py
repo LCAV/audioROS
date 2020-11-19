@@ -11,8 +11,8 @@ from .live_plotter import LivePlotter
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-XMIN_FREQ = 200 # min plotting frequency in Hz
-XMAX_FREQ = 7000 # max plotting frequency in Hz
+XMIN_FREQ = 3900 #200 # min plotting frequency in Hz
+XMAX_FREQ = 4100 # max plotting frequency in Hz
 YMIN_FREQ = 1e-10 # min plotting frequency in Hz
 YMAX_FREQ = 1e5 # max plotting frequency in Hz
 
@@ -33,7 +33,7 @@ class AudioPlotter(Node):
             "signals frequency": axs[0],
             "signals time": axs[1]
         }
-        self.fig.set_size_inches(7, 10)
+        self.fig.set_size_inches(14, 20)
         self.plotter_dict = {}
         self.current_n_buffer = None
         self.current_n_frequencies = None
@@ -61,6 +61,10 @@ class AudioPlotter(Node):
 
         __, signals_f, freqs = read_signals_freq_message(msg)
 
+        # remove zero frequencies
+        signals_f = signals_f[freqs > 0, :]
+        freqs = freqs[freqs > 0]
+
         # sort frequencies
         indices = np.argsort(freqs)
         y = np.abs(signals_f[indices, :].T)
@@ -72,6 +76,8 @@ class AudioPlotter(Node):
         self.plotter_dict["signals frequency"].update_axvlines(freqs)
         self.current_n_frequencies = msg.n_frequencies
 
+        # TODO(FD) remove this or make it more consistent
+        self.plotter_dict["signals frequency"].ax.set_xlim(XMIN_FREQ, XMAX_FREQ)
         self.fig.canvas.draw()
 
 

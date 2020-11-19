@@ -21,7 +21,7 @@ import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
 from audio_interfaces_py.messages import read_spectrum_message, create_doa_message
-from audio_stack.spectrum_estimator import combine_rows, normalize_rows
+from audio_stack.beam_former import combine_rows, normalize_rows
 
 N_ESTIMATES = 3 # number of peaks to detect
 COMBINATION_METHOD = "sum" # way to combine across frequencies
