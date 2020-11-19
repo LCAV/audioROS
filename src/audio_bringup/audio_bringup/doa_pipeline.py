@@ -19,7 +19,7 @@ sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 
-from crazyflie_crtp.commands import command_dict
+from crazyflie_crtp.commands import command_dict, buzzer_dict
 
 
 EXP_DIRNAME = os.getcwd() + "/experiments/"
@@ -33,7 +33,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_12_buzzer360'
 #EXTRA_DIRNAME = '2020_11_12_speaker360'
 #EXTRA_DIRNAME = '2020_11_13_speaker360'
-EXTRA_DIRNAME = '2020_11_18_speaker360'
+#EXTRA_DIRNAME = '2020_11_18_speaker360'
+EXTRA_DIRNAME = '2020_11_19_wall'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -51,7 +52,8 @@ def get_filename(**params):
     motors = params.get("motors")
     motors_flag = "" if ((type(motors) == str) or (motors > 0)) else "no"
     ending = "" if params.get("degree") == 0 else f"_{params.get('degree')}"
-    fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
+    ending_distance = "" if params.get("distance", None) is None else f"_{params.get('distance')}"
+    fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}{ending_distance}"
     return fname
 
 
@@ -65,6 +67,14 @@ def set_param(node_name, param_name, param_value):
     else:
         print("error:", out_string)
         return False
+
+
+def execute_commands(command_list):
+    for command in command_list:
+        node, parameter, value, sleep = command
+        print(f'execute {parameter}: {value} and sleep for {sleep}s...')
+        set_param(node, parameter, str(value))
+        time.sleep(sleep)
 
 
 def get_active_nodes():
@@ -92,7 +102,7 @@ if __name__ == "__main__":
 
 
     source_type = global_params.get('source_type', 'soundcard')
-    if source_type == 'soundcard':
+    if (source_type == 'soundcard') or (global_params['n_meas_mics'] > 0):
         sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
 
         sound = np.zeros(10, dtype=float)
@@ -112,8 +122,8 @@ if __name__ == "__main__":
     for params in params_list:
 
         #### prepare filenames ####
-        #answer = ''
-        answer = 'y'
+        answer = ''
+        #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
@@ -154,7 +164,6 @@ if __name__ == "__main__":
 
         if params['degree'] in (360, 90):
             SerialIn = serial.Serial(SERIAL_PORT, 115200)
-
 
         #### prepare drone ####
 
@@ -198,7 +207,12 @@ if __name__ == "__main__":
                 sd.play(out_signal, blocking=True)
 
         # when we use the buzzer, we only record what the measurement mics get.    
-        elif source_type == 'buzzer':
+        elif (source_type == 'buzzer-onboard') or (source_type == 'buzzer'):
+
+            # play buzzer sound
+            if source_type == 'buzzer-onboard':
+                execute_commands(buzzer_dict[params['source']])
+
             if global_params['n_meas_mics'] > 0:
                 print(f'recording sound for {global_params["duration"]} seconds...')
                 n_frames = global_params['duration'] * global_params['fs_soundcard']
@@ -206,14 +220,15 @@ if __name__ == "__main__":
             else:
                 if type(params['motors']) == str:
                     print(f'executing motor commands:')
-                    for command in command_dict[params['motors']]:
-                        node, parameter, value, sleep = command
-                        print(f'execute {parameter}: {value} and sleep for {sleep}s...')
-                        set_param(node, parameter, str(value))
-                        time.sleep(sleep)
+                    execute_commands(command_dict[params['motors']])
                 else:
                     print(f'waiting for {global_params["duration"]} seconds...')
                     time.sleep(global_params['duration'])
+
+            # end buzzer sound
+            if source_type == 'buzzer-onboard':
+                execute_commands(buzzer_dict['stop'])
+
         print('...done')
 
         # when done playing sound: stop bag file
