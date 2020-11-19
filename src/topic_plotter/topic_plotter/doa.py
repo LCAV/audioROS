@@ -7,7 +7,7 @@ import matplotlib.pylab as plt
 from audio_interfaces.msg import Spectrum, PoseRaw
 from audio_interfaces_py.messages import read_spectrum_message
 
-from audio_stack.spectrum_estimator import normalize_rows, combine_rows
+from audio_stack.beam_former import normalize_rows, combine_rows
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
@@ -15,8 +15,8 @@ NORMALIZE = "zero_to_one"
 COMBINATION_METHOD = "sum"
 
 # window of frequencies used for plotting and combination 
-MIN_FREQ = 500
-MAX_FREQ = 1500
+MIN_FREQ = -np.inf #500
+MAX_FREQ = np.inf #1500
 
 YMIN_SPEC = 1e-3
 YMAX_SPEC = 2

@@ -1,0 +1,12 @@
+rosbag2_bagfile_information:
+  version: 2
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - /home/duembgen/ROS/audioROS/experiments/2020_11_03_sweep/nomotors_nosnr_noprops_sweep_90/nomotors_nosnr_noprops_sweep_90_0.db3
+  duration:
+    nanoseconds: 0
+  starting_time:
+    nanoseconds_since_epoch: 9223372036854775807
+  message_count: 0
+  topics_with_message_count:
+    []
