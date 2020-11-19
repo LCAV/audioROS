@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-#cf_id = "E7E7E7E7E8"
-#id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/80/2M/{cf_id}"
 
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/70/2M/{cf_id}"
+#cf_id = "E7E7E7E7E7"
+#id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -57,6 +57,11 @@ COMMAND_PARAMETERS_TUPLES = [
     ("land_velocity", rclpy.Parameter.Type.DOUBLE, 0.0),
 ]
 
+BUZZER_PARAMETERS_TUPLES = [
+    ("buzzer_effect", rclpy.Parameter.Type.INTEGER, -1),
+    ("buzzer_freq", rclpy.Parameter.Type.INTEGER, 0),
+]
+
 # TODO(FD) figure out from where we can read this. Make it a parameter? 
 SOURCE_DIRECTION_DEG = 90.0
 
@@ -82,7 +87,7 @@ class Gateway(Node):
 
         parameters = []
 
-        for param in AUDIO_PARAMETERS_TUPLES + MOTOR_PARAMETERS_TUPLES + COMMAND_PARAMETERS_TUPLES:
+        for param in AUDIO_PARAMETERS_TUPLES + MOTOR_PARAMETERS_TUPLES + COMMAND_PARAMETERS_TUPLES + BUZZER_PARAMETERS_TUPLES:
             self.declare_parameter(param[0])
             param_rclpy = rclpy.parameter.Parameter(*param)
             parameters.append(param_rclpy)
@@ -182,8 +187,18 @@ class Gateway(Node):
                 if velocity > 0:
                     self.reader_crtp.send_land_command()
 
-            else:
+            # send buzzer commands
+            elif param.name == 'buzzer_effect':
+                effect = param.get_parameter_value().integer_value
+                if effect >= 0:
+                    self.reader_crtp.send_buzzer_effect(effect)
 
+            elif param.name == 'buzzer_freq':
+                freq = param.get_parameter_value().integer_value
+                if freq >= 0:
+                    self.reader_crtp.send_buzzer_freq(freq)
+
+            else:
                 param_tuples_audio = [p for p in AUDIO_PARAMETERS_TUPLES if p[0] == param.name]
                 param_tuples_motor = [p for p in MOTOR_PARAMETERS_TUPLES if p[0] == param.name]
 
