@@ -171,33 +171,35 @@ class Gateway(Node):
         self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
+        success = True
+
         for param in params: 
 
             # send motor commands
             if param.name == 'hover_height':
                 height = param.get_parameter_value().double_value
                 if height > 0:
-                    self.reader_crtp.send_hover_command(height)
+                    success = self.reader_crtp.send_hover_command(height)
             elif param.name == 'turn_angle':
                 angle = param.get_parameter_value().integer_value
                 if angle > 0:
-                    self.reader_crtp.send_turn_command(angle)
+                    success = self.reader_crtp.send_turn_command(angle)
             elif param.name == 'land_velocity':
                 velocity = param.get_parameter_value().double_value
                 if velocity > 0:
-                    self.reader_crtp.send_land_command()
+                    success = self.reader_crtp.send_land_command()
 
             # send buzzer commands
             elif param.name == 'buzzer_effect':
                 effect = param.get_parameter_value().integer_value
                 if effect >= 0:
                     self.reader_crtp.send_buzzer_effect(effect)
-
             elif param.name == 'buzzer_freq':
                 freq = param.get_parameter_value().integer_value
                 if freq >= 0:
                     self.reader_crtp.send_buzzer_freq(freq)
 
+            # send audio and raw motor commands.
             else:
                 param_tuples_audio = [p for p in AUDIO_PARAMETERS_TUPLES if p[0] == param.name]
                 param_tuples_motor = [p for p in MOTOR_PARAMETERS_TUPLES if p[0] == param.name]
@@ -205,22 +207,20 @@ class Gateway(Node):
                 if len(param_tuples_audio) == 1:
                     self.set_param(param, param_tuples_audio[0], "audio")
                 elif len(param_tuples_motor) == 1:
-                    # TODO(FD) find more elegant way to do this
                     value = param.get_parameter_value().integer_value
                     if param.name == "all":
-                        [self.reader_crtp.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
                         self.get_logger().info( f"changing all motors to {value}")
+                        success = self.reader_crtp.send_thrust_command(value)
                     else:
-                        self.reader_crtp.cf.param.set_value(f"motorPowerSet.{param.name}", value)
                         self.get_logger().info(f"changing {param.name} to {value}")
-                    if value > 0:
-                        print("changing motorPowerSet.enable to 1")
-                        self.reader_crtp.cf.param.set_value("motorPowerSet.enable", 1)
-
-
+                        success = self.reader_crtp.send_thrust_command(value, param.name)
                 else:
                     raise ValueError(param)
-        return SetParametersResult(successful=True)
+
+        if success:
+            return SetParametersResult(successful=True)
+        else:
+            return SetParametersResult(successful=False)
 
     def set_param(self, param, param_tuple, param_class):
         if param_tuple[1] == rclpy.Parameter.Type.INTEGER:
