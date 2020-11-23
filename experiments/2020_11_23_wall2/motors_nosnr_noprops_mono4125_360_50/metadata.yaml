@@ -4,18 +4,18 @@ rosbag2_bagfile_information:
   relative_file_paths:
     - /home/duembgen/ROS/audioROS/experiments/2020_11_23_wall2/motors_nosnr_noprops_mono4125_360_50/motors_nosnr_noprops_mono4125_360_50_0.db3
   duration:
-    nanoseconds: 41968975656
+    nanoseconds: 41324807372
   starting_time:
-    nanoseconds_since_epoch: 1606144760847796129
-  message_count: 4552
+    nanoseconds_since_epoch: 1606152581865357806
+  message_count: 4496
   topics_with_message_count:
-    - topic_metadata:
-        name: /geometry/pose_raw
-        type: audio_interfaces/msg/PoseRaw
-        serialization_format: cdr
-      message_count: 4193
     - topic_metadata:
         name: /audio/signals_f
         type: audio_interfaces/msg/SignalsFreq
         serialization_format: cdr
-      message_count: 359
+      message_count: 354
+    - topic_metadata:
+        name: /geometry/pose_raw
+        type: audio_interfaces/msg/PoseRaw
+        serialization_format: cdr
+      message_count: 4142

@@ -4,18 +4,18 @@ rosbag2_bagfile_information:
   relative_file_paths:
     - /home/duembgen/ROS/audioROS/experiments/2020_11_23_wall2/nomotors_nosnr_noprops_None_360_50/nomotors_nosnr_noprops_None_360_50_0.db3
   duration:
-    nanoseconds: 38321187300
+    nanoseconds: 38473447163
   starting_time:
-    nanoseconds_since_epoch: 1606144908698357255
-  message_count: 4152
+    nanoseconds_since_epoch: 1606152722251914314
+  message_count: 4181
   topics_with_message_count:
     - topic_metadata:
         name: /geometry/pose_raw
         type: audio_interfaces/msg/PoseRaw
         serialization_format: cdr
-      message_count: 3825
+      message_count: 3852
     - topic_metadata:
         name: /audio/signals_f
         type: audio_interfaces/msg/SignalsFreq
         serialization_format: cdr
-      message_count: 327
+      message_count: 329
