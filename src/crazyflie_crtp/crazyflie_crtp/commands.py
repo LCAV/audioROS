@@ -16,7 +16,7 @@ command_dict = {
 
 buzzer_dict = {
     'sweep': [
-        ('/gateway', 'buzzer_effect', 11, 0),
+        ('/gateway', 'buzzer_effect', 15, 0),
     ],
     'mono4125': [
         ('/gateway', 'buzzer_effect', 12, 0), # bypass

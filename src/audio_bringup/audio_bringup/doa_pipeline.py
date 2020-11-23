@@ -14,13 +14,14 @@ import time
 
 import numpy as np
 from scipy.io import wavfile
+import serial
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
+from serial_motors import SerialMotors
 
 from crazyflie_crtp.commands import command_dict, buzzer_dict
-
 
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_14_static_new'
@@ -34,16 +35,15 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_12_speaker360'
 #EXTRA_DIRNAME = '2020_11_13_speaker360'
 #EXTRA_DIRNAME = '2020_11_18_speaker360'
-EXTRA_DIRNAME = '2020_11_19_wall'
+#EXTRA_DIRNAME = '2020_11_19_wall'
+#EXTRA_DIRNAME = '2020_11_20_wall'
+EXTRA_DIRNAME = '2020_11_23_wall'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
 WAV_DIRNAME = "export/"
 
-# Ubuntu:
-# to find serial port, run python -m serial.tools.list_ports
-SERIAL_PORT = "/dev/ttyACM0"
 
 def get_filename(**params):
     source_flag = "None" if params.get("source") is None else params.get("source")
@@ -85,8 +85,6 @@ def get_active_nodes():
 
 
 if __name__ == "__main__":
-    import serial
-
     extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
     exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
     csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
@@ -106,10 +104,11 @@ if __name__ == "__main__":
         sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
 
         sound = np.zeros(10, dtype=float)
-        print('playing zero test sound...')
         if global_params['n_meas_mics'] > 0:
+            print('playing and recording zero test sound...')
             sd.playrec(sound, blocking=True)
         else:
+            print('playing zero test sound...')
             sd.play(sound, blocking=True)
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
@@ -118,16 +117,18 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
+    previous_distance = 0
     timestamp = int(time.time())
-    for params in params_list:
+    for param_i, params in enumerate(params_list):
 
         #### prepare filenames ####
-        answer = ''
-        #answer = 'y'
+        #answer = ''
+        answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
             continue
+        print(f'starting experiment {param_i}/{len(params_list)} with {params}')
 
         if type(params['motors']) == str:
             if source_type == 'soundcard':
@@ -162,8 +163,9 @@ if __name__ == "__main__":
         elif source_type == 'buzzer':
             input(f'make sure buzzer plays {params["source"]} at frequency {global_params["freq_source"]}! Enter to continue')
 
-        if params['degree'] in (360, 90):
-            SerialIn = serial.Serial(SERIAL_PORT, 115200)
+        distance = params.get('distance', None)
+        if (params['degree'] != 0) or (distance is not None):
+            SerialIn = SerialMotors()
 
         #### prepare drone ####
 
@@ -177,25 +179,35 @@ if __name__ == "__main__":
         if params.get('max_freq', None) is not None:
             set_param('/gateway', 'max_freq', str(params['max_freq']))
 
+        if distance is not None:
+            delta = distance - previous_distance 
+            print('moving forward by', delta)
+            SerialIn.move(delta)
+            previous_distance = distance
+
+        if params['degree'] != 360:
+            print('turning by', params['degree'])
+            SerialIn.turn(params['degree'])
+
         # TODO(FD) csv file and bag file will not be perfectly synchronized.
         # if that is necessary, we need to rewrite this section.
         # start recording csv file
         set_param('/csv_writer', 'filename', '')
         # start recording bag file
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
-        print('waiting to start bag record')
-        time.sleep(1)
-
-        if params['degree'] == 360:
-            # start rotating and continue immediately
-            SerialIn.write(b"i")
-        elif params['degree'] == 90:
-            # wait until rotation is one
-            SerialIn.write(b"o")
-            time.sleep(8)
+        print('started bag record')
 
         if type(params['motors']) == int:
             set_param('/gateway', 'all', str(params['motors']))
+
+        # play buzzer sound
+        if source_type == 'buzzer-onboard':
+            if params['source'] is not None:
+                execute_commands(buzzer_dict[params['source']])
+
+        if params['degree'] == 360:
+            print('starting turn', params['degree'])
+            SerialIn.turn(params['degree'])
 
         #### get measurements ####
         if source_type == 'soundcard':
@@ -208,10 +220,6 @@ if __name__ == "__main__":
 
         # when we use the buzzer, we only record what the measurement mics get.    
         elif (source_type == 'buzzer-onboard') or (source_type == 'buzzer'):
-
-            # play buzzer sound
-            if source_type == 'buzzer-onboard':
-                execute_commands(buzzer_dict[params['source']])
 
             if global_params['n_meas_mics'] > 0:
                 print(f'recording sound for {global_params["duration"]} seconds...')
@@ -241,16 +249,15 @@ if __name__ == "__main__":
         set_param('/gateway', 'all', '0')
 
         # save wav file.
-        if (global_params['n_meas_mics'] > 0):
+        if global_params['n_meas_mics'] > 0:
             recording_float32 = recording.astype(np.float32)
             wav_filename = os.path.join(wav_dirname, filename) + '.wav'
             wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
             print('wrote wav file as', wav_filename)
 
         # turn back
-        if params['degree'] == 360:
-            SerialIn.write(b"j")
-            time.sleep(25)
-        elif params['degree'] == 90:
-            SerialIn.write(b"k")
-            time.sleep(8) # wait for turning to be done
+        SerialIn.turn_back(params['degree'])
+
+    # after last experiment: move back distance 
+    if distance is not None:
+        SerialIn.move_back(distance)
