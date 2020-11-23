@@ -37,7 +37,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_18_speaker360'
 #EXTRA_DIRNAME = '2020_11_19_wall'
 #EXTRA_DIRNAME = '2020_11_20_wall'
-EXTRA_DIRNAME = '2020_11_23_wall'
+#EXTRA_DIRNAME = '2020_11_23_wall'
+EXTRA_DIRNAME = '2020_11_23_wall2'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -65,7 +66,7 @@ def set_param(node_name, param_name, param_value):
     if out_string == "Set parameter successful":
         return True
     else:
-        print("error:", out_string)
+        print("set_param error:", out_string)
         return False
 
 
@@ -165,7 +166,7 @@ if __name__ == "__main__":
 
         distance = params.get('distance', None)
         if (params['degree'] != 0) or (distance is not None):
-            SerialIn = SerialMotors()
+            SerialIn = SerialMotors(verbose=False)
 
         #### prepare drone ####
 
@@ -181,13 +182,27 @@ if __name__ == "__main__":
 
         if distance is not None:
             delta = distance - previous_distance 
-            print('moving forward by', delta)
-            SerialIn.move(delta)
+            if delta > 0:
+                print('moving forward by', delta)
+                SerialIn.move(delta)
+            elif delta < 0:
+                print('moving backward by', delta)
+                SerialIn.move(delta)
             previous_distance = distance
+
 
         if params['degree'] != 360:
             print('turning by', params['degree'])
             SerialIn.turn(params['degree'])
+
+
+        if (type(params['motors']) is int) and (params['motors'] > 0):
+            success = set_param('/gateway', 'all', str(params['motors']))
+            if not success:
+                print('battery low!')
+                if params['degree'] != 360:
+                    print('turning back by', params['degree'])
+                    SerialIn.turn_back(params['degree'])
 
         # TODO(FD) csv file and bag file will not be perfectly synchronized.
         # if that is necessary, we need to rewrite this section.
@@ -197,8 +212,6 @@ if __name__ == "__main__":
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('started bag record')
 
-        if type(params['motors']) == int:
-            set_param('/gateway', 'all', str(params['motors']))
 
         # play buzzer sound
         if source_type == 'buzzer-onboard':
@@ -258,6 +271,6 @@ if __name__ == "__main__":
         # turn back
         SerialIn.turn_back(params['degree'])
 
-    # after last experiment: move back distance 
+    # after last experiment: move back to position 0
     if distance is not None:
         SerialIn.move_back(distance)
