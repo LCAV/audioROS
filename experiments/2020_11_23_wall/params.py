@@ -17,13 +17,14 @@ MONO = 'mono4125'
 
 # repeat for many different distances
 params_list = []
-for d in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]:
-    for motors in [0, THRUST]:
-        params_list += [
-            {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': motors, 'snr': 0, 'props': 0, 'source':MONO, 'degree':360},
-            {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': motors, 'snr': 0, 'props': 0, 'source':None, 'degree':360},
-            {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': motors, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':0},
-            {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': motors, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':27},
-            {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': motors, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':54},
-            {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': motors, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':81}
-        ]
+#for d in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]:
+for d in [40, 50, 60, 70, 80, 90]:
+    params_list += [
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':MONO, 'degree':360},
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':None, 'degree':360},
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':0},
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':27},
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':54},
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':81},
+        {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': THRUST, 'snr': 0, 'props': 0, 'source':MONO, 'degree':360},
+    ]
