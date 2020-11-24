@@ -24,6 +24,8 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS):
             df.loc[i, 'yaw_deg'] = df_pos.loc[pos_idx].yaw_deg
             df.loc[i, 'dx'] = df_pos.loc[pos_idx].dx
             df.loc[i, 'dy'] = df_pos.loc[pos_idx].dy
+            if 'yaw_rate_deg' in df_pos.columns:
+                df.loc[i, 'yaw_rate_deg'] = df_pos.loc[pos_idx].yaw_rate_deg
         else:
             df.loc[i, 'yaw_deg'] = None
             print('too high time lag (in ms):', lag)
