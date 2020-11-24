@@ -32,8 +32,11 @@ combine_list = ["product", "sum"]
 normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
 
-def get_fname(degree, props, snr, motors, source):
+def get_fname(degree, props, snr, motors, source, distance=None, appendix=""):
     ending = "" if degree == 0 else f"_{degree}"
+    if distance is not None:
+        ending += f"_{distance}"
+    ending += appendix
     props_flag = "" if props else "no"
     motors_flag = "" if motors else "no"
     if source == "None":
@@ -62,7 +65,7 @@ def get_fname_old(degree, props, snr, motors, source):
     return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
 
 
-def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
+def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
     def convert_audio(row):
         arrays = ["signals_real_vect", "signals_imag_vect", "frequencies", "mic_positions"]
         ints = ["n_mics", "n_frequencies", "timestamp", "audio_timestamp"]
@@ -94,7 +97,7 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=E
     if exp_name == "2020_09_17_white-noise-static":
         filename = get_fname_old(degree, props, snr, motors, source)
     else:
-        filename = get_fname(degree, props, snr, motors, source)
+        filename = get_fname(degree, props, snr, motors, source, distance=distance, appendix=appendix)
     fname = f"{CSV_DIRNAME}/{filename}.csv"
     df = pd.read_csv(fname)
     print('read', fname)
@@ -105,7 +108,7 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=E
     if 'source_direction-deg' in df.columns:
         df.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
 
-    pose_columns = [p for p in ['dx', 'dy', 'yaw_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']
+    pose_columns = [p for p in ['dx', 'dy', 'yaw_deg', 'yaw_rate_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']
                     if p in df.columns]
     df_pose = df.loc[df.topic=='geometry/pose_raw', pose_columns]
     return df_audio, df_pose
@@ -146,6 +149,34 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
         end_index = -1
     end_time = df.timestamp.values[end_index]
     df.loc[:, "timestamp_s"] = (df.timestamp - end_time + duration) / 1000
+
+
+def get_positions(df):
+    # compute positions based on relative movement
+    start_pos = np.array([0, 0])
+    positions = np.empty([len(df), 2])
+    i_row = 0
+    for i, row in df.iterrows():
+        yaw_rad = row.yaw_deg / 180 * np.pi
+        length = np.sqrt(row.dx**2 + row.dy**2)
+        new_pos = start_pos + length * np.array(
+            [np.cos(yaw_rad), np.sin(yaw_rad)])
+        positions[i_row, :] = new_pos
+        i_row += 1
+    return positions
+
+
+def integrate_yaw(times, yaw_rates):
+    t_0 = times[0]
+    yaw = 0
+    integrated_yaw = [yaw]
+    for yaw_rate, t_1 in zip(yaw_rates[1:], times[1:]):
+        yaw_delta = yaw_rate * (t_1 - t_0) * 1e-3
+        yaw += yaw_delta
+        integrated_yaw.append(yaw)
+        t_0 = t_1
+    return np.array(integrated_yaw)
+
 
 
 def evaluate_data(fname=""):
