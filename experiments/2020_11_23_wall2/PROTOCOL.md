@@ -10,10 +10,13 @@ __Place__: Place, if necessary temperature etc.
 ## Notes 
 
 <!-- quick and dirty notes, to be written out later -->
-- new experiments with fewer thrust experiments
+- These are new experiments with fewer thrust experiments
 - 40 and 50 cm: corrupted, because stopped working at motors_360_40 (motors stopped and from then on no more buzzer deck)
 - started again at 60 cm
 - did wrong measurements at 60 (angle offset), so had to start again
+
+- next day: first measure at 10 and 50 again (appendix new)
+- then, a few centimeters more in, at 30 again (appendix new)
 
 ## Description
 
