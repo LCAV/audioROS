@@ -118,7 +118,7 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
-    previous_distance = 30
+    previous_distance = 0
     timestamp = int(time.time())
     for param_i, params in enumerate(params_list):
 
@@ -143,8 +143,7 @@ if __name__ == "__main__":
 
         answer = 'y'
         while os.path.exists(bag_filename):
-            #answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
-            answer = 'new'
+            answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
             if answer == 'n':
                 break
             filename = f'{filename}_{answer}'
