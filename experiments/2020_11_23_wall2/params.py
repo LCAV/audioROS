@@ -9,16 +9,13 @@ global_params = {
 }
 
 THRUST = 43000
-#MIN_FREQ = 3000 # to be fixed
-#MAX_FREQ = 15000
-MIN_FREQ = 100 # to be fixed
+MIN_FREQ = 100 
 MAX_FREQ = 4400
 MONO = 'mono4125'
 
 # repeat for many different distances
 params_list = []
-#for d in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]:
-for d in [30]: #60, 70, 80, 90]:
+for d in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]:
     params_list += [
         {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': THRUST, 'snr': 0, 'props': 0, 'source':MONO, 'degree':360},
         {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':MONO, 'degree':360},
