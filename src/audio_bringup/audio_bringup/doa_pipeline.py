@@ -38,7 +38,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_19_wall'
 #EXTRA_DIRNAME = '2020_11_20_wall'
 #EXTRA_DIRNAME = '2020_11_23_wall'
-EXTRA_DIRNAME = '2020_11_23_wall2'
+#EXTRA_DIRNAME = '2020_11_23_wall2'
+EXTRA_DIRNAME = '2020_11_26_wall'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -106,8 +107,12 @@ if __name__ == "__main__":
 
         sound = np.zeros(10, dtype=float)
         if global_params['n_meas_mics'] > 0:
-            print('playing and recording zero test sound...')
-            sd.playrec(sound, blocking=True)
+            if source_type == 'soundcard':
+                print('playing and recording zero test sound...')
+                sd.playrec(sound, blocking=True)
+            else:
+                print('recording zero test sound...')
+                sd.rec(10, blocking=True)
         else:
             print('playing zero test sound...')
             sd.play(sound, blocking=True)
