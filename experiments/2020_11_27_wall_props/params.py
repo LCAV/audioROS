@@ -14,7 +14,6 @@ THRUST = 43000
 
 # repeat for many different distances
 params_list = []
-#for d in range(50):
 for d in range(50):
     params_list += [
         {'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ, 'distance':d, 'motors': THRUST, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':0},
