@@ -22,7 +22,8 @@ setup(
         'console_scripts': [
             'audio = topic_plotter.audio:main',
             'doa = topic_plotter.doa:main',
-            'geometry = topic_plotter.geometry:main'
+            'geometry = topic_plotter.geometry:main',
+            'status = topic_plotter.status:main'
         ],
     },
 )

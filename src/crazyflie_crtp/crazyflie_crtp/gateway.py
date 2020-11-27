@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose 
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw
+from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus
 from audio_interfaces_py.messages import create_signals_freq_message, create_pose_message, create_pose_raw_message
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-#cf_id = "E7E7E7E7E8"
-#id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/80/2M/{cf_id}"
 
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/70/2M/{cf_id}"
+#cf_id = "E7E7E7E7E7"
+#id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -79,6 +79,9 @@ class Gateway(Node):
         self.publisher_motion_pose_raw = self.create_publisher(
             PoseRaw, "geometry/pose_raw", 10
         )
+        self.publisher_status = self.create_publisher(
+            CrazyflieStatus, "crazyflie/status", 10
+        )
 
         self.prev_position_x = 0.0
         self.prev_position_y = 0.0
@@ -97,8 +100,10 @@ class Gateway(Node):
 
         # choose high publish rate so that we introduce as little
         # waiting time as possible
-        self.desired_rate = 1000
+        self.desired_rate = 1000 # Hz
         self.create_timer(1/self.desired_rate, self.publish_current_data)
+
+        self.create_timer(1.0, self.publish_battery)
 
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:
@@ -108,6 +113,17 @@ class Gateway(Node):
         if not self.reader_crtp.motion_dict["published"]:
             self.publish_motion_dict()
             self.reader_crtp.motion_dict["published"] = True
+
+
+    def publish_battery(self):
+        msg = CrazyflieStatus()
+        if self.reader_crtp.battery is not None:
+            msg.vbat = float(self.reader_crtp.battery)
+        else:
+            msg.vbat = 0.0
+        msg.timestamp = int((time.time() - self.start_time) * 1000)
+        self.publisher_status.publish(msg)
+
 
     def publish_audio_dict(self):
         # read audio
