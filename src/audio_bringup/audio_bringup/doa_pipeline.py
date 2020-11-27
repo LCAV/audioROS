@@ -39,7 +39,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_20_wall'
 #EXTRA_DIRNAME = '2020_11_23_wall'
 #EXTRA_DIRNAME = '2020_11_23_wall2'
-EXTRA_DIRNAME = '2020_11_26_wall'
+#EXTRA_DIRNAME = '2020_11_26_wall'
+EXTRA_DIRNAME = '2020_11_27_wall_props'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -265,6 +266,10 @@ if __name__ == "__main__":
 
         # set thrust to 0 (or stop hover)
         set_param('/gateway', 'all', '0')
+
+        if (type(params['motors']) is int) and (params['motors'] > 0):
+            print('wait for 1.5 minutes for batteries to recharge')
+            time.sleep(90)
 
         # save wav file.
         if global_params['n_meas_mics'] > 0:
