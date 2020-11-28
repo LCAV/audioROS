@@ -1,11 +1,7 @@
 global_params = {
-    'duration': 38, # seconds, 
     'source_type': 'buzzer-onboard',
     'fs_soundcard': 44100, # hz
     'n_meas_mics': 1, # number of measurement mics
-    'freq_source': 4125, # hz, for mono only
-    'min_dB': -60,
-    'max_dB': -10, 
 }
 
 MIN_FREQ = 1000

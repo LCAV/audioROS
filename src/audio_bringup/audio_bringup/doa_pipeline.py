@@ -21,7 +21,8 @@ from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 from serial_motors import SerialMotors
 
-from crazyflie_crtp.commands import command_dict, buzzer_dict
+from crazyflie_description_py.commands import command_dict, buzzer_dict
+from crazyflie_description_py.parameters import SWEEPS
 
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_14_static_new'
@@ -40,9 +41,10 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_23_wall'
 #EXTRA_DIRNAME = '2020_11_23_wall2'
 #EXTRA_DIRNAME = '2020_11_26_wall'
-EXTRA_DIRNAME = '2020_11_27_wall_props'
+#EXTRA_DIRNAME = '2020_11_27_wall_props'
+EXTRA_DIRNAME = '2020_11_27_wall_short'
 
-TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw']
+TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/battery']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
 WAV_DIRNAME = "export/"
@@ -126,7 +128,10 @@ if __name__ == "__main__":
 
     previous_distance = 0
     timestamp = int(time.time())
-    for param_i, params in enumerate(params_list):
+
+    param_i = 0
+    while param_i < len(params_list):
+        params = params_list[param_i]
 
         #### prepare filenames ####
         #answer = ''
@@ -159,32 +164,29 @@ if __name__ == "__main__":
             continue
 
         #### prepare sound and turntable interfaces ####
-
+        duration = global_params.get("duration", 30)
         if source_type == 'soundcard':
             out_signal = generate_signal(global_params['fs_soundcard'], 
-                    global_params['duration'], 
+                    duration, 
                     signal_type=params['source'], 
-                    frequency_hz=global_params['freq_source'], 
-                    min_dB=global_params['min_dB'], 
-                    max_dB=global_params['max_dB'])
+                    frequency_hz=source_params['freq_source'], 
+                    min_dB=source_params['min_dB'], 
+                    max_dB=source_params['max_dB'])
         elif source_type == 'buzzer':
-            input(f'make sure buzzer plays {params["source"]} at frequency {global_params["freq_source"]}! Enter to continue')
+            input(f'make sure buzzer plays {params["source"]} at correct frequency! Enter to continue')
 
         distance = params.get('distance', None)
         if (params['degree'] != 0) or (distance is not None):
             SerialIn = SerialMotors(verbose=False)
 
-        #### prepare drone ####
-
-        # set audio parameters
+        # TODO(FD) set all parameters 
         set_param('/gateway', 'filter_snr_enable', str(params['snr']))
         set_param('/gateway', 'filter_prop_enable', str(params['props']))
-
-        # TODO(FD) do this for all possible parameters 
-        if params.get('min_freq', None) is not None:
-            set_param('/gateway', 'min_freq', str(params['min_freq']))
-        if params.get('max_freq', None) is not None:
-            set_param('/gateway', 'max_freq', str(params['max_freq']))
+        if source_type == 'buzzer-onboard':
+            sweep = SWEEPS[params['source']]
+            c, (min_freq, max_freq), duration = sweep
+            set_param('/gateway', 'min_freq', str(min_freq))
+            set_param('/gateway', 'max_freq', str(max_freq))
 
         if distance is not None:
             delta = distance - previous_distance 
@@ -196,19 +198,29 @@ if __name__ == "__main__":
                 SerialIn.move_back(delta)
             previous_distance = distance
 
-
         if params['degree'] != 360:
             print('turning by', params['degree'])
             SerialIn.turn(params['degree'])
 
-
         if (type(params['motors']) is int) and (params['motors'] > 0):
+            #print('wait for 10 more seconds before starting next experiment with motors')
+            #time.sleep(10)
             success = set_param('/gateway', 'all', str(params['motors']))
+            counter = 0
+            while not success and (counter < 6):
+                print('ERROR: battery low, wait for 20 seconds for batteries to recharge')
+                time.sleep(20)
+                success = set_param('/gateway', 'all', str(params['motors']))
+                counter += 1
+
             if not success:
-                print('battery low!')
-                if params['degree'] != 360:
+                print('ERROR: battery still low. restarting experiment')
+                if not params['degree'] in [0, 360]:
                     print('turning back by', params['degree'])
                     SerialIn.turn_back(params['degree'])
+                continue
+            else:
+                print('SUCCESS: battery has charged enough')
 
         # TODO(FD) csv file and bag file will not be perfectly synchronized.
         # if that is necessary, we need to rewrite this section.
@@ -218,8 +230,6 @@ if __name__ == "__main__":
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('started bag record')
 
-
-        # play buzzer sound
         if source_type == 'buzzer-onboard':
             if params['source'] is not None:
                 execute_commands(buzzer_dict[params['source']])
@@ -241,16 +251,16 @@ if __name__ == "__main__":
         elif (source_type == 'buzzer-onboard') or (source_type == 'buzzer'):
 
             if global_params['n_meas_mics'] > 0:
-                print(f'recording sound for {global_params["duration"]} seconds...')
-                n_frames = global_params['duration'] * global_params['fs_soundcard']
+                print(f'recording sound for {duration} seconds...')
+                n_frames = int(duration * global_params['fs_soundcard'])
                 recording = sd.rec(n_frames, blocking=True)
             else:
                 if type(params['motors']) == str:
                     print(f'executing motor commands:')
                     execute_commands(command_dict[params['motors']])
                 else:
-                    print(f'waiting for {global_params["duration"]} seconds...')
-                    time.sleep(global_params['duration'])
+                    print(f'waiting for {duration} seconds...')
+                    time.sleep(duration)
 
             # end buzzer sound
             if source_type == 'buzzer-onboard':
@@ -258,18 +268,14 @@ if __name__ == "__main__":
 
         print('...done')
 
+        # set thrust to 0 (or stop hover)
+        set_param('/gateway', 'all', '0')
+
         # when done playing sound: stop bag file
         bag_pid.send_signal(signal.SIGINT)
 
         # record the csv file
         set_param('/csv_writer', 'filename', csv_filename)
-
-        # set thrust to 0 (or stop hover)
-        set_param('/gateway', 'all', '0')
-
-        if (type(params['motors']) is int) and (params['motors'] > 0):
-            print('wait for 1.5 minutes for batteries to recharge')
-            time.sleep(90)
 
         # save wav file.
         if global_params['n_meas_mics'] > 0:
@@ -281,6 +287,9 @@ if __name__ == "__main__":
         # turn back
         SerialIn.turn_back(params['degree'])
 
+        param_i += 1
+
     # after last experiment: move back to position 0
     if distance is not None:
+        print('moving back by', distance)
         SerialIn.move_back(distance)

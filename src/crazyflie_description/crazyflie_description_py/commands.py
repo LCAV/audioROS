@@ -1,4 +1,5 @@
 import numpy as np
+from .parameters import SWEEPS
 
 # node, parameter, value, duration (seconds)
 thrusts = np.linspace(1000, 50000, 50)
@@ -14,10 +15,11 @@ command_dict = {
      ]
 }
 
+# buzzer commands from the different sweeps.
 buzzer_dict = {
-    'sweep': [
-        ('/gateway', 'buzzer_effect', 15, 0),
-    ],
+    key: [('/gateway', 'buzzer_effect', value[0], 0)] for key, value in SWEEPS.items()
+}
+buzzer_dict.update({
     'mono4125': [
         ('/gateway', 'buzzer_effect', 12, 0), # bypass
         ('/gateway', 'buzzer_freq', 4125, 0),
@@ -25,4 +27,4 @@ buzzer_dict = {
     'stop': [
         ('/gateway', 'buzzer_effect', 0, 0), # off
     ]
-}
+})
