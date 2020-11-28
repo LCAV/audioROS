@@ -13,3 +13,10 @@ N_MICS = 4 # number of mics
 FS = 32000 # sampling frequency [Hz]
 N_BUFFER = 2048 # number of samples in audio buffer
 FFTSIZE = 32 # number of frequency bins that are sent. 
+
+# name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
+SWEEPS = {
+    'sweep': (15, [1000, 5000], 38.0),
+    'sweep_low': (16, [900, 1100], 16.0),
+    'sweep_high': (17, [3400, 3600], 16.0),
+}

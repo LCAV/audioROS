@@ -4,4 +4,3 @@
 """
 __init__.py: Empty file to make crazyflie_description_py a python module.
 """
-pass
