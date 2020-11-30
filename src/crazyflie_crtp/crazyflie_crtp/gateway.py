@@ -114,7 +114,6 @@ class Gateway(Node):
             self.publish_motion_dict()
             self.reader_crtp.motion_dict["published"] = True
 
-
     def publish_battery(self):
         msg = CrazyflieStatus()
         if self.reader_crtp.battery is not None:
@@ -123,7 +122,6 @@ class Gateway(Node):
             msg.vbat = 0.0
         msg.timestamp = int((time.time() - self.start_time) * 1000)
         self.publisher_status.publish(msg)
-
 
     def publish_audio_dict(self):
         # read audio
