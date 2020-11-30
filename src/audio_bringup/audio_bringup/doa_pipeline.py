@@ -45,7 +45,7 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_27_wall_short'
 EXTRA_DIRNAME = '2020_11_28_wall_turn'
 
-TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/battery']
+TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
 WAV_DIRNAME = "export/"

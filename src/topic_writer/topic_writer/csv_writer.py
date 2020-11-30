@@ -8,7 +8,7 @@ from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw
+from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus
 
 # Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
 # Used to automate the process of bag file conversion (CTRL+C does not work for some reason)
@@ -24,6 +24,10 @@ class CsvWriter(Node):
 
         self.subscription_pose_raw = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
+        )
+
+        self.subscription_status = self.create_subscription(
+            CrazyflieStatus, "crazyflie/status", self.listener_callback_status, 10
         )
 
         self.declare_parameter("filename")
@@ -70,6 +74,16 @@ class CsvWriter(Node):
         self.header = set(row_dict.keys()).union(self.header)
         self.rows.append(row_dict)
 
+    def listener_callback_status(self, msg):
+        row_dict = {
+          "index": len(self.rows),
+          "topic": "crazyflie/status",
+          "timestamp": msg.timestamp,
+          "vbat": msg.vbat,
+        }
+        self.header = set(row_dict.keys()).union(self.header)
+        self.rows.append(row_dict)
+
     def set_params(self, params):
         """ Set the parameter. If filename is set, we save the current rows and reset. """
         param = params[0] # only one parameter possible.
@@ -96,6 +110,8 @@ class CsvWriter(Node):
                 csv_writer = csv.DictWriter(f, sorted(self.header))
                 csv_writer.writeheader()
             self.get_logger().info(f"Wrote header in new file {fullname}.")
+        else:
+            self.get_logger().warn(f"File {fullname} exists! Appending new rows to it.")
 
         with open(fullname, "a") as f:
             csv_writer = csv.DictWriter(f, sorted(self.header))
