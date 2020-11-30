@@ -16,7 +16,9 @@ FFTSIZE = 32 # number of frequency bins that are sent.
 
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
 SWEEPS = {
-    'sweep': (15, [1000, 5000], 38.0),
-    'sweep_low': (16, [900, 1100], 16.0),
-    'sweep_high': (17, [3400, 3600], 16.0),
+    'sweep':      (15, [1000, 5000], 38.0), # 38s is duration of sweep
+    'sweep_low':  (16, [900,  1100], 16.0), # 16s is duration of sweep
+    'sweep_high': (17, [3400, 3600], 16.0), # 16s is duration of sweep
+    'mono4125':   (0,  [1000, 5000], 18.0), # 18s is duration of 360degree turn
+    'mono3500':   (0,  [1000, 5000], 18.0), # 18s is duration of 360degree turn
 }

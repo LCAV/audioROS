@@ -12,7 +12,7 @@ from audio_interfaces.msg import SignalsFreq, PoseRaw
 
 # Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
 # Used to automate the process of bag file conversion (CTRL+C does not work for some reason)
-TIMEOUT_S = 60*60*2 # seconds
+TIMEOUT_S = np.inf # seconds
 
 class CsvWriter(Node):
     def __init__(self):
@@ -104,18 +104,12 @@ class CsvWriter(Node):
         self.get_logger().info(f"Appended {len(self.rows)} rows to {fullname}.")
         self.reset()
 
-#    def destroy_node(self):
-#        self.get_logger().info("Custom destroy")
-#        self.write_file()
-#        super().destroy_node()
-
 
 def main(args=None):
     import time 
     rclpy.init(args=args)
 
     writer = CsvWriter()
-
     try:
         start_time = time.time()
         while (time.time() - start_time) < TIMEOUT_S:

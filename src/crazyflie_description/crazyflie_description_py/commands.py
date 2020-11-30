@@ -17,12 +17,16 @@ command_dict = {
 
 # buzzer commands from the different sweeps.
 buzzer_dict = {
-    key: [('/gateway', 'buzzer_effect', value[0], 0)] for key, value in SWEEPS.items()
+    key: [('/gateway', 'buzzer_effect', value[0], 0)] for key, value in SWEEPS.items() if 'sweep' in key
 }
 buzzer_dict.update({
     'mono4125': [
         ('/gateway', 'buzzer_effect', 12, 0), # bypass
         ('/gateway', 'buzzer_freq', 4125, 0),
+    ],
+    'mono3500': [
+        ('/gateway', 'buzzer_effect', 12, 0), # bypass
+        ('/gateway', 'buzzer_freq', 3500, 0),
     ],
     'stop': [
         ('/gateway', 'buzzer_effect', 0, 0), # off
