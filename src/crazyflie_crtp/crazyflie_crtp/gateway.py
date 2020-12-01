@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose 
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus
+from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
 from audio_interfaces_py.messages import create_signals_freq_message, create_pose_message, create_pose_raw_message
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-#cf_id = "E7E7E7E7E8"
-#id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/80/2M/{cf_id}"
 
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/70/2M/{cf_id}"
+#cf_id = "E7E7E7E7E7"
+#id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -82,6 +82,9 @@ class Gateway(Node):
         self.publisher_status = self.create_publisher(
             CrazyflieStatus, "crazyflie/status", 10
         )
+        self.publisher_motors = self.create_publisher(
+            CrazyflieMotors, "crazyflie/motors", 10
+        )
 
         self.prev_position_x = 0.0
         self.prev_position_y = 0.0
@@ -103,25 +106,42 @@ class Gateway(Node):
         self.desired_rate = 1000 # Hz
         self.create_timer(1/self.desired_rate, self.publish_current_data)
 
-        self.create_timer(1.0, self.publish_battery)
-
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:
             self.publish_audio_dict()
             self.reader_crtp.audio_dict["published"] = True
 
-        if not self.reader_crtp.motion_dict["published"]:
+        if not self.reader_crtp.logging_dicts["motion"]["published"]:
             self.publish_motion_dict()
-            self.reader_crtp.motion_dict["published"] = True
+            self.reader_crtp.logging_dicts["motion"]["published"] = True
+
+        if not self.reader_crtp.logging_dicts["motors"]["published"]:
+            self.publish_motors_dict()
+            self.reader_crtp.logging_dicts["motors"]["published"] = True
+
+        if not self.reader_crtp.logging_dicts["status"]["published"]:
+            self.publish_battery()
+            self.reader_crtp.logging_dicts["status"]["published"] = True
 
     def publish_battery(self):
         msg = CrazyflieStatus()
-        if self.reader_crtp.battery is not None:
-            msg.vbat = float(self.reader_crtp.battery)
+        data = self.reader_crtp.logging_dicts["status"]["data"]
+        if data is not None:
+            msg.vbat = float(data["vbat"])
         else:
             msg.vbat = 0.0
-        msg.timestamp = int((time.time() - self.start_time) * 1000)
+        msg.timestamp = self.reader_crtp.logging_dicts["status"]["timestamp"]
         self.publisher_status.publish(msg)
+
+    def publish_motors_dict(self):
+        msg = CrazyflieMotors()
+        data = self.reader_crtp.logging_dicts["motors"]["data"]
+        if data is not None:
+            msg.motors_pwm = [data["m{i}_pwm"] for i in range(1, 5)]
+        else:
+            msg.motors_pwm = []
+        msg.timestamp = self.reader_crtp.logging_dicts["motors"]["timestamp"]
+        self.publisher_motors.publish(msg)
 
     def publish_audio_dict(self):
         # read audio
@@ -169,8 +189,8 @@ class Gateway(Node):
         self.get_logger().info(f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}")
 
     def publish_motion_dict(self):
-        motion_dict = self.reader_crtp.motion_dict["data"]
-        timestamp = self.reader_crtp.motion_dict["timestamp"]
+        motion_dict = self.reader_crtp.logging_dicts["motion"]["data"]
+        timestamp = self.reader_crtp.logging_dicts["motion"]["timestamp"]
 
         msg_pose_raw = create_pose_raw_message(motion_dict, timestamp)
         msg_pose_raw.source_direction_deg = SOURCE_DIRECTION_DEG
