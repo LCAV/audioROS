@@ -29,6 +29,9 @@ class CsvWriter(Node):
         self.subscription_status = self.create_subscription(
             CrazyflieStatus, "crazyflie/status", self.listener_callback_status, 10
         )
+        self.subscription_motors = self.create_subscription(
+            CrazyflieMotors, "crazyflie/motors", self.listener_callback_motors, 10
+        )
 
         self.declare_parameter("filename")
         self.set_parameters_callback(self.set_params)
@@ -80,6 +83,16 @@ class CsvWriter(Node):
           "topic": "crazyflie/status",
           "timestamp": msg.timestamp,
           "vbat": msg.vbat,
+        }
+        self.header = set(row_dict.keys()).union(self.header)
+        self.rows.append(row_dict)
+
+    def listener_callback_motors(self, msg):
+        row_dict = {
+          "index": len(self.rows),
+          "topic": "crazyflie/motors",
+          "timestamp": msg.timestamp,
+          "motors_pwm": msg.motors_pwm,
         }
         self.header = set(row_dict.keys()).union(self.header)
         self.rows.append(row_dict)
