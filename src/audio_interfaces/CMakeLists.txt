@@ -34,6 +34,7 @@ endif()
 
 set(msg_files
   "msg/Correlations.msg"
+  "msg/CrazyflieMotors.msg"
   "msg/CrazyflieStatus.msg"
   "msg/DoaEstimates.msg"
   "msg/PoseRaw.msg"
