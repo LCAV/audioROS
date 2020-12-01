@@ -23,7 +23,8 @@ setup(
             'audio = topic_plotter.audio:main',
             'doa = topic_plotter.doa:main',
             'geometry = topic_plotter.geometry:main',
-            'status = topic_plotter.status:main'
+            'status = topic_plotter.status:main',
+            'motors = topic_plotter.motors:main'
         ],
     },
 )

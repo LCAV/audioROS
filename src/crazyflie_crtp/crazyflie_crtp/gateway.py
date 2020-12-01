@@ -137,7 +137,7 @@ class Gateway(Node):
         msg = CrazyflieMotors()
         data = self.reader_crtp.logging_dicts["motors"]["data"]
         if data is not None:
-            msg.motors_pwm = [data["m{i}_pwm"] for i in range(1, 5)]
+            msg.motors_pwm = [data[f"m{i}_pwm"] for i in range(1, 5)]
         else:
             msg.motors_pwm = []
         msg.timestamp = self.reader_crtp.logging_dicts["motors"]["timestamp"]
@@ -283,13 +283,14 @@ def main(args=None):
 
     verbose = False
     log_motion = True # get position logging from Crazyflie.
+    log_motors = True 
 
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
-        reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion)
+        reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors)
         publisher = Gateway(reader_crtp)
         print("done initializing")
 
