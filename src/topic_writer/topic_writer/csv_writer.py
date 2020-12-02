@@ -8,7 +8,7 @@ from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus
+from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
 
 # Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
 # Used to automate the process of bag file conversion (CTRL+C does not work for some reason)
@@ -37,7 +37,7 @@ class CsvWriter(Node):
         self.set_parameters_callback(self.set_params)
         
         self.reset()
-        self.get_logger().info('Subscribed to audio/signals_f and geometry/pose_raw.')
+        self.get_logger().info('Subscribed to audio/signals_f and crazyflie/status and crazyflie/motors and geometry/pose_raw.')
 
     def reset(self):
         self.header = {"index", "topic"}
@@ -92,8 +92,9 @@ class CsvWriter(Node):
           "index": len(self.rows),
           "topic": "crazyflie/motors",
           "timestamp": msg.timestamp,
-          "motors_pwm": msg.motors_pwm,
+          "motors_pwm": np.array(msg.motors_pwm),
         }
+
         self.header = set(row_dict.keys()).union(self.header)
         self.rows.append(row_dict)
 

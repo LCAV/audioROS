@@ -43,7 +43,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_26_wall'
 #EXTRA_DIRNAME = '2020_11_27_wall_props'
 #EXTRA_DIRNAME = '2020_11_27_wall_short'
-EXTRA_DIRNAME = '2020_11_28_wall_turn'
+#EXTRA_DIRNAME = '2020_11_28_wall_turn'
+EXTRA_DIRNAME = '2020_11_30_wall_hover'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -79,8 +80,17 @@ def execute_commands(command_list):
     for command in command_list:
         node, parameter, value, sleep = command
         print(f'execute {parameter}: {value} and sleep for {sleep}s...')
-        set_param(node, parameter, str(value))
+        if parameter != '':
+            set_param(node, parameter, str(value))
         time.sleep(sleep)
+
+
+def get_total_time(command_list):
+    time = 0
+    for command in command_list:
+        time += command[3]
+    time += 25 # extra 10 seconds for unexpected waiting times
+    return time
 
 
 def get_active_nodes():
@@ -146,8 +156,6 @@ if __name__ == "__main__":
         if type(params['motors']) == str:
             if source_type == 'soundcard':
                 raise ValueError('cannot play sound card and control motors at the same time')
-            elif global_params['n_meas_mics'] > 0:
-                raise ValueError('cannot record sound card and control motors at the same time')
 
         filename = get_filename(**params)
         bag_filename = os.path.join(exp_dirname, filename)
@@ -165,8 +173,24 @@ if __name__ == "__main__":
             continue
 
         #### prepare sound and turntable interfaces ####
+        distance = params.get('distance', None)
+        if (params['degree'] != 0) or (distance is not None):
+            SerialIn = SerialMotors(verbose=False)
+
         duration = global_params.get("duration", 30)
-        if source_type == 'soundcard':
+        min_freq = params.get('min_freq', None)
+        max_freq = params.get('max_freq', None)
+        if type(params['motors']) == str:
+            duration_motors = get_total_time(command_dict[params['motors']])
+            if duration_motors > duration:
+                print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
+                duration = duration_motors
+        if (source_type == 'buzzer-onboard') and (params['source'] is not None):
+            c, (min_freq, max_freq), duration_buzzer = SWEEPS[params['source']]
+            if duration_buzzer > duration:
+                print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
+                duration = duration_buzzer
+        elif source_type == 'soundcard':
             out_signal = generate_signal(global_params['fs_soundcard'], 
                     duration, 
                     signal_type=params['source'], 
@@ -176,19 +200,14 @@ if __name__ == "__main__":
         elif source_type == 'buzzer':
             input(f'make sure buzzer plays {params["source"]} at correct frequency! Enter to continue')
 
-        distance = params.get('distance', None)
-        if (params['degree'] != 0) or (distance is not None):
-            SerialIn = SerialMotors(verbose=False)
-
-        # TODO(FD) set all parameters 
         set_param('/gateway', 'filter_snr_enable', str(params['snr']))
         set_param('/gateway', 'filter_prop_enable', str(params['props']))
-        if source_type == 'buzzer-onboard':
-            sweep = SWEEPS[params['source']]
-            c, (min_freq, max_freq), duration = sweep
+        if min_freq is not None:
             set_param('/gateway', 'min_freq', str(min_freq))
+        if max_freq is not None:
             set_param('/gateway', 'max_freq', str(max_freq))
 
+        #### move ####
         if distance is not None:
             delta = distance - previous_distance 
             if delta > 0:
@@ -199,13 +218,11 @@ if __name__ == "__main__":
                 SerialIn.move_back(delta)
             previous_distance = distance
 
-        if params['degree'] != 360:
+        if not (params['degree'] in [0, 360]):
             print('turning by', params['degree'])
             SerialIn.turn(params['degree'])
 
         if (type(params['motors']) is int) and (params['motors'] > 0):
-            #print('wait for 10 more seconds before starting next experiment with motors')
-            #time.sleep(10)
             success = set_param('/gateway', 'all', str(params['motors']))
             counter = 0
             while not success and (counter < 6):
@@ -216,21 +233,20 @@ if __name__ == "__main__":
 
             if not success:
                 print('ERROR: battery still low. restarting experiment')
-                if not params['degree'] in [0, 360]:
+                if not (params['degree'] in [0, 360]):
                     print('turning back by', params['degree'])
                     SerialIn.turn_back(params['degree'])
                 continue
             else:
                 print('SUCCESS: battery has charged enough')
 
-        # TODO(FD) csv file and bag file will not be perfectly synchronized.
-        # if that is necessary, we need to rewrite this section.
-        # start recording csv file
+        #### record ####
         set_param('/csv_writer', 'filename', '')
-        # start recording bag file
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('started bag record')
 
+
+        #### play ####
         if source_type == 'buzzer-onboard':
             if params['source'] is not None:
                 execute_commands(buzzer_dict[params['source']])
@@ -239,7 +255,7 @@ if __name__ == "__main__":
             print('starting turn', params['degree'])
             SerialIn.turn(params['degree'])
 
-        #### get measurements ####
+        # when we use an external speaker, we play and record. 
         if source_type == 'soundcard':
             if global_params['n_meas_mics'] > 0:
                 print('playing and recording sound...')
@@ -247,50 +263,49 @@ if __name__ == "__main__":
             else:
                 print('playing (not recording) sound...')
                 sd.play(out_signal, blocking=True)
-
-        # when we use the buzzer, we only record what the measurement mics get.    
+        # when we use the buzzer, we simply record what the measurement mics get.    
         elif (source_type == 'buzzer-onboard') or (source_type == 'buzzer'):
+            start_time = time.time()
 
             if global_params['n_meas_mics'] > 0:
                 print(f'recording sound for {duration} seconds...')
                 n_frames = int(duration * global_params['fs_soundcard'])
-                recording = sd.rec(n_frames, blocking=True)
+                recording = sd.rec(n_frames, blocking=False)
+
+            if type(params['motors']) == str:
+                print(f'executing motor commands:')
+                execute_commands(command_dict[params['motors']])
+                extra_idle_time = duration - (time.time() - start_time)
+                if extra_idle_time > 0:
+                    print(f'finished motor commands faster than expected. sleeping for {extra_idle_time:.2f} seconds...')
+                    time.sleep(extra_idle_time)
+                elif extra_idle_time < 0:
+                    print(f'Warning: finished recording before finishing motor commands! {extra_idle_time:.2f}')
             else:
-                if type(params['motors']) == str:
-                    print(f'executing motor commands:')
-                    execute_commands(command_dict[params['motors']])
-                else:
-                    print(f'waiting for {duration} seconds...')
-                    time.sleep(duration)
+                print(f'waiting for {duration} seconds...')
+                time.sleep(duration)
 
-            # end buzzer sound
-            if source_type == 'buzzer-onboard':
-                execute_commands(buzzer_dict['stop'])
-
+        #### wrap up ####
+        if source_type == 'buzzer-onboard':
+            execute_commands(buzzer_dict['stop'])
         print('...done')
 
-        # set thrust to 0 (or stop hover)
         set_param('/gateway', 'all', '0')
-
-        # when done playing sound: stop bag file
         bag_pid.send_signal(signal.SIGINT)
-
-        # record the csv file
         set_param('/csv_writer', 'filename', csv_filename)
 
-        # save wav file.
         if global_params['n_meas_mics'] > 0:
             recording_float32 = recording.astype(np.float32)
             wav_filename = os.path.join(wav_dirname, filename) + '.wav'
             wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
             print('wrote wav file as', wav_filename)
 
-        # turn back
-        SerialIn.turn_back(params['degree'])
+        if params['degree'] != 0:
+            SerialIn.turn_back(params['degree'])
 
         param_i += 1
 
     # after last experiment: move back to position 0
-    if distance is not None:
+    if (distance is not None) and (distance > 0):
         print('moving back by', distance)
         SerialIn.move_back(distance)
