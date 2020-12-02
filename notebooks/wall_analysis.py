@@ -6,12 +6,16 @@ def get_psd(signals_f, frequencies, ax=None, fname='real'):
     
     if 'simulated' in fname:
         slope = (4000 - 1000) / (200 - 50)
+        offset = -500
     elif 'real' in fname:
-        slope = (4000 - 1000) / (285 - 90)
+        # old dataset (2020_11_23_wall2)
+        #slope = (4000 - 1000) / (285 - 90)
+        #offset = -500
+        slope = (4000 - 1000) / (250 - 50)
+        offset = 200
     else:
         raise ValueError(exp_name)
     
-    offset = -500
     delta = 50
 
     # freqs_window = offset + slope * times
@@ -25,5 +29,5 @@ def get_psd(signals_f, frequencies, ax=None, fname='real'):
     times = np.arange(signals_f.shape[0])
     for i, (t, f) in enumerate(zip(times_window, frequencies)):
         signals_window = signals_f[(times <= t + delta) & (times >= t - delta),:,i]
-        psd[:, i] = np.sum(np.abs(signals_window)**2 /(2*delta), axis=0) / signals_window.shape[0]
+        psd[:, i] = np.sum(np.abs(signals_window)**2 / signals_window.shape[0], axis=0)
     return psd

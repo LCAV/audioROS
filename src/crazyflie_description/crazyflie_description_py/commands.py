@@ -2,6 +2,10 @@ import numpy as np
 from .parameters import SWEEPS
 
 # node, parameter, value, duration (seconds)
+# 
+# duration calculation: 
+# for angles: angle_deg / 360 * 5
+# for distances: distance_m * 5 (/0.2)
 thrusts = np.linspace(1000, 50000, 50)
 command_dict = {
      'sweep': [
@@ -9,9 +13,14 @@ command_dict = {
      ],
      'hover': [
         ('/gateway', 'hover_height', 0.5, 3),
-        ('/gateway', 'turn_angle', 20, 5),
-        ('/gateway', 'turn_angle', -20, 5),
-        ('/gateway', 'land_velocity', 1, 3),
+        ('/gateway', '' , '' , 2),
+        ('/gateway', 'turn_angle', 360, 5), # rate is 5
+        ('/gateway', '' , '' , 2),
+        ('/gateway', 'move_distance', 0.3, 2),
+        ('/gateway', '' , '' , 2),
+        ('/gateway', 'move_distance', -0.3, 2),
+        ('/gateway', '' , '' , 2),
+        ('/gateway', 'land_velocity', 0.2, 3),
      ]
 }
 

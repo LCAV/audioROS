@@ -55,6 +55,7 @@ COMMAND_PARAMETERS_TUPLES = [
     ("hover_height", rclpy.Parameter.Type.DOUBLE, 0.0),
     ("turn_angle", rclpy.Parameter.Type.INTEGER, 0),
     ("land_velocity", rclpy.Parameter.Type.DOUBLE, 0.0),
+    ("move_distance", rclpy.Parameter.Type.DOUBLE, 0.0),
 ]
 
 BUZZER_PARAMETERS_TUPLES = [
@@ -176,7 +177,7 @@ class Gateway(Node):
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
 
         abs_signals_f = np.abs(signals_f)
-        if np.any(abs_signals_f[:3, :] > 1e5) or np.any(abs_signals_f[:3, :] < 1e-10):
+        if np.any(abs_signals_f[:3, :] > 1e5):
             self.get_logger().warn("Possibly in valid audio:")
             self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
             self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
@@ -216,12 +217,16 @@ class Gateway(Node):
                     success = self.reader_crtp.send_hover_command(height)
             elif param.name == 'turn_angle':
                 angle = param.get_parameter_value().integer_value
-                if angle > 0:
+                if angle != 0:
                     success = self.reader_crtp.send_turn_command(angle)
             elif param.name == 'land_velocity':
                 velocity = param.get_parameter_value().double_value
                 if velocity > 0:
                     success = self.reader_crtp.send_land_command()
+            elif param.name == 'move_distance':
+                distance = param.get_parameter_value().double_value
+                if distance != 0:
+                    self.reader_crtp.send_move_command(distance)
 
             # send buzzer commands
             elif param.name == 'buzzer_effect':
