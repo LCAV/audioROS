@@ -133,7 +133,7 @@ def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp
     status_columns = ['timestamp', 'index', 'topic', 'vbat']
     df_status = df.loc[df.topic=='crazyflie/status', status_columns]
 
-    motors_columns = ['timestamp', 'index', 'topic', 'motors_pwm', 'motors_thrust']
+    motors_columns = [c for c in ['timestamp', 'index', 'topic', 'motors_pwm', 'motors_thrust'] if c in df.columns]
     df_motors = df.loc[df.topic=='crazyflie/motors', motors_columns]
     df_motors = df_motors.apply(convert_row, axis=1)
     return df_status, df_motors
