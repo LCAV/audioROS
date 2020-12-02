@@ -14,20 +14,26 @@ class MotorsPlotter(Node):
             CrazyflieMotors, "crazyflie/motors", self.listener_callback_motors, 10
         )
 
-        self.fig, self.ax = plt.subplots()
-        self.ax.set_title("Motors pwm signals")
-        self.ax.set_xlabel("time [s]")
-        self.ax.set_ylabel("pwm signals")
+        self.fig, self.axs = plt.subplots(1, 2)
+        self.axs[0].set_title("Motors pwm signals")
+        self.axs[1].set_title("Motors thrust signals")
+        self.axs[0].set_xlabel("time [s]")
+        self.axs[1].set_xlabel("time [s]")
+        self.axs[0].set_ylabel("pwm signals")
+        self.axs[1].set_ylabel("thrust signals")
         #self.ax.set_ylim(3, 5)
         for i in range(4):
-            self.ax.scatter([], [], color=f"C{i}", label=f"motor {i}")
-        self.ax.legend()
-        self.fig.set_size_inches(14, 20)
+            self.axs[0].scatter([], [], color=f"C{i}", label=f"motor {i}")
+            self.axs[1].scatter([], [], color=f"C{i}", label=f"motor {i}")
+        self.axs[0].legend()
+        self.axs[1].legend()
+        self.fig.set_size_inches(14, 10)
         plt.show(block=False)
 
     def listener_callback_motors(self, msg):
         for i in range(4): 
-            self.ax.scatter(msg.timestamp/1000, msg.motors_pwm[i], color=f"C{i}")
+            self.axs[0].scatter(msg.timestamp/1000, msg.motors_pwm[i], color=f"C{i}")
+            self.axs[1].scatter(msg.timestamp/1000, msg.motors_thrust[i], color=f"C{i}")
         self.fig.canvas.draw()
 
 def main(args=None):
