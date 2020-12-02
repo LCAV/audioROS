@@ -93,6 +93,7 @@ class CsvWriter(Node):
           "topic": "crazyflie/motors",
           "timestamp": msg.timestamp,
           "motors_pwm": np.array(msg.motors_pwm),
+          "motors_thrust": np.array(msg.motors_thrust),
         }
 
         self.header = set(row_dict.keys()).union(self.header)

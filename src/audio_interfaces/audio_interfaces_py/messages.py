@@ -29,7 +29,7 @@ def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     msg.position = Point()
     msg.position.x = d_world[0] + prev_x
     msg.position.y = d_world[1] + prev_y
-    msg.position.z = motion_dict["z"]
+    msg.position.z = float(motion_dict["z"])
     msg.orientation = Quaternion()
     r_quat = r.as_quat()
     msg.orientation.x = r_quat[0]
@@ -42,11 +42,11 @@ def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
 def create_pose_raw_message(motion_dict, timestamp):
     """ Create PoseRaw message. """
     msg = PoseRaw()
-    msg.dx = motion_dict["dx"]
-    msg.dy = motion_dict["dy"]
-    msg.z = motion_dict["z"]
-    msg.yaw_deg = motion_dict["yaw"]
-    msg.yaw_rate_deg = motion_dict["yaw_rate"]
+    msg.dx = float(motion_dict["dx"])
+    msg.dy = float(motion_dict["dy"])
+    msg.z = float(motion_dict["z"])
+    msg.yaw_deg = float(motion_dict["yaw"])
+    msg.yaw_rate_deg = float(motion_dict["yaw_rate"])
     msg.source_direction_deg = 0.0
     msg.timestamp = timestamp
     return msg

@@ -44,7 +44,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_27_wall_props'
 #EXTRA_DIRNAME = '2020_11_27_wall_short'
 #EXTRA_DIRNAME = '2020_11_28_wall_turn'
-EXTRA_DIRNAME = '2020_11_30_wall_hover'
+#EXTRA_DIRNAME = '2020_11_30_wall_hover'
+EXTRA_DIRNAME = '2020_12_2_chirp'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -137,7 +138,7 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
-    previous_distance = 0
+    previous_distance = 50
     timestamp = int(time.time())
 
     param_i = 0
@@ -145,11 +146,12 @@ if __name__ == "__main__":
         params = params_list[param_i]
 
         #### prepare filenames ####
-        #answer = ''
-        answer = 'y'
+        answer = ''
+        #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
+            param_i += 1
             continue
         print(f'starting experiment {param_i}/{len(params_list)} with {params}')
 

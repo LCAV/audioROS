@@ -28,7 +28,7 @@ class StatusPlotter(Node):
         self.hline_initial = None 
         self.ax.scatter([], [], color="C2", label='current level')
         self.ax.legend()
-        self.fig.set_size_inches(14, 20)
+        self.fig.set_size_inches(14, 10)
         plt.show(block=False)
 
     def listener_callback_status(self, msg):

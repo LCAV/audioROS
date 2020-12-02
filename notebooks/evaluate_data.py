@@ -114,7 +114,7 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=E
 
 def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
     def convert_row(row):
-        arrays = ["motors_pwm"]
+        arrays = ["motors_pwm", "motors_thrust"]
         ints = ["timestamp"]
         arrays = [a for a in arrays if a in row.index]
         ints = [i for i in ints if i in row.index]
@@ -133,7 +133,7 @@ def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp
     status_columns = ['timestamp', 'index', 'topic', 'vbat']
     df_status = df.loc[df.topic=='crazyflie/status', status_columns]
 
-    motors_columns = ['timestamp', 'index', 'topic', 'motors_pwm']
+    motors_columns = ['timestamp', 'index', 'topic', 'motors_pwm', 'motors_thrust']
     df_motors = df.loc[df.topic=='crazyflie/motors', motors_columns]
     df_motors = df_motors.apply(convert_row, axis=1)
     return df_status, df_motors
