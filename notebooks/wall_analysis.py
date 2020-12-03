@@ -1,5 +1,20 @@
 import numpy as np
 
+def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None):
+    # freqs_window = offset + slope * times
+    times_window = (frequencies - offset) / slope
+    
+    if ax is not None:
+        ax.plot(times_window-delta, frequencies, color='red')
+        ax.plot(times_window+delta, frequencies, color='red')
+
+    psd = np.zeros(signals_f.shape[1:]) # 4 x 32
+    times = np.arange(signals_f.shape[0])
+    for i, t in enumerate(times_window):
+        signals_window = signals_f[(times <= t + delta) & (times >= t - delta), : , i]
+        psd[:, i] = np.sum(np.abs(signals_window)**2 / signals_window.shape[0], axis=0)
+    return psd
+
 def get_psd(signals_f, frequencies, ax=None, fname='real'):
     # signals_f shape: times, 4, 32
     # read off from plot: 
@@ -15,19 +30,5 @@ def get_psd(signals_f, frequencies, ax=None, fname='real'):
         offset = 200
     else:
         raise ValueError(exp_name)
-    
-    delta = 50
 
-    # freqs_window = offset + slope * times
-    times_window = (frequencies - offset) / slope
-    
-    if ax is not None:
-        ax.plot(times_window-delta, frequencies, color='red')
-        ax.plot(times_window+delta, frequencies, color='red')
-
-    psd = np.zeros(signals_f.shape[1:]) # 4 x 32
-    times = np.arange(signals_f.shape[0])
-    for i, (t, f) in enumerate(zip(times_window, frequencies)):
-        signals_window = signals_f[(times <= t + delta) & (times >= t - delta),:,i]
-        psd[:, i] = np.sum(np.abs(signals_window)**2 / signals_window.shape[0], axis=0)
-    return psd
+    return extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=ax)
