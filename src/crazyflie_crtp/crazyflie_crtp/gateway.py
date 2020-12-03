@@ -251,7 +251,13 @@ class Gateway(Node):
                     value = param.get_parameter_value().integer_value
                     if param.name == "all":
                         self.get_logger().info( f"changing all motors to {value}")
-                        success = self.reader_crtp.send_thrust_command(value)
+                        if value > 30000:
+                            print('set intermediate 30000')
+                            success = self.reader_crtp.send_thrust_command(30000)
+                            print('set', value)
+                            success = self.reader_crtp.send_thrust_command(value)
+                        else:
+                            success = self.reader_crtp.send_thrust_command(value)
                     else:
                         self.get_logger().info(f"changing {param.name} to {value}")
                         success = self.reader_crtp.send_thrust_command(value, param.name)
@@ -308,10 +314,16 @@ def main(args=None):
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
+            print('node interrupted')
             cf.param.set_value("audio.send_audio_enable", 0)
             cf.param.set_value("motorPowerSet.enable", 0)
-            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
-            time.sleep(1)
+        except Exception as e:
+            print('error occured')
+            cf.param.set_value("audio.send_audio_enable", 0)
+            cf.param.set_value("motorPowerSet.enable", 0)
+            print(e)
+    print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+    time.sleep(1)
 
     publisher.destroy_node()
     rclpy.shutdown()

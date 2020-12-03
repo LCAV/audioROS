@@ -9,7 +9,7 @@ __Place__: Place, if necessary temperature etc.
 
 ## Notes 
 
-<!-- quick and dirty notes, to be written out later -->
+Experiments with too much spacing between distances, probably not useful anymore. 
 - came into door at experiment 54, 30
 - noticed in last experiment that motors were not loud enough -> stopped experiments to change settings. 
 

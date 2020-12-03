@@ -10,6 +10,7 @@ __Place__: Place, if necessary temperature etc.
 ## Notes 
 
 <!-- quick and dirty notes, to be written out later -->
+- this experiment was done with the super long motors, for which there is an error in linear motion (going and coming back leads to a few milimeters shift with respect to starting position). 
 - These are new experiments with fewer thrust experiments
 - 40 and 50 cm: corrupted, because stopped working at motors_360_40 (motors stopped and from then on no more buzzer deck)
 - started again at 60 cm

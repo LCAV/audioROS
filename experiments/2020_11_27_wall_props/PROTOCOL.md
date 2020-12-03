@@ -12,6 +12,7 @@ __Place__: Place, if necessary temperature etc.
 <!-- quick and dirty notes, to be written out later -->
 - last csv recording: 44, all others missing (can recover with bag file though). 
 - many recordings do not have propeller sounds because of battery issues.
+- there was an issue with the usb-connection of the soundcard (unstable power supply), which is why the measurement mic data of this dataset is corrupted. 
 
 ## Description
 

@@ -9,8 +9,8 @@ __Place__: Place, if necessary temperature etc.
 
 ## Notes 
 
-<!-- quick and dirty notes, to be written out later -->
-- although we set snr to True, the parameter did not go through because it should be set to 1 instead! 
+- Record the frequency response of drone when hovering. Drone had a battery, audio deck, flow deck and the buzzer deck attached. 
+- Although we set snr to True, the parameter did not go through because it should be set to 1 instead! 
 
 ## Description
 
