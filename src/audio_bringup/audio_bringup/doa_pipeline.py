@@ -45,7 +45,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_27_wall_short'
 #EXTRA_DIRNAME = '2020_11_28_wall_turn'
 #EXTRA_DIRNAME = '2020_11_30_wall_hover'
-EXTRA_DIRNAME = '2020_12_2_chirp'
+#EXTRA_DIRNAME = '2020_12_2_chirp'
+EXTRA_DIRNAME = '2020_12_3_wall_props'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -138,7 +139,8 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
-    previous_distance = 50
+    previous_distance = 0
+    previous_angle = 0
     timestamp = int(time.time())
 
     param_i = 0
@@ -176,7 +178,8 @@ if __name__ == "__main__":
 
         #### prepare sound and turntable interfaces ####
         distance = params.get('distance', None)
-        if (params['degree'] != 0) or (distance is not None):
+        angle = params.get('degree', 0)
+        if (angle != 0) or (distance is not None):
             SerialIn = SerialMotors(verbose=False)
 
         duration = global_params.get("duration", 30)
@@ -217,12 +220,18 @@ if __name__ == "__main__":
                 SerialIn.move(delta)
             elif delta < 0:
                 print('moving backward by', delta)
-                SerialIn.move_back(delta)
+                SerialIn.move_back(-delta)
             previous_distance = distance
 
-        if not (params['degree'] in [0, 360]):
-            print('turning by', params['degree'])
-            SerialIn.turn(params['degree'])
+        if not (angle in [0, 360]):
+            delta = angle - previous_angle
+            if delta > 0
+                print('turning by', delta)
+                SerialIn.turn(delta)
+            elif delta < 0:
+                print('turning back by', delta)
+                SerialIn.turn_back(-delta)
+            previous_angle = angle
 
         if (type(params['motors']) is int) and (params['motors'] > 0):
             success = set_param('/gateway', 'all', str(params['motors']))
@@ -235,9 +244,6 @@ if __name__ == "__main__":
 
             if not success:
                 print('ERROR: battery still low. restarting experiment')
-                if not (params['degree'] in [0, 360]):
-                    print('turning back by', params['degree'])
-                    SerialIn.turn_back(params['degree'])
                 continue
             else:
                 print('SUCCESS: battery has charged enough')
@@ -253,9 +259,9 @@ if __name__ == "__main__":
             if params['source'] is not None:
                 execute_commands(buzzer_dict[params['source']])
 
-        if params['degree'] == 360:
-            print('starting turn', params['degree'])
-            SerialIn.turn(params['degree'])
+        if angle == 360:
+            print('starting turning by 360')
+            SerialIn.turn(angle)
 
         # when we use an external speaker, we play and record. 
         if source_type == 'soundcard':
@@ -302,12 +308,16 @@ if __name__ == "__main__":
             wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
             print('wrote wav file as', wav_filename)
 
-        if params['degree'] != 0:
-            SerialIn.turn_back(params['degree'])
+        if angle == 360:
+            SerialIn.turn_back(angle)
 
         param_i += 1
 
     # after last experiment: move back to position 0
+    if (distance is not None) and (distance > 0):
+        print('moving back by', distance)
+        SerialIn.move_back(distance)
+
     if (distance is not None) and (distance > 0):
         print('moving back by', distance)
         SerialIn.move_back(distance)
