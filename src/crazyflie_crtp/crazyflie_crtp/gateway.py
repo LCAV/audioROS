@@ -157,11 +157,10 @@ class Gateway(Node):
         # read frequencies
         fbins = self.reader_crtp.audio_dict["fbins"]
         if fbins is None:
-            self.get_logger().warn("Empty fbins. Not publishing")
+            self.get_logger().warn("No data yet. Not publishing")
             return
 
         all_frequencies = np.fft.rfftfreq(n=N_BUFFER, d=1/FS)
-
         n_frequencies = len(fbins)
 
         # the only allowed duplicates are 0
@@ -170,6 +169,9 @@ class Gateway(Node):
             return
         elif not np.any(fbins > 0): 
             self.get_logger().warn(f"Empty fbins!")
+            return
+        elif np.any(fbins >= len(all_frequencies)):
+            self.get_logger().warn(f"Invalid fbins! {fbins[fbins > len(all_frequencies)]}")
             return
 
         frequencies = all_frequencies[fbins]
