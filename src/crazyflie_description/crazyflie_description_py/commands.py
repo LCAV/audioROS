@@ -21,7 +21,10 @@ command_dict = {
         ('/gateway', 'move_distance', -0.3, 2),
         ('/gateway', '' , '' , 2),
         ('/gateway', 'land_velocity', 0.2, 3),
-     ]
+     ],
+     'all43000': [
+        ('/gateway', 'all', 43000, 165) # 165 is duration of the 50cm move
+     ],
 }
 
 # buzzer commands from the different sweeps.
