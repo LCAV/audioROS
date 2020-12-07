@@ -313,6 +313,10 @@ if __name__ == "__main__":
                     time.sleep(extra_idle_time)
                 elif extra_idle_time < 0:
                     print(f'Warning: finished recording before finishing motor commands! {extra_idle_time:.2f}')
+            elif (type(params['motors']) == int) and (params['motors'] > 0):
+                set_param('/gateway', 'all', str(params['motors']))
+                print(f'waiting for {duration} seconds...')
+                time.sleep(duration)
             else:
                 print(f'waiting for {duration} seconds...')
                 time.sleep(duration)
