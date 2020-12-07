@@ -87,8 +87,9 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
-        self.prev_position_x = 0.0
-        self.prev_position_y = 0.0
+        # TODO(FD) for pose message, not used anymore. Remove? 
+        #self.prev_position_x = 0.0
+        #self.prev_position_y = 0.0
 
         self.reader_crtp = reader_crtp
 
@@ -199,12 +200,12 @@ class Gateway(Node):
         msg_pose_raw.source_direction_deg = SOURCE_DIRECTION_DEG
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
-        msg_pose = create_pose_message(motion_dict, 
-                self.prev_position_x, self.prev_position_y, timestamp)
-        self.publisher_motion_pose.publish(msg_pose)
-
-        self.prev_position_x = msg_pose.position.x
-        self.prev_position_y = msg_pose.position.y
+        # TODO(FD) pose is not currently used. Remove this or move it somewhere else? 
+        #msg_pose = create_pose_message(motion_dict, 
+        #        self.prev_position_x, self.prev_position_y, timestamp)
+        #self.publisher_motion_pose.publish(msg_pose)
+        #self.prev_position_x = msg_pose.position.x
+        #self.prev_position_y = msg_pose.position.y
         self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
@@ -318,13 +319,16 @@ def main(args=None):
             print('node interrupted')
             cf.param.set_value("audio.send_audio_enable", 0)
             cf.param.set_value("motorPowerSet.enable", 0)
+            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            time.sleep(1)
         except Exception as e:
             print('error occured')
             cf.param.set_value("audio.send_audio_enable", 0)
             cf.param.set_value("motorPowerSet.enable", 0)
+            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            time.sleep(1)
             print(e)
-    print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
-    time.sleep(1)
+            raise
 
     publisher.destroy_node()
     rclpy.shutdown()
