@@ -47,7 +47,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_30_wall_hover'
 #EXTRA_DIRNAME = '2020_12_2_chirp'
 #EXTRA_DIRNAME = '2020_12_3_wall_props'
-EXTRA_DIRNAME = '2020_12_4_moving'
+#EXTRA_DIRNAME = '2020_12_4_moving'
+EXTRA_DIRNAME = '2020_12_7_moving'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -92,9 +93,8 @@ def get_total_time(command_list):
     time = 0
     for command in command_list:
         time += command[3]
-    time += 25 # extra 10 seconds for unexpected waiting times
+    #time += 25 # extra 10 seconds for unexpected waiting times 
     return time
-
 
 def get_active_nodes():
     param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
