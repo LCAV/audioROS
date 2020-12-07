@@ -2,22 +2,25 @@ global_params = {
     'source_type': 'buzzer-onboard',
     'fs_soundcard': 44100, # hz
     'n_meas_mics': 1, # number of measurement mics
-    'duration': 10
+    'duration': 10 # will always be overwritten
 }
-
-MIN_FREQ = 1000
-MAX_FREQ = 5000
 THRUST = 43000
 
 # calibration
-source_list = ['mono3125', 'mono4156', 'mono8000']
-d = 51
-for source in source_list:
-    params_list = [
-        {'distance':10, 'motors': THRUST, 'snr': 1, 'props': 0, 'source':SOURCE, 'degree':360},
-        {'distance':51, 'motors': THRUST, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':0},
-        {'distance':0, 'motors': THRUST, 'snr': 0, 'props': 0, 'source':SOURCE, 'degree':360},
-        {'distance':0, 'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':360},
-        {'distance':-51, 'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':0},
-        {'distance':10, 'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':360},
+params_list = []
+for motors in [0, THRUST]:
+    params_list += [
+        {'distance':51, 'motors': motors, 'snr': 1, 'props': 0, 'source':'mono3125', 'degree':0, 
+         'min_freq':1000, 'max_freq':5000},
+        {'distance':-51, 'motors': motors, 'snr': 0, 'props': 0, 'source':'mono3125', 'degree':0},
+        {'distance':51, 'motors': motors, 'snr': 1, 'props': 0, 'source':'mono4156', 'degree':0, 
+         'min_freq':1000, 'max_freq':5000},
+        {'distance':-51, 'motors': motors, 'snr': 0, 'props': 0, 'source':'mono4156', 'degree':0},
+        {'distance':51, 'motors': motors, 'snr': 1, 'props': 0, 'source':'mono8000', 'degree':0, 
+         'min_freq':5000, 'max_freq':9000},
+        {'distance':-51, 'motors': motors, 'snr': 0, 'props': 0, 'source':'mono8000', 'degree':0},
+        {'distance':51, 'motors': motors, 'snr': 1, 'props': 0, 'source':None, 'degree':0,
+         'min_freq':100, 'max_freq':5000},
+        {'distance':-51, 'motors': motors, 'snr': 1, 'props': 0, 'source':None, 'degree':0,
+         'min_freq':5000, 'max_freq':9000},
     ]

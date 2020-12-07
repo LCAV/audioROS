@@ -1,17 +1,16 @@
 <!-- create this document in each new experiments folder, calling it README.md -->
 # EXPERIMENT NAME
 
-__Time__: Day DD.MM.YYYY
+__Time__: Monday December 7 2020
 
-__Recorded by__: First Last, ...
+__Recorded by__: Frederike Duembgen 
 
-__Place__: Place, if necessary temperature etc. 
+__Place__: BC325
 
 ## Notes 
 
 <!-- quick and dirty notes, to be written out later -->
 
-- First dataset (recorded Thursday): send constant thrust to drone and record the response, to be used as reference for external power source signal. 
 
 ## Description
 

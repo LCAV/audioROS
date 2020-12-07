@@ -46,7 +46,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_11_28_wall_turn'
 #EXTRA_DIRNAME = '2020_11_30_wall_hover'
 #EXTRA_DIRNAME = '2020_12_2_chirp'
-EXTRA_DIRNAME = '2020_12_3_wall_props'
+#EXTRA_DIRNAME = '2020_12_3_wall_props'
+EXTRA_DIRNAME = '2020_12_4_moving'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -183,22 +184,33 @@ if __name__ == "__main__":
             SerialIn = SerialMotors(verbose=False)
 
         duration = global_params.get("duration", 30)
+
+        # If given in parameters, min_freq and max_freq overwrite all other settings. Otherwise 
+        # these parameters are read from the buzzer frequency characteristics.
         min_freq = params.get('min_freq', None)
         max_freq = params.get('max_freq', None)
+
         if type(params['motors']) == str:
             duration_motors = get_total_time(command_dict[params['motors']])
             if duration_motors > duration:
                 print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
                 duration = duration_motors
         if (source_type == 'buzzer-onboard') and (params['source'] is not None):
-            c, (min_freq, max_freq), duration_buzzer = SOUND_EFFECTS[params['source']]
+            c, (min_freq_buzz, max_freq_buzz), duration_buzzer = SOUND_EFFECTS[params['source']]
             if duration_buzzer > duration:
                 print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
                 duration = duration_buzzer
+            if min_freq is None:
+                print(f'Using buzzer min_freq {min_freq_buzz}.')
+                min_freq = min_freq_buzz
+            if max_freq is None:
+                print(f'Using buzzer max_freq {max_freq_buzz}.')
+                max_freq = max_freq_buzz
+
 
         if distance in [51, -51]:
             # TODO(FD) replace below with serial_motors.py command durations
-            duration_move = 265  
+            duration_move = 165  
             if duration_move > duration:
                 print(f'ignoring global duration {duration} and using turn command duration {duration_move}')
                 duration = duration_move
@@ -217,9 +229,12 @@ if __name__ == "__main__":
                     min_dB=source_params['min_dB'], 
                     max_dB=source_params['max_dB'])
         elif source_type == 'buzzer':
-            input(f'make sure buzzer plays {params["source"]} at correct frequency! Enter to continue')
+            input(f'make sure external buzzer plays {params["source"]}! Enter to continue')
 
-        set_param('/gateway', 'filter_snr_enable', str(params['snr']))
+        filter_snr = params.get('snr', 0) 
+        set_param('/gateway', 'filter_snr_enable', str(filter_snr))
+        if (filter_snr > 0) and ((min_freq is None) or (max_freq is None)): 
+            raise Warning('Need to set min_freq and max_freq when using snr filtering!')
         set_param('/gateway', 'filter_prop_enable', str(params['props']))
         if min_freq is not None:
             set_param('/gateway', 'min_freq', str(min_freq))
@@ -263,16 +278,14 @@ if __name__ == "__main__":
             SerialIn.turn(angle, blocking=False)
 
         if distance == 51:
-            delta = 50 - previous_distance
-            print('start moving by:', delta)
-            SerialIn.move(delta, blocking=False)
-            previous_distance = 50
+            print('start moving by 50')
+            SerialIn.move(50, blocking=False)
+            previous_distance = 50 + previous_distance
 
         if distance == -51:
-            delta = previous_distance
-            print('start moving back to zero, delta:', previous_distance)
-            SerialIn.move_back(delta, blocking=False)
-            previous_distance = 0
+            print('start moving back by 50') 
+            SerialIn.move_back(50, blocking=False)
+            previous_distance = previous_distance - 50
 
         # when we use an external speaker, we play and record. 
         if source_type == 'soundcard':
@@ -322,12 +335,11 @@ if __name__ == "__main__":
         if angle == 360:
             print('turning back by 360')
             SerialIn.turn_back(angle, blocking=True)
-            SerialIn.move_back(50, blocking=True)
 
         param_i += 1
 
     # after last experiment: move back to position 0
-    if (distance is not None) and not (distance in [0, 51]):
+    if (distance is not None) and not (distance in [0, 51, -51]):
         print('moving back by', distance)
         SerialIn.move_back(distance)
 
