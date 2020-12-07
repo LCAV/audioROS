@@ -22,7 +22,7 @@ from signals import generate_signal
 from serial_motors import SerialMotors
 
 from crazyflie_description_py.commands import command_dict, buzzer_dict
-from crazyflie_description_py.parameters import SWEEPS
+from crazyflie_description_py.parameters import SOUND_EFFECTS
 
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_14_static_new'
@@ -191,11 +191,25 @@ if __name__ == "__main__":
                 print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
                 duration = duration_motors
         if (source_type == 'buzzer-onboard') and (params['source'] is not None):
-            c, (min_freq, max_freq), duration_buzzer = SWEEPS[params['source']]
+            c, (min_freq, max_freq), duration_buzzer = SOUND_EFFECTS[params['source']]
             if duration_buzzer > duration:
                 print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
                 duration = duration_buzzer
-        elif source_type == 'soundcard':
+
+        if distance in [51, -51]:
+            # TODO(FD) replace below with serial_motors.py command durations
+            duration_move = 265  
+            if duration_move > duration:
+                print(f'ignoring global duration {duration} and using turn command duration {duration_move}')
+                duration = duration_move
+        if angle == 360:
+            # TODO(FD) replace below with serial_motors.py command durations
+            duration_turn = 18  
+            if duration_turn > duration:
+                print(f'ignoring global duration {duration} and using turn command duration {duration_turn}')
+                duration = duration_turn
+
+        if source_type == 'soundcard':
             out_signal = generate_signal(global_params['fs_soundcard'], 
                     duration, 
                     signal_type=params['source'], 
@@ -213,7 +227,7 @@ if __name__ == "__main__":
             set_param('/gateway', 'max_freq', str(max_freq))
 
         #### move ####
-        if distance is not None:
+        if (distance is not None) and not (distance in [-51, 51]):
             delta = distance - previous_distance 
             if delta > 0:
                 print('moving forward by', delta)
@@ -225,28 +239,13 @@ if __name__ == "__main__":
 
         if not (angle in [0, 360]):
             delta = angle - previous_angle
-            if delta > 0
+            if delta > 0:
                 print('turning by', delta)
-                SerialIn.turn(delta)
+                SerialIn.turn(delta, blocking=True)
             elif delta < 0:
                 print('turning back by', delta)
-                SerialIn.turn_back(-delta)
+                SerialIn.turn_back(-delta, blocking=True)
             previous_angle = angle
-
-        if (type(params['motors']) is int) and (params['motors'] > 0):
-            success = set_param('/gateway', 'all', str(params['motors']))
-            counter = 0
-            while not success and (counter < 6):
-                print('ERROR: battery low, wait for 20 seconds for batteries to recharge')
-                time.sleep(20)
-                success = set_param('/gateway', 'all', str(params['motors']))
-                counter += 1
-
-            if not success:
-                print('ERROR: battery still low. restarting experiment')
-                continue
-            else:
-                print('SUCCESS: battery has charged enough')
 
         #### record ####
         set_param('/csv_writer', 'filename', '')
@@ -261,7 +260,19 @@ if __name__ == "__main__":
 
         if angle == 360:
             print('starting turning by 360')
-            SerialIn.turn(angle)
+            SerialIn.turn(angle, blocking=False)
+
+        if distance == 51:
+            delta = 50 - previous_distance
+            print('start moving by:', delta)
+            SerialIn.move(delta, blocking=False)
+            previous_distance = 50
+
+        if distance == -51:
+            delta = previous_distance
+            print('start moving back to zero, delta:', previous_distance)
+            SerialIn.move_back(delta, blocking=False)
+            previous_distance = 0
 
         # when we use an external speaker, we play and record. 
         if source_type == 'soundcard':
@@ -309,15 +320,17 @@ if __name__ == "__main__":
             print('wrote wav file as', wav_filename)
 
         if angle == 360:
-            SerialIn.turn_back(angle)
+            print('turning back by 360')
+            SerialIn.turn_back(angle, blocking=True)
+            SerialIn.move_back(50, blocking=True)
 
         param_i += 1
 
     # after last experiment: move back to position 0
-    if (distance is not None) and (distance > 0):
+    if (distance is not None) and not (distance in [0, 51]):
         print('moving back by', distance)
         SerialIn.move_back(distance)
 
-    if (distance is not None) and (distance > 0):
-        print('moving back by', distance)
-        SerialIn.move_back(distance)
+    if not (angle in [0, 360]):
+        print('turning back by', angle)
+        SerialIn.turn_back(angle)

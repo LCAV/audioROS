@@ -257,6 +257,7 @@ class Gateway(Node):
                             print('set', value)
                             success = self.reader_crtp.send_thrust_command(value)
                         else:
+                            print('set', value)
                             success = self.reader_crtp.send_thrust_command(value)
                     else:
                         self.get_logger().info(f"changing {param.name} to {value}")

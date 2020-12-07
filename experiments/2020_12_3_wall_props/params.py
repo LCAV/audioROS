@@ -23,4 +23,5 @@ for d in range(50):
             {'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':'sweep', 'degree':degree},
             {'distance':d, 'motors': THRUST, 'snr': 0, 'props': 0, 'source':'sweep_hard', 'degree':degree},
             {'distance':d, 'motors': 0, 'snr': 0, 'props': 0, 'source':'sweep_hard', 'degree':degree},
+            {'distance':d, 'motors': THRUST, 'snr': 1, 'props': 0, 'source':None, 'degree':degree},
         ]
