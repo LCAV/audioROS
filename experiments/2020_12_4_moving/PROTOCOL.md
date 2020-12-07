@@ -12,7 +12,6 @@ __Place__: Place, if necessary temperature etc.
 <!-- quick and dirty notes, to be written out later -->
 
 - First dataset (recorded Thursday): send constant thrust to drone and record the response, to be used as reference for external power source signal. 
-- We abandoned these experiments because the communication with the Crazyflie broke whenever we use a "too high" thrust command. Instead, we do "moving" experiments.
 
 ## Description
 
