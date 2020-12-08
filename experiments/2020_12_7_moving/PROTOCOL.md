@@ -65,7 +65,9 @@ Otherwise:
 <!--
 Explain folder naming etc. 
 -->
-- as usual
+- naming as usual
+- renamed manually `motors_..._mono4156_-51` to `nomotors_...` because it was a typo.
+- not using `motors_..._None_-51` because it is a duplicate and does not match the general pattern of motors forward, no motors backwards. 
 
 ### Observations
 <!--
@@ -88,7 +90,7 @@ Second round:
 - 1  OK
 - 1' stopped at 342744
 - 2  OK, only a few warnings mid-way. Battery low towards end -> higher propeller speed.
-- 2' stopped around 30cm, 118070. Saved this manually, and potentially added some faulty extra rows! 
+- 2' stopped around 30cm, 118070. Saved this manually, and potentially added some faulty extra rows! Also lost the wav file of this one because the script crashed.  
 Third round: 
 - 4  OK, only a few warnings in ca. 1/3
 - 3' super good run

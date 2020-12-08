@@ -16,16 +16,12 @@ EXP_NAME = "2020_11_30_wall_hover"
 
 RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
 
-sys.path.append(f"../experiments/{EXP_NAME}/")
-from params import global_params
-DURATION_SEC = global_params.get('duration', 30) # duration before end to be kept
-
 # results
 combine_list = ["product", "sum"]
 normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
 
-def get_fname(degree, props, snr, motors, source, distance=None, appendix=""):
+def get_fname(degree, props, snr, motors, source, distance=None, appendix="", **kwargs):
     ending = "" if degree == 0 else f"_{degree}"
     if distance is not None:
         ending += f"_{distance}"
@@ -145,6 +141,7 @@ def read_df_from_wav(fname, n_buffer=2048):
     
     n_mics = 1
     fs, source_data = wavfile.read(fname)
+    print(f'read {fname}')
     f, t, source_stft = stft(source_data, fs, nperseg=n_buffer, axis=0)
     
     source_freq = np.fft.rfftfreq(n=n_buffer, d=1/fs) # n_frequencies x n_times
@@ -153,7 +150,7 @@ def read_df_from_wav(fname, n_buffer=2048):
     for i in range(source_stft.shape[1]):
         df.loc[len(df), :] = {
             "index": i,
-            "timestamp": i * n_buffer/fs * 1000, # miliseconds
+            "timestamp": i * len(source_freq)/fs * 1000, # miliseconds
             "n_mics": n_mics,
             "topic": "measurement_mic",
             "signals_f": source_stft[:, i].reshape((1, -1)),  # n_mics x n_frequencies
@@ -230,7 +227,10 @@ def integrate_yaw(times, yaw_rates):
 
 
 def evaluate_data(fname=""):
-    from params import SOURCE_LIST, DEGREE_LIST
+    sys.path.append(f"../experiments/{EXP_NAME}/")
+    from params import SOURCE_LIST, DEGREE_LIST, global_params
+    DURATION_SEC = global_params.get('duration', 30) # duration before end to be kept
+
     duration = DURATION_SEC * 1e3  # miliseconds
 
     source_list = SOURCE_LIST
