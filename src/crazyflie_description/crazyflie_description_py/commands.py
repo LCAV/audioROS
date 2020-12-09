@@ -23,7 +23,7 @@ command_dict = {
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
      'all43000': [
-        ('/gateway', 'all', 43000, 165) # 165 is duration of the 50cm move
+        ('/gateway', 'all', 43000, 1) # 165 is duration of the 50cm move
      ],
 }
 
