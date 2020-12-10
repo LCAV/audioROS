@@ -70,3 +70,6 @@ Evening:
 - 180_5, drone moved slightly because of connector
 - 270_20, sound of youtube video in the very beginning of recording
 - a few issues with rotations not done correctly, needed to restart a few times by setting previous_angle/previous_distance.
+Morning:
+- during 90_5, camipro fell on floor creating loud sound
+- during 180_5, buzzing sound from computer
