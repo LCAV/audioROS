@@ -73,4 +73,4 @@ Evening:
 Morning:
 - during 90_5, camipro fell on floor creating loud sound
 - during 180_5, buzzing sound from computer
-- started again at 20_0, because the communication somehow broke. Added appendix "new" to measurements if existing 
+- started again at 20_0, because the communication somehow broke. Added appendix "new" to measurements if existing, but renamed after.

@@ -2,7 +2,7 @@ rosbag2_bagfile_information:
   version: 2
   storage_identifier: sqlite3
   relative_file_paths:
-    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_9_rotating/nomotors_snr_props_sweep_270_30/nomotors_snr_props_sweep_270_30_0.db3
+    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_9_rotating/nomotors_snr_props_sweep_270_30_new/nomotors_snr_props_sweep_270_30_new_0.db3
   duration:
     nanoseconds: 43935391960
   starting_time:
