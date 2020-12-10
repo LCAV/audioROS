@@ -51,6 +51,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_7_moving'
 EXTRA_DIRNAME = '2020_12_9_rotating'
 
+APPENDIX = "new" # set to None for no effect
+
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
@@ -141,11 +143,11 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
-    previous_distance = 20
-    previous_angle = 90
+    previous_distance = 30
+    previous_angle = 180
     timestamp = int(time.time())
 
-    param_i = 13
+    param_i = 0
     while param_i < len(params_list):
         params = params_list[param_i]
 
@@ -169,7 +171,10 @@ if __name__ == "__main__":
 
         answer = 'y'
         while os.path.exists(bag_filename):
-            answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
+            if APPENDIX is None:
+                answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
+            else:
+                answer = APPENDIX 
             if answer == 'n':
                 break
             filename = f'{filename}_{answer}'

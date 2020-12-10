@@ -7,7 +7,8 @@ global_params = {
 
 THRUST = "all43000"
 SOURCE_LIST = ['sweep']
-DISTANCE_LIST = [5, 10, 20, 30, 40, 50]
+#DISTANCE_LIST = [5, 10, 20, 30, 40, 50]
+DISTANCE_LIST = [20, 30, 40, 50]
 DEGREE_LIST = [90 * i for i in range(4)]
 MOTORS_LIST = [0, THRUST]
 MIN_FREQ = 1000
@@ -19,7 +20,7 @@ source = SOURCE_LIST[0]
 params_list = []
 
 
-for filter_ in [1] #[0, 1]:
+for filter_ in [1]: #[0, 1]:
     for d in DISTANCE_LIST:
         params_list += [
             {'distance':d, 'motors':THRUST, 'snr':filter_, 'props':filter_, 'source':source, 'degree':0, 
