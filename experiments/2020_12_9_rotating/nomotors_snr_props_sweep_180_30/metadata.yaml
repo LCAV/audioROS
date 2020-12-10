@@ -4,28 +4,28 @@ rosbag2_bagfile_information:
   relative_file_paths:
     - /home/lcavadmin/ROS/audioROS/experiments/2020_12_9_rotating/nomotors_snr_props_sweep_180_30/nomotors_snr_props_sweep_180_30_0.db3
   duration:
-    nanoseconds: 43893156182
+    nanoseconds: 43713909679
   starting_time:
-    nanoseconds_since_epoch: 1607593506122756020
-  message_count: 4717
+    nanoseconds_since_epoch: 1607594640114060787
+  message_count: 4953
   topics_with_message_count:
-    - topic_metadata:
-        name: /geometry/pose_raw
-        type: audio_interfaces/msg/PoseRaw
-        serialization_format: cdr
-      message_count: 4233
-    - topic_metadata:
-        name: /audio/signals_f
-        type: audio_interfaces/msg/SignalsFreq
-        serialization_format: cdr
-      message_count: 0
     - topic_metadata:
         name: /crazyflie/motors
         type: audio_interfaces/msg/CrazyflieMotors
         serialization_format: cdr
-      message_count: 440
+      message_count: 439
     - topic_metadata:
         name: /crazyflie/status
         type: audio_interfaces/msg/CrazyflieStatus
         serialization_format: cdr
       message_count: 44
+    - topic_metadata:
+        name: /audio/signals_f
+        type: audio_interfaces/msg/SignalsFreq
+        serialization_format: cdr
+      message_count: 226
+    - topic_metadata:
+        name: /geometry/pose_raw
+        type: audio_interfaces/msg/PoseRaw
+        serialization_format: cdr
+      message_count: 4244
