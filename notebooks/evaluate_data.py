@@ -98,7 +98,7 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=E
 
     df_audio = df.loc[df.topic=='audio/signals_f']
     df_audio = df_audio.apply(convert_audio, axis=1)
-    df_audio.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True)
+    df_audio.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True, errors='ignore')
 
     if 'source_direction-deg' in df.columns:
         df.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
