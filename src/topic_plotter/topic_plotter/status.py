@@ -28,15 +28,24 @@ class StatusPlotter(Node):
         self.hline_initial = None 
         self.ax.scatter([], [], color="C2", label='current level')
         self.ax.legend()
-        self.fig.set_size_inches(14, 10)
+        #self.fig.set_size_inches(14, 10)
+        self.fig.set_size_inches(5, 5)
+        self.start_time = None
         plt.show(block=False)
 
     def listener_callback_status(self, msg):
         if self.hline_initial is None:
             self.hline_initial = self.ax.axhline(msg.vbat, label='initial level', color="C1")
             self.ax.legend()
-        self.ax.scatter(msg.timestamp/1000, msg.vbat, color="C2")
+
+        time_s = msg.timestamp/1000
+        if self.start_time is None:
+            self.start_time = time_s
+        self.ax.scatter(time_s, msg.vbat, color="C2")
         self.ax.set_title(f"Status, current battery level: {msg.vbat:.2f}V")
+        # only show latest 3 minutes
+        min_time_s = max(time_s - 3 * 60, self.start_time)
+        self.ax.set_xlim(min_time_s, time_s)
         self.fig.canvas.draw()
 
 

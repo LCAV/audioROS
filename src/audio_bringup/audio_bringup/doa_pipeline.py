@@ -141,17 +141,17 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
-    previous_distance = 0
-    previous_angle = 0
+    previous_distance = 20
+    previous_angle = 90
     timestamp = int(time.time())
 
-    param_i = 0
+    param_i = 13
     while param_i < len(params_list):
         params = params_list[param_i]
 
         #### prepare filenames ####
-        answer = ''
-        #answer = 'y'
+        #answer = ''
+        answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                 SerialIn.move_back(-delta)
             previous_distance = distance
 
-        if not (angle in [0, 360]):
+        if not (angle == 360):
             delta = angle - previous_angle
             if delta > 0:
                 print('turning by', delta)
