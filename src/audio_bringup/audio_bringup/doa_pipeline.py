@@ -24,6 +24,9 @@ from serial_motors import SerialMotors
 from crazyflie_description_py.commands import command_dict, buzzer_dict
 from crazyflie_description_py.parameters import SOUND_EFFECTS
 
+START_DISTANCE = 0
+START_ANGLE = 0
+
 EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_10_14_static_new'
 #EXTRA_DIRNAME = '2020_10_30_dynamic_test'
@@ -49,15 +52,15 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_3_wall_props'
 #EXTRA_DIRNAME = '2020_12_4_moving'
 #EXTRA_DIRNAME = '2020_12_7_moving'
-EXTRA_DIRNAME = '2020_12_9_rotating'
+#EXTRA_DIRNAME = '2020_12_9_rotating'
+EXTRA_DIRNAME = '2020_12_11_calibration'
 
-APPENDIX = "new" # set to None for no effect
+APPENDIX = None #"new" # set to None for no effect
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
 CSV_DIRNAME = "csv_files/"
 WAV_DIRNAME = "export/"
-
 
 def get_filename(**params):
     source_flag = "None" if params.get("source") is None else params.get("source")
@@ -98,6 +101,7 @@ def get_total_time(command_list):
         time += command[3]
     #time += 25 # extra 10 seconds for unexpected waiting times 
     return time
+
 
 def get_active_nodes():
     param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
@@ -143,8 +147,8 @@ if __name__ == "__main__":
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
-    previous_distance = 30
-    previous_angle = 180
+    previous_distance = START_DISTANCE
+    previous_angle = START_ANGLE
     timestamp = int(time.time())
 
     param_i = 0
@@ -152,8 +156,8 @@ if __name__ == "__main__":
         params = params_list[param_i]
 
         #### prepare filenames ####
-        #answer = ''
-        answer = 'y'
+        answer = ''
+        #answer = 'y'
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
@@ -169,7 +173,7 @@ if __name__ == "__main__":
         bag_filename = os.path.join(exp_dirname, filename)
         csv_filename = os.path.join(csv_dirname, filename)
 
-        answer = 'y'
+        answer = ''
         while os.path.exists(bag_filename):
             if APPENDIX is None:
                 answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
@@ -184,9 +188,9 @@ if __name__ == "__main__":
             continue
 
         #### prepare sound and turntable interfaces ####
-        distance = params.get('distance', None)
+        distance = params.get('distance', 0)
         angle = params.get('degree', 0)
-        if (angle != 0) or (distance is not None):
+        if (previous_angle != angle) or (distance != previous_distance):
             SerialIn = SerialMotors(verbose=False)
 
         duration = global_params.get("duration", 30)
