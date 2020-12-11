@@ -125,7 +125,7 @@ def parse_calibration_experiments():
         '2020_12_11_calibration',
     ]
     source_list = ['sweep', 'sweep_buzzer']
-    appendix_list = ['']
+    appendix_list = ['', '_BC329']
     filter_list = [0, 1] # snr and props
     motors_list = [0, 'all43000']
 
