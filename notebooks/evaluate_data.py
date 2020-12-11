@@ -22,24 +22,8 @@ normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
 
 def get_fname(degree, props, snr, motors, source, distance=None, appendix="", **kwargs):
-    ending = "" if degree == 0 else f"_{degree}"
-    if distance is not None:
-        ending += f"_{distance}"
-    ending += appendix
-    props_flag = "" if props else "no"
-    motors_flag = "" if motors else "no"
-    if source == "None":
-        source_flag = "nosource"
-    elif source == True:
-        source_flag = "source"
-    elif source == False:
-        source_flag = "nosource"
-    elif source is None:
-        source_flag = "None"
-    else:
-        source_flag = source
-    snr_flag = "" if snr else "no"
-    return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
+    from audio_bringup.doa_pipeline import get_filename
+    return get_filename(degree=degree, props=props, snr=snr, motors=motors, source=source,distance=distance, appendix=appendix, **kwargs)
 
 
 def get_fname_old(degree, props, snr, motors, source, **kwargs):
