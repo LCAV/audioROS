@@ -116,6 +116,63 @@ def parse_experiments(exp_name='2020_12_9_moving'):
     return df_total
 
 
+def parse_calibration_experiments():
+    max_value = 100 # all signals received are actually between 0 and 2. 
+    df_total = pd.DataFrame(columns=['signals_f', 'source', 'snr', 'motors', 'exp_name', 'appendix', 
+                                     'seconds', 'frequencies', 'frequencies_matrix'])
+
+    exp_name_list = [
+        '2020_12_11_calibration',
+    ]
+    source_list = ['sweep', 'sweep_buzzer']
+    appendix_list = ['', '_BC329']
+    filter_list = [0, 1] # snr and props
+    motors_list = [0, 'all43000']
+
+    for exp_name, source, motors, appendix, filter_ in itertools.product(exp_name_list, source_list, motors_list, appendix_list, filter_list):
+        params = dict(
+            exp_name=exp_name,
+            motors=motors,
+            degree=0 ,
+            distance=0 ,
+            source=source,
+            appendix=appendix,
+            snr=filter_,
+            props=filter_,
+        )
+        try:
+            df, __ = read_df(**params)
+        except FileNotFoundError as e:
+            print('could not read', params)
+            continue 
+            
+        signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+        if np.any(np.abs(signals_f) > max_value):
+            signals_f[np.where(np.abs(signals_f) > max_value)] = 0
+
+        seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
+        frequencies_matrix = np.array([*df.loc[:,'frequencies']])
+        frequencies = frequencies_matrix[0, :]
+        # save frequency matrix only if frequencies vary.
+        if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
+            frequencies_matrix = None
+        else:
+            print('saving frequencies matrix')
+        
+        df_total.loc[len(df_total), :] = dict(
+            exp_name=exp_name, 
+            appendix=appendix, 
+            source=str(source), 
+            snr=filter_, 
+            motors=motors, 
+            signals_f=signals_f, 
+            seconds=seconds, 
+            frequencies=frequencies, 
+            frequencies_matrix=frequencies_matrix
+        )
+    return df_total
+
+
 if __name__ == "__main__":
     exp_name = '2020_12_9_rotating'
     fname = f'results/{exp_name}_real.pkl'
