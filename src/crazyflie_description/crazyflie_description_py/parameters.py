@@ -21,6 +21,7 @@ SOUND_EFFECTS = {
     'sweep_high': (17, [3400, 3600], 16.0), # 16s is duration of sweep
     'sweep_all':  (18, [0,   16000],  513), # 513 is duration of sweep
     'sweep_hard': (19, [1,       2], 12.0), # 12s is duration of sweep
+    'sweep_buzzer':  (20, [0,   16000],  185), # 185 is duration of sweep
     'mono4125':   (0,  [1000, 5000], 18.0), # 18s is duration of 360degree turn
     'mono3500':   (0,  [1000, 5000], 18.0), 
     'mono3125':   (0,  [1,       2], 18.0), 
