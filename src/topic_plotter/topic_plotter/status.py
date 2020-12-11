@@ -23,7 +23,7 @@ class StatusPlotter(Node):
         self.ax.set_title("Status")
         self.ax.set_xlabel("time [s]")
         self.ax.set_ylabel("battery level [V]")
-        self.ax.set_ylim(3, 5)
+        self.ax.set_ylim(2.5, 4.2)
         self.hline = self.ax.axhline(ReaderCRTP.BATTERY_OK, label='OK level', color="C0")
         self.hline_initial = None 
         self.ax.scatter([], [], color="C2", label='current level')
