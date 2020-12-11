@@ -24,6 +24,8 @@ from serial_motors import SerialMotors
 from crazyflie_description_py.commands import command_dict, buzzer_dict
 from crazyflie_description_py.parameters import SOUND_EFFECTS
 
+
+APPENDIX = None #"new" # set to None for no effect
 START_DISTANCE = 0
 START_ANGLE = 0
 
@@ -54,8 +56,6 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_7_moving'
 #EXTRA_DIRNAME = '2020_12_9_rotating'
 EXTRA_DIRNAME = '2020_12_11_calibration'
-
-APPENDIX = None #"new" # set to None for no effect
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
