@@ -2,12 +2,12 @@ rosbag2_bagfile_information:
   version: 2
   storage_identifier: sqlite3
   relative_file_paths:
-    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_11_calibration/motors_snr_props_sweep_None/motors_snr_props_sweep_None_0.db3
+    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_10_calibration_BC329/nomotors_snr_props_sweep_BC329/nomotors_snr_props_sweep_BC329_0.db3
   duration:
-    nanoseconds: 41784753489
+    nanoseconds: 41718095827
   starting_time:
-    nanoseconds_since_epoch: 1607682288893452944
-  message_count: 5001
+    nanoseconds_since_epoch: 1607683299897730750
+  message_count: 4993
   topics_with_message_count:
     - topic_metadata:
         name: /crazyflie/motors
@@ -28,4 +28,4 @@ rosbag2_bagfile_information:
         name: /geometry/pose_raw
         type: audio_interfaces/msg/PoseRaw
         serialization_format: cdr
-      message_count: 4184
+      message_count: 4176
