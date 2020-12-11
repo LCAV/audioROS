@@ -10,6 +10,8 @@ __Place__: BC325, BC Atrium, Audio room, Anechoic room?
 ## Notes 
 <!-- quick and dirty notes, to be written out later -->
 
+- Renamed first results to not have "None" in name.
+
 ## Description
 
 ###  Hardware

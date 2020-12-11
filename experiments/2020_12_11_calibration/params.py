@@ -7,7 +7,7 @@ global_params = {
 
 THRUST = "all43000"
 SOURCE_LIST = ['sweep', 'sweep_buzzer']
-DISTANCE_LIST = [None]
+DISTANCE_LIST = [0]
 DEGREE_LIST = [0]
 MOTORS_LIST = [0, THRUST]
 MIN_FREQ = 1000
