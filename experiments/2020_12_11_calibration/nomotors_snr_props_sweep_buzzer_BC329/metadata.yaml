@@ -2,7 +2,7 @@ rosbag2_bagfile_information:
   version: 2
   storage_identifier: sqlite3
   relative_file_paths:
-    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_10_calibration_BC329/nomotors_snr_props_sweep_buzzer_None/nomotors_snr_props_sweep_buzzer_None_0.db3
+    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_10_calibration_BC329/nomotors_snr_props_sweep_buzzer_BC329/nomotors_snr_props_sweep_buzzer_BC329_0.db3
   duration:
     nanoseconds: 188878163882
   starting_time:
