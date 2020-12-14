@@ -6,6 +6,18 @@ import pandas as pd
 
 from evaluate_data import read_df, read_df_from_wav, get_fname
 
+
+def filter_by_dicts(df, dicts):
+    mask = np.zeros(len(df), dtype=bool)
+    for dict_ in dicts:
+        this_mask = np.ones(len(df), dtype=bool)
+        for key, val in dict_.items():
+            this_mask = this_mask & (df.loc[:, key] == val)
+        mask = np.bitwise_or(mask, this_mask)
+        assert np.any(mask)
+    return df.loc[mask, :]
+
+
 def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None):
     # freqs_window = offset + slope * times
     times_window = (frequencies - offset) / slope
@@ -25,7 +37,6 @@ def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None)
 def get_psd(signals_f, frequencies, ax=None, fname='real'):
     # signals_f shape: times, 4, 32
     # read off from plot: 
-    
     if 'simulated' in fname:
         slope = (4000 - 1000) / (200 - 50)
         offset = -500
@@ -125,7 +136,7 @@ def parse_calibration_experiments():
         '2020_12_11_calibration',
     ]
     source_list = ['sweep', 'sweep_buzzer']
-    appendix_list = ['', '_BC329']
+    appendix_list = ['', '_BC329', '_HALL', '_HALL2', '_HALL3', '_HALL3ok']
     filter_list = [0, 1] # snr and props
     motors_list = [0, 'all43000']
 
