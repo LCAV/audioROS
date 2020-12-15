@@ -34,8 +34,88 @@ def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None)
     return psd
 
 
+def extract_psd_dict(signals_f, frequencies_matrix, min_t=0, max_t=None, n_freq=1, ax=None):
+    """
+    Extract a hash table from the signals and frequencies information, one for 
+    each microphone.
+    
+    structure of output: 
+    
+    mic0: {
+        f0: [val0, val1],
+        f1: [val0, val1, val2], 
+        f2: [...]
+    }
+    mic1: ...
+    """
+    n_mics = signals_f.shape[1]
+    all_frequencies = np.unique(frequencies_matrix.flatten())
+
+    psd_dict = [{f:[] for f in all_frequencies} for i in range(n_mics)]
+
+    if max_t is None:
+        max_t = frequencies_matrix.shape[0]
+        
+    if ax is not None:
+        ax.plot(frequencies_matrix[:, 0])
+        ax.axvline(min_t, color='k')
+        ax.axvline(max_t, color='k')
+
+    for i_t in range(min_t, max_t): # n_times x n_freqs 
+        # save strongest n_freq frequencies
+        fs = frequencies_matrix[i_t, :n_freq]
+        for i_mic in range(n_mics):
+            for f_idx, f in enumerate(fs):
+                psd_dict[i_mic][f].append(np.abs(signals_f[i_t, i_mic, f_idx]))
+    return psd_dict
+                
+
+def extract_psd(psd_dict_list, verbose=False, method='median'):
+    """
+    Combine hash tables in given list into one big hashtable, and return the unique keys
+    and statistics of its values.
+    
+    """
+    # extract all the different frequencies from psd_dict_list.
+    n_mics = len(psd_dict_list[0])
+    frequencies = set().union(*(psd_dict[i].keys() for psd_dict in psd_dict_list for i in range(n_mics)))
+    frequencies = np.sort(list(frequencies))
+    
+    psd = np.zeros((n_mics, len(frequencies)))
+    psd_std = np.zeros((n_mics, len(frequencies)))
+    for i_mic in range(n_mics):
+        for j, f in enumerate(frequencies):
+            
+            # combine all values at this f and mic
+            vals = []
+            for psd_dict in psd_dict_list:
+                if f in psd_dict[i_mic].keys():
+                    vals += psd_dict[i_mic][f]
+                    
+            if verbose:
+                print(f'for frequency {f}, mic{i_mic}, found {vals}')
+            if len(vals):
+                
+                if ('reject' in method) and (len(vals) > 4):
+                    vals = vals[2:-2]
+                if 'median' in method: 
+                    psd[i_mic, j] = np.median(vals) 
+                if 'mean' in method: 
+                    psd[i_mic, j] = np.mean(vals) 
+                    
+                psd_std[i_mic, j] = np.std(vals) 
+                
+    # remove the frequencies for which we have no data
+    mask = np.any(psd > 0, axis=0)
+    return psd[:, mask], frequencies[mask], psd_std[:, mask]
+
+
 def get_psd(signals_f, frequencies, ax=None, fname='real'):
-    # signals_f shape: times, 4, 32
+    """ 
+    :param signals_f: tensor of signals of shape n_times x n_mics x n_frequencies
+    :param frequencies: frequencies vector in Hz.
+    """
+
     # read off from plot: 
     if 'simulated' in fname:
         slope = (4000 - 1000) / (200 - 50)
@@ -195,3 +275,4 @@ if __name__ == "__main__":
         df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
         print('saved intermediate as', fname)
+
