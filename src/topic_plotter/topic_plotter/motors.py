@@ -27,7 +27,9 @@ class MotorsPlotter(Node):
             self.axs[1].scatter([], [], color=f"C{i}", label=f"motor {i}")
         self.axs[0].legend()
         self.axs[1].legend()
-        self.fig.set_size_inches(14, 10)
+        self.axs[0].set_ylim(35000,66000)
+        self.axs[1].set_ylim(35000,66000)
+        self.fig.set_size_inches(14, 5)
         plt.show(block=False)
 
     def listener_callback_motors(self, msg):
@@ -51,4 +53,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    main()
+    main
