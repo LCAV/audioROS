@@ -29,39 +29,29 @@ id = f"radio://0/70/2M/{cf_id}"
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
-# TODO(FD) make sure that we overwrite these parameters
-# from a params.yaml file when we start (for better tractability)
-# Crazyflie audio parameters that can be set from here.
-AUDIO_PARAMETERS_TUPLES = [
-    ("send_audio_enable", rclpy.Parameter.Type.INTEGER, 1),
-    ("min_freq", rclpy.Parameter.Type.INTEGER, 4000),
-    ("max_freq", rclpy.Parameter.Type.INTEGER, 4200),
-    ("delta_freq", rclpy.Parameter.Type.INTEGER, 100), # not used without prop
-    ("n_average", rclpy.Parameter.Type.INTEGER, 5), # not used without snr
-    ("filter_snr_enable", rclpy.Parameter.Type.INTEGER, 0),
-    ("filter_prop_enable", rclpy.Parameter.Type.INTEGER, 0),
-]
-
-MOTOR_PARAMETERS_TUPLES = [
-    ("all", rclpy.Parameter.Type.INTEGER, 0),
-    ("m1", rclpy.Parameter.Type.INTEGER, 0),
-    ("m2", rclpy.Parameter.Type.INTEGER, 0),
-    ("m3", rclpy.Parameter.Type.INTEGER, 0),
-    ("m4", rclpy.Parameter.Type.INTEGER, 0),
-    ("enable", rclpy.Parameter.Type.INTEGER, 0),
-]
-
-COMMAND_PARAMETERS_TUPLES = [
-    ("hover_height", rclpy.Parameter.Type.DOUBLE, 0.0),
-    ("turn_angle", rclpy.Parameter.Type.INTEGER, 0),
-    ("land_velocity", rclpy.Parameter.Type.DOUBLE, 0.0),
-    ("move_distance", rclpy.Parameter.Type.DOUBLE, 0.0),
-]
-
-BUZZER_PARAMETERS_TUPLES = [
-    ("buzzer_effect", rclpy.Parameter.Type.INTEGER, -1),
-    ("buzzer_freq", rclpy.Parameter.Type.INTEGER, 0),
-]
+# parameter default values, will be overwritten by
+# parameter yaml file, given by:
+# ros2 run crazyflie_crtp gateway --ros-args --params-file params/default.yaml
+PARAMS_DICT = {
+    "send_audio_enable": (rclpy.Parameter.Type.INTEGER, 1),
+    "min_freq": (rclpy.Parameter.Type.INTEGER, 4000),
+    "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
+    "delta_freq": (rclpy.Parameter.Type.INTEGER, 100), # not used without prop
+    "n_average": (rclpy.Parameter.Type.INTEGER, 5), # not used without snr
+    "filter_snr_enable": (rclpy.Parameter.Type.INTEGER, 0),
+    "filter_prop_enable": (rclpy.Parameter.Type.INTEGER, 0),
+    "all": (rclpy.Parameter.Type.INTEGER, 0),
+    "m1": (rclpy.Parameter.Type.INTEGER, 0),
+    "m2": (rclpy.Parameter.Type.INTEGER, 0),
+    "m3": (rclpy.Parameter.Type.INTEGER, 0),
+    "m4": (rclpy.Parameter.Type.INTEGER, 0),
+    "hover_height": (rclpy.Parameter.Type.DOUBLE, 0.0),
+    "turn_angle": (rclpy.Parameter.Type.INTEGER, 0),
+    "land_velocity": (rclpy.Parameter.Type.DOUBLE, 0.0),
+    "move_distance": (rclpy.Parameter.Type.DOUBLE, 0.0),
+    "buzzer_effect": (rclpy.Parameter.Type.INTEGER, -1),
+    "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
+}
 
 # TODO(FD) figure out from where we can read this. Make it a parameter? 
 SOURCE_DIRECTION_DEG = 90.0
@@ -69,7 +59,8 @@ SOURCE_DIRECTION_DEG = 90.0
 
 class Gateway(Node):
     def __init__(self, reader_crtp):
-        super().__init__("gateway")
+        super().__init__("gateway", 
+                automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
 
         self.start_time = time.time()
 
@@ -93,14 +84,11 @@ class Gateway(Node):
 
         self.reader_crtp = reader_crtp
 
-        parameters = []
-
-        for param in AUDIO_PARAMETERS_TUPLES + MOTOR_PARAMETERS_TUPLES + COMMAND_PARAMETERS_TUPLES + BUZZER_PARAMETERS_TUPLES:
-            self.declare_parameter(param[0])
-            param_rclpy = rclpy.parameter.Parameter(*param)
-            parameters.append(param_rclpy)
-
         self.set_parameters_callback(self.set_params)
+
+        # need to do this to send initial parameters
+        # over to Crazyflie.
+        parameters = self.get_parameters(PARAMS_DICT.keys())
         self.set_parameters(parameters)
 
         # choose high publish rate so that we introduce as little
@@ -215,83 +203,54 @@ class Gateway(Node):
 
         for param in params: 
 
+            # we need this in case this parameter
+            # was not set yet by the startup file. 
+            # then we use the default values.
+            if param.type_ == param.Type.NOT_SET:
+                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
+
             # send motor commands
             if param.name == 'hover_height':
-                height = param.get_parameter_value().double_value
-                if height > 0:
-                    success = self.reader_crtp.send_hover_command(height)
+                if param.value > 0:
+                    success = self.reader_crtp.send_hover_command(param.value)
             elif param.name == 'turn_angle':
-                angle = param.get_parameter_value().integer_value
-                if angle != 0:
-                    success = self.reader_crtp.send_turn_command(angle)
+                if param.value != 0:
+                    success = self.reader_crtp.send_turn_command(param.value)
             elif param.name == 'land_velocity':
-                velocity = param.get_parameter_value().double_value
-                if velocity > 0:
+                if param.value > 0:
                     success = self.reader_crtp.send_land_command()
             elif param.name == 'move_distance':
-                distance = param.get_parameter_value().double_value
-                if distance != 0:
-                    self.reader_crtp.send_move_command(distance)
+                if param.value != 0:
+                    self.reader_crtp.send_move_command(param.value)
 
             # send buzzer commands
             elif param.name == 'buzzer_effect':
-                effect = param.get_parameter_value().integer_value
-                if effect >= 0:
-                    self.reader_crtp.send_buzzer_effect(effect)
+                if param.value >= 0:
+                    self.reader_crtp.send_buzzer_effect(param.value)
             elif param.name == 'buzzer_freq':
-                freq = param.get_parameter_value().integer_value
-                if freq >= 0:
-                    self.reader_crtp.send_buzzer_freq(freq)
+                if param.value >= 0:
+                    self.reader_crtp.send_buzzer_freq(param.value)
 
-            # send audio and raw motor commands.
+            elif param.name == "all":
+                self.get_logger().info( f"setting all motors to {param.value}")
+                success = self.reader_crtp.send_thrust_command(param.value)
+            elif param.name in [f"m{i}" for i in range(1, 5)]:
+                self.get_logger().info(f"setting {param.name} to {param.value}")
+                success = self.reader_crtp.send_thrust_command(param.value, param.name)
             else:
-                param_tuples_audio = [p for p in AUDIO_PARAMETERS_TUPLES if p[0] == param.name]
-                param_tuples_motor = [p for p in MOTOR_PARAMETERS_TUPLES if p[0] == param.name]
-
-                if len(param_tuples_audio) == 1:
-                    self.set_param(param, param_tuples_audio[0], "audio")
-                elif len(param_tuples_motor) == 1:
-                    value = param.get_parameter_value().integer_value
-                    if param.name == "all":
-                        self.get_logger().info( f"changing all motors to {value}")
-                        if value > 30000:
-                            print('set intermediate 30000')
-                            success = self.reader_crtp.send_thrust_command(30000)
-                            print('set', value)
-                            success = self.reader_crtp.send_thrust_command(value)
-                        else:
-                            print('set', value)
-                            success = self.reader_crtp.send_thrust_command(value)
-                    else:
-                        self.get_logger().info(f"changing {param.name} to {value}")
-                        success = self.reader_crtp.send_thrust_command(value, param.name)
-                else:
-                    raise ValueError(param)
+                self.set_audio_param(param)
 
         if success:
             return SetParametersResult(successful=True)
         else:
             return SetParametersResult(successful=False)
 
-    def set_param(self, param, param_tuple, param_class):
-        if param_tuple[1] == rclpy.Parameter.Type.INTEGER:
-            old_value = (
-                self.get_parameter(param.name).get_parameter_value().integer_value
-            )
-            new_value = param.get_parameter_value().integer_value
-        elif param_tuple[1] == rclpy.Parameter.Type.DOUBLE:
-            old_value = (
-                self.get_parameter(param.name).get_parameter_value().double_value
-            )
-            new_value = param.get_parameter_value().double_value
-        else:
-            raise ValueError(param_tuple)
-
-        self.reader_crtp.cf.param.set_value(f"{param_class}.{param.name}", new_value)
+    def set_audio_param(self, param):
+        old_value = self.get_parameter(param.name).value
+        self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
         self.get_logger().info(
-            f"changing {param.name} from {old_value} to {new_value}"
+            f"changing {param.name} from {old_value} to {param.value}"
         )
-        return 
 
 
 def main(args=None):

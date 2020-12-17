@@ -1,0 +1,6 @@
+gateway:
+  ros__parameters:
+    min_freq: 100
+    max_freq: 1000
+    filter_snr_enable: 1
+    filter_props_enable: 0

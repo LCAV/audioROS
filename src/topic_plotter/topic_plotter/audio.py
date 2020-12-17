@@ -12,8 +12,8 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLoc
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-XMIN_FREQ = 1000 #200 # min plotting frequency in Hz
-XMAX_FREQ = 5000 # max plotting frequency in Hz
+XMIN_FREQ = 100 #200 # min plotting frequency in Hz
+XMAX_FREQ = 1000 # max plotting frequency in Hz
 YMIN_FREQ = 1e-10 # min plotting frequency in Hz
 YMAX_FREQ = 1e5 # max plotting frequency in Hz
 
@@ -29,12 +29,14 @@ class AudioPlotter(Node):
             Signals, "audio/signals", self.listener_callback_signals, 10
         )
 
-        self.fig, axs = plt.subplots(2)
+        self.fig, ax = plt.subplots()
+        #self.fig, axs = plt.subplots(2)
         self.axs = {
-            "signals frequency": axs[0],
-            "signals time": axs[1]
+            "signals frequency": ax,
+            #"signals frequency": axs[0],
+            #"signals time": axs[1]
         }
-        self.fig.set_size_inches(25, 20)
+        self.fig.set_size_inches(10, 5)
         self.plotter_dict = {}
         self.current_n_buffer = None
         self.current_n_frequencies = None
@@ -79,8 +81,9 @@ class AudioPlotter(Node):
         self.plotter_dict["signals frequency"].update_axvlines(freqs)
         self.current_n_frequencies = msg.n_frequencies
 
-        # TODO(FD) remove this or make it more consistent
         self.plotter_dict["signals frequency"].ax.set_xlim(XMIN_FREQ, XMAX_FREQ)
+
+        #[ax.axis('tight') for ax in self.axs.values()]
         self.fig.canvas.draw()
 
 
