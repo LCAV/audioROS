@@ -152,10 +152,10 @@ class Gateway(Node):
         n_frequencies = len(fbins)
 
         # the only allowed duplicates are 0
-        if len(set(fbins[fbins>0])) < len(fbins[fbins>0]):
-            self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
-            return
-        elif not np.any(fbins > 0): 
+        #if len(set(fbins[fbins>0])) < len(fbins[fbins>0]):
+            #self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
+            #return
+        if not np.any(fbins > 0): 
             self.get_logger().warn(f"Empty fbins!")
             return
         elif np.any(fbins >= len(all_frequencies)):
