@@ -1,13 +1,13 @@
 global_params = {
-    'source_type': 'buzzer-onboard',
+    'source_type': 'buzzer-onboard-flying',
     'fs_soundcard': 44100, # hz
     'n_meas_mics': 0, # number of measurement mics
     'duration': 10 # will always be overwritten
 }
 
 MOTORS = "linear"
-SNR = 1 # TODO(FD) change to 2 as soon as implemented
-FREQS = [1000, 2000, 3000, 4000] # TODO(FD) adjust frequencies
+SNR = 2 # TODO(FD) change to 2 as soon as implemented
+FREQS = [1750, 2375, 3125, 3875] 
 MIN_FREQ = 1000
 MAX_FREQ = 5000
 

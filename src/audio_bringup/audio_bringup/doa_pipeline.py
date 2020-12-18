@@ -87,9 +87,11 @@ def set_param(node_name, param_name, param_value):
         return False
 
 
-def execute_commands(command_list):
+def execute_commands(command_list, source='sweep_slow'):
     for command in command_list:
         node, parameter, value, sleep = command
+        if (parameters == 'buzzer_effect') and (value is None):
+            value = SOUND_EFFECTS[source][0]
         print(f'execute {parameter}: {value} and sleep for {sleep}s...')
         if parameter != '':
             set_param(node, parameter, str(value))
@@ -283,6 +285,9 @@ if __name__ == "__main__":
         if source_type == 'buzzer-onboard':
             if params['source'] is not None:
                 execute_commands(buzzer_dict[params['source']])
+        if source_type == 'buzzer-onboard-flying':
+            if params['source'] is not None:
+                set_param('/gateway', 'buzzer_effect', str(12))
 
         if angle == 360:
             print('starting turning by 360')
@@ -317,7 +322,7 @@ if __name__ == "__main__":
 
             if type(params['motors']) == str:
                 print(f'executing motor commands:')
-                execute_commands(command_dict[params['motors']])
+                execute_commands(command_dict[params['motors']], source=params['source'])
                 extra_idle_time = duration - (time.time() - start_time)
                 if extra_idle_time > 0:
                     print(f'finished motor commands faster than expected. sleeping for {extra_idle_time:.2f} seconds...')
