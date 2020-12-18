@@ -24,10 +24,9 @@ command_dict = {
      ],
      'linear':[
         ('/gateway', 'hover_height', 0.5, 3),
-        ('/gateway', 'move_distance', 0.5, 2), # 50 cm
+        ('/gateway', 'move_distance', 0.5, 12), # 50 cm
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
-
      'all43000': [
         ('/gateway', 'all', 43000, 1) # 165 is duration of the 50cm move
      ],
