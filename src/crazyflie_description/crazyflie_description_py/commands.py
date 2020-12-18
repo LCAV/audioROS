@@ -31,6 +31,9 @@ command_dict = {
      'all43000': [
         ('/gateway', 'all', 43000, 1) # 165 is duration of the 50cm move
      ],
+     'all45000': [
+        ('/gateway', 'all', 45000, 1) # 165 is duration of the 50cm move
+     ],
 }
 
 # buzzer commands from the different sweeps.

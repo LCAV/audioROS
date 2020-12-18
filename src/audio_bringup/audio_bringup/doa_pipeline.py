@@ -56,7 +56,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_7_moving'
 #EXTRA_DIRNAME = '2020_12_9_rotating'
 #EXTRA_DIRNAME = '2020_12_11_calibration'
-EXTRA_DIRNAME = '2020_12_18_flying'
+#EXTRA_DIRNAME = '2020_12_18_flying'
+EXTRA_DIRNAME = '2020_12_18_stepper'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -158,6 +159,8 @@ if __name__ == "__main__":
     previous_angle = START_ANGLE
     timestamp = int(time.time())
 
+    distance = None
+    angle = 0
     param_i = 0
     while param_i < len(params_list):
         params = params_list[param_i]
@@ -225,12 +228,17 @@ if __name__ == "__main__":
                 max_freq = max_freq_buzz
 
 
-        if distance in [51, -51]:
-            # TODO(FD) replace below with serial_motors.py command durations
-            duration_move = 165  
+        if distance == 51:
+            duration_move = 100 #165  
             if duration_move > duration:
                 print(f'ignoring global duration {duration} and using turn command duration {duration_move}')
                 duration = duration_move
+        elif distance == -51:
+            duration_move = 165
+            if duration_move > duration:
+                print(f'ignoring global duration {duration} and using turn command duration {duration_move}')
+                duration = duration_move
+
         if angle == 360:
             # TODO(FD) replace below with serial_motors.py command durations
             duration_turn = 18  
