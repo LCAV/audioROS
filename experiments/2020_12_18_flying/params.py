@@ -11,7 +11,7 @@ FREQS = [1750, 2375, 3125, 3875]
 MIN_FREQ = 1000
 MAX_FREQ = 5000
 
-SOURCE_LIST = ['sweep_slow', None]
+SOURCE_LIST = ['sweep_slow', 'sweep_fast', None]
 DISTANCE_LIST = [0]
 DEGREE_LIST = [0]
 PROPS_LIST = [0, 1]
@@ -22,6 +22,7 @@ SNR_LIST = [SNR]
 params_list = [
    {'motors':MOTORS, 'snr':SNR, 'props':0, 'source':None, 'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ}, 
    {'motors':MOTORS, 'snr':SNR, 'props':1, 'source':'sweep_slow', 'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ}, 
+   {'motors':MOTORS, 'snr':SNR, 'props':1, 'source':'sweep_fast', 'min_freq':MIN_FREQ, 'max_freq':MAX_FREQ}, 
 ]
 for f in FREQS:
     params_list.append(
