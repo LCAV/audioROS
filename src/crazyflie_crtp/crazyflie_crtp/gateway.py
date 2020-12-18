@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-#cf_id = "E7E7E7E7E8"
-#id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/80/2M/{cf_id}"
 
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/70/2M/{cf_id}"
+#cf_id = "E7E7E7E7E7"
+#id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.

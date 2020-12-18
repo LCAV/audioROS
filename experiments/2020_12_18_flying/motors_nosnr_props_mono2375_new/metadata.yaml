@@ -1,0 +1,31 @@
+rosbag2_bagfile_information:
+  version: 2
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - /home/lcavadmin/ROS/audioROS/experiments/2020_12_18_flying/motors_nosnr_props_mono2375_new/motors_nosnr_props_mono2375_new_0.db3
+  duration:
+    nanoseconds: 31255330558
+  starting_time:
+    nanoseconds_since_epoch: 1608307850335549148
+  message_count: 2906
+  topics_with_message_count:
+    - topic_metadata:
+        name: /crazyflie/motors
+        type: audio_interfaces/msg/CrazyflieMotors
+        serialization_format: cdr
+      message_count: 244
+    - topic_metadata:
+        name: /crazyflie/status
+        type: audio_interfaces/msg/CrazyflieStatus
+        serialization_format: cdr
+      message_count: 27
+    - topic_metadata:
+        name: /audio/signals_f
+        type: audio_interfaces/msg/SignalsFreq
+        serialization_format: cdr
+      message_count: 210
+    - topic_metadata:
+        name: /geometry/pose_raw
+        type: audio_interfaces/msg/PoseRaw
+        serialization_format: cdr
+      message_count: 2425
