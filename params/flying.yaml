@@ -4,7 +4,7 @@ gateway:
     min_freq: 1000
     max_freq: 5000
     delta_freq: 100 # not used without prop
-    n_average: 5 # not used without snr
+    n_average: 1 # not used without snr
     filter_snr_enable: 1
     filter_prop_enable: 1
     buzzer_effect: 0
