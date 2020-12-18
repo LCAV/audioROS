@@ -24,7 +24,8 @@ command_dict = {
      ],
      'linear':[
         ('/gateway', 'hover_height', 0.5, 3),
-        ('/gateway', 'move_distance', 0.5, 2), # 50 cm
+        ('/gateway', 'buzzer_effect', None, 0), # will be overwritten
+        ('/gateway', 'move_distance', 0.5, 12), # 50 cm
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
 
