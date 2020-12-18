@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-cf_id = "E7E7E7E7E8"
-id = f"radio://0/80/2M/{cf_id}"
+#cf_id = "E7E7E7E7E8"
+#id = f"radio://0/80/2M/{cf_id}"
 
-#cf_id = "E7E7E7E7E7"
-#id = f"radio://0/70/2M/{cf_id}"
+cf_id = "E7E7E7E7E7"
+id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -240,6 +240,8 @@ class Gateway(Node):
             elif param.name in [f"m{i}" for i in range(1, 5)]:
                 self.get_logger().info(f"set {param.name} to {param.value}")
                 success = self.reader_crtp.send_thrust_command(param.value, param.name)
+            elif param.name == "send_audio_enable":
+                self.reader_crtp.send_audio_enable(param.value)
             else:
                 self.set_audio_param(param)
 
@@ -286,13 +288,13 @@ def main(args=None):
                 time.sleep(1)
         except KeyboardInterrupt:
             print('node interrupted')
-            cf.param.set_value("audio.send_audio_enable", 0)
+            reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
             print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
             time.sleep(1)
         except Exception as e:
             print('error occured')
-            cf.param.set_value("audio.send_audio_enable", 0)
+            reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
             print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
             time.sleep(1)
