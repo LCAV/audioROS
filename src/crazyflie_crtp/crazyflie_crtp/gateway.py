@@ -232,10 +232,10 @@ class Gateway(Node):
                     self.reader_crtp.send_buzzer_freq(param.value)
 
             elif param.name == "all":
-                self.get_logger().info( f"setting all motors to {param.value}")
+                self.get_logger().info( f"set all motors to {param.value}")
                 success = self.reader_crtp.send_thrust_command(param.value)
             elif param.name in [f"m{i}" for i in range(1, 5)]:
-                self.get_logger().info(f"setting {param.name} to {param.value}")
+                self.get_logger().info(f"set {param.name} to {param.value}")
                 success = self.reader_crtp.send_thrust_command(param.value, param.name)
             else:
                 self.set_audio_param(param)
@@ -247,10 +247,15 @@ class Gateway(Node):
 
     def set_audio_param(self, param):
         old_value = self.get_parameter(param.name).value
-        self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
-        self.get_logger().info(
-            f"changing {param.name} from {old_value} to {param.value}"
-        )
+        try:
+            self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
+            self.get_logger().info(
+                f"changed {param.name} from {old_value} to {param.value}"
+            )
+        except:
+            self.get_logger().warn(
+                f"error when trying to set {param.name}"
+            )
 
 
 def main(args=None):

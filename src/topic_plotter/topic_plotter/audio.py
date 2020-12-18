@@ -13,9 +13,10 @@ MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
 XMIN_FREQ = 100 #200 # min plotting frequency in Hz
-XMAX_FREQ = 1000 # max plotting frequency in Hz
+XMAX_FREQ = 5000 # max plotting frequency in Hz
 YMIN_FREQ = 1e-10 # min plotting frequency in Hz
 YMAX_FREQ = 1e5 # max plotting frequency in Hz
+FIG_SIZE = (15, 5)
 
 class AudioPlotter(Node):
     def __init__(self):
@@ -36,7 +37,7 @@ class AudioPlotter(Node):
             #"signals frequency": axs[0],
             #"signals time": axs[1]
         }
-        self.fig.set_size_inches(10, 5)
+        self.fig.set_size_inches(*FIG_SIZE)
         self.plotter_dict = {}
         self.current_n_buffer = None
         self.current_n_frequencies = None
@@ -73,10 +74,11 @@ class AudioPlotter(Node):
         y = np.abs(signals_f[indices, :].T)
         x = freqs[indices]
 
+        max_freq = x[np.argmax(y, axis=1)] 
         labels = [f"mic {i}" for i in range(y.shape[1])]
         self.plotter_dict["signals frequency"].update_lines(y, x, labels, linestyle='-', marker='o')
-        self.plotter_dict["signals frequency"].ax.set_title(f"time [ms]: {msg.timestamp}")
-        self.plotter_dict["signals frequency"].ax.set_xticks(np.arange(XMIN_FREQ, XMAX_FREQ, 100))
+        self.plotter_dict["signals frequency"].ax.set_title(f"time [ms]: {msg.timestamp}, max at {max_freq}Hz")
+        self.plotter_dict["signals frequency"].ax.set_xticks(np.arange(XMIN_FREQ, XMAX_FREQ, 200))
         self.plotter_dict["signals frequency"].ax.xaxis.set_minor_locator(AutoMinorLocator(2))
         self.plotter_dict["signals frequency"].update_axvlines(freqs)
         self.current_n_frequencies = msg.n_frequencies
