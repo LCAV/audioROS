@@ -91,8 +91,11 @@ def set_param(node_name, param_name, param_value):
 def execute_commands(command_list, source='sweep_slow'):
     for command in command_list:
         node, parameter, value, sleep = command
-        if (parameters == 'buzzer_effect') and (value is None):
+        if (parameter == 'buzzer_effect') and (value is None) and (source is not None):
             value = SOUND_EFFECTS[source][0]
+        elif (parameter == 'buzzer_effect') and (source is None):
+            continue
+
         print(f'execute {parameter}: {value} and sleep for {sleep}s...')
         if parameter != '':
             set_param(node, parameter, str(value))
@@ -209,7 +212,7 @@ if __name__ == "__main__":
             if duration_motors > duration:
                 print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
                 duration = duration_motors
-        if (source_type == 'buzzer-onboard') and (params['source'] is not None):
+        if ('buzzer-onboard' in source_type) and (params['source'] is not None):
             c, (min_freq_buzz, max_freq_buzz), duration_buzzer = SOUND_EFFECTS[params['source']]
             if duration_buzzer > duration:
                 print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
@@ -286,9 +289,10 @@ if __name__ == "__main__":
         if source_type == 'buzzer-onboard':
             if params['source'] is not None:
                 execute_commands(buzzer_dict[params['source']])
-        if source_type == 'buzzer-onboard-flying':
-            if params['source'] is not None:
-                set_param('/gateway', 'buzzer_effect', str(12))
+        elif source_type == 'buzzer-onboard-flying':
+            source = params['source']
+            if source not in [None, 'sweep_slow','sweep_fast']:
+                execute_commands(buzzer_dict[source])
 
         if angle == 360:
             print('starting turning by 360')
@@ -313,7 +317,7 @@ if __name__ == "__main__":
                 print('playing (not recording) sound...')
                 sd.play(out_signal, blocking=True)
         # when we use the buzzer, we simply record what the measurement mics get.    
-        elif (source_type == 'buzzer-onboard') or (source_type == 'buzzer'):
+        elif ('buzzer-onboard' in source_type) or (source_type == 'buzzer'):
             start_time = time.time()
 
             if global_params['n_meas_mics'] > 0:
@@ -339,7 +343,7 @@ if __name__ == "__main__":
                 time.sleep(duration)
 
         #### wrap up ####
-        if source_type == 'buzzer-onboard':
+        if 'buzzer-onboard' in source_type:
             execute_commands(buzzer_dict['stop'])
         print('...done')
 
