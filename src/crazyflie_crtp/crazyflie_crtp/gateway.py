@@ -222,6 +222,9 @@ class Gateway(Node):
             elif param.name == 'move_distance':
                 if param.value != 0:
                     self.reader_crtp.send_move_command(param.value)
+            elif param.name == 'move_forward':
+                if param.value != 0:
+                    self.reader_crtp.send_forward_command(param.value)
 
             # send buzzer commands
             elif param.name == 'buzzer_effect':
