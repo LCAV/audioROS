@@ -10,6 +10,13 @@ __Place__: Place, if necessary temperature etc.
 ## Notes 
 <!-- quick and dirty notes, to be written out later -->
 
+first round: duration 30
+- first: drone crashed in the very end, battery low
+
+second round (appendix new): duration 26
+all measurements with same battery! start at 4.1, down to ca. 3.75
+- last measurement: battery level quite low at start, rosbag error (topic not created yet, for the crazyflie/motors topic) 
+
 ## Description
 
 ###  Hardware
