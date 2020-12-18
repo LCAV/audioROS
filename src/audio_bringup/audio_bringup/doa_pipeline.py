@@ -55,7 +55,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_4_moving'
 #EXTRA_DIRNAME = '2020_12_7_moving'
 #EXTRA_DIRNAME = '2020_12_9_rotating'
-EXTRA_DIRNAME = '2020_12_11_calibration'
+#EXTRA_DIRNAME = '2020_12_11_calibration'
+EXTRA_DIRNAME = '2020_12_18_flying'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
