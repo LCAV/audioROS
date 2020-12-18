@@ -28,7 +28,6 @@ command_dict = {
         ('/gateway', 'move_distance', 0.5, 12), # 50 cm
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
-
      'all43000': [
         ('/gateway', 'all', 43000, 1) # 165 is duration of the 50cm move
      ],
