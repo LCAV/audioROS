@@ -52,7 +52,8 @@ class AudioSimulation(Node):
         self.first_sample = 0
         self.current_pose = Pose()
         self.mic_positions = np.array(MIC_POSITIONS)
-    
+   
+
     def constant_publisher(self):
         """
         Publish signal chunks at a rate defined by the timer
@@ -79,8 +80,6 @@ class AudioSimulation(Node):
         self.get_logger().info(f"{self.time_idx}: Published audio signal")
         self.time_idx += N_BUFFER
        
-        #TODO two ifs => similar issue?
-        # shutdown => exiting the console command
         if self.time_idx >= MAX_TIMESTAMP:
             self.get_logger().warn("timestamp overflow")
             if LOOP:
@@ -120,8 +119,9 @@ class AudioSimulation(Node):
         self.mic_positions_global = global_mic_positions(self.mic_positions, rotation, drone_center)
         sim_room = self.simulation(self.mic_positions_global)
         self.signals = sim_room.mic_array.signals
-
-        pose_raw = create_pose_raw_message(self.current_pose, msg_pose)
+        
+        # TODO: timestamp
+        pose_raw = create_pose_raw_message(self.current_pose, msg_pose, 0)
         self.current_pose = msg_pose
 
         self.publisher_rawpose.publish(pose_raw)
@@ -150,7 +150,7 @@ class AudioSimulation(Node):
         return pyroom_cp
 
 
-def create_pose_raw_message(previous_pose, current_pose):
+def create_pose_raw_message(previous_pose, current_pose, timestamp):
     """
     Create a message of type PoseRaw() based on previous and current pose
     """
@@ -160,15 +160,13 @@ def create_pose_raw_message(previous_pose, current_pose):
     curr_orientation = current_pose.orientation 
     
     pose_raw = PoseRaw()
-    #TODO change timestamp!
-    pose_raw.timestamp = 0 
+    pose_raw.timestamp = timestamp
     pose_raw.dx = curr_position.x - prev_position.x
     pose_raw.dy = curr_position.y - prev_position.y
     pose_raw.z = curr_position.z
     pose_raw.yaw_deg = get_yaw(curr_orientation)
     pose_raw.yaw_rate_deg = 0.0
-    #TODO ground truth source direction in [-180, 180] degrees
-    pose_raw.source_direction_deg = 0.0
+    pose_raw.source_direction_deg = degrees(atan2(curr_position.y, curr_position.x))
 
     return pose_raw
 
@@ -181,7 +179,7 @@ def get_yaw(quaternion):
     x = quaternion.x
     y = quaternion.y
     z = quaternion.z
-    w = quaternion.z
+    w = quaternion.w
 
     yaw = degrees(atan2(2.0 * (y*z + w*x), w*w -  x*x - y*y + z*z))
     
