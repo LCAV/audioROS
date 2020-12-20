@@ -61,9 +61,10 @@ Otherwise:
 - Other parameters used
 -->
 
+Used the params/flying.yaml parameters for gateway.
+Used params.py file.
 Soundcard settings unchanged from last time
 Used 300Hz for audio deck rate. 
-Very few communication problems compared to last times. 
 
 ### Data
 <!--
@@ -79,6 +80,8 @@ Anything unusual that happened during the experiments, such as
 - Connection problems, low data rates, etc. 
 - Hardware (battery failures, broken parts, etc)
 -->
+
+Very few communication problems compared to last times. 
 
 Noticed that we used blocking "forward" command and changed this before restarting experiments. 
 
