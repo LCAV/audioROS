@@ -71,6 +71,7 @@ Used 300Hz for audio deck rate.
 Explain folder naming etc. 
 -->
 
+- important: nosnr flag actually corresponds to snr=2!
 - as always
 
 ### Observations
