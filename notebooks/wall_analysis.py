@@ -132,11 +132,15 @@ def get_psd(signals_f, frequencies, ax=None, fname='real'):
     return extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=ax)
 
 
-def parse_experiments(exp_name='2020_12_9_moving'):
+def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     if exp_name == '2020_12_7_moving':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]
     elif exp_name == '2020_12_9_rotating':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list = [0, 1]
+    elif exp_name == '2020_12_18_flying':
+        appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]; wav = False
+    elif exp_name == '2020_12_18_stepper':
+        appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]
 
     max_value = 100 # all signals received are actually between 0 and 2. 
     sys.path = [p for p in sys.path if not 'experiments' in p]
@@ -155,6 +159,8 @@ def parse_experiments(exp_name='2020_12_9_moving'):
     )
     for degree, distance, source, motors, appendix, snr, props in itertools.product(
         DEGREE_LIST, DISTANCE_LIST, SOURCE_LIST, MOTORS_LIST, appendix_list, snr_list, props_list): 
+
+        mic_dfs = {'audio_deck': None, 'measurement': None}
         try:
             params['motors'] = motors
             params['degree'] = degree
@@ -163,16 +169,22 @@ def parse_experiments(exp_name='2020_12_9_moving'):
             params['appendix'] = appendix
             params['snr'] = snr
             params['props'] = props
+
             df_csv, __ = read_df(**params)
+            mic_dfs['audio_deck'] = df_csv
             
             fname = get_fname(**params)
-            df_wav = read_df_from_wav(f'../experiments/{exp_name}/export/{fname}.wav', n_buffer=N_BUFFER)
+
+            if wav: 
+                df_wav = read_df_from_wav(f'../experiments/{exp_name}/export/{fname}.wav', n_buffer=N_BUFFER)
+                mic_dfs['measurement'] = df_wav
             
         except FileNotFoundError as e:
             continue 
             
-        for mic_type, df in zip(['audio_deck', 'measurement'], [df_csv, df_wav]):
-            
+        for mic_type, df in mic_dfs.items():
+            if df is None:
+                continue
             if not 'signals_f' in df.columns:
                 continue
             
@@ -189,7 +201,7 @@ def parse_experiments(exp_name='2020_12_9_moving'):
             else:
                 print('saving frequencies matrix')
             
-            spec = np.sum(np.abs(signals_f), axis=1)
+            spec = np.sum(np.abs(signals_f), axis=1) # average over mics
             psd = get_psd(signals_f, frequencies, fname='real')
 
             params['source'] = str(params['source'])
@@ -265,9 +277,11 @@ def parse_calibration_experiments():
 
 
 if __name__ == "__main__":
-    exp_name = '2020_12_9_rotating'
+    #exp_name = '2020_12_9_rotating'
+    exp_name = '2020_12_18_flying'
     fname = f'results/{exp_name}_real.pkl'
     try:
+        raise 
         df_total = pd.read_pickle(fname)
         print('read', fname)
     except:
@@ -275,4 +289,3 @@ if __name__ == "__main__":
         df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
         print('saved intermediate as', fname)
-

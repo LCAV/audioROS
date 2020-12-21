@@ -12,6 +12,7 @@ MIN_FREQ = 1000
 MAX_FREQ = 5000
 
 SOURCE_LIST = ['sweep_slow', 'sweep_fast', None]
+SOURCE_LIST += [f'mono{f}' for f in FREQS]
 DISTANCE_LIST = [0]
 DEGREE_LIST = [0]
 PROPS_LIST = [0, 1]
