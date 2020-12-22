@@ -86,8 +86,7 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=E
 
     if 'source_direction-deg' in df.columns:
         df.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
-    pose_columns = [p for p in ['dx', 'dy', 'yaw_deg', 'yaw_rate_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']
-                    if p in df.columns]
+    pose_columns = set(['dx', 'dy', 'z', 'yaw_deg', 'yaw_rate_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']).intersection(df.columns)
     df_pose = df.loc[df.topic=='geometry/pose_raw', pose_columns]
     return df_audio, df_pose
 
@@ -184,17 +183,29 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
 
 
 def get_positions(df_pos):
+    """ Get absoltue positions from relative estimates. 
+    """ 
+    if isinstance(df_pos, pd.DataFrame):
+        yaw_degs = df_pos.yaw_deg.values
+        dxs = df_pos.dx.values
+        dys = df_pos.dy.values
+        zs = df_pos.z.values
+    elif isinstance(df_pos, pd.Series): 
+        yaw_degs = df_pos.yaw_deg
+        dxs = df_pos.dx
+        dys = df_pos.dy
+        zs = df_pos.z
+
     # compute positions based on relative movement
     start_pos = np.array([0, 0])
-    positions = np.empty([len(df_pos), 2])
-    i_row = 0
-    for i, row in df_pos.iterrows():
-        yaw_rad = row.yaw_deg / 180 * np.pi
-        length = np.sqrt(row.dx**2 + row.dy**2)
+    positions = np.empty([len(dxs), 3])
+    for i, (yaw_deg, dx, dy, z) in enumerate(zip(yaw_degs, dxs, dys, zs)):
+        yaw_rad = yaw_deg / 180 * np.pi
+        length = np.sqrt(dx**2 + dy**2)
         new_pos = start_pos + length * np.array(
             [np.cos(yaw_rad), np.sin(yaw_rad)])
-        positions[i_row, :] = new_pos
-        i_row += 1
+        positions[i, :2] = new_pos
+        positions[i, 2] = z
     return positions
 
 

@@ -3,8 +3,11 @@ import sys
 
 import numpy as np
 import pandas as pd
+import progressbar
 
 from evaluate_data import read_df, read_df_from_wav, get_fname
+from evaluate_data import get_positions
+from dynamic_analysis import add_pose_to_df
 
 
 def filter_by_dicts(df, dicts):
@@ -150,8 +153,12 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
 
     DEGREE_LIST = [0]
 
-    df_total = pd.DataFrame(columns=['signals_f', 'degree', 'distance', 'source', 'snr', 
-                                     'motors', 'psd', 'spec', 'frequencies', 'appendix', 'seconds', 'mic_type', 'frequencies_matrix'])
+    df_total = pd.DataFrame(columns=[
+        'signals_f', 'degree', 'distance', 'source', 'snr', 
+        'motors', 'psd', 'spec', 'frequencies', 'appendix', 
+        'seconds', 'mic_type', 'frequencies_matrix', 'dx', 'dy', 'z', 'yaw_deg', 
+        'positions'
+    ])
 
     params = dict(
         props = False,
@@ -170,7 +177,10 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
             params['snr'] = snr
             params['props'] = props
 
-            df_csv, __ = read_df(**params)
+            df_csv, df_pos = read_df(**params)
+
+            positions = get_positions(df_pos)
+            add_pose_to_df(df_csv, df_pos)
             mic_dfs['audio_deck'] = df_csv
             
             fname = get_fname(**params)
@@ -212,7 +222,12 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 frequencies_matrix=frequencies_matrix,
                 spec=spec,
                 psd=psd,
-                seconds=seconds
+                seconds=seconds, 
+                dx=df.dx.values,
+                dy=df.dy.values,
+                z=df.z.values,
+                yaw_deg=df.yaw_deg.values,
+                positions=positions
             )
             all_items.update(params)
             df_total.loc[len(df_total), :] = all_items
@@ -288,4 +303,4 @@ if __name__ == "__main__":
         print('could not read', fname)
         df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
-        print('saved intermediate as', fname)
+        print('saved as', fname)
