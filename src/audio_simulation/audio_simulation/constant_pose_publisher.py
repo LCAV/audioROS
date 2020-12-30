@@ -21,14 +21,14 @@ class ConstantPosePublisher(Node):
     def timer_callback(self):
         msg = Pose()
 
-        msg.orientation.x = 0.5
-        msg.orientation.y = 0.5
-        msg.orientation.z = 0.5
-        msg.orientation.w = 0.5
+        msg.orientation.x = 0.
+        msg.orientation.y = 0.
+        msg.orientation.z = 0.
+        msg.orientation.w = 1.
 
         msg.position.x = 1.0
-        msg.position.y = 1.0
-        msg.position.z = 1.0
+        msg.position.y = 2.0
+        msg.position.z = 3.0
 
         self.publisher_pose.publish(msg)
         self.get_logger().info("Pose has been published")
