@@ -53,6 +53,36 @@ def create_pose_raw_message(motion_dict, timestamp):
     return msg
 
 
+def create_pose_raw_message_from_poses(previous_pose, current_pose):
+    """
+    Create a PoseRaw message based on previous and current Pose.
+
+    :param previous_pose: previous Pose message.
+    :param current_pose: current Pose message.
+    :return: PoseRaw message
+    """
+    from scipy.spatial.transform import Rotation
+    r = Rotation.from_quat([
+        current_pose.orientation.x,
+        current_pose.orientation.y,
+        current_pose.orientation.z,
+        current_pose.orientation.w
+    ])
+    yaw_deg = r.as_euler('xyz', degrees=True)[2]
+
+    pose_raw = PoseRaw()
+    pose_raw.dx = current_pose.position.x - previous_pose.position.x
+    pose_raw.dy = current_pose.position.y - previous_pose.position.y
+    pose_raw.z = current_pose.position.z
+    pose_raw.yaw_deg = yaw_deg
+
+    # have to be filled later: 
+    pose_raw.timestamp = 0
+    pose_raw.yaw_rate_deg = 0.0
+    pose_raw.source_direction_deg = 0.0
+    return pose_raw
+
+
 def create_signals_message(signals, mic_positions, timestamp, fs):
     """ Create Signals message. """
     msg = Signals()

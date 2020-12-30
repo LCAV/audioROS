@@ -6,9 +6,9 @@ float32 dx
 float32 dy
 # absolute z in meters
 float32 z 
-# yaw angle in [-180, 180] degrees
+# absolute yaw angle in [-180, 180] degrees
 float32 yaw_deg
 # yaw rate in [-180, 180] degrees
 float32 yaw_rate_deg
-# ground truth source direction in [-180, 180] degrees
+# absolute ground truth source direction in [-180, 180] degrees
 float32 source_direction_deg
