@@ -28,6 +28,7 @@ ROOM_DIM = [2, 2, 2]  # room dimensions
 SOURCE_POS = [1, 1, 1]  # source position
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
 NUM_REFLECTIONS = 5 # number of reflections to consider in pyroomacoustis.
+DURATION_SEC = 60 # duration of audio signal simulated
 LOOP = False # flag for looping the signal after reaching the end
 
 
@@ -35,10 +36,10 @@ class CrazyflieSimulation(Node):
     def __init__(self):
         super().__init__("audio_simulation")
 
-        self.room = set_room(ROOM_DIM, N_BUFFER, [SOURCE_POS,], FS)
+        self.room = set_room(ROOM_DIM, [SOURCE_POS,], FS)
         self.time_idx = 0
 
-        self.publisher_rawpose = self.create_publisher(PoseRaw, "geometry/pose_raw", 10)
+        self.publisher_pose_raw = self.create_publisher(PoseRaw, "geometry/pose_raw", 10)
         self.publisher_signals = self.create_publisher(Signals, "audio/signals", 10)
         self.subscription_position = self.create_subscription(
             Pose, "geometry/pose", self.pose_listener_callback, 10
@@ -65,10 +66,11 @@ class CrazyflieSimulation(Node):
         assert (self.time_idx + N_BUFFER) < self.signals.shape[1]
 
         signal_to_send = self.signals[:, self.time_idx:self.time_idx+N_BUFFER]
+        timestamp = self.get_time_ms() 
 
-        msg = create_signals_message(signal_to_send, self.mic_positions, self.time_idx, self.room.fs)
+        msg = create_signals_message(signal_to_send, self.mic_positions, timestamp, self.room.fs)
         self.publisher_signals.publish(msg)
-        self.get_logger().info(f"{self.time_idx}: Published audio signal")
+        self.get_logger().info(f"{timestamp}: Published audio signal")
         self.time_idx += N_BUFFER
        
         if self.time_idx >= MAX_TIMESTAMP:
@@ -88,6 +90,10 @@ class CrazyflieSimulation(Node):
             rclpy.shutdown()
 
 
+    def get_time_ms(self):
+        return int(round(self.time_idx / FS * 1000))
+
+
     def pose_listener_callback(self, msg_pose):
         """
         Run a simulation, update the signal content and publish a PoseRaw() 
@@ -99,19 +105,30 @@ class CrazyflieSimulation(Node):
             msg_pose.orientation.z, 
             msg_pose.orientation.w
         ])
-        drone_center = np.array(
-            [msg_pose.position.x, msg_pose.position.y, msg_pose.position.z]
-        )
+        drone_center = np.array([
+            msg_pose.position.x, 
+            msg_pose.position.y, 
+            msg_pose.position.z
+        ])
 
         self.mic_positions_global = global_mic_positions(self.mic_positions, rotation, drone_center)
-        sim_room = self.simulation(self.mic_positions_global)
-        self.signals = sim_room.mic_array.signals
+        timestamp = self.get_time_ms()
 
+        delta = None
         if self.current_pose is not None:
-            # TODO: timestamp
-            pose_raw = create_pose_raw_message(self.current_pose, msg_pose, 0)
-            self.publisher_rawpose.publish(pose_raw)
-            self.get_logger().info("Published pose raw")
+            pose_raw = create_pose_raw_message(self.current_pose, msg_pose, timestamp)
+            self.publisher_pose_raw.publish(pose_raw)
+            self.get_logger().info(f"{timestamp}: Published PoseRaw message.")
+
+            delta = get_relative_movement(self.current_pose, msg_pose)
+
+        # update the signals if this is the first 
+        # measurement or if we have moved.
+        if (delta is None) or any(delta):
+            sim_room = self.simulation(self.mic_positions_global)
+            self.signals = sim_room.mic_array.signals
+        elif (delta is not None):
+            self.get_logger().info("Did not move, not updating signals.")
 
         self.current_pose = msg_pose
 
@@ -138,6 +155,24 @@ class CrazyflieSimulation(Node):
             )
         return pyroom_cp
 
+
+def get_relative_movement(pose1, pose2):
+    """ Get the step length (in m) and rotation (in radiants) 
+    between pose1 and pose2.
+
+    """
+    step_length = np.linalg.norm([
+        pose2.position.x - pose1.position.x,
+        pose2.position.y - pose1.position.y,
+        pose2.position.z - pose1.position.z
+    ])
+    r1, r2 = [R.from_quat([p.orientation.x,
+                           p.orientation.y,
+                           p.orientation.z,
+                           p.orientation.w]) for p in [pose1, pose2]]
+    r = r2 * r1.inv() # "get angle2 - angle1"
+    rotation = r.magnitude() # magnitude of rotation, in radiants
+    return [step_length, rotation]
 
 def create_pose_raw_message(previous_pose, current_pose, timestamp):
     """
@@ -196,20 +231,20 @@ def starting_sample_nr(pyroom, mic_array):
     return max_index
 
 
-def set_room(room_dim, nr_samples, source_position_list, fs):
+def set_room(room_dim, source_position_list, fs, duration_sec=DURATION_SEC):
     """
     Set the shoe box room with specified dimensions, 
     sampling frequency and sources.
     """
-
     pyroom = pra.ShoeBox(room_dim, fs=fs, max_order=NUM_REFLECTIONS)
 
-    # Generate a signal that is definitely long enough inside this room. 
     # The max possible delay comes from the main diagonal of cuboid. 
     max_delay_sec = np.sqrt(np.sum(np.array(room_dim)**2)) / pyroom.physics.get_sound_speed()
-    duration_sec = nr_samples / fs + max_delay_sec * NUM_REFLECTIONS
-    audio_source = generate_signal_random(fs, duration_sec)
+    assert duration_sec > max_delay_sec
+
+
     for i in range(len(source_position_list)):
+        audio_source = generate_signal_random(fs, duration_sec)
         pyroom.add_source(source_position_list[i], signal=audio_source)
     return pyroom
 

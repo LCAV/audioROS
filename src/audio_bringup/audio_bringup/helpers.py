@@ -18,18 +18,18 @@ def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
     logger = launch.substitutions.LaunchConfiguration("log_level")
     launch_arguments = [
         launch.actions.DeclareLaunchArgument(
-                "log_level",
-                default_value=[log_level],
-                description="Logging level",
+            "log_level",
+            default_value=[log_level],
+            description="Logging level",
         )
     ]
 
     if bag_filename != "":
         launch_arguments.append(
-                launch.actions.ExecuteProcess(
-                    cmd=['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD,
-                    output='screen'
-                    )
+            launch.actions.ExecuteProcess(
+                cmd=['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD,
+                output='screen'
+                )
         )
     launch_arguments += [
         launch_ros.actions.Node(
