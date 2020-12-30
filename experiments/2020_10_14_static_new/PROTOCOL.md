@@ -1,7 +1,4 @@
 <!-- create this document in each new experiments folder, calling it README.md -->
-
-TODO(FD): fill this in. 
-
 # EXPERIMENT NAME
 
 Some intermediate notes: 

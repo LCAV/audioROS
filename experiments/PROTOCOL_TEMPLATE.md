@@ -1,14 +1,13 @@
-<!-- create this document in each new experiments folder, calling it README.md -->
+<!-- Copy this document to each new experiments folder. -->
 # EXPERIMENT NAME
 
-__Time__: Day DD.MM.YYYY
+__Time__: Day DD.MM.YYYY, morning/afternoon/evening
 
 __Recorded by__: First Last, ...
 
 __Place__: Place, if necessary temperature etc. 
 
 ## Notes 
-
 <!-- quick and dirty notes, to be written out later -->
 
 ## Description
@@ -18,18 +17,10 @@ __Place__: Place, if necessary temperature etc.
 Checklist: 
 - Speaker type
 - Microphone type
-- Reference angle for DOA
-- Distance speaker-mic etc. 
--->
-
-### Software
-<!--
-Checklist: 
-- Sampling rate
-- Motor thrust value 
-- Audio files used
-- Scripts used
-- Other parameters used
+- Motors for linear/rotational movement
+- Computer
+- Drone type, decks used
+- Soundcard
 -->
 
 ### Protocol
@@ -37,7 +28,23 @@ Checklist:
 Checklist: 
 - Sound level calibration
 - Order of scripts run
+- Times of battery exchange etc. 
 - Start/end times of recordings, synchronization
+-->
+
+### Parameters
+<!--
+Checklist: 
+If available:
+- parameters file location
+- soundcard settings
+
+Otherwise: 
+- Sampling rate
+- Motor thrust value 
+- Audio files used
+- Scripts used
+- Other parameters used
 -->
 
 ### Data

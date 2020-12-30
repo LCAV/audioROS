@@ -34,11 +34,13 @@ endif()
 
 set(msg_files
   "msg/Correlations.msg"
+  "msg/CrazyflieMotors.msg"
+  "msg/CrazyflieStatus.msg"
+  "msg/DoaEstimates.msg"
+  "msg/PoseRaw.msg"
   "msg/Spectrum.msg"
   "msg/Signals.msg"
   "msg/SignalsFreq.msg"
-  "msg/PoseRaw.msg"
-  "msg/DoaEstimates.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

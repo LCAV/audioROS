@@ -11,6 +11,7 @@ import matplotlib.pylab as plt
 import numpy as np
 
 matplotlib.use("TkAgg")
+matplotlib.interactive(False)
 
 MAX_YLIM = math.inf  # set to inf for no effect.
 MIN_YLIM = -math.inf  # set to -inf for no effect.
@@ -43,11 +44,7 @@ class LivePlotter(object):
         self.meshes = {}
 
         self.fig.canvas.mpl_connect("close_event", self.handle_close)
-
-        # works with Tk backend: remove the frame so that user does not
-        # wrongly close window.
-        # win = plt.gcf().canvas.manager.window
-        # win.overrideredirect(1)
+        self.fig.canvas.mpl_connect("resize_event", self.handle_resize)
 
         # Need the block argument to make sure the script continues after
         # plotting the figure.
@@ -56,6 +53,12 @@ class LivePlotter(object):
     def handle_close(self, evt):
         plt.close("all")
         print("closed all figures")
+
+    def handle_resize(self, evt):
+        # TODO(FD) this is not called when we resize
+        # the figure, need to figure out why.
+        self.fig.canvas.draw()
+        print("resize")
 
     def clear(self):
         for i in range(len(self.ax.lines)):

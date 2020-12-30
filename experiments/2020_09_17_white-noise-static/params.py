@@ -1,11 +1,12 @@
 # TODO(FD) below parameters were reconstructed and might not correspond to the actual
 # parameters with which the experiments were ran! At the time the pipeline was not as 
 # automated yet. 
-
 global_params = {
     'duration':30, # seconds
     'fs_soundcard':44100, # hz
     'n_meas_mics':1, # number of measurement mics
+}
+source_params = {
     'freq_source':800, # hz
     'min_dB':-30,
     'max_dB':0,
