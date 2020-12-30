@@ -6,51 +6,27 @@ import numpy as np
 import pandas as pd
 
 from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
+from crazyflie_description_py.parameters import FS
 
-EXP_NAME = "2020_09_17_white-noise-static"
+#EXP_NAME = "2020_09_17_white-noise-static"
 #EXP_NAME = "2020_10_14_static"
 #EXP_NAME = "2020_10_14_static_new"
 #EXP_NAME = "2020_10_30_dynamic"
+EXP_NAME = "2020_11_30_wall_hover"
 
 RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
-
-sys.path.append(f"../experiments/{EXP_NAME}/")
-from params import global_params, SOURCE_LIST, DEGREE_LIST
-
-FS = 32000
-DURATION_SEC = global_params['duration'] # duration before end to be kept
-
-# expeirments
-source_list = SOURCE_LIST
-degree_list = DEGREE_LIST
-props_list = [True, False]
-snr_list = [True, False]
-motors_list = [True, False]
 
 # results
 combine_list = ["product", "sum"]
 normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
 
-def get_fname(degree, props, snr, motors, source):
-    ending = "" if degree == 0 else f"_{degree}"
-    props_flag = "" if props else "no"
-    motors_flag = "" if motors else "no"
-    if source == "None":
-        source_flag = "nosource"
-    elif source == True:
-        source_flag = "source"
-    elif source == False:
-        source_flag = "nosource"
-    elif source is None:
-        source_flag = "None"
-    else:
-        source_flag = source
-    snr_flag = "" if snr else "no"
-    return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
+def get_fname(degree, props, snr, motors, source, distance=None, appendix="", **kwargs):
+    from audio_bringup.doa_pipeline import get_filename
+    return get_filename(degree=degree, props=props, snr=snr, motors=motors, source=source,distance=distance, appendix=appendix, **kwargs)
 
 
-def get_fname_old(degree, props, snr, motors, source):
+def get_fname_old(degree, props, snr, motors, source, **kwargs):
     ending = "" if degree == 0 else f"_{degree}"
     props_flag = "" if props else "no"
     motors_flag = "" if motors else "no"
@@ -62,7 +38,19 @@ def get_fname_old(degree, props, snr, motors, source):
     return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
 
 
-def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
+def read_full_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
+    CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
+    if exp_name == "2020_09_17_white-noise-static":
+        filename = get_fname_old(degree, props, snr, motors, source)
+    else:
+        filename = get_fname(degree, props, snr, motors, source, distance=distance, appendix=appendix)
+    fname = f"{CSV_DIRNAME}/{filename}.csv"
+    df = pd.read_csv(fname)
+    print('read', fname)
+    return df
+
+
+def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
     def convert_audio(row):
         arrays = ["signals_real_vect", "signals_imag_vect", "frequencies", "mic_positions"]
         ints = ["n_mics", "n_frequencies", "timestamp", "audio_timestamp"]
@@ -90,27 +78,72 @@ def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=E
             row["mic_positions"] = mic_positions
         return row
 
-    CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
-    if exp_name == "2020_09_17_white-noise-static":
-        filename = get_fname_old(degree, props, snr, motors, source)
-    else:
-        filename = get_fname(degree, props, snr, motors, source)
-    fname = f"{CSV_DIRNAME}/{filename}.csv"
-    df = pd.read_csv(fname)
-    print('read', fname)
+    df = read_full_df(degree=degree, props=props, snr=snr, motors=motors, source=source, exp_name=exp_name, distance=distance, appendix=appendix)
+
     df_audio = df.loc[df.topic=='audio/signals_f']
     df_audio = df_audio.apply(convert_audio, axis=1)
-    df_audio.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True)
+    df_audio.drop(["signals_real_vect", "signals_imag_vect"], axis=1, inplace=True, errors='ignore')
 
     if 'source_direction-deg' in df.columns:
         df.rename(columns={'source_direction-deg':'source_direction_deg'}, inplace=True)
-
-    pose_columns = [p for p in ['dx', 'dy', 'yaw_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']
-                    if p in df.columns]
+    pose_columns = set(['dx', 'dy', 'z', 'yaw_deg', 'yaw_rate_deg', 'source_direction_deg', 'timestamp', 'index', 'topic']).intersection(df.columns)
     df_pose = df.loc[df.topic=='geometry/pose_raw', pose_columns]
     return df_audio, df_pose
 
 
+def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
+    def convert_row(row):
+        arrays = ["motors_pwm", "motors_thrust"]
+        ints = ["timestamp"]
+        arrays = [a for a in arrays if a in row.index]
+        ints = [i for i in ints if i in row.index]
+        for array_name in arrays:
+            row[array_name] = np.fromstring(
+                row[array_name].replace("[", "").replace("]", ""),
+                sep=" ",
+                dtype=np.float32,
+            )
+        for int_name in ints:
+            row[int_name] = int(row[int_name])
+        return row
+
+    df = read_full_df(degree=degree, props=props, snr=snr, motors=motors, source=source, exp_name=exp_name, distance=distance, appendix=appendix)
+    
+    status_columns = ['timestamp', 'index', 'topic', 'vbat']
+    df_status = df.loc[df.topic=='crazyflie/status', status_columns]
+
+    motors_columns = [c for c in ['timestamp', 'index', 'topic', 'motors_pwm', 'motors_thrust'] if c in df.columns]
+    df_motors = df.loc[df.topic=='crazyflie/motors', motors_columns]
+    df_motors = df_motors.apply(convert_row, axis=1)
+    return df_status, df_motors
+
+
+def read_df_from_wav(fname, n_buffer=2048):
+    from scipy.signal import stft
+    from scipy.io import wavfile
+    
+    n_mics = 1
+    fs, source_data = wavfile.read(fname)
+    print(f'read {fname}')
+    f, t, source_stft = stft(source_data, fs, nperseg=n_buffer, axis=0)
+    
+    source_freq = np.fft.rfftfreq(n=n_buffer, d=1/fs) # n_frequencies x n_times
+
+    df = pd.DataFrame(columns=["index", "timestamp", "n_mics", "topic", "signals_f", "frequencies", "n_frequencies"])
+    for i in range(source_stft.shape[1]):
+        df.loc[len(df), :] = {
+            "index": i,
+            "timestamp": i * len(source_freq)/fs * 1000, # miliseconds
+            "n_mics": n_mics,
+            "topic": "measurement_mic",
+            "signals_f": source_stft[:, i].reshape((1, -1)),  # n_mics x n_frequencies
+            "frequencies": source_freq,
+            "n_frequencies": len(source_freq)
+        }
+    return df
+
+
+# TODO(FD) delete
 def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
     from scipy.signal import stft
     from scipy.io import wavfile
@@ -134,6 +167,7 @@ def get_spectrogram(df):
     return np.mean(np.abs(stft), axis=1).T  # average over n_mics: n_freqs x n_times
 
 
+# TODO(FD) delete
 def add_soundlevel(df, threshold=1e-4, duration=1000):
     spectrogram = get_spectrogram(df)  # n_freqs x n_times
     sound_level = np.mean(spectrogram**2, axis=0)  # average over n_frequencies
@@ -148,8 +182,57 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
     df.loc[:, "timestamp_s"] = (df.timestamp - end_time + duration) / 1000
 
 
+def get_positions(df_pos):
+    """ Get absoltue positions from relative estimates. 
+    """ 
+    if isinstance(df_pos, pd.DataFrame):
+        yaw_degs = df_pos.yaw_deg.values
+        dxs = df_pos.dx.values
+        dys = df_pos.dy.values
+        zs = df_pos.z.values
+    elif isinstance(df_pos, pd.Series): 
+        yaw_degs = df_pos.yaw_deg
+        dxs = df_pos.dx
+        dys = df_pos.dy
+        zs = df_pos.z
+
+    # compute positions based on relative movement
+    start_pos = np.array([0, 0])
+    positions = np.empty([len(dxs), 3])
+    for i, (yaw_deg, dx, dy, z) in enumerate(zip(yaw_degs, dxs, dys, zs)):
+        yaw_rad = yaw_deg / 180 * np.pi
+        length = np.sqrt(dx**2 + dy**2)
+        new_pos = start_pos + length * np.array(
+            [np.cos(yaw_rad), np.sin(yaw_rad)])
+        positions[i, :2] = new_pos
+        positions[i, 2] = z
+    return positions
+
+
+def integrate_yaw(times, yaw_rates):
+    t_0 = times[0]
+    yaw = 0
+    integrated_yaw = [yaw]
+    for yaw_rate, t_1 in zip(yaw_rates[1:], times[1:]):
+        yaw_delta = yaw_rate * (t_1 - t_0) * 1e-3
+        yaw += yaw_delta
+        integrated_yaw.append(yaw)
+        t_0 = t_1
+    return np.array(integrated_yaw)
+
+
 def evaluate_data(fname=""):
+    sys.path.append(f"../experiments/{EXP_NAME}/")
+    from params import SOURCE_LIST, DEGREE_LIST, global_params
+    DURATION_SEC = global_params.get('duration', 30) # duration before end to be kept
+
     duration = DURATION_SEC * 1e3  # miliseconds
+
+    source_list = SOURCE_LIST
+    degree_list = DEGREE_LIST
+    props_list = [True, False]
+    snr_list = [True, False]
+    motors_list = [True, False]
 
     beam_former = None 
 
