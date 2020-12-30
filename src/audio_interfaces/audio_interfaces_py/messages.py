@@ -5,8 +5,6 @@ messages.py: ROS-message to and from numpy-array conversions.
 """
 
 import numpy as np
-# TODO(FD): could replace this with tf.transformations or tf2.transformations
-from scipy.spatial.transform import Rotation
 
 from geometry_msgs.msg import Pose, Point, Quaternion
 
@@ -18,6 +16,9 @@ N_MICS = 4
 
 def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     """ Create Pose message. """
+    # TODO(FD): could replace this with tf.transformations or tf2.transformations
+    from scipy.spatial.transform import Rotation
+
     r = Rotation.from_euler("z", motion_dict["yaw"], degrees=True)
     d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
     d_world = r.as_matrix()[:2, :2] @ d_local
@@ -29,7 +30,7 @@ def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     msg.position = Point()
     msg.position.x = d_world[0] + prev_x
     msg.position.y = d_world[1] + prev_y
-    msg.position.z = motion_dict["z"]
+    msg.position.z = float(motion_dict["z"])
     msg.orientation = Quaternion()
     r_quat = r.as_quat()
     msg.orientation.x = r_quat[0]
@@ -42,11 +43,11 @@ def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
 def create_pose_raw_message(motion_dict, timestamp):
     """ Create PoseRaw message. """
     msg = PoseRaw()
-    msg.dx = motion_dict["dx"]
-    msg.dy = motion_dict["dy"]
-    msg.z = motion_dict["z"]
-    msg.yaw_deg = motion_dict["yaw"]
-    msg.yaw_rate_deg = motion_dict["yaw_rate"]
+    msg.dx = float(motion_dict["dx"])
+    msg.dy = float(motion_dict["dy"])
+    msg.z = float(motion_dict["z"])
+    msg.yaw_deg = float(motion_dict["yaw"])
+    msg.yaw_rate_deg = float(motion_dict["yaw_rate"])
     msg.source_direction_deg = 0.0
     msg.timestamp = timestamp
     return msg
@@ -144,6 +145,8 @@ def create_doa_message(doa_estimates, timestamp):
 
 def read_pose_message(msg):
     """ Read Pose message.  """
+    # TODO(FD): could replace this with tf.transformations or tf2.transformations
+    from scipy.spatial.transform import Rotation
     new_position = np.array((msg.position.x, msg.position.y))
     quat = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
     r = Rotation.from_quat(quat)
@@ -153,6 +156,8 @@ def read_pose_message(msg):
 
 def read_pose_raw_message(msg):
     """ Read PoseRaw message.  """
+    # TODO(FD): could replace this with tf.transformations or tf2.transformations
+    from scipy.spatial.transform import Rotation
     d_local = np.array((msg.dx, msg.dy))
     yaw = msg.yaw_deg
     yaw_rate = msg.yaw_rate_deg

@@ -8,11 +8,11 @@ from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw
+from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
 
 # Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
 # Used to automate the process of bag file conversion (CTRL+C does not work for some reason)
-TIMEOUT_S = 60*60*2 # seconds
+TIMEOUT_S = np.inf # seconds
 
 class CsvWriter(Node):
     def __init__(self):
@@ -26,11 +26,18 @@ class CsvWriter(Node):
             PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
 
+        self.subscription_status = self.create_subscription(
+            CrazyflieStatus, "crazyflie/status", self.listener_callback_status, 10
+        )
+        self.subscription_motors = self.create_subscription(
+            CrazyflieMotors, "crazyflie/motors", self.listener_callback_motors, 10
+        )
+
         self.declare_parameter("filename")
         self.set_parameters_callback(self.set_params)
         
         self.reset()
-        self.get_logger().info('Subscribed to audio/signals_f and geometry/pose_raw.')
+        self.get_logger().info('Subscribed to audio/signals_f and crazyflie/status and crazyflie/motors and geometry/pose_raw.')
 
     def reset(self):
         self.header = {"index", "topic"}
@@ -70,6 +77,28 @@ class CsvWriter(Node):
         self.header = set(row_dict.keys()).union(self.header)
         self.rows.append(row_dict)
 
+    def listener_callback_status(self, msg):
+        row_dict = {
+          "index": len(self.rows),
+          "topic": "crazyflie/status",
+          "timestamp": msg.timestamp,
+          "vbat": msg.vbat,
+        }
+        self.header = set(row_dict.keys()).union(self.header)
+        self.rows.append(row_dict)
+
+    def listener_callback_motors(self, msg):
+        row_dict = {
+          "index": len(self.rows),
+          "topic": "crazyflie/motors",
+          "timestamp": msg.timestamp,
+          "motors_pwm": np.array(msg.motors_pwm),
+          "motors_thrust": np.array(msg.motors_thrust),
+        }
+
+        self.header = set(row_dict.keys()).union(self.header)
+        self.rows.append(row_dict)
+
     def set_params(self, params):
         """ Set the parameter. If filename is set, we save the current rows and reset. """
         param = params[0] # only one parameter possible.
@@ -96,6 +125,8 @@ class CsvWriter(Node):
                 csv_writer = csv.DictWriter(f, sorted(self.header))
                 csv_writer.writeheader()
             self.get_logger().info(f"Wrote header in new file {fullname}.")
+        else:
+            self.get_logger().warn(f"File {fullname} exists! Appending new rows to it.")
 
         with open(fullname, "a") as f:
             csv_writer = csv.DictWriter(f, sorted(self.header))
@@ -104,18 +135,12 @@ class CsvWriter(Node):
         self.get_logger().info(f"Appended {len(self.rows)} rows to {fullname}.")
         self.reset()
 
-#    def destroy_node(self):
-#        self.get_logger().info("Custom destroy")
-#        self.write_file()
-#        super().destroy_node()
-
 
 def main(args=None):
     import time 
     rclpy.init(args=args)
 
     writer = CsvWriter()
-
     try:
         start_time = time.time()
         while (time.time() - start_time) < TIMEOUT_S:

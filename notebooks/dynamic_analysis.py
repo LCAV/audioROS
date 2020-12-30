@@ -10,42 +10,36 @@ import pandas as pd
 MAX_ALLOWED_LAG_MS = 20
 
 def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS):
+    """ For each row in df, add the latest position estimate, 
+    as long as it is within an allowed time window. """
+    last_idx = None
     for i, row in df.iterrows():
         timestamp = row.timestamp
 
         # most recent position timestamp
         if not len(df_pos[df_pos.timestamp <= timestamp]):
             df.loc[i, 'yaw_deg'] = None
-            print('no position before first audio:', timestamp, df_pos.timestamp.values)
+            print('Warning: no position before first audio:', timestamp, df_pos.timestamp.values)
             continue
         pos_idx = df_pos[df_pos.timestamp <= timestamp].index[-1]
-        lag = timestamp - df_pos.loc[pos_idx].timestamp
+        if pos_idx == last_idx: 
+            print(f'Warning: using {pos_idx} again.')
+        row = df_pos.loc[pos_idx]
+        lag = timestamp - row.timestamp
         if lag <= MAX_ALLOWED_LAG_MS:
-            df.loc[i, 'yaw_deg'] = df_pos.loc[pos_idx].yaw_deg
-            df.loc[i, 'dx'] = df_pos.loc[pos_idx].dx
-            df.loc[i, 'dy'] = df_pos.loc[pos_idx].dy
+            df.loc[i, 'yaw_deg'] = row.yaw_deg
+            df.loc[i, 'dx'] = row.dx
+            df.loc[i, 'dy'] = row.dy
+            df.loc[i, 'z'] = row.z
+            if 'yaw_rate_deg' in df_pos.columns:
+                df.loc[i, 'yaw_rate_deg'] = row.yaw_rate_deg
         else:
             df.loc[i, 'yaw_deg'] = None
-            print('too high time lag (in ms):', lag)
-
-
-def update_df(df, new_values, **filter_v):
-    print('filter:', filter_v)
-    for filt, val in filter_v.items():
-        print(filt, df.loc[df[filt] == val])
-    print(len(df.loc[(df[list(filter_v)] == pd.Series(filter_v)).all(axis=1)]))
-    if len(df.loc[(df[list(filter_v)] == pd.Series(filter_v)).all(axis=1)]):
-        df.loc[(df[list(filter_v)] == pd.Series(filter_v)).all(axis=1), :] = new_values
-        print('updated existing row')
-    else:
-        df = df.loc[len(df), :] = new_values.update(filter_v)
-        print('added new line')
-        assert len(df.loc[(df[list(filter_v)] == pd.Series(filter_v)).all(axis=1)]) == 1
-    return df 
-
+            print(f'Warning for {pos_idx}: too high time lag {lag}ms')
+        last_idx = pos_idx
 
 if __name__ == "__main__":
-    from evaluate_data import read_df, get_spec
+    from evaluate_data import read_df
     from audio_stack.beam_former import BeamFormer, normalize_rows, combine_rows
     import progressbar
 

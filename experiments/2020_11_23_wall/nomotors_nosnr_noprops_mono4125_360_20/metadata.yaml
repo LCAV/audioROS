@@ -1,0 +1,21 @@
+rosbag2_bagfile_information:
+  version: 2
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - /home/duembgen/ROS/audioROS/experiments/2020_11_23_wall/nomotors_nosnr_noprops_mono4125_360_20/nomotors_nosnr_noprops_mono4125_360_20_0.db3
+  duration:
+    nanoseconds: 43534947965
+  starting_time:
+    nanoseconds_since_epoch: 1606123900849491420
+  message_count: 4735
+  topics_with_message_count:
+    - topic_metadata:
+        name: /audio/signals_f
+        type: audio_interfaces/msg/SignalsFreq
+        serialization_format: cdr
+      message_count: 373
+    - topic_metadata:
+        name: /geometry/pose_raw
+        type: audio_interfaces/msg/PoseRaw
+        serialization_format: cdr
+      message_count: 4362
