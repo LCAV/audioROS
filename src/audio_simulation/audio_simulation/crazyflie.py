@@ -31,7 +31,7 @@ NUM_REFLECTIONS = 5 # number of reflections to consider in pyroomacoustis.
 LOOP = False # flag for looping the signal after reaching the end
 
 
-class AudioSimulation(Node):
+class CrazyflieSimulation(Node):
     def __init__(self):
         super().__init__("audio_simulation")
 
@@ -46,91 +46,79 @@ class AudioSimulation(Node):
 
         self.create_timer(N_BUFFER/FS, self.constant_publisher)
 
-        #TODO: there has to be a better way to initialize it
         self.signals = []
         self.mic_positions_global = []
-        self.first_sample = 0
-        self.current_pose = Pose()
+        self.current_pose = None
         self.mic_positions = np.array(MIC_POSITIONS)
     
     def constant_publisher(self):
         """
         Publish signal chunks at a rate defined by the timer
         """
-        
-        
         if len(self.signals) == 0:
             return 
         
         if self.time_idx == 0:
             self.time_idx = starting_sample_nr(self.room, self.mic_positions_global)
-            self.first_sample = self.time_idx 
 
-        if self.time_idx + N_BUFFER < self.signals.shape[1]:
-            signal_to_send = np.zeros((N_MICS, N_BUFFER), dtype=float)
-        else:
-            signal_to_send = np.zeros((N_MICS, (self.signals.shape[1] - self.first_sample) % N_BUFFER), dtype=float)
+        assert (self.time_idx + N_BUFFER) < self.signals.shape[1]
 
-        for i in range(N_MICS):
-            signal_to_send[i] = self.signals[i][self.time_idx:self.time_idx+N_BUFFER]
+        signal_to_send = self.signals[:, self.time_idx:self.time_idx+N_BUFFER]
 
         msg = create_signals_message(signal_to_send, self.mic_positions, self.time_idx, self.room.fs)
         self.publisher_signals.publish(msg)
         self.get_logger().info(f"{self.time_idx}: Published audio signal")
         self.time_idx += N_BUFFER
        
-        #TODO two ifs => similar issue?
-        # shutdown => exiting the console command
+
         if self.time_idx >= MAX_TIMESTAMP:
             self.get_logger().warn("timestamp overflow")
-            if LOOP:
-                self.time_idx = starting_sample_nr(self.room, self.mic_positions_global)
-                self.first_sample = self.time_idx 
-            else:
-                self.get_logger().warn("exiting the node")
-                self.destroy_node()
-                rclpy.shutdown()
-        
-        if self.time_idx >= self.signals.shape[1]:
-            if LOOP:
-                self.get_logger().warn("end of signal array - starting sending from the beginning")
-                self.time_idx = starting_sample_nr(self.room, self.mic_positions_global)
-                self.first_sample = self.time_idx 
-            else:
-                self.get_logger().warn("end of signal array - exiting the node")
-                self.destroy_node()
-                rclpy.shutdown()
+        elif self.time_idx >= self.signals.shape[1]:
+            self.get_logger().warn("end of signal array")
+        else: # continue normally
+            return 
+
+        # treat the cases where time_idx has reached limit
+        if LOOP:
+            self.time_idx = 0 # will be filled next time we enter this function
+        else:
+            self.get_logger().warn("exiting the node")
+            self.destroy_node()
+            # shutdown => exiting the console command
+            rclpy.shutdown()
 
 
     def pose_listener_callback(self, msg_pose):
         """
-        Run a simulation, update a signal content and publish a PoseRaw() message  when a new pose is received 
+        Run a simulation, update the signal content and publish a PoseRaw() 
+        message  when a new pose is received.
         """
-
-        rotation_rx = msg_pose.orientation
-        drone_center_rx = msg_pose.position
-
-        rotation = np.array(
-            [rotation_rx.x, rotation_rx.y, rotation_rx.z, rotation_rx.w]
-        )
+        rotation = np.array([
+            msg_pose.orientation.x, 
+            msg_pose.orientation.y, 
+            msg_pose.orientation.z, 
+            msg_pose.orientation.w
+        ])
         drone_center = np.array(
-            [drone_center_rx.x, drone_center_rx.y, drone_center_rx.z]
+            [msg_pose.position.x, msg_pose.position.y, msg_pose.position.z]
         )
 
         self.mic_positions_global = global_mic_positions(self.mic_positions, rotation, drone_center)
         sim_room = self.simulation(self.mic_positions_global)
         self.signals = sim_room.mic_array.signals
 
-        pose_raw = create_pose_raw_message(self.current_pose, msg_pose)
-        self.current_pose = msg_pose
+        if self.current_pose is not None:
+            pose_raw = create_pose_raw_message(self.current_pose, msg_pose)
+            self.publisher_rawpose.publish(pose_raw)
+            self.get_logger().info("Published pose raw")
 
-        self.publisher_rawpose.publish(pose_raw)
-        self.get_logger().info("Published pose raw")
+        self.current_pose = msg_pose
 
 
     def simulation(self, mic_array):
         """
-        Run a pyroomacoustics simulation on a copy of the pyroom attribute of an AudioSimulation object.
+        Run a pyroomacoustics simulation on a copy of the pyroom attribute 
+        of an CrazyflieSimulation object.
         """
         pyroom_copy = self.copy_room()
         pyroom_copy.add_microphone_array(mic_array.T) # dim x n_mics
@@ -140,7 +128,7 @@ class AudioSimulation(Node):
 
     def copy_room(self):
         """
-        Copy the pyroom attribute of an AudioSimulation object.
+        Copy the pyroom attribute of an CrazyflieSimulation object.
         """
         pyroom_cp = pra.ShoeBox(self.room.shoebox_dim, fs=self.room.fs)
         for i in range(len(self.room.sources)):
@@ -152,7 +140,7 @@ class AudioSimulation(Node):
 
 def create_pose_raw_message(previous_pose, current_pose):
     """
-    Create a message of type PoseRaw() based on previous and current pose
+    Create a message of type PoseRaw() based on previous and current pose.
     """
     
     prev_position = previous_pose.position 
@@ -175,7 +163,7 @@ def create_pose_raw_message(previous_pose, current_pose):
 
 def get_yaw(quaternion):
     """
-    Calculate yaw from a quaternion
+    Calculate yaw from a quaternion.
     """
 
     x = quaternion.x
@@ -190,7 +178,8 @@ def get_yaw(quaternion):
 
 def starting_sample_nr(pyroom, mic_array):
     """
-    Calculate the index of the sample from which on all mics register audio from sources.
+    Calculate the index of the sample from which on all mics register 
+    audio from all sources.
     """
 
     n_sources = pyroom.n_sources
@@ -210,7 +199,8 @@ def starting_sample_nr(pyroom, mic_array):
 
 def set_room(room_dim, nr_samples, source_position_list, fs):
     """
-    Set the shoe box room with specified dimensions, sampling frequency and sources
+    Set the shoe box room with specified dimensions, 
+    sampling frequency and sources
     """
 
     pyroom = pra.ShoeBox(room_dim, fs=fs, max_order=NUM_REFLECTIONS)
@@ -243,7 +233,7 @@ def global_mic_positions(mic_positions, rotation, drone_center):
 def main(args=None):
     rclpy.init(args=args)
 
-    sim_node = AudioSimulation()
+    sim_node = CrazyflieSimulation()
 
     rclpy.spin(sim_node)
 
