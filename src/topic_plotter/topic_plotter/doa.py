@@ -21,9 +21,9 @@ MAX_FREQ = np.inf #1500
 YMIN_SPEC = 1e-3
 YMAX_SPEC = 2
 
-class AudioPlotter(Node):
+class DoaPlotter(Node):
     def __init__(self):
-        super().__init__("audio_plotter")
+        super().__init__("doa_plotter")
 
         self.subscription_spectrum = self.create_subscription(
             Spectrum, "audio/spectrum_raw", self.listener_callback_spectrum, 10
@@ -41,7 +41,7 @@ class AudioPlotter(Node):
         self.current_n_buffer = None
         self.current_n_frequencies = None
 
-        self.raw_pose_synch = TopicSynchronizer(10)
+        self.raw_pose_synch = TopicSynchronizer(20)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.fig, axs = plt.subplots(2, 2)
@@ -117,7 +117,7 @@ class AudioPlotter(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    plotter = AudioPlotter()
+    plotter = DoaPlotter()
 
     rclpy.spin(plotter)
 

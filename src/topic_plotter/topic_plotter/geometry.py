@@ -45,7 +45,7 @@ class GeometryPlotter(Node):
 
         # for error calculations
         self.error_list = []
-        self.raw_pose_synch = TopicSynchronizer(10)
+        self.raw_pose_synch = TopicSynchronizer(20)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
     def init_plotter(self, name, xlabel='x', ylabel='y'):

@@ -36,11 +36,11 @@ class SpectrumEstimator(Node):
         super().__init__("spectrum_estimator")
 
         self.subscription_signals_f = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 10
+            SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 1
         )
 
         self.raw_pose_synch = TopicSynchronizer(allowed_lag=20)
-        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
+        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 1)
 
         self.publisher_spectrum_raw = self.create_publisher(Spectrum, "audio/spectrum_raw", 10)
         self.publisher_spectrum_combined = self.create_publisher(Spectrum, "audio/spectrum_combined", 10)
@@ -130,6 +130,7 @@ class SpectrumEstimator(Node):
         t2 = time.time()
         processing_time = t2 - t1
         self.get_logger().info(f"Published raw spectrum after {processing_time:.2f}s.")
+        return
 
         #### multi-spectra
         #TODO(FD) fill in 
