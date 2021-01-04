@@ -4,8 +4,6 @@
 processor.py: Process raw audio signals and publish frequency bins signals_f 
 
 This is the digital twin of what the microphone board does. 
-Warning: not currently maintained as not actviely used.
-
 """
 
 import os
@@ -28,6 +26,7 @@ from bin_selection import select_frequencies as embedded_select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 from audio_interfaces_py.messages import create_correlations_message, create_signals_freq_message, read_signals_freq_message, read_signals_message
+from crazyflie_description_py.parameters import TUKEY_ALPHA
 
 # Denoising method
 # METHOD_NOISE = "bandpass"
@@ -40,12 +39,13 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 METHOD_WINDOW = "tukey"
 
 # Frequency selection
-THRUST = 43000
-MIN_FREQ = 200
-MAX_FREQ = 7000
+THRUST = 50000
+MIN_FREQ = 3000
+MAX_FREQ = 5000
+SINGLE_FREQ = 4000
 DELTA_FREQ = 100
 
-METHOD_FREQUENCY = ""
+METHOD_FREQUENCY = "" #"single"
 METHOD_FREQUENCY_DICT = {
     "": {
         "min_freq": MIN_FREQ,
@@ -76,8 +76,8 @@ METHOD_FREQUENCY_DICT = {
         "thrust": THRUST, 
     },
     "single": {
-        "min_freq": 200,
-        "max_freq": 200,
+        "min_freq": SINGLE_FREQ,
+        "max_freq": SINGLE_FREQ,
         "delta_freq": 100,
         "filter_snr": False,
         "thrust": 0,
@@ -96,7 +96,7 @@ def verify_validity(params_dict):
 
 def get_stft(signals, Fs, method_window, method_noise):
     if method_window == "tukey":
-        window = signal.tukey(signals.shape[1])
+        window = signal.tukey(signals.shape[1], alpha=TUKEY_ALPHA)
         signals *= window
     elif method_window == "":
         pass

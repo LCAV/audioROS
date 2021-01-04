@@ -16,6 +16,8 @@ FS = 32000 # sampling frequency [Hz]
 N_BUFFER = 2048 # number of samples in audio buffer
 FFTSIZE = 32 # number of frequency bins that are sent. 
 
+TUKEY_ALPHA = 0.2 # alpha parameter for tukey window
+
 MONO_FREQS = [3500, 4125, 1750, 2375, 3125, 3875] 
 
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)

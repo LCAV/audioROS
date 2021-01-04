@@ -20,8 +20,8 @@ from audio_stack.topic_synchronizer import TopicSynchronizer
 # Beamforming method, available: 
 # - "das": delay-and-sum
 # - "mvdr": minimum-variance distortionless response
-#BF_METHOD = "das"
-BF_METHOD = "mvdr"
+BF_METHOD = "das"
+#BF_METHOD = "mvdr"
 
 COMBINATION_N = 5 # number of spectra to combine
 COMBINATION_METHOD = "sum" # way to combine spectra
@@ -96,20 +96,16 @@ class SpectrumEstimator(Node):
         signals_f = signals_f[frequencies > 0, :]
         frequencies = frequencies[frequencies > 0]
 
-        if msg.n_frequencies >= 2 ** 8:
-            self.get_logger().error(f"too many frequencies to process: {n_frequencies}")
-            return
-
         if self.beam_former is None:
-            if mic_positions is not None:
-                self.beam_former = BeamFormer(mic_positions)
-                self.beam_former.init_dynamic_estimate(frequencies, self.combination_n, self.combination_method)
-            else:
+            if mic_positions is None:
                 self.get_logger().error(
                     "need to set send mic_positions in Correlation to do DOA"
                 )
-        R = self.beam_former.get_correlation(signals_f)
+            self.beam_former = BeamFormer(mic_positions)
+            self.beam_former.init_dynamic_estimate(frequencies, self.combination_n, self.combination_method, "none")
+            self.beam_former.init_multi_estimate(frequencies, self.combination_n)
 
+        R = self.beam_former.get_correlation(signals_f)
         if self.bf_method == "mvdr":
             spectrum = self.beam_former.get_mvdr_spectrum(
                 R, frequencies
@@ -121,39 +117,37 @@ class SpectrumEstimator(Node):
         else:
             raise ValueError(self.bf_method)
 
-        spectrum = normalize_rows(spectrum, NORMALIZE)
-
         # publish raw spectrum
         msg_spec = create_spectrum_message(spectrum, frequencies, msg.timestamp)
         self.publisher_spectrum_raw.publish(msg_spec)
-
-        t2 = time.time()
-        processing_time = t2 - t1
-        self.get_logger().info(f"Published raw spectrum after {processing_time:.2f}s.")
-        return
-
-        #### multi-spectra
-        #TODO(FD) fill in 
+        self.get_logger().info(f"Published raw spectrum after {time.time() - t1:.2f}s.")
 
         #### combined specra
         pose_message = self.raw_pose_synch.get_latest_message(msg.timestamp, self.get_logger())
         if pose_message is None:
+            print('skipping cause no pose')
             return
-        else:
-            orientation = pose_message.yaw_deg
 
-        # add latest spectrum and orientation to dynamic estimate
+        orientation = pose_message.yaw_deg
+
         self.beam_former.add_to_dynamic_estimates(spectrum, orientation)
-
-        # retrieve current estimate
         dynamic_spectrum = self.beam_former.get_dynamic_estimate()
-        dynamic_spectrum = normalize_rows(dynamic_spectrum, NORMALIZE)
 
-        # publish
-        msg_new = msg_spec
-        msg_new.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
-        self.publisher_spectrum_combined.publish(msg_new)
-        self.get_logger().info(f"Published dynamic spectrum.")
+        msg_dynamic = msg_spec
+        msg_dynamic.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
+        self.publisher_spectrum_combined.publish(msg_dynamic)
+        self.get_logger().info(f"Published dynamic spectrum after {time.time() - t1:.2f}s.")
+    
+        #### multi-spectra
+        timestamp = msg.timestamp
+        self.beam_former.add_to_multi_estimate(signals_f, frequencies, timestamp, orientation)
+        spectrum_multi = self.beam_former.get_multi_estimate(method=self.bf_method)
+
+        msg_multi = msg_spec
+        msg_multi.spectrum_vect = list(spectrum_multi.astype(float).flatten())
+        self.publisher_spectrum_multi.publish(msg_multi)
+        self.get_logger().info(f"Published multi spectrum after {time.time() - t1:.2f}s.")
+
 
 
 def main(args=None):

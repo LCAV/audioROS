@@ -26,19 +26,22 @@ from signals import generate_signal_random, generate_signal_mono
 
 ROOM_DIM = [7, 9, 4]  # room dimensions [m].
 SOURCE_POS = [5, 8, 1]  # source position [m], None for no external source.
+SOURCE_TYPE = "mono" # type of source, random or mono
+SOURCE_FREQ = 3500 # Hz, only used for mono.
 BUZZER_ON = True # add buzzer to drone.
 BUZZER_FREQ = 4000 # Hz, 
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
 NUM_REFLECTIONS = 1 # number of reflections to consider in pyroomacoustis.
 DURATION_SEC = 10 # duration of simulated audio signal 
 LOOP = True # flag for looping the signal after reaching the end
+NOISE = 1e-2 # white noise to add on signals (variance squared)
 
 
 class CrazyflieSimulation(Node):
     def __init__(self):
         super().__init__("audio_simulation")
 
-        self.room = create_room(ROOM_DIM, [SOURCE_POS,], FS)
+        self.room = create_room()
         self.time_idx = 0
 
         self.publisher_pose_raw = self.create_publisher(PoseRaw, "geometry/pose_raw", 10)
@@ -142,7 +145,7 @@ class CrazyflieSimulation(Node):
         Run a pyroomacoustics simulation on a copy of the pyroom attribute 
         of an CrazyflieSimulation object.
         """
-        pyroom_copy = create_room(ROOM_DIM, [SOURCE_POS,], FS)
+        pyroom_copy = create_room()
 
         pyroom_copy.add_microphone_array(mic_array.T) # dim x n_mics
         if buzzer is not None: 
@@ -170,25 +173,29 @@ def starting_sample_nr(pyroom, mic_array):
     return max_index
 
 
-def create_room(room_dim, source_position_list, fs, duration_sec=DURATION_SEC):
+def create_room():
     """
     Set the shoe box room with specified dimensions, 
     sampling frequency and sources.
     """
-    pyroom = pra.ShoeBox(room_dim, fs=fs, max_order=NUM_REFLECTIONS)
+    pyroom = pra.ShoeBox(ROOM_DIM, fs=FS, max_order=NUM_REFLECTIONS, sigma2_awgn=NOISE)
 
     # The max possible delay comes from the main diagonal of cuboid. 
-    max_delay_sec = np.sqrt(np.sum(np.array(room_dim)**2)) / pyroom.physics.get_sound_speed()
-    assert duration_sec > max_delay_sec
+    max_delay_sec = np.sqrt(np.sum(np.array(ROOM_DIM)**2)) / pyroom.physics.get_sound_speed()
+    assert DURATION_SEC > max_delay_sec
 
-    for source in source_position_list:
-        if source is not None:
-            audio_source = generate_signal_random(fs, duration_sec)
-            pyroom.add_source(source, signal=audio_source)
+    if SOURCE_POS is not None:
+        if SOURCE_TYPE == "random": 
+            source_signal = generate_signal_random(FS, DURATION_SEC)
+        elif SOURCE_TYPE == "mono":
+            source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=SOURCE_FREQ)
+        else:
+            raise ValueError(SOURCE_TYPE)
+        pyroom.add_source(SOURCE_POS, signal=source_signal)
 
     if BUZZER_ON: 
         buzzer = [0, 0, 0] # will be overwritten
-        buzzer_signal = generate_signal_mono(fs, duration_sec, frequenzy_hz=BUZZER_FREQ)
+        buzzer_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=BUZZER_FREQ)
         pyroom.add_source(buzzer, signal=buzzer_signal)
     return pyroom
 

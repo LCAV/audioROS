@@ -11,15 +11,22 @@ from audio_stack.beam_former import normalize_rows, combine_rows
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from .live_plotter import LivePlotter
 
-NORMALIZE = "zero_to_one"
-COMBINATION_METHOD = "sum"
+# combination used across frequencies
+COMBINATION_METHOD = "sum" 
+#COMBINATION_METHOD = "product" 
+
+# normalization after combination
+NORMALIZE = "sum_to_one"  
+#NORMALIZE = "zero_to_one"  
+#NORMALIZE = "none"
 
 # window of frequencies used for plotting and combination 
 MIN_FREQ = -np.inf #500
 MAX_FREQ = np.inf #1500
 
-YMIN_SPEC = 1e-3
-YMAX_SPEC = 2
+YMIN_SPEC = 1e-5
+YMAX_SPEC = 1
+FIGSIZE = (15, 10)
 
 class DoaPlotter(Node):
     def __init__(self):
@@ -44,17 +51,19 @@ class DoaPlotter(Node):
         self.raw_pose_synch = TopicSynchronizer(20)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
-        self.fig, axs = plt.subplots(2, 2)
+        self.fig, axs = plt.subplots(2, 3)
         self.axs = {
           "raw line": axs[0, 0],
           "raw heatmap": axs[1, 0],
           "combined line": axs[0, 1],
-          "combined heatmap": axs[1, 1]
+          "combined heatmap": axs[1, 1],
+          "multi line": axs[0, 2],
+          "multi heatmap": axs[1, 2]
         }
         timestamp = 0
         for title, ax in self.axs.items():
             ax.set_title(title + f" {timestamp}ms")
-        self.fig.set_size_inches(14, 14)
+        self.fig.set_size_inches(*FIGSIZE)
 
 
     def init_plotter(self, name, xlabel='x', ylabel='y', log=True, ymin=-np.inf, ymax=np.inf, xmin=-np.inf, xmax=np.inf):
