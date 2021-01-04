@@ -110,34 +110,28 @@ class CrazyflieSimulation(Node):
         """
         self.mic_positions_global = global_positions(self.mic_positions, msg_pose, z=HEIGHT_MIC_ARRAY)
 
-        if SOURCE_POS is not None:
-            source_direction_deg = degrees(atan2(
-                    SOURCE_POS[1] - msg_pose.position.y, 
-                    SOURCE_POS[0] - msg_pose.position.x
-                )
-            )
-        else:
-            source_direction_deg = 0
-
+        # create a new pose_raw message if this is not the first measurement. 
         delta = None
         if self.current_pose is not None:
-            self.pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
+            if SOURCE_POS is not None:
+                source_direction_deg = degrees(atan2(SOURCE_POS[1] - msg_pose.position.y, 
+                                                     SOURCE_POS[0] - msg_pose.position.x))
+            else:
+                source_direction_deg = 0
 
+            self.pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
             self.pose_raw_msg.source_direction_deg = source_direction_deg 
             delta = get_relative_movement(self.current_pose, msg_pose)
 
-        # update the signals if this is the first 
-        # measurement or if we have moved.
+        # update the signals if this is the first measurement or if we have moved.
         if (delta is None) or any(delta):
-
             buzzer = None
             if BUZZER_ON: 
                 buzzer = global_positions(self.buzzer_position, msg_pose, z=HEIGHT_BUZZER)
 
             self.room = self.simulation(self.mic_positions_global, buzzer=buzzer)
             self.signals = self.room.mic_array.signals
-
-        elif (delta is not None):
+        elif (delta is not None) and not any(delta):
             self.get_logger().info("Did not move, not updating signals.")
 
         self.current_pose = msg_pose

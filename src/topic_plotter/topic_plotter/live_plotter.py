@@ -50,9 +50,11 @@ class LivePlotter(object):
         # plotting the figure.
         plt.show(block=False)
 
+
     def handle_close(self, evt):
         plt.close("all")
         print("closed all figures")
+
 
     def handle_resize(self, evt):
         # TODO(FD) this is not called when we resize
@@ -60,11 +62,13 @@ class LivePlotter(object):
         self.fig.canvas.draw()
         print("resize")
 
+
     def clear(self):
         for i in range(len(self.ax.lines)):
             self.ax.lines.pop()
         self.lines = {}
         self.axvlines = {}
+
 
     def update_arrow(self, origin, angle_deg, name="orientation"):
         """ Update arrow coordinates. 
@@ -93,8 +97,6 @@ class LivePlotter(object):
 
         self.ax.legend(loc="upper left")
 
-        # without this, the plot does not get updated live.
-        # self.fig.canvas.draw()
 
     def update_lines(self, data_matrix, x_data=None, labels=None, linestyle='-', marker=''):
         """ Plot each row of data_matrix as one line.
@@ -126,6 +128,7 @@ class LivePlotter(object):
 
         self.reset_xlim()
         self.reset_ylim()
+
 
     def update_mesh(self, data_matrix, y_labels=None, name="standard", log=False):
         """ Plot each row of data_matrix in an image. """

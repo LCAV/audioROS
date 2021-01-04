@@ -38,7 +38,6 @@ def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
             output="screen",
             parameters=dict_.get("params", []),
             arguments=['--ros-args', '--log-level', logger],
-            #arguments=['--ros-args', '--log-level', 'warn'],
         )
         for executable, dict_ in node_config.items()
     ]
