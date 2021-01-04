@@ -3,12 +3,13 @@ crazyflie.py: Publish simulated audio signals for the Crazyflie drone in a room.
 
 """
 
+from math import atan2, degrees
 import os
 import sys
+import time
 
 import numpy as np
 import pyroomacoustics as pra
-from math import atan2, degrees
 
 import rclpy
 from rclpy.node import Node
@@ -17,24 +18,24 @@ from geometry_msgs.msg import Pose
 
 from audio_interfaces.msg import Signals, PoseRaw
 from audio_interfaces_py.messages import create_signals_message, create_pose_raw_message_from_poses
-from audio_simulation.geometry import global_positions, get_relative_movement
+from audio_simulation.geometry import global_positions, get_relative_movement, get_starting_pose
+from audio_simulation.geometry import ROOM_DIM, SOURCE_POS
 from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION, FS, N_BUFFER, HEIGHT_MIC_ARRAY, HEIGHT_BUZZER
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from signals import generate_signal_random, generate_signal_mono
 
 
-ROOM_DIM = [7, 9, 4]  # room dimensions [m].
-SOURCE_POS = [5, 8, 1]  # source position [m], None for no external source.
 SOURCE_TYPE = "mono" # type of source, random or mono
 SOURCE_FREQ = 3500 # Hz, only used for mono.
-BUZZER_ON = True # add buzzer to drone.
+BUZZER_ON = False # add buzzer to drone.
 BUZZER_FREQ = 4000 # Hz, 
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
 NUM_REFLECTIONS = 1 # number of reflections to consider in pyroomacoustis.
-DURATION_SEC = 10 # duration of simulated audio signal 
+DIM = 2 # dimension of simulation
+DURATION_SEC = 1 # duration of simulated audio signal 
 LOOP = True # flag for looping the signal after reaching the end
-NOISE = 1e-2 # white noise to add on signals (variance squared)
+NOISE = None # white noise to add on signals (variance squared), set to None for no effect
 
 
 class CrazyflieSimulation(Node):
@@ -54,7 +55,7 @@ class CrazyflieSimulation(Node):
 
         self.signals = []
         self.mic_positions_global = []
-        self.current_pose = None
+        self.current_pose = get_starting_pose()
         self.mic_positions = np.array(MIC_POSITIONS)
         self.buzzer_position = np.array(BUZZER_POSITION)
         self.pose_raw_msg = None
@@ -69,8 +70,22 @@ class CrazyflieSimulation(Node):
         
         if self.time_idx == 0:
             self.time_idx = starting_sample_nr(self.room, self.mic_positions_global)
+            #try:
+            #    nonzero_indices = np.where(np.all(self.signals > 0, axis=0))[0] 
+            #    self.time_idx = nonzero_indices[0]
+            #    self.end_idx = nonzero_indices[-1]
+            #except: 
+            #    self.get_logger().error("Registered all zero signal. Did you move mics outside the room?")
 
-        assert (self.time_idx + N_BUFFER) < self.signals.shape[1]
+            self.get_logger().info(f"Starting again at {self.time_idx}")
+            self.end_idx = self.room.fs * DURATION_SEC # this is less than signals.shape[1]
+            assert self.signals.shape[1] >= self.end_idx
+            if not np.any(self.signals[:, self.time_idx]):
+                self.get_logger().warn(f"all zero in beginning: {self.signals[0, self.time_idx:self.end_idx]}")
+            if not np.any(self.signals[:, self.end_idx]):
+                self.get_logger().warn(f"all zero in end: {self.signals[0, self.time_idx:self.end_idx]}")
+
+        assert (self.time_idx + N_BUFFER) < self.end_idx
 
         timestamp = self.get_time_ms() 
         signal_to_send = self.signals[:, self.time_idx:self.time_idx+N_BUFFER]
@@ -81,13 +96,14 @@ class CrazyflieSimulation(Node):
         if self.pose_raw_msg is not None:
             self.pose_raw_msg.timestamp = timestamp
             self.publisher_pose_raw.publish(self.pose_raw_msg)
+            self.pose_raw_msg = None # makes sure not to publish this twice. 
         self.get_logger().info(f"{timestamp}: Published audio and pose signal")
 
         self.time_idx += N_BUFFER
        
         if self.time_idx >= MAX_TIMESTAMP:
             self.get_logger().warn("timestamp overflow")
-        elif (self.time_idx + N_BUFFER) >= self.signals.shape[1]:
+        elif (self.time_idx + N_BUFFER) >= self.end_idx:
             self.get_logger().warn("end of signal array")
         else: # continue normally
             return 
@@ -98,8 +114,7 @@ class CrazyflieSimulation(Node):
         else:
             self.get_logger().warn("exiting the node")
             self.destroy_node()
-            # shutdown => exiting the console command
-            rclpy.shutdown()
+            rclpy.shutdown() # exit the console command
 
 
     def get_time_ms(self):
@@ -111,33 +126,41 @@ class CrazyflieSimulation(Node):
         Run a simulation, update the signal content and publish a PoseRaw
         message  when a new pose is received.
         """
-        self.mic_positions_global = global_positions(self.mic_positions, msg_pose, z=HEIGHT_MIC_ARRAY)
+        from copy import deepcopy
+        t1 = time.time()
 
-        # create a new pose_raw message if this is not the first measurement. 
-        delta = None
-        if self.current_pose is not None:
-            if SOURCE_POS is not None:
-                source_direction_deg = degrees(atan2(SOURCE_POS[1] - msg_pose.position.y, 
-                                                     SOURCE_POS[0] - msg_pose.position.x))
-            else:
-                source_direction_deg = 0
+        # create a new pose_raw message. 
+        if SOURCE_POS is not None:
+            source_direction_deg = degrees(atan2(SOURCE_POS[1] - msg_pose.position.y, 
+                                                 SOURCE_POS[0] - msg_pose.position.x))
+        else:
+            source_direction_deg = 0
+        self.pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
+        self.pose_raw_msg.source_direction_deg = source_direction_deg 
 
-            self.pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
-            self.pose_raw_msg.source_direction_deg = source_direction_deg 
-            delta = get_relative_movement(self.current_pose, msg_pose)
+        self.mic_positions_global = global_positions(self.mic_positions, msg_pose, z=HEIGHT_MIC_ARRAY)[:, :DIM]
+        for m in range(self.mic_positions_global.shape[0]):
+            pos = self.mic_positions_global[m]
+            if not self.room.is_inside(pos):
+                self.get_logger().warn(f"mic{m} position outside room: {pos}")
+                return
 
         # update the signals if this is the first measurement or if we have moved.
-        if (delta is None) or any(delta):
+        delta = get_relative_movement(self.current_pose, msg_pose)
+        if any(delta):
             buzzer = None
             if BUZZER_ON: 
                 buzzer = global_positions(self.buzzer_position, msg_pose, z=HEIGHT_BUZZER)
 
             self.room = self.simulation(self.mic_positions_global, buzzer=buzzer)
-            self.signals = self.room.mic_array.signals
-        elif (delta is not None) and not any(delta):
+             # make a copy to make sure we don't send data while it is being changed.
+            self.signals = deepcopy(self.room.mic_array.signals)
+        else:
             self.get_logger().info("Did not move, not updating signals.")
 
         self.current_pose = msg_pose
+        self.get_logger().warn(f"Updated signals after {time.time() - t1:.2f}s")
+        return
 
 
     def simulation(self, mic_array, buzzer=None):
@@ -145,17 +168,15 @@ class CrazyflieSimulation(Node):
         Run a pyroomacoustics simulation on a copy of the pyroom attribute 
         of an CrazyflieSimulation object.
         """
+        t1 = time.time()
         pyroom_copy = create_room()
-
-        pyroom_copy.add_microphone_array(mic_array.T) # dim x n_mics
+        #self.get_logger().warn(f"1: {time.time() - t1:.2f}s")
+        pyroom_copy.add_microphone_array(mic_array[:, :DIM].T) # dim x n_mics
+        #self.get_logger().warn(f"2: {time.time() - t1:.2f}s")
         if buzzer is not None: 
-            pyroom_copy.sources[-1].position = buzzer.flatten()
-
-        print('simulating with:')
-        print('sources', [s.position for s in pyroom_copy.sources])
-        print('mics:', pyroom_copy.mic_array.R)
-
+            pyroom_copy.sources[-1].position = buzzer.flatten()[:DIM]
         pyroom_copy.simulate()
+        #self.get_logger().warn(f"3: {time.time() - t1:.2f}s")
         return pyroom_copy
 
 
@@ -164,10 +185,11 @@ def starting_sample_nr(pyroom, mic_array):
     Calculate the index of the sample from which on all mics register 
     audio from all sources.
     """
-    # n_sources x 3:
-    p_sources = np.array([s.position for s in pyroom.sources if s.position is not None]) 
+    # n_sources x dim:
+    p_sources = np.array([s.position for s in pyroom.sources]) 
     # n_sources x n_mics:
-    distances = np.linalg.norm(p_sources[:, None, :] - mic_array[None, :], axis=2)
+    assert p_sources.shape[1] == mic_array.shape[1]
+    distances = np.linalg.norm(p_sources[:, None, :] - mic_array[None, :, :], axis=2)
     max_distance = np.max(distances)
     max_index = int(np.ceil((max_distance / pyroom.physics.get_sound_speed()) * pyroom.fs) + 1)
     return max_index
@@ -178,10 +200,10 @@ def create_room():
     Set the shoe box room with specified dimensions, 
     sampling frequency and sources.
     """
-    pyroom = pra.ShoeBox(ROOM_DIM, fs=FS, max_order=NUM_REFLECTIONS, sigma2_awgn=NOISE)
+    pyroom = pra.ShoeBox(ROOM_DIM[:DIM], fs=FS, max_order=NUM_REFLECTIONS, sigma2_awgn=NOISE)
 
     # The max possible delay comes from the main diagonal of cuboid. 
-    max_delay_sec = np.sqrt(np.sum(np.array(ROOM_DIM)**2)) / pyroom.physics.get_sound_speed()
+    max_delay_sec = np.linalg.norm(np.array(ROOM_DIM[:DIM])) / pyroom.physics.get_sound_speed()
     assert DURATION_SEC > max_delay_sec
 
     if SOURCE_POS is not None:
@@ -191,12 +213,12 @@ def create_room():
             source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=SOURCE_FREQ)
         else:
             raise ValueError(SOURCE_TYPE)
-        pyroom.add_source(SOURCE_POS, signal=source_signal)
+        pyroom.add_source(SOURCE_POS[:DIM], signal=source_signal)
 
     if BUZZER_ON: 
         buzzer = [0, 0, 0] # will be overwritten
         buzzer_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=BUZZER_FREQ)
-        pyroom.add_source(buzzer, signal=buzzer_signal)
+        pyroom.add_source(buzzer[:DIM], signal=buzzer_signal)
     return pyroom
 
 
