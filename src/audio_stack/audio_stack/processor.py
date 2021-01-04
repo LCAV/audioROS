@@ -39,13 +39,13 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 METHOD_WINDOW = "tukey"
 
 # Frequency selection
+# set MIN_FREQ==MAX_FREQ to choose one frequency only.
 THRUST = 50000
-MIN_FREQ = 3000
-MAX_FREQ = 5000
-SINGLE_FREQ = 4000
+MIN_FREQ = 1000 
+MAX_FREQ = 5000 
 DELTA_FREQ = 100
 
-METHOD_FREQUENCY = "" #"single"
+METHOD_FREQUENCY = "" 
 METHOD_FREQUENCY_DICT = {
     "": {
         "min_freq": MIN_FREQ,
@@ -75,13 +75,6 @@ METHOD_FREQUENCY_DICT = {
         "filter_snr": True,
         "thrust": THRUST, 
     },
-    "single": {
-        "min_freq": SINGLE_FREQ,
-        "max_freq": SINGLE_FREQ,
-        "delta_freq": 100,
-        "filter_snr": False,
-        "thrust": 0,
-    }
 }
 
 def verify_validity(params_dict):

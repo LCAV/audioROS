@@ -31,9 +31,8 @@ class DoaEstimator(Node):
     def __init__(self):
         super().__init__("doa_estimator")
 
-        # TODO(FD) create subscribers to other spectrum estimates
         self.subscription_spectrum = self.create_subscription(
-            Spectrum, "audio/spectrum_raw", self.listener_callback_spectrum, 10
+            Spectrum, "audio/spectrum_combined", self.listener_callback_spectrum, 10
         )
 
         self.publisher_doa = self.create_publisher(
