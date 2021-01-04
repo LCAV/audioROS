@@ -8,8 +8,25 @@ geometry.py: Some geometry functions useful across all simulations.
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from geometry_msgs.msg import Pose, Point
 
 from audio_interfaces.msg import PoseRaw
+from audio_interfaces_py.messages import get_quaternion
+
+ROOM_DIM = [10., 7., 4.]  # room dimensions [m].
+SOURCE_POS = [5., 6., 1.]  # source position [m], None for no external source.
+STARTING_POS = np.array([5., 0., 1.]) # drone starting position [m]
+YAW_DEG = 30 # starting absoltue yaw angle in degrees
+
+def get_starting_pose():
+    msg = Pose()
+    msg.orientation = get_quaternion(YAW_DEG)
+    msg.position = Point(
+        x=STARTING_POS[0],
+        y=STARTING_POS[1],
+        z=STARTING_POS[2]
+    )
+    return msg
 
 
 def global_positions(local_positions_2D, msg_pose, z=0):
@@ -17,7 +34,8 @@ def global_positions(local_positions_2D, msg_pose, z=0):
     Calculate global postions (e.g. of mics) based on the current pose (rotation and translation). 
 
     :param local_positions_2D: coordinates (e.g. of mics) in local coordinates (n_mics x 2)
-    :param msg_pose: Pose message 
+    :param msg_pose: Pose message
+    :param z: height in (e.g. of mics) in local coordinates 
 
     :return: global positions (n_mics x 3)
     """
@@ -35,11 +53,8 @@ def global_positions(local_positions_2D, msg_pose, z=0):
     n_pos = local_positions_2D.shape[0]
 
     rot = R.from_quat(rotation)
-    global_positions = np.empty((n_pos, 3), dtype=float)
-    global_positions[:, :2] = local_positions_2D
-    global_positions[:, 2] = z
-    for i in range(n_pos):
-        global_positions[i, :] = rot.apply(global_positions[i, :] - translation) + translation
+    local_positions_3D = np.c_[local_positions_2D, np.full((n_pos, 1), z)]
+    global_positions = rot.apply(local_positions_3D) + translation
     return global_positions
 
 

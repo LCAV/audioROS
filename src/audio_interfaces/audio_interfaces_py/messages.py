@@ -14,29 +14,27 @@ from audio_interfaces.msg import PoseRaw
 N_MICS = 4
 #N_FREQS = 32
 
+def get_quaternion(yaw_deg):
+    from scipy.spatial.transform import Rotation
+    r = Rotation.from_euler("z", yaw_deg, degrees=True)
+    r_quat = r.as_quat()
+    return Quaternion(x=r_quat[0], y=r_quat[1], z=r_quat[2], w=r_quat[3])
+
+
 def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     """ Create Pose message. """
-    # TODO(FD): could replace this with tf.transformations or tf2.transformations
     from scipy.spatial.transform import Rotation
+    d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
 
     r = Rotation.from_euler("z", motion_dict["yaw"], degrees=True)
-    d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
     d_world = r.as_matrix()[:2, :2] @ d_local
-
-    assert abs(np.linalg.norm(d_local) - np.linalg.norm(d_world)) < 1e-10, (
-            np.linalg.norm(d_local), np.linalg.norm(d_world))
-
     msg = Pose()
-    msg.position = Point()
-    msg.position.x = d_world[0] + prev_x
-    msg.position.y = d_world[1] + prev_y
-    msg.position.z = float(motion_dict["z"])
-    msg.orientation = Quaternion()
-    r_quat = r.as_quat()
-    msg.orientation.x = r_quat[0]
-    msg.orientation.y = r_quat[1]
-    msg.orientation.z = r_quat[2]
-    msg.orientation.w = r_quat[3]
+    msg.position = Point(
+        x=d_world[0]+prev_x,
+        y=d_world[1]+prev_y,
+        z=float(motion_dict["z"])
+    )
+    msg.orientation = get_quaternion(motion_dict["yaw"])
     return msg
 
 
@@ -71,9 +69,15 @@ def create_pose_raw_message_from_poses(previous_pose, current_pose):
     yaw_deg = r.as_euler('xyz', degrees=True)[2]
 
     pose_raw = PoseRaw()
-    pose_raw.dx = current_pose.position.x - previous_pose.position.x
-    pose_raw.dy = current_pose.position.y - previous_pose.position.y
-    pose_raw.z = current_pose.position.z
+    delta_global = np.array([ 
+        current_pose.position.x - previous_pose.position.x,
+        current_pose.position.y - previous_pose.position.y,
+        current_pose.position.z
+    ])
+    delta = r.inv().apply(delta_global)
+    pose_raw.dx = delta[0]
+    pose_raw.dy = delta[1] 
+    pose_raw.z = delta[2]
     pose_raw.yaw_deg = yaw_deg
 
     # have to be filled later: 
@@ -186,13 +190,12 @@ def read_pose_message(msg):
 
 def read_pose_raw_message(msg):
     """ Read PoseRaw message.  """
-    # TODO(FD): could replace this with tf.transformations or tf2.transformations
     from scipy.spatial.transform import Rotation
-    d_local = np.array((msg.dx, msg.dy))
+    d_local = np.array((msg.dx, msg.dy, msg.z))
     yaw = msg.yaw_deg
     yaw_rate = msg.yaw_rate_deg
     r = Rotation.from_euler('z', yaw, degrees=True)
-    d_world = r.as_matrix()[:2, :2] @ d_local
+    d_world = r.apply(d_local)[:2]
     return d_world, yaw, yaw_rate
 
 
