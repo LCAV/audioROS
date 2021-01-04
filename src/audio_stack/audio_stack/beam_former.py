@@ -25,17 +25,23 @@ INVERSE = 'pinv' # use standard pseudoinverse
 
 def normalize_rows(matrix, method):
     """ Normalizes last dimension of matrix (can be more than 2-dimensional) """ 
+    if np.all(np.isnan(matrix)): 
+        print("Warning: not normalizeing, all nan.")
+        return matrix
+
     if method == "zero_to_one":
-        normalized =  (matrix - np.nanmin(matrix, axis=1, keepdims=True)) / (np.nanmax(matrix, axis=1, keepdims=True) - np.nanmin(matrix, axis=1, keepdims=True))
-        #np.testing.assert_allclose(np.nanmax(normalized, axis=1), 1)
-        #np.testing.assert_allclose(np.nanmin(normalized, axis=1), 0)
+        normalized = matrix - np.nanmin(matrix, axis=1, keepdims=True)
+        denom = (np.nanmax(matrix, axis=1, keepdims=True) - np.nanmin(matrix, axis=1, keepdims=True))
+        if np.any(denom > 0):
+            normalized /= denom
+            np.testing.assert_allclose(np.nanmax(normalized, axis=1), 1)
+            np.testing.assert_allclose(np.nanmin(normalized, axis=1), 0)
     elif method == "zero_to_one_all":
         denom = np.nanmax(matrix) - np.nanmin(matrix)
-        if denom == 0.0:
-            return matrix 
-        normalized =  (matrix - np.nanmin(matrix)) / denom
-        assert np.nanmax(normalized) == 1, np.nanmax(normalized)
-        assert np.nanmin(normalized) == 0, np.nanmin(normalized)
+        if denom > 0:
+            normalized = (matrix - np.nanmin(matrix)) / denom
+            assert np.nanmax(normalized) == 1, np.nanmax(normalized)
+            assert np.nanmin(normalized) == 0, np.nanmin(normalized)
     elif method == "sum_to_one":
         # first make sure values are between 0 and 1 (otherwise division can lead to errors)
         denom = np.nanmax(matrix, axis=1, keepdims=True) - np.nanmin(matrix, axis=1, keepdims=True)
@@ -44,12 +50,12 @@ def normalize_rows(matrix, method):
         normalized = matrix / sum_matrix
         #np.testing.assert_allclose(np.sum(normalized, axis=1), 1.0, rtol=1e-5)
     elif method in ["none", None]:
-        return matrix
+        normalized = matrix 
     else:
         raise ValueError(method)
 
     if np.any(np.isnan(normalized)):
-        print("Warning: problem in normalization")
+        print("Warning: problem in normalization", method)
     return normalized
 
 
@@ -149,7 +155,7 @@ class BeamFormer(object):
         index = int(round(delta_deg * (n_angles - 1) / 360))
         return np.c_[spectrum[:, index:], spectrum[:, :index]]
 
-    def init_dynamic_estimate(self, frequencies, combination_n, combination_method, normalization_method='zero_to_one'):
+    def init_dynamic_estimate(self, frequencies, combination_n, combination_method, normalization_method='none'):
         self.spectra_aligned = np.full((combination_n, len(frequencies), len(BeamFormer.theta_scan)), np.nan) 
         self.index_dynamic = 0
 
@@ -170,6 +176,7 @@ class BeamFormer(object):
         """
         self.spectra_aligned[self.index_dynamic, :, :] = self.shift_spectrum(spectrum, -orientation_deg)
         self.index_dynamic = (self.index_dynamic + 1) % self.params['dynamic']['combination_n']
+        return self.shift_spectrum(spectrum, -orientation_deg)
 
     def add_signals_to_dynamic_estimates(self, signals_f, frequencies, orientation_deg=0, method='das'):
         """ Add new spectrum to list and remove outdated ones.
@@ -181,21 +188,16 @@ class BeamFormer(object):
             spectrum = self.get_das_spectrum(R, frequencies)
         elif method == 'mvdr':
             spectrum = self.get_mvdr_spectrum(R, frequencies)
-
-        self.spectra_aligned[self.index_dynamic, :, :] = self.shift_spectrum(spectrum, -orientation_deg)
-        self.index_dynamic = (self.index_dynamic + 1) % self.params['dynamic']['combination_n']
-        return self.shift_spectrum(spectrum, -orientation_deg)
+        return self.add_to_dynamic_estimates(spectrum, orientation_deg)
 
     def get_dynamic_estimate(self):
         """ Get current estimate
 
         :return: spectrum estimate of shape (n_angles,)
         """
-        # don't need to treat nan cases, as they are taken care of by standard numpy nanmin, nanmax, nansum etc. 
-        #if np.any(np.isnan(self.spectra_aligned)):
-        #    pass
-
-        spectra_aligned = normalize_rows(self.spectra_aligned, method=self.params['dynamic']['normalization_method'])
+        rows = ~np.all(np.isnan(self.spectra_aligned), axis=(1, 2))
+        spectra_aligned = self.spectra_aligned[rows, ...]
+        spectra_aligned = normalize_rows(spectra_aligned, method=self.params['dynamic']['normalization_method'])
         return combine_rows(spectra_aligned, self.params['dynamic']['combination_method'], keepdims=False) # n_frequencies x n_angles
 
     def init_multi_estimate(self, frequencies, combination_n):

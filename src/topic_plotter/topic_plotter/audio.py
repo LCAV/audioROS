@@ -73,11 +73,11 @@ class AudioPlotter(Node):
 
         # sort frequencies
         indices = np.argsort(freqs)
-        y = np.abs(signals_f[indices, :].T)
+        y = np.abs(signals_f[indices, :].T) # n_mics x n_freqs
         x = freqs[indices]
 
         max_freq = x[np.argmax(y, axis=1)] 
-        labels = [f"mic {i}" for i in range(y.shape[1])]
+        labels = [f"mic {i}" for i in range(y.shape[0])]
         self.plotter_dict["signals frequency"].update_lines(y, x, labels, linestyle='-', marker='o')
 
         self.title = f"time [ms]: {msg.timestamp}, max at {max_freq}Hz"
@@ -98,7 +98,7 @@ class AudioPlotter(Node):
         self.init_plotter("signals time", xlabel="time idx [-]", ylabel="magnitude [-]", log=False)
 
         __, signals = read_signals_message(msg)
-        labels = [f"mic {i}" for i in range(1, 1+msg.n_mics)]
+        labels = [f"mic {i}" for i in range(msg.n_mics)]
 
         if msg.n_buffer != self.current_n_buffer:
             self.plotter_dict["signals time"].clear()
