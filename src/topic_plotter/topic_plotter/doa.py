@@ -51,12 +51,14 @@ class AudioPlotter(Node):
           "combined line": axs[0, 1],
           "combined heatmap": axs[1, 1]
         }
+        timestamp = 0
+        for title, ax in self.axs.items():
+            ax.set_title(title + f" {timestamp}ms")
         self.fig.set_size_inches(14, 14)
 
 
     def init_plotter(self, name, xlabel='x', ylabel='y', log=True, ymin=-np.inf, ymax=np.inf, xmin=-np.inf, xmax=np.inf):
         if not (name in self.plotter_dict.keys()):
-
             if name in self.axs.keys():
                 fig = self.fig
                 ax = self.axs[name]
@@ -99,16 +101,18 @@ class AudioPlotter(Node):
             orientation_index = np.argmin(abs(theta_scan - orientation))
             self.plotter_dict[f"{name} heatmap"].update_axvlines([orientation_index], color='orange')
 
-        for plotter in self.plotter_dict.values():
-            plotter.ax.set_title(f'time [ms]: {msg_spec.timestamp}')
+        for title, ax in self.axs.items():
+            ax.set_title(title + f" {msg_spec.timestamp}ms")
         self.fig.canvas.draw()
 
 
     def listener_callback_spectrum_combined(self, msg_spec):
         return self.listener_callback_spectrum(msg_spec, name="combined")
 
+
     def listener_callback_spectrum_multi(self, msg_spec):
         return self.listener_callback_spectrum(msg_spec, name="multi")
+
 
 def main(args=None):
     rclpy.init(args=args)
