@@ -48,7 +48,7 @@ class DoaPlotter(Node):
         self.current_n_buffer = None
         self.current_n_frequencies = None
 
-        self.raw_pose_synch = TopicSynchronizer(20)
+        self.raw_pose_synch = TopicSynchronizer(10)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
         self.fig, axs = plt.subplots(2, 3)

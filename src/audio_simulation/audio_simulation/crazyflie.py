@@ -26,16 +26,16 @@ sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from signals import generate_signal_random, generate_signal_mono
 
 
-SOURCE_TYPE = "mono" # type of source, random or mono
+SOURCE_TYPE = "random" # type of source, random or mono
 SOURCE_FREQ = 3500 # Hz, only used for mono.
 BUZZER_ON = False # add buzzer to drone.
 BUZZER_FREQ = 4000 # Hz, 
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
-NUM_REFLECTIONS = 1 # number of reflections to consider in pyroomacoustis.
+NUM_REFLECTIONS = 0 # number of reflections to consider in pyroomacoustis.
 DIM = 2 # dimension of simulation
-DURATION_SEC = 1 # duration of simulated audio signal 
+DURATION_SEC = 5 # duration of simulated audio signal 
 LOOP = True # flag for looping the signal after reaching the end
-NOISE = None # white noise to add on signals (variance squared), set to None for no effect
+NOISE = 1e-2 # white noise to add on signals (variance squared), set to None for no effect
 
 
 class CrazyflieSimulation(Node):
