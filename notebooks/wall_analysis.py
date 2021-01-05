@@ -153,12 +153,12 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
 
     DEGREE_LIST = [0]
 
+    pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
     df_total = pd.DataFrame(columns=[
         'signals_f', 'degree', 'distance', 'source', 'snr', 
         'motors', 'psd', 'spec', 'frequencies', 'appendix', 
-        'seconds', 'mic_type', 'frequencies_matrix', 'dx', 'dy', 'z', 'yaw_deg', 
-        'positions'
-    ])
+        'seconds', 'mic_type', 'frequencies_matrix', 'positions'] + pos_columns
+    )
 
     params = dict(
         props = False,
@@ -223,12 +223,16 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 spec=spec,
                 psd=psd,
                 seconds=seconds, 
-                dx=df.dx.values,
-                dy=df.dy.values,
-                z=df.z.values,
-                yaw_deg=df.yaw_deg.values,
-                positions=positions
-            )
+                positions=positions)
+            if 'dx' in df.columns: 
+                pos_dict = {
+                    col:df[col].values for col in pos_columns
+                }
+            else:
+                pos_dict = {
+                    col:None for col in pos_columns
+                }
+            all_items.update(pos_dict)
             all_items.update(params)
             df_total.loc[len(df_total), :] = all_items
     return df_total
@@ -293,7 +297,8 @@ def parse_calibration_experiments():
 
 if __name__ == "__main__":
     #exp_name = '2020_12_9_rotating'
-    exp_name = '2020_12_18_flying'
+    #exp_name = '2020_12_18_flying'
+    exp_name = '2020_12_18_stepper'
     fname = f'results/{exp_name}_real.pkl'
     try:
         raise 
