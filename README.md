@@ -33,10 +33,16 @@ colcon build --symlink-install
 
 The stack is separated into the following modules:
 
+- `audio_interfaces` (C++): Custom ROS message definintions.
+- `audio_bringup` (python): Contains pipeline for recording measurements (`doa_pipeline.py`) and some commonly used launch files.  
 - `audio_stack` (python): Read and process audio signals.
-- `audio_interfaces` (C++): Custom ROS message definintions. 
+- `audio_simulation` (python): Simulated audio using pyroomacoustics.  
 - `audio_publisher` (python): Publish signals from file or computer's audio input stream. 
 - `crazyflie_crtp` (python): Publish audio signals received over CRTP from Crazyflie drone.  
+- `crazyflie_description` (python): Commonly used global parameters of Crazyflie drone.  
+- `topic_plotter` (python): Create plots of the different topics. 
+- `topic_writer` (python): Convert data from topics to different formats (e.g. csv format) and save. 
+
 
 A diagram of the interactions of the different packages is shown below.
 
