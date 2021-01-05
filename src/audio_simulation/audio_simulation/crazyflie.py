@@ -70,22 +70,18 @@ class CrazyflieSimulation(Node):
         
         if self.time_idx == 0:
             self.time_idx = starting_sample_nr(self.room, self.mic_positions_global)
-            #try:
-            #    nonzero_indices = np.where(np.all(self.signals > 0, axis=0))[0] 
-            #    self.time_idx = nonzero_indices[0]
-            #    self.end_idx = nonzero_indices[-1]
-            #except: 
-            #    self.get_logger().error("Registered all zero signal. Did you move mics outside the room?")
+            self.end_idx = self.room.fs * DURATION_SEC # this should be less than signals.shape[1]
+            # alternative: 
+            # nonzero_indices = np.where(np.all(self.signals > 0, axis=0))[0] 
+            # self.time_idx = nonzero_indices[0]
+            # self.end_idx = nonzero_indices[-1]
 
             self.get_logger().info(f"Starting again at {self.time_idx}")
-            self.end_idx = self.room.fs * DURATION_SEC # this is less than signals.shape[1]
             assert self.signals.shape[1] >= self.end_idx
             if not np.any(self.signals[:, self.time_idx]):
                 self.get_logger().warn(f"all zero in beginning: {self.signals[0, self.time_idx:self.end_idx]}")
             if not np.any(self.signals[:, self.end_idx]):
                 self.get_logger().warn(f"all zero in end: {self.signals[0, self.time_idx:self.end_idx]}")
-
-        assert (self.time_idx + N_BUFFER) < self.end_idx
 
         timestamp = self.get_time_ms() 
         signal_to_send = self.signals[:, self.time_idx:self.time_idx+N_BUFFER]
@@ -187,8 +183,8 @@ def starting_sample_nr(pyroom, mic_array):
     """
     # n_sources x dim:
     p_sources = np.array([s.position for s in pyroom.sources]) 
-    # n_sources x n_mics:
     assert p_sources.shape[1] == mic_array.shape[1]
+    # n_sources x n_mics:
     distances = np.linalg.norm(p_sources[:, None, :] - mic_array[None, :, :], axis=2)
     max_distance = np.max(distances)
     max_index = int(np.ceil((max_distance / pyroom.physics.get_sound_speed()) * pyroom.fs) + 1)

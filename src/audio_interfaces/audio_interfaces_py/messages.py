@@ -24,16 +24,13 @@ def get_quaternion(yaw_deg):
 def create_pose_message(motion_dict, prev_x, prev_y, timestamp):
     """ Create Pose message. """
     from scipy.spatial.transform import Rotation
-    d_local = np.array((motion_dict["dx"], motion_dict["dy"]))
+    d_local = np.array([motion_dict["dx"], motion_dict["dy"], motion_dict["z"]])
 
     r = Rotation.from_euler("z", motion_dict["yaw"], degrees=True)
-    d_world = r.as_matrix()[:2, :2] @ d_local
+    pos_world = r.apply(d_local) + np.array([prev_x, prev_y, 0])
+    
     msg = Pose()
-    msg.position = Point(
-        x=d_world[0]+prev_x,
-        y=d_world[1]+prev_y,
-        z=float(motion_dict["z"])
-    )
+    msg.position = Point(x=pos_world[0], y=pos_world[1], z=pos_world[2])
     msg.orientation = get_quaternion(motion_dict["yaw"])
     return msg
 
