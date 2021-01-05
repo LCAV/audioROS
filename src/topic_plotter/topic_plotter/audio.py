@@ -7,12 +7,12 @@ import matplotlib.pylab as plt
 from audio_interfaces.msg import Signals, SignalsFreq
 from audio_interfaces_py.messages import read_signals_message, read_signals_freq_message 
 from .live_plotter import LivePlotter
-from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
+from matplotlib.ticker import AutoMinorLocator
 
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-XMIN_FREQ = 100 #200 # min plotting frequency in Hz
+XMIN_FREQ = 1000 #200 # min plotting frequency in Hz
 XMAX_FREQ = 5000 # max plotting frequency in Hz
 YMIN_FREQ = 1e-10 # min plotting frequency in Hz
 YMAX_FREQ = 1e5 # max plotting frequency in Hz
@@ -73,11 +73,11 @@ class AudioPlotter(Node):
 
         # sort frequencies
         indices = np.argsort(freqs)
-        y = np.abs(signals_f[indices, :].T)
+        y = np.abs(signals_f[indices, :].T) # n_mics x n_freqs
         x = freqs[indices]
 
         max_freq = x[np.argmax(y, axis=1)] 
-        labels = [f"mic {i}" for i in range(y.shape[1])]
+        labels = [f"mic {i}" for i in range(y.shape[0])]
         self.plotter_dict["signals frequency"].update_lines(y, x, labels, linestyle='-', marker='o')
 
         self.title = f"time [ms]: {msg.timestamp}, max at {max_freq}Hz"
@@ -98,7 +98,7 @@ class AudioPlotter(Node):
         self.init_plotter("signals time", xlabel="time idx [-]", ylabel="magnitude [-]", log=False)
 
         __, signals = read_signals_message(msg)
-        labels = [f"mic {i}" for i in range(1, 1+msg.n_mics)]
+        labels = [f"mic {i}" for i in range(msg.n_mics)]
 
         if msg.n_buffer != self.current_n_buffer:
             self.plotter_dict["signals time"].clear()

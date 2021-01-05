@@ -15,10 +15,23 @@ from scipy.spatial.transform import Rotation
 from audio_interfaces.msg import PoseRaw, DoaEstimates
 from audio_interfaces_py.messages import read_pose_raw_message, read_pose_message
 from audio_stack.topic_synchronizer import TopicSynchronizer
+from audio_simulation.geometry import SOURCE_POS, ROOM_DIM, STARTING_POS
 
 from .live_plotter import LivePlotter
 
-MAX_LENGTH = 10 # number of positions to plot
+MAX_LENGTH = 2 # number of positions to plot
+
+def plot_room(ax):
+    x, y = ROOM_DIM[:2]
+    ax.plot([0, 0], [0, y], color='black')
+    ax.plot([x, x], [0, y], color='black')
+    ax.plot([0, x], [0, 0], color='black')
+    ax.plot([0, x], [y, y], color='black')
+
+
+def plot_source(ax):
+    ax.scatter(SOURCE_POS[0], SOURCE_POS[1], color='black')
+
 
 class GeometryPlotter(Node):
     def __init__(self):
@@ -28,9 +41,9 @@ class GeometryPlotter(Node):
             PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
 
-        #self.subscription_pose = self.create_subscription(
-        #    Pose, "geometry/pose", self.listener_callback_pose, 10
-        #)
+        self.subscription_pose = self.create_subscription(
+            Pose, "geometry/pose", self.listener_callback_pose, 10
+        )
 
         self.subscription_doa = self.create_subscription(
             DoaEstimates, "geometry/doa_estimates", self.listener_callback_doa, 10
@@ -38,14 +51,14 @@ class GeometryPlotter(Node):
 
         self.plotter_dict = {}
         # initialize a starting position for pose_raw, as it only contains delta positions
-        self.pose_raw_list = np.zeros((2, 1))
+        self.pose_raw_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
 
         # need no starting position for pose as it has absolute positions
         self.pose_list = np.empty((2, 0))
 
         # for error calculations
         self.error_list = []
-        self.raw_pose_synch = TopicSynchronizer(10)
+        self.raw_pose_synch = TopicSynchronizer(20)
         self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10)
 
     def init_plotter(self, name, xlabel='x', ylabel='y'):
@@ -54,6 +67,9 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_xlabel(xlabel)
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
+
+            plot_room(self.plotter_dict[name].ax)
+            plot_source(self.plotter_dict[name].ax)
 
     def update_plotter(self, name, pose_list, yaw_deg, source_direction_deg=None):
         self.plotter_dict[name].update_scatter(
@@ -79,15 +95,12 @@ class GeometryPlotter(Node):
         d_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
         new_position = self.pose_raw_list[:, -1] + d_world
         self.pose_raw_list = np.c_[self.pose_raw_list, new_position]
-
         if self.pose_raw_list.shape[1] > MAX_LENGTH:
             self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
 
         self.update_plotter("pose raw", self.pose_raw_list, yaw, msg_pose_raw.source_direction_deg)
         self.plotter_dict["pose raw"].fig.canvas.draw()
 
-    # TODO(FD) figure out why the pose_raw topic and pose topic do not yield exactly the same 
-    # position estimates.
     def listener_callback_pose(self, msg_pose):
         xlabel = "x [m]"
         ylabel = "y [m]"

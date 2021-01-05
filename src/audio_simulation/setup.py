@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'crazyflie = audio_simulation.crazyflie:main',
             'constant_pose_publisher = audio_simulation.constant_pose_publisher:main',
+            'linear_pose_publisher = audio_simulation.linear_pose_publisher:main',
         ],
     },
 )

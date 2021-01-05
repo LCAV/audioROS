@@ -8,6 +8,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Pose
 from std_msgs.msg import String
 
+from audio_simulation.geometry import get_starting_pose
 
 class ConstantPosePublisher(Node):
     def __init__(self):
@@ -19,17 +20,7 @@ class ConstantPosePublisher(Node):
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def timer_callback(self):
-        msg = Pose()
-
-        msg.orientation.x = 0.5
-        msg.orientation.y = 0.5
-        msg.orientation.z = 0.5
-        msg.orientation.w = 0.5
-
-        msg.position.x = 1.0
-        msg.position.y = 1.0
-        msg.position.z = 1.0
-
+        msg = get_starting_pose()
         self.publisher_pose.publish(msg)
         self.get_logger().info("Pose has been published")
 
