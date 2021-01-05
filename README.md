@@ -44,14 +44,16 @@ A diagram of the interactions of the different packages is shown below.
 
 ## Use cases
 
-### Simulation  (WIP)
+### Simulation 
 
-TODO: fill in
+- To simulate the drone doing source localization inside a room, you can run: 
+  ```
+  ros2 launch audio_bringup doa_simulated.launch.py
+  ```
 
 ## Requirements (WIP)
 
-
-List of requirements to run all nodes in this repo 
+List of requirements to run all nodes in this repo, continuously updated and will (hopefully) eventually be added to installation instructions.
 - pyserial (for turntable handling)
 
 ## Credits

@@ -1,5 +1,5 @@
 """
-linear_pose_publisher.py: Publish a linear vertical movement of Crazyflie.
+linear_pose_publisher.py: Publish linear movement of Crazyflie inside a room. 
 """
 
 import numpy as np
