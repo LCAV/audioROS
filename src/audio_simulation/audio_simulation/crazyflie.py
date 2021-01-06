@@ -13,6 +13,7 @@ import pyroomacoustics as pra
 
 import rclpy
 from rclpy.node import Node
+from rcl_interfaces.msg import SetParametersResult
 
 from geometry_msgs.msg import Pose
 
@@ -25,13 +26,14 @@ from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION, 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from signals import generate_signal_random, generate_signal_mono
 
+PARAMS_DICT = {
+    "source_type": (rclpy.Parameter.Type.STRING, "mono"),
+    "source_freq": (rclpy.Parameter.Type.INTEGER, 3500),
+    "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 4000)
+}
 
-SOURCE_TYPE = None # type of source, random or mono or None
-SOURCE_FREQ = 3500 # Hz, only used for mono.
-BUZZER_ON = True # add buzzer to drone.
-BUZZER_FREQ = 4000 # Hz, 
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
-NUM_REFLECTIONS = 0 # number of reflections to consider in pyroomacoustis.
+NUM_REFLECTIONS = 1 # number of reflections to consider in pyroomacoustis.
 DIM = 2 # dimension of simulation
 DURATION_SEC = 5 # duration of simulated audio signal 
 LOOP = True # flag for looping the signal after reaching the end
@@ -40,9 +42,9 @@ NOISE = 1e-2 # white noise to add on signals (variance squared), set to None for
 
 class CrazyflieSimulation(Node):
     def __init__(self):
-        super().__init__("audio_simulation")
+        super().__init__("audio_simulation",
+            automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
 
-        self.room = create_room()
         self.time_idx = 0
 
         self.publisher_pose_raw = self.create_publisher(PoseRaw, "geometry/pose_raw", 10)
@@ -59,6 +61,25 @@ class CrazyflieSimulation(Node):
         self.mic_positions = np.array(MIC_POSITIONS)
         self.buzzer_position = np.array(BUZZER_POSITION)
         self.pose_raw_msg = None
+
+        self.source_params = {key: val[1] for key, val in PARAMS_DICT.items()}
+        self.set_parameters_callback(self.set_params)
+        parameters = self.get_parameters(PARAMS_DICT.keys())
+        self.set_parameters(parameters)
+
+        self.room = create_room(self.source_params)
+
+
+    def set_params(self, params):
+        for param in params:
+            # we need this in case this parameter
+            # was not set at startup. 
+            # then we use the default values.
+            if param.type_ == param.Type.NOT_SET:
+                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
+
+            self.source_params[param.name] = param.value
+        return SetParametersResult(successful=True)
    
 
     def signals_publisher(self):
@@ -145,7 +166,7 @@ class CrazyflieSimulation(Node):
         delta = get_relative_movement(self.current_pose, msg_pose)
         if any(delta):
             buzzer = None
-            if BUZZER_ON: 
+            if self.source_params["buzzer_freq"] > 0: 
                 buzzer = global_positions(self.buzzer_position, msg_pose, z=HEIGHT_BUZZER)
 
             self.room = self.simulation(self.mic_positions_global, buzzer=buzzer)
@@ -165,7 +186,7 @@ class CrazyflieSimulation(Node):
         of an CrazyflieSimulation object.
         """
         t1 = time.time()
-        pyroom_copy = create_room()
+        pyroom_copy = create_room(self.source_params)
         #self.get_logger().warn(f"1: {time.time() - t1:.2f}s")
         pyroom_copy.add_microphone_array(mic_array[:, :DIM].T) # dim x n_mics
         #self.get_logger().warn(f"2: {time.time() - t1:.2f}s")
@@ -191,7 +212,7 @@ def starting_sample_nr(pyroom, mic_array):
     return max_index
 
 
-def create_room():
+def create_room(source_params):
     """
     Set the shoe box room with specified dimensions, 
     sampling frequency and sources.
@@ -203,19 +224,19 @@ def create_room():
     assert DURATION_SEC > max_delay_sec
 
     if SOURCE_POS is not None:
-        if SOURCE_TYPE == "random": 
+        if source_params["source_type"] == "random": 
             source_signal = generate_signal_random(FS, DURATION_SEC)
-        elif SOURCE_TYPE == "mono":
-            source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=SOURCE_FREQ)
-        elif SOURCE_TYPE is None:
+        elif source_params["source_type"] == "mono":
+            source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=source_params["source_freq"])
+        elif source_params["source_type"] in [None, "none"]:
             source_signal = np.zeros(int(ceil(FS * DURATION_SEC)))
         else:
-            raise ValueError(SOURCE_TYPE)
+            raise ValueError(source_params["source_type"])
         pyroom.add_source(SOURCE_POS[:DIM], signal=source_signal)
 
-    if BUZZER_ON: 
+    if source_params["buzzer_freq"] > 0: 
         buzzer = [0, 0, 0] # will be overwritten
-        buzzer_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=BUZZER_FREQ)
+        buzzer_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=source_params["buzzer_freq"])
         pyroom.add_source(buzzer[:DIM], signal=buzzer_signal)
     return pyroom
 

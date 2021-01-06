@@ -52,9 +52,13 @@ A diagram of the interactions of the different packages is shown below.
 
 ### Simulation 
 
-- To simulate the drone doing source localization inside a room, you can run: 
+- To simulate the drone doing source localization inside a room, run: 
   ```
   ros2 launch audio_bringup doa_simulated.launch.py
+  ```
+- To simulate the drone doing wall detection, run: 
+  ```
+  ros2 launch audio_bringup wall_simulated.launch.py
   ```
 
 ## Requirements (WIP)

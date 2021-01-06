@@ -15,17 +15,19 @@ from audio_simulation.geometry import ROOM_DIM, STARTING_POS, YAW_DEG
 
 VELOCITY = np.array([0., 0.5, 0.]) # m/s, in drone coordinates
 EPS = 0.2 # m, safety margin from walls
+MAX_Y = None
 
 class LinearPosePublisher(Node):
-    def __init__(self):
+    def __init__(self, position=STARTING_POS, velocity=VELOCITY, yaw_deg=YAW_DEG, max_y=MAX_Y):
         super().__init__("linear_pose_publisher")
 
         self.publisher_pose = self.create_publisher(Pose, "geometry/pose", 10)
 
-        self.rot = R.from_euler('z', YAW_DEG, degrees=True)
-        self.velocity = VELOCITY
-        self.position = STARTING_POS
-        assert np.all(self.position <= ROOM_DIM), "starting position not inside room!"
+        self.rot = R.from_euler('z', yaw_deg, degrees=True)
+        self.velocity = velocity
+        self.position = position 
+        self.max_y = max_y
+        assert np.all(self.position <= ROOM_DIM-EPS) and np.all(self.position >= EPS), "starting position not inside room!"
 
         # start movement
         self.timer_period = 0.5  # seconds
@@ -43,13 +45,19 @@ class LinearPosePublisher(Node):
 
         # if we het the wall, revert direction
         if np.any(new_position > np.array(ROOM_DIM) - EPS) or np.any(new_position < EPS):
-            #self.velocity = -self.velocity
             self.get_logger().warn("touched wall, turn direction")
-            self.rot = self.rot * R.from_euler('z', 180, degrees=True)
+            self.velocity = -self.velocity
+            #self.rot = self.rot * R.from_euler('z', 180, degrees=True)
+            return
+
+        # if we reached max_y, revert direction. 
+        if (self.max_y is not None) and (new_position[1] > self.max_y):
+            self.get_logger().warn(f"reached {self.max_y}, turn direction")
+            self.velocity = -self.velocity
+            #self.rot = self.rot * R.from_euler('z', 180, degrees=True)
             return
 
         self.position = new_position
-
         quat = self.rot.as_quat()
 
         msg = Pose()

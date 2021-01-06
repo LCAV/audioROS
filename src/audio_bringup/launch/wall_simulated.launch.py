@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-doa_simulated.launch.py: Launch the doa pipeline in simulation. 
+wall_simulated.launch.py: Launch the wall detection pipeline in simulation. 
 """
 
 import sys
@@ -16,18 +16,15 @@ LOG_LEVEL = "warn"
 node_config = {
     "crazyflie": {
         "pkg": "audio_simulation", 
-        "params": [{"buzzer_freq":0, "source_type":"random"}]
+        "params": [{"buzzer_freq":2000, "source_type":"none"}]
     },
-    "linear_pose_publisher": {"pkg": "audio_simulation"},
+    "wall_approach_publisher": {"pkg": "audio_simulation"},
     "processor": {
-        "pkg": "audio_stack",
-        "params": [{"min_freq":1000, "max_freq":5000}]
+        "pkg": "audio_stack", 
+        "params": [{"min_freq":2000, "max_freq":2000}]
     },
-    "spectrum_estimator": {"pkg": "audio_stack"},
-    "doa_estimator": {"pkg": "audio_stack"},
-    #"audio": {"pkg": "topic_plotter"},
-    #"doa": {"pkg": "topic_plotter"}, is very slow
     "geometry": {"pkg": "topic_plotter"},
+    "wall": {"pkg": "topic_plotter"},
 }
 
 
