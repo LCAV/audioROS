@@ -290,15 +290,16 @@ def main(args=None):
             print('node interrupted')
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
-            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            reader_crtp.send_buzzer_freq(0)
+            print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
         except Exception as e:
             print('error occured')
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
-            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            reader_crtp.send_buzzer_freq(0)
+            print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
-            print(e)
             raise
 
     publisher.destroy_node()

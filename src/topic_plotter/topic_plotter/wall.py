@@ -10,7 +10,7 @@ from audio_stack.topic_synchronizer import TopicSynchronizer
 
 from .live_plotter import LivePlotter
 
-FREQ_HZ = None # frequency bin to use. if not given, we use the max snr one. 
+FREQ_HZ = 2000 # frequency bin to use. if not given, we use the max snr one. 
 MAX_FREQS_TO_PLOT = 4 # maximum frequencies to plot, less than 10
 FIG_SIZE = (10, 10)
 XMIN = 0
@@ -45,6 +45,7 @@ class WallPlotter(Node):
     def listener_callback_pose_raw(self, msg_pose):
         msg_signals_f = self.signals_f_synch.get_latest_message(msg_pose.timestamp, self.get_logger())
         if msg_signals_f is not None:
+            self.get_logger().info(f"Processing pose {msg_pose.timestamp}")
             __, signals_f, freqs = read_signals_freq_message(msg_signals_f)
             # remove zero frequencies
             signals_f = signals_f[freqs > 0, :] # n_freqs x n_mics
@@ -71,10 +72,11 @@ class WallPlotter(Node):
                 label = None
 
             for i in range(N_MICS): 
+                self.get_logger().warn(f"plotting {xdata}, {ydata[i]}")
                 self.plotter_dict[i].ax.scatter(xdata, ydata[i], color=color,label=label)
             self.plotter_dict[0].ax.legend(loc='upper left')
         else:
-            self.get_logger().warn(f"No valid signals message for pose {msg_pose}")
+            self.get_logger().warn(f"No valid signals message for pose {msg_pose.timestamp}")
 
         self.fig.canvas.draw()
 
