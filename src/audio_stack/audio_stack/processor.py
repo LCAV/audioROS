@@ -17,8 +17,6 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
-from .beam_former import BeamFormer
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
@@ -28,8 +26,10 @@ from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 from audio_interfaces_py.messages import create_correlations_message, create_signals_freq_message, read_signals_freq_message, read_signals_message
 from crazyflie_description_py.parameters import TUKEY_ALPHA
 
-# Denoising method
-# METHOD_NOISE = "bandpass"
+# Denoising method, available: 
+# - "" (no denoising)
+# - "bandpass" (apply bandpass filter)
+# - "single" (keep only single frequency)
 METHOD_NOISE = ""
 METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 
@@ -39,46 +39,16 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 METHOD_WINDOW = "tukey"
 
 # Frequency selection
-# set MIN_FREQ==MAX_FREQ to choose one frequency only.
-THRUST = 50000
-MIN_FREQ = 1000 
-MAX_FREQ = 5000 
-DELTA_FREQ = 100
-
-METHOD_FREQUENCY = "" 
-METHOD_FREQUENCY_DICT = {
-    "": {
-        "min_freq": MIN_FREQ,
-        "max_freq": MAX_FREQ,
-        "delta_freq": DELTA_FREQ,
-        "filter_snr": False,
-        "thrust": 0, 
-    },
-    "snr": {
-        "min_freq": MIN_FREQ,
-        "max_freq": MAX_FREQ,
-        "delta_freq": DELTA_FREQ,
-        "filter_snr": True,
-        "thrust": 0, 
-    },
-    "props": {
-        "min_freq": MIN_FREQ,
-        "max_freq": MAX_FREQ,
-        "delta_freq": DELTA_FREQ,
-        "filter_snr": False,
-        "thrust": THRUST, 
-    },
-    "props_snr": {
-        "min_freq": MIN_FREQ,
-        "max_freq": MAX_FREQ,
-        "delta_freq": DELTA_FREQ,
-        "filter_snr": True,
-        "thrust": THRUST, 
-    },
+# set min_freq==max_freq to choose one frequency only.
+PARAMS_DICT = {
+    "min_freq": (rclpy.Parameter.Type.INTEGER, 100),
+    "max_freq": (rclpy.Parameter.Type.INTEGER, 8000),
+    "delta_freq": (rclpy.Parameter.Type.INTEGER, 100), # not used without prop
+    "filter_snr": (rclpy.Parameter.Type.INTEGER, 0), # equivalent to filter_snr_enable
+    "thrust": (rclpy.Parameter.Type.INTEGER, 0), # if > 0, we use filter_props_enable
 }
 
 def verify_validity(params_dict):
-    assert all([key in params_dict.keys() for key in METHOD_FREQUENCY_DICT[METHOD_FREQUENCY].keys()])
     assert params_dict["min_freq"] <= params_dict["max_freq"]
     assert params_dict["min_freq"] >= 0
     assert params_dict["max_freq"] >= 0
@@ -125,11 +95,10 @@ def get_stft(signals, Fs, method_window, method_noise):
 class Processor(Node):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
     """
-    def __init__(self, plot_freq=False, plot_time=False):
-        super().__init__("processor")
+    def __init__(self):
+        super().__init__("processor", 
+            automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
 
-        self.plot_freq = plot_freq
-        self.plot_time = plot_time
         self.subscription_signals = self.create_subscription(
             Signals, "audio/signals", self.listener_callback_signals, 10
         )
@@ -137,47 +106,22 @@ class Processor(Node):
             SignalsFreq, "audio/signals_f", 10
         )
 
-        self.methods = {
-            "noise": METHOD_NOISE,
-            "window": METHOD_WINDOW,
-            "frequency": METHOD_FREQUENCY,
-        }
-        parameters = []
-        for key, value in self.methods.items():
-            self.declare_parameter(key)
-            parameters.append(
-                rclpy.parameter.Parameter(key, rclpy.Parameter.Type.STRING, value)
-            )
-
-        self.frequency_params = METHOD_FREQUENCY_DICT[METHOD_FREQUENCY]
-        for key, value in self.frequency_params.items():
-            self.declare_parameter(key)
-            parameters.append(
-                rclpy.parameter.Parameter(key, rclpy.Parameter.Type.INTEGER, value)
-            )
-
-        self.set_parameters(parameters)
+        self.frequency_params = {key: val[1] for key, val in PARAMS_DICT.items()}
         self.set_parameters_callback(self.set_params)
+        parameters = self.get_parameters(PARAMS_DICT.keys())
+        self.set_parameters(parameters)
 
-        self.beam_former = BeamFormer()
 
     def set_params(self, params):
         new_params = self.frequency_params.copy()
         for param in params:
-            if param.name in self.methods.keys():
-                # set high-level parameters
-                value = param.get_parameter_value().string_value
-                self.methods[param.name] = value
+            # we need this in case this parameter
+            # was not set at startup. 
+            # then we use the default values.
+            if param.type_ == param.Type.NOT_SET:
+                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
 
-                if param.name == "frequency":
-                    for key in new_params.keys():
-                        new_params[key] = METHOD_FREQUENCY_DICT[value][key]
-            else:
-                # set low-level parameters
-                self.methods["frequency"] = "custom"
-                value = param.get_parameter_value().integer_value
-
-                new_params[param.name] = value
+            new_params[param.name] = param.value
 
         if verify_validity(new_params):
             self.frequency_params = new_params
@@ -189,11 +133,7 @@ class Processor(Node):
         t1 = time.time()
 
         self.mic_positions, signals = read_signals_message(msg)
-
-        # processing
-        signals_f, freqs = get_stft(
-            signals, msg.fs, self.methods["window"], self.methods["noise"]
-        )  # n_samples x n_mics
+        signals_f, freqs = get_stft(signals, msg.fs, METHOD_WINDOW, METHOD_NOISE) # n_samples x n_mics
 
         bins = embedded_select_frequencies(
             msg.n_buffer,
@@ -207,19 +147,15 @@ class Processor(Node):
         msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, None, msg.fs)
         self.publisher_signals_f.publish(msg_freq)
 
-        # check that the above processing pipeline does not
-        # take too long compared to the desired publish rate.
-        t2 = time.time()
-        processing_time = t2 - t1
         self.get_logger().info(
-                f"listener_callback_signals: Published signals_f after {processing_time:.2f}s"
+            f"listener_callback_signals: Published signals_f after {time.time() - t1:.2f}s"
         )
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    processor = Processor(plot_freq=True, plot_time=False)
+    processor = Processor()
     rclpy.spin(processor)
 
     # Destroy the node explicitly

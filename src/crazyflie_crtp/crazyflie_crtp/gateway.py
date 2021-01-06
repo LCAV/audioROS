@@ -204,7 +204,7 @@ class Gateway(Node):
         for param in params: 
 
             # we need this in case this parameter
-            # was not set yet by the startup file. 
+            # was not set yet at startup. 
             # then we use the default values.
             if param.type_ == param.Type.NOT_SET:
                 param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
