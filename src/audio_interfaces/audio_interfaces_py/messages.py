@@ -40,9 +40,13 @@ def create_pose_raw_message(motion_dict, timestamp):
     msg = PoseRaw()
     msg.dx = float(motion_dict["dx"])
     msg.dy = float(motion_dict["dy"])
+    msg.vx = float(motion_dict.get("vx", 0))
+    msg.vy = float(motion_dict.get("vy", 0))
+    msg.x = float(motion_dict["x"])
+    msg.y = float(motion_dict["y"])
     msg.z = float(motion_dict["z"])
     msg.yaw_deg = float(motion_dict["yaw"])
-    msg.yaw_rate_deg = float(motion_dict["yaw_rate"])
+    msg.yaw_rate_deg = float(motion_dict.get("yaw_rate", 0))
     msg.source_direction_deg = 0.0
     msg.timestamp = timestamp
     return msg
@@ -188,12 +192,15 @@ def read_pose_message(msg):
 def read_pose_raw_message(msg):
     """ Read PoseRaw message.  """
     from scipy.spatial.transform import Rotation
-    d_local = np.array((msg.dx, msg.dy, msg.z))
+    d_local = np.array((msg.dx, msg.dy, 0))
+    v_local = np.array((msg.vx, msg.vy, 0))
+    r_world = np.array((msg.x, msg.y, msg.z))
     yaw = msg.yaw_deg
     yaw_rate = msg.yaw_rate_deg
     r = Rotation.from_euler('z', yaw, degrees=True)
     d_world = r.apply(d_local)[:2]
-    return d_world, yaw, yaw_rate
+    v_world = r.apply(v_local)[:2]
+    return r_world, d_world, v_world, yaw, yaw_rate
 
 
 def read_signals_message(msg):
