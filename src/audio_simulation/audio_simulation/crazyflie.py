@@ -3,7 +3,7 @@ crazyflie.py: Publish simulated audio signals for the Crazyflie drone in a room.
 
 """
 
-from math import atan2, degrees
+from math import atan2, ceil, degrees
 import os
 import sys
 import time
@@ -26,9 +26,9 @@ sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from signals import generate_signal_random, generate_signal_mono
 
 
-SOURCE_TYPE = "random" # type of source, random or mono
+SOURCE_TYPE = None # type of source, random or mono or None
 SOURCE_FREQ = 3500 # Hz, only used for mono.
-BUZZER_ON = False # add buzzer to drone.
+BUZZER_ON = True # add buzzer to drone.
 BUZZER_FREQ = 4000 # Hz, 
 MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
 NUM_REFLECTIONS = 0 # number of reflections to consider in pyroomacoustis.
@@ -207,6 +207,8 @@ def create_room():
             source_signal = generate_signal_random(FS, DURATION_SEC)
         elif SOURCE_TYPE == "mono":
             source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=SOURCE_FREQ)
+        elif SOURCE_TYPE is None:
+            source_signal = np.zeros(int(ceil(FS * DURATION_SEC)))
         else:
             raise ValueError(SOURCE_TYPE)
         pyroom.add_source(SOURCE_POS[:DIM], signal=source_signal)

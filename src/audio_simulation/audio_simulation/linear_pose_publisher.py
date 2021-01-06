@@ -24,16 +24,17 @@ class LinearPosePublisher(Node):
 
         self.rot = R.from_euler('z', YAW_DEG, degrees=True)
         self.velocity = VELOCITY
-        self.position = STARTING_POS + EPS
+        self.position = STARTING_POS
         assert np.all(self.position <= ROOM_DIM), "starting position not inside room!"
-
-        # publish starting pose
-        msg = get_starting_pose()
-        self.publisher_pose.publish(msg)
 
         # start movement
         self.timer_period = 0.5  # seconds
+        # we do not need to wait before starting the timer
+        # because the timer first waits for self.timer_period.
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
+
+        msg = get_starting_pose()
+        self.publisher_pose.publish(msg)
 
 
     def timer_callback(self):
@@ -43,6 +44,7 @@ class LinearPosePublisher(Node):
         # if we het the wall, revert direction
         if np.any(new_position > np.array(ROOM_DIM) - EPS) or np.any(new_position < EPS):
             #self.velocity = -self.velocity
+            self.get_logger().warn("touched wall, turn direction")
             self.rot = self.rot * R.from_euler('z', 180, degrees=True)
             return
 

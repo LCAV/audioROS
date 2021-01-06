@@ -19,7 +19,7 @@ from audio_simulation.geometry import SOURCE_POS, ROOM_DIM, STARTING_POS
 
 from .live_plotter import LivePlotter
 
-MAX_LENGTH = 2 # number of positions to plot
+MAX_LENGTH = 3 # number of positions to plot
 
 XLABEL = "x [m]"
 YLABEL = "y [m]"
@@ -56,7 +56,7 @@ class GeometryPlotter(Node):
         # initialize a starting position for pose_raw, as it only contains delta positions
         self.pose_motion_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
         self.pose_imu_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
-        self.pose_kalman_list = np.empty((2, 0))
+        self.pose_kalman_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
         self.kalman_start_pos = None
         self.previous_time = None
 
@@ -75,8 +75,8 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
 
-            #plot_room(self.plotter_dict[name].ax)
-            #plot_source(self.plotter_dict[name].ax)
+            plot_room(self.plotter_dict[name].ax)
+            plot_source(self.plotter_dict[name].ax)
 
     def update_plotter(self, name, pose_list, yaw_deg=None, source_direction_deg=None, pose_label="pose estimates"):
         self.plotter_dict[name].update_scatter(
@@ -94,6 +94,8 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].update_arrow(
                 pose_list[:, -1], source_direction_deg, label="source_direction_deg"
             )
+
+        self.plotter_dict[name].ax.legend(loc='upper right')
 
     def listener_callback_pose_raw(self, msg_pose_raw):
         self.init_plotter("pose raw", xlabel=XLABEL, ylabel=YLABEL)
@@ -177,9 +179,6 @@ def main(args=None):
 
     rclpy.spin(plotter)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     plotter.destroy_node()
     rclpy.shutdown()
 

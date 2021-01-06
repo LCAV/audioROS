@@ -19,8 +19,8 @@ node_config = {
     "processor": {"pkg": "audio_stack"},
     "spectrum_estimator": {"pkg": "audio_stack"},
     "doa_estimator": {"pkg": "audio_stack"},
-    "audio": {"pkg": "topic_plotter"},
-    "doa": {"pkg": "topic_plotter"},
+    #"audio": {"pkg": "topic_plotter"},
+    #"doa": {"pkg": "topic_plotter"}, is very slow
     "geometry": {"pkg": "topic_plotter"},
 }
 

@@ -95,8 +95,6 @@ class LivePlotter(object):
             )
             self.arrows[label]['line'] = line
 
-        self.ax.legend(loc="upper left")
-
 
     def update_lines(self, data_matrix, x_data=None, labels=None, **kwargs):
         """ Plot each row of data_matrix as one line.
@@ -122,8 +120,6 @@ class LivePlotter(object):
                         x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, **kwargs 
                     )
                 self.lines[i] = line
-
-        self.ax.legend(loc="upper right")
 
         self.reset_xlim()
         self.reset_ylim()
@@ -162,6 +158,7 @@ class LivePlotter(object):
             if i in self.axvlines.keys():
                 self.axvlines[i].set_xdata(xcoord)
             else:
+                color = kwargs.get("color", None)
                 if color is None:
                     color = f"C{i % 10}"
                 axvline = self.ax.axvline(xcoord, ls=":", **kwargs)
@@ -179,7 +176,7 @@ class LivePlotter(object):
                 x_data, y_data, label=label, linestyle='-', marker='o', **kwargs
             )
             self.scatter[label] = line
-        self.ax.legend(loc='upper right')
+
         self.reset_xlim()
         self.reset_ylim()
 

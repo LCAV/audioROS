@@ -78,7 +78,9 @@ def create_pose_raw_message_from_poses(previous_pose, current_pose):
     delta = r.inv().apply(delta_global)
     pose_raw.dx = delta[0]
     pose_raw.dy = delta[1] 
-    pose_raw.z = delta[2]
+    pose_raw.x = current_pose.position.x
+    pose_raw.y = current_pose.position.y
+    pose_raw.z = current_pose.position.z
     pose_raw.yaw_deg = yaw_deg
 
     # have to be filled later: 

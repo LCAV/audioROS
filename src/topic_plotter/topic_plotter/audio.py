@@ -3,11 +3,12 @@ from rclpy.node import Node
 
 import numpy as np
 import matplotlib.pylab as plt
+from matplotlib.ticker import AutoMinorLocator
 
 from audio_interfaces.msg import Signals, SignalsFreq
 from audio_interfaces_py.messages import read_signals_message, read_signals_freq_message 
+
 from .live_plotter import LivePlotter
-from matplotlib.ticker import AutoMinorLocator
 
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
@@ -119,9 +120,6 @@ def main(args=None):
 
     rclpy.spin(plotter)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     plotter.destroy_node()
     rclpy.shutdown()
 
