@@ -70,7 +70,7 @@ class LivePlotter(object):
         self.axvlines = {}
 
 
-    def update_arrow(self, origin, angle_deg, name="orientation"):
+    def update_arrow(self, origin, angle_deg, label="orientation"):
         """ Update arrow coordinates. 
         """
         xmin, xmax = self.ax.get_xlim()
@@ -80,25 +80,25 @@ class LivePlotter(object):
         dx = arrow_length * math.cos(angle_deg * math.pi / 180)
         dy = arrow_length * math.sin(angle_deg * math.pi / 180)
 
-        if name in self.arrows.keys(): # 
-            self.arrows[name]['pointer'].set_data(origin_x + dx, origin_y + dy)
-            self.arrows[name]['line'].set_data([origin_x, origin_x + dx], [origin_y, origin_y + dy])
+        if label in self.arrows.keys(): # 
+            self.arrows[label]['pointer'].set_data(origin_x + dx, origin_y + dy)
+            self.arrows[label]['line'].set_data([origin_x, origin_x + dx], [origin_y, origin_y + dy])
         else:
-            self.arrows[name] = {}
+            self.arrows[label] = {}
             (line,) = self.ax.plot(
                     origin_x+dx, origin_y+dy, marker=">", color=f"C{len(self.arrows)}"
             )
-            self.arrows[name]['pointer'] = line
+            self.arrows[label]['pointer'] = line
             (line,) = self.ax.plot(
-                    [origin_x, origin_x + dx], [origin_y, origin_y + dy], label=name, 
+                    [origin_x, origin_x + dx], [origin_y, origin_y + dy], label=label, 
                     color=f"C{len(self.arrows)}"
             )
-            self.arrows[name]['line'] = line
+            self.arrows[label]['line'] = line
 
         self.ax.legend(loc="upper left")
 
 
-    def update_lines(self, data_matrix, x_data=None, labels=None, linestyle='-', marker=''):
+    def update_lines(self, data_matrix, x_data=None, labels=None, **kwargs):
         """ Plot each row of data_matrix as one line.
         """
         for i in range(data_matrix.shape[0]):
@@ -116,11 +116,10 @@ class LivePlotter(object):
                 label = labels[i] if labels is not None else None
                 if self.log:
                     (line,) = self.ax.semilogy(
-                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, linestyle=linestyle, marker=marker
-                    )
+                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, **kwargs)
                 else:
                     (line,) = self.ax.plot(
-                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, linestyle=linestyle, marker=marker
+                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, **kwargs 
                     )
                 self.lines[i] = line
 
@@ -158,28 +157,29 @@ class LivePlotter(object):
             self.ax.set_yticklabels(new_yticks)
 
 
-    def update_axvlines(self, data_vector, color=None):
+    def update_axvlines(self, data_vector, **kwargs):
         for i, xcoord in enumerate(data_vector):
             if i in self.axvlines.keys():
                 self.axvlines[i].set_xdata(xcoord)
             else:
                 if color is None:
                     color = f"C{i % 10}"
-                axvline = self.ax.axvline(xcoord, color=color, ls=":")
+                axvline = self.ax.axvline(xcoord, ls=":", **kwargs)
                 self.axvlines[i] = axvline
 
 
-    def update_scatter(self, x_data, y_data):
+    def update_scatter(self, x_data, y_data, label="position", **kwargs):
         """ Plot x_data and y_data as scattered points.
         """
-        if self.scatter:
-            self.scatter["line"].set_data(x_data, y_data)
+        if label in self.scatter.keys():
+            self.scatter[label].set_data(x_data, y_data)
 
         else:
             (line,) = self.ax.plot(
-                x_data, y_data, linestyle='-', marker='o'
+                x_data, y_data, label=label, linestyle='-', marker='o', **kwargs
             )
-            self.scatter["line"] = line
+            self.scatter[label] = line
+        self.ax.legend(loc='upper right')
         self.reset_xlim()
         self.reset_ylim()
 
