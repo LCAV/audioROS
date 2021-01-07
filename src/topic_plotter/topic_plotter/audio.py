@@ -92,6 +92,7 @@ class AudioPlotter(Node):
         self.plotter_dict["signals frequency"].ax.set_xlim(XMIN_FREQ, XMAX_FREQ)
 
         #[ax.axis('tight') for ax in self.axs.values()]
+        self.plotter_dict["signals frequency"].ax.legend(loc='lower left')
         self.fig.canvas.draw()
 
 
