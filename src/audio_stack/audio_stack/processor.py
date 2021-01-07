@@ -10,8 +10,8 @@ import os
 import sys
 import time
 
-from scipy import signal
 import numpy as np
+from scipy import signal
 
 import rclpy
 from rclpy.node import Node

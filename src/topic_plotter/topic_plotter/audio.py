@@ -13,7 +13,7 @@ from .live_plotter import LivePlotter
 MIN_FREQ = -np.inf #400
 MAX_FREQ = np.inf #600
 
-XMIN_FREQ = 1000 #200 # min plotting frequency in Hz
+XMIN_FREQ = 100 #200 # min plotting frequency in Hz
 XMAX_FREQ = 5000 # max plotting frequency in Hz
 YMIN_FREQ = 1e-10 # min plotting frequency in Hz
 YMAX_FREQ = 1e5 # max plotting frequency in Hz

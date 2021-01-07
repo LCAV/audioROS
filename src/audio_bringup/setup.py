@@ -23,6 +23,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'measurement_pipeline = audio_bringup.measurement_pipeline:main'
         ],
     },
 )

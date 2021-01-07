@@ -24,6 +24,7 @@ node_config = {
             "max_freq": 5000
         }]
     },
+    "audio": {"pkg": "topic_plotter"},
     "geometry": {"pkg": "topic_plotter"},
     "wall": {"pkg": "topic_plotter"},
 }

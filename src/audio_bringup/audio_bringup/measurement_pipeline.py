@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-fixed_source.py: 
+snr_pipeline.py
 
 Experiment with a fixed loudspeaker playing some stationary signal.
 """
@@ -13,6 +13,7 @@ import sys
 import time
 
 import numpy as np
+import rclpy
 from scipy.io import wavfile
 import serial
 
@@ -34,7 +35,8 @@ EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_9_rotating'
 #EXTRA_DIRNAME = '2020_12_11_calibration'
 #EXTRA_DIRNAME = '2020_12_18_flying'
-EXTRA_DIRNAME = '2020_12_18_stepper'
+#EXTRA_DIRNAME = '2020_12_18_stepper'
+EXTRA_DIRNAME = '2021_01_07_snr_study'
 
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
 #TOPICS_TO_RECORD = ['--all'] 
@@ -55,6 +57,8 @@ def get_filename(**params):
 
 
 def set_param(node_name, param_name, param_value):
+    if type(param_value) != str:
+        param_value = str(param_value)
     param_pid = subprocess.Popen(['ros2', 'param', 'set', node_name, param_name, param_value], stdout=subprocess.PIPE)
     print('waiting to set params:', param_name, param_value)
     out_bytes, err = param_pid.communicate()
@@ -95,88 +99,13 @@ def get_active_nodes():
     return out_string
 
 
-if __name__ == "__main__":
-    extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
-    exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
-    csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
-    wav_dirname = os.path.join(exp_dirname, WAV_DIRNAME)
+def main(args=None): 
+    rclpy.init(args=args)
 
-    sys.path.append(exp_dirname)
-    from params import global_params, params_list
-    print(f'loaded parameters from {exp_dirname}/params.py')
-
-    active_nodes = get_active_nodes()
-    assert '/csv_writer' in active_nodes
-    assert '/gateway' in active_nodes
-
-
-    source_type = global_params.get('source_type', 'soundcard')
-    if (source_type == 'soundcard') or (global_params['n_meas_mics'] > 0):
-        sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
-
-        sound = np.zeros(10, dtype=float)
-        if global_params['n_meas_mics'] > 0:
-            if source_type == 'soundcard':
-                print('playing and recording zero test sound...')
-                sd.playrec(sound, blocking=True)
-            else:
-                print('recording zero test sound...')
-                sd.rec(10, blocking=True)
-        else:
-            print('playing zero test sound...')
-            sd.play(sound, blocking=True)
-
-    for dirname in [exp_dirname, csv_dirname, wav_dirname]:
-        if not os.path.exists(dirname):
-            os.makedirs(dirname)
-            print(f'created {dirname}')
-        print(f'saving under {dirname}')
-
-    previous_distance = START_DISTANCE
-    previous_angle = START_ANGLE
-    timestamp = int(time.time())
-
-    distance = None
-    angle = 0
-    param_i = 0
-    while param_i < len(params_list):
-        params = params_list[param_i]
-
-        #### prepare filenames ####
-        answer = ''
-        #answer = 'y'
-        while not (answer in ['y', 'n']):
-            answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
-        if answer == 'n':
-            param_i += 1
-            continue
-        print(f'starting experiment {param_i}/{len(params_list)} with {params}')
-
-        if type(params['motors']) == str:
-            if source_type == 'soundcard':
-                raise ValueError('cannot play sound card and control motors at the same time')
-
-        filename = get_filename(**params)
-        bag_filename = os.path.join(exp_dirname, filename)
-        csv_filename = os.path.join(csv_dirname, filename)
-
-        answer = ''
-        while os.path.exists(bag_filename):
-            if APPENDIX is None:
-                answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
-            else:
-                answer = APPENDIX 
-            if answer == 'n':
-                break
-            filename = f'{filename}_{answer}'
-            bag_filename = os.path.join(exp_dirname, filename)
-            csv_filename = os.path.join(csv_dirname, filename)
-        if answer == 'n':
-            continue
-
-        #### prepare sound and turntable interfaces ####
+    def measure_doa(params):
         distance = params.get('distance', 0)
         angle = params.get('degree', 0)
+        #### prepare sound and turntable interfaces ####
         if (previous_angle != angle) or (distance != previous_distance):
             SerialIn = SerialMotors(verbose=False)
 
@@ -345,7 +274,156 @@ if __name__ == "__main__":
         if angle == 360:
             print('turning back by 360')
             SerialIn.turn_back(angle, blocking=True)
+        return
 
+    def measure_snr(params):
+        assert source_type == 'buzzer'
+        duration = global_params.get("duration", 30)
+
+        # If given in parameters, min_freq and max_freq overwrite all other settings. Otherwise 
+        # these parameters are read from the buzzer frequency characteristics.
+        min_freq = params.get('min_freq', None)
+        max_freq = params.get('max_freq', None)
+
+        duration_motors = get_total_time(command_dict[params['motors']])
+        if duration_motors > duration:
+            print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
+            duration = duration_motors
+
+        
+        # we set the frequency even though this drone 
+        # is not playing, so that snr=2 works. 
+        freq = int(params["source"].strip("mono"))
+        set_param('/gateway', 'buzzer_freq', freq)
+        set_param('/gateway', 'buzzer_effect', 0)
+        input(f'make sure external buzzer plays {params["source"]}! Enter to continue')
+
+        filter_snr = params.get('snr', 0) 
+        set_param('/gateway', 'filter_snr_enable', str(filter_snr))
+        if (filter_snr > 0) and ((min_freq is None) or (max_freq is None)): 
+            raise Warning('Need to set min_freq and max_freq when using snr filtering!')
+        set_param('/gateway', 'filter_prop_enable', str(params['props']))
+        if min_freq is not None:
+            set_param('/gateway', 'min_freq', str(min_freq))
+        if max_freq is not None:
+            set_param('/gateway', 'max_freq', str(max_freq))
+
+        #### record ####
+        set_param('/csv_writer', 'filename', '')
+        bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
+        print('started bag record')
+
+        #### play ####
+        start_time = time.time()
+
+        if global_params['n_meas_mics'] > 0:
+            print(f'recording sound for {duration} seconds...')
+            n_frames = int(duration * global_params['fs_soundcard'])
+            recording = sd.rec(n_frames, blocking=False)
+
+        if type(params['motors']) == str:
+            print(f'executing motor commands:')
+            execute_commands(command_dict[params['motors']], source=params['source'])
+            extra_idle_time = duration - (time.time() - start_time)
+            if extra_idle_time > 0:
+                print(f'finished motor commands faster than expected. sleeping for {extra_idle_time:.2f} seconds...')
+                time.sleep(extra_idle_time)
+            elif extra_idle_time < 0:
+                print(f'Warning: finished recording before finishing motor commands! {extra_idle_time:.2f}')
+        else: # if motors is set to 0, so no motor commands are sent. 
+            print(f'waiting for {duration} seconds...')
+            time.sleep(duration)
+
+        #### wrap up ####
+        print('...done')
+        set_param('/gateway', 'all', '0')
+        bag_pid.send_signal(signal.SIGINT)
+        set_param('/csv_writer', 'filename', csv_filename)
+
+        if global_params['n_meas_mics'] > 0:
+            recording_float32 = recording.astype(np.float32)
+            wav_filename = os.path.join(wav_dirname, filename) + '.wav'
+            wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
+            print('wrote wav file as', wav_filename)
+        return
+
+    extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
+    exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
+    csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
+    wav_dirname = os.path.join(exp_dirname, WAV_DIRNAME)
+
+    sys.path.append(exp_dirname)
+    from params import global_params, params_list
+    print(f'loaded parameters from {exp_dirname}/params.py')
+
+    active_nodes = get_active_nodes()
+    assert '/csv_writer' in active_nodes
+    assert '/gateway' in active_nodes
+
+    source_type = global_params.get('source_type', 'soundcard')
+    if (source_type == 'soundcard') or (global_params['n_meas_mics'] > 0):
+        sd = get_usb_soundcard_ubuntu(global_params['fs_soundcard'], global_params['n_meas_mics'])
+
+        sound = np.zeros(10, dtype=float)
+        if global_params['n_meas_mics'] > 0:
+            if source_type == 'soundcard':
+                print('playing and recording zero test sound...')
+                sd.playrec(sound, blocking=True)
+            else:
+                print('recording zero test sound...')
+                sd.rec(10, blocking=True)
+        else:
+            print('playing zero test sound...')
+            sd.play(sound, blocking=True)
+
+    for dirname in [exp_dirname, csv_dirname, wav_dirname]:
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+            print(f'created {dirname}')
+        print(f'saving under {dirname}')
+
+    previous_distance = START_DISTANCE
+    previous_angle = START_ANGLE
+    timestamp = int(time.time())
+
+    distance = None
+    angle = 0
+    param_i = 0
+    while param_i < len(params_list):
+        params = params_list[param_i]
+        answer = ''
+        #answer = 'y'
+        while not (answer in ['y', 'n']):
+            answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
+        if answer == 'n':
+            continue
+        print(f'starting experiment {param_i+1}/{len(params_list)} with {params}')
+
+        if type(params['motors']) == str:
+            if source_type == 'soundcard':
+                raise ValueError('cannot play sound card and control motors at the same time')
+
+        #### prepare filenames ####
+        filename = get_filename(**params)
+        bag_filename = os.path.join(exp_dirname, filename)
+        csv_filename = os.path.join(csv_dirname, filename)
+
+        answer = ''
+        while os.path.exists(bag_filename):
+            if APPENDIX is None:
+                answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
+            else:
+                answer = APPENDIX 
+            if answer == 'n':
+                break
+            filename = f'{filename}_{answer}'
+            bag_filename = os.path.join(exp_dirname, filename)
+            csv_filename = os.path.join(csv_dirname, filename)
+        if answer == 'n':
+            continue
+
+        #measure_doa(params)
+        measure_snr(params)
         param_i += 1
 
     # after last experiment: move back to position 0
@@ -356,3 +434,6 @@ if __name__ == "__main__":
     if not (angle in [0, 360]):
         print('turning back by', angle)
         SerialIn.turn_back(angle)
+
+if __name__ == "__main__":
+    main()
