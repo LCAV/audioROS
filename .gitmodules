@@ -1,3 +1,6 @@
 [submodule "crazyflie-audio"]
 	path = crazyflie-audio
 	url = https://github.com/lcav/crazyflie-audio
+[submodule "experiments"]
+	path = experiments
+	url = git@github.com:lcav/drone-experiments
