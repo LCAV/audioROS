@@ -41,6 +41,7 @@ METHOD_WINDOW = "tukey"
 # Frequency selection
 # set min_freq==max_freq to choose one frequency only.
 PARAMS_DICT = {
+    "n_freqs": (rclpy.Parameter.Type.INTEGER, 32),
     "min_freq": (rclpy.Parameter.Type.INTEGER, 100),
     "max_freq": (rclpy.Parameter.Type.INTEGER, 8000),
     "delta_freq": (rclpy.Parameter.Type.INTEGER, 100), # not used without prop

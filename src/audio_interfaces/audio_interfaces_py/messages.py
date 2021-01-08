@@ -11,8 +11,6 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations, Spectrum, DoaEstimates
 from audio_interfaces.msg import PoseRaw
 
-N_MICS = 4
-#N_FREQS = 32
 
 def get_quaternion(yaw_deg):
     from scipy.spatial.transform import Rotation
@@ -125,8 +123,6 @@ def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, audi
     msg.timestamp = timestamp
     msg.audio_timestamp = audio_timestamp
     msg.n_mics = signals_f.shape[1] 
-    # TODO(FD) remove this debugging check
-    assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
     msg.frequencies = [int(f) for f in freqs]
 
@@ -149,8 +145,6 @@ def create_correlations_message(R, freqs, mic_positions, timestamp):
     """
     msg = Correlations()
     msg.n_mics = int(R.shape[1])
-    # TODO(FD) remove this debugging check
-    assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
     msg.frequencies = [int(f) for f in freqs]
     msg.corr_real_vect = list(R.real.astype(float).flatten())

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-wall_real.launch.py: Launch the wall detection pipeline on real drone. 
+wav_plotting.launch.py: Read and plot wav file
 """
 
 import sys
@@ -14,19 +14,17 @@ from audio_bringup.helpers import get_launch_description
 LOG_LEVEL = "warn"
 
 node_config = {
-    "gateway": {
-        "pkg": "crazyflie_crtp", 
+    "file": {"pkg": "audio_publisher"},
+    "processor": {
+        "pkg": "audio_stack", 
         "params": [{
-            "buzzer_effect": 12, 
-            "buzzer_freq": 2000, 
-            "filter_snr_enable": 2,
-            "min_freq": 1000,
-            "max_freq": 5000
+            "filter_snr": 0,
+            "min_freq": 100,
+            "max_freq": 5000,
+            "n_freqs": 1025 
         }]
     },
     "audio": {"pkg": "topic_plotter"},
-    "geometry": {"pkg": "topic_plotter"},
-    "wall": {"pkg": "topic_plotter"},
 }
 
 

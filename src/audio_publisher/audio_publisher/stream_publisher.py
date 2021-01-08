@@ -20,7 +20,9 @@ import sounddevice as sd
 from audio_interfaces.msg import Signals
 from .publisher import AudioPublisher
 
-N_MICS = 4
+
+N_MICS = 1
+N_BUFFER = 2048
 
 
 class StreamPublisher(AudioPublisher):
@@ -35,8 +37,8 @@ class StreamPublisher(AudioPublisher):
             Fs=Fs,
         )
 
-        self.duration_ms = 100 * 1000
         self.n_mics = N_MICS
+        self.duration_ms = 100 * 1000
 
         sd.default.device = "default"
         sd.check_input_settings(
@@ -45,14 +47,14 @@ class StreamPublisher(AudioPublisher):
 
         # blocking stream, more ROS-like, better for plotting. However might result in some lost samples
         if blocking:
-            self.stream = sd.InputStream(channels=self.n_mics, blocksize=n_buffer)
+            self.stream = sd.InputStream(channels=self.n_mics, blocksize=self.n_buffer)
             self.stream.start()
             self.create_timer(1.0 / self.publish_rate, self.publish_signals_timer)
 
         # non-blocking stream, less ROS-like, problematic for plotting. But we do not lose samples.
         else:
             with sd.InputStream(
-                channels=self.n_mics, callback=self.publish_signals_callback, blocksize=n_buffer
+                channels=self.n_mics, callback=self.publish_signals_callback, blocksize=self.n_buffer
             ) as stream:
                 sd.sleep(self.duration_ms)
                 # need below return or we will stay in this context forever
@@ -68,14 +70,12 @@ class StreamPublisher(AudioPublisher):
         self.process_signals(signals_T.T)
 
     def publish_signals_timer(self):
-        n_buffer = self.n_buffer
-
         n_available = self.stream.read_available
-        if n_buffer > n_available:
+        if self.n_buffer > n_available:
             self.get_logger().warn(
-                f"Requesting more frames ({n_buffer}) than available ({n_available})"
+                f"Requesting more frames ({self.n_buffer}) than available ({n_available})"
             )
-        signals_T, overflow = self.stream.read(n_buffer)  # frames x channels
+        signals_T, overflow = self.stream.read(self.n_buffer)  # frames x channels
         if overflow:
             self.get_logger().warn("overflow")
 
@@ -86,20 +86,13 @@ def main(args=None):
     rclpy.init(args=args)
 
     Fs = 44100
-    n_buffer = 2 ** 10
-    publish_rate = int(Fs / n_buffer)  # 11 # in Hz
+    n_buffer = N_BUFFER
     blocking = False
-
-    print(f"Publishing audio data from stream at {publish_rate}Hz.")
-
-    mic_positions = np.zeros((N_MICS, 2))
 
     publisher = StreamPublisher(
         Fs=Fs,
-        publish_rate=publish_rate,
         n_buffer=n_buffer,
         blocking=blocking,
-        mic_positions=mic_positions,
     )
 
     rclpy.shutdown()
