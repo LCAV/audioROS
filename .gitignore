@@ -69,3 +69,5 @@ notebooks/figures/
 notebooks/results/
 experiments/testing/*
 experiments/*/results/
+node_modules/
+experiments/
