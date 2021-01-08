@@ -38,10 +38,12 @@ def read_recordings(exp_name, appendix=""):
 
 
 class FilePublisher(AudioPublisher):
-    def __init__(self, file_source, n_buffer=N_BUFFER, loop=False, publish_rate=None, mic_positions=None):
+    def __init__(self, file_source, loop=False, publish_rate=None, mic_positions=None):
         """
         :param publish_rate: in Hz, at which rate to publish
         """
+        PARAMS_DICT = AudioPublisher.PARAMS_DICT 
+        PARAMS_DICT["appendix"] = ""
 
         # for old datasets only
         if file_source in fp.parameters.keys():
@@ -54,7 +56,6 @@ class FilePublisher(AudioPublisher):
         super().__init__(
             "file_publisher",
             mic_positions=mic_positions,
-            n_buffer=n_buffer,
             publish_rate=publish_rate,
             Fs=Fs
         )
@@ -81,7 +82,7 @@ class FilePublisher(AudioPublisher):
         elif file_source == "recordings_9_7_20":
             signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=GT_DEGREES)
         elif file_source == "2021_01_07_snr_study":
-            signals_all = read_recordings(file_source, appendix="_5")
+            signals_all = read_recordings(file_source, appendix=self.current_params["appendix"])
         else:
             raise ValueError(file_source)
 
@@ -94,7 +95,7 @@ class FilePublisher(AudioPublisher):
         self.len = self.signals_full.shape[1]
 
     def publish_signals(self):
-        n_buffer = self.n_buffer
+        n_buffer = self.current_params["n_buffer"]
 
         signals = self.signals_full[:, self.file_idx:self.file_idx + n_buffer]
         self.process_signals(signals)

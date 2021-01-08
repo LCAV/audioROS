@@ -14,8 +14,6 @@ import numpy as np
 from scipy import signal
 
 import rclpy
-from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
@@ -24,6 +22,7 @@ from bin_selection import select_frequencies as embedded_select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations
 from audio_interfaces_py.messages import create_correlations_message, create_signals_freq_message, read_signals_freq_message, read_signals_message
+from audio_interfaces_py.node_with_params import NodeWithParams
 from crazyflie_description_py.parameters import TUKEY_ALPHA
 
 # Denoising method, available: 
@@ -37,25 +36,6 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 # - "" (no window)
 # - "tukey" (flat + cosine on borders)
 METHOD_WINDOW = "tukey"
-
-# Frequency selection
-# set min_freq==max_freq to choose one frequency only.
-PARAMS_DICT = {
-    "n_freqs": (rclpy.Parameter.Type.INTEGER, 32),
-    "min_freq": (rclpy.Parameter.Type.INTEGER, 100),
-    "max_freq": (rclpy.Parameter.Type.INTEGER, 8000),
-    "delta_freq": (rclpy.Parameter.Type.INTEGER, 100), # not used without prop
-    "filter_snr": (rclpy.Parameter.Type.INTEGER, 0), # equivalent to filter_snr_enable
-    "thrust": (rclpy.Parameter.Type.INTEGER, 0), # if > 0, we use filter_props_enable
-}
-
-def verify_validity(params_dict):
-    assert params_dict["min_freq"] <= params_dict["max_freq"]
-    assert params_dict["min_freq"] >= 0
-    assert params_dict["max_freq"] >= 0
-    assert params_dict["thrust"] >= 0
-    assert params_dict["filter_snr"] in [0, 1]
-    return True
 
 
 def get_stft(signals, Fs, method_window, method_noise):
@@ -93,12 +73,22 @@ def get_stft(signals, Fs, method_window, method_noise):
     return signals_f, freqs
 
 
-class Processor(Node):
+class Processor(NodeWithParams):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
     """
+    # Frequency selection
+    # set min_freq==max_freq to choose one frequency only.
+    PARAMS_DICT = {
+        "n_freqs": 32,
+        "min_freq": 100,
+        "max_freq": 8000,
+        "delta_freq": 100, # not used without thrust
+        "filter_snr": 0, # equivalent to filter_snr_enable
+        "thrust": 0, # if > 0, we use filter_props_enable
+    }
+
     def __init__(self):
-        super().__init__("processor", 
-            automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
+        super().__init__("processor")
 
         self.subscription_signals = self.create_subscription(
             Signals, "audio/signals", self.listener_callback_signals, 10
@@ -107,28 +97,17 @@ class Processor(Node):
             SignalsFreq, "audio/signals_f", 10
         )
 
-        self.frequency_params = {key: val[1] for key, val in PARAMS_DICT.items()}
-        self.set_parameters_callback(self.set_params)
-        parameters = self.get_parameters(PARAMS_DICT.keys())
-        self.set_parameters(parameters)
 
+    # below overwrites base class verify_validity function.
+    @staticmethod
+    def verify_validity(params_dict):
+        assert params_dict["min_freq"] <= params_dict["max_freq"]
+        assert params_dict["min_freq"] >= 0
+        assert params_dict["max_freq"] >= 0
+        assert params_dict["thrust"] >= 0
+        assert params_dict["filter_snr"] in [0, 1]
+        return True
 
-    def set_params(self, params):
-        new_params = self.frequency_params.copy()
-        for param in params:
-            # we need this in case this parameter
-            # was not set at startup. 
-            # then we use the default values.
-            if param.type_ == param.Type.NOT_SET:
-                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
-
-            new_params[param.name] = param.value
-
-        if verify_validity(new_params):
-            self.frequency_params = new_params
-            return SetParametersResult(successful=True)
-        else:
-            return SetParametersResult(successful=False)
 
     def listener_callback_signals(self, msg):
         t1 = time.time()
@@ -140,7 +119,7 @@ class Processor(Node):
             msg.n_buffer,
             msg.fs,
             buffer_f=signals_f.T,
-            **self.frequency_params,
+            **self.current_params,
         )
         freqs = freqs[bins]
         signals_f = signals_f[bins]

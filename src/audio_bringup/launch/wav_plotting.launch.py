@@ -13,18 +13,34 @@ from audio_bringup.helpers import get_launch_description
 
 LOG_LEVEL = "warn"
 
+MIN_FREQ = 100
+MAX_FREQ = 16000
+APPENDIX = "_3"
+
 node_config = {
-    "file": {"pkg": "audio_publisher"},
+    "file": {
+        "pkg": "audio_publisher", 
+        "params": [{
+            "appendix": APPENDIX
+        }]
+    },
     "processor": {
         "pkg": "audio_stack", 
         "params": [{
             "filter_snr": 0,
-            "min_freq": 100,
-            "max_freq": 5000,
+            "min_freq": MIN_FREQ,
+            "max_freq": MAX_FREQ,
             "n_freqs": 1025 
         }]
     },
-    "audio": {"pkg": "topic_plotter"},
+    "audio": {
+        "pkg": "topic_plotter",
+        "params": [{
+            "min_freq": MIN_FREQ,
+            "max_freq": MAX_FREQ,
+        }]
+
+    },
 }
 
 
