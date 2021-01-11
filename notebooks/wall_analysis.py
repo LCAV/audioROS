@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import progressbar
 
+from crazyflie_description_py.parameters import N_BUFFER, FS 
 from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
@@ -21,19 +22,28 @@ def filter_by_dicts(df, dicts):
     return df.loc[mask, :]
 
 
-def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None):
-    # freqs_window = offset + slope * times
+def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None, times=None):
+    eps = 1e-2
     times_window = (frequencies - offset) / slope
+    # freqs_window = offset + slope * times
     
     if ax is not None:
         ax.plot(times_window-delta, frequencies, color='red')
         ax.plot(times_window+delta, frequencies, color='red')
 
     psd = np.zeros(signals_f.shape[1:]) # 4 x 32
-    times = np.arange(signals_f.shape[0])
+    if times is None:
+        times = np.arange(signals_f.shape[0])
     for i, t in enumerate(times_window):
-        signals_window = signals_f[(times <= t + delta) & (times >= t - delta), : , i]
-        psd[:, i] = np.sum(np.abs(signals_window)**2 / signals_window.shape[0], axis=0)
+
+        # reduce the signals to a valid window given by offset and slope
+        valid_times = (times <= t + delta) & (times >= t - delta)
+        signals_window = np.abs(signals_f[valid_times, : , i]) # n_times x n_mics
+
+        # within the window, choose only nonzero indices for average
+        signals_nonzero = signals_window[np.mean(signals_window, axis=1) > eps, :]
+        #print('reduced from:', signals_window.shape[0], signals_nonzero.shape[0])
+        psd[:, i] = np.mean(signals_nonzero**2, axis=0)
     return psd
 
 
@@ -135,6 +145,75 @@ def get_psd(signals_f, frequencies, ax=None, fname='real'):
     return extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=ax)
 
 
+def add_distance_estimates(row, ax=None, min_z=300):
+    if row.distance == 51:
+        d = np.linspace(.1, .6, len(row.seconds))
+    elif row.distance == -51:
+        d = np.linspace(.1, .6, len(row.seconds))[::-1]
+    else:
+        #TODO(FD): to be improved once we have better flow estimates. 
+        min_time = 5 # read from plot
+        max_time = 25 # read from plot
+        
+        d = np.full(len(row.seconds), np.nan)
+        row.z[np.isnan(row.z)] = 0
+        start_idx = np.where(row.seconds > min_time)[0][0]
+        end_idx = np.where(row.seconds < max_time)[0][-1]
+
+        assert end_idx > start_idx, f"{start_idx}<={end_idx}"
+        valid_z = row.z[start_idx:end_idx]
+        max_idx = start_idx + np.argmax(valid_z)
+        try:
+            min_idx = start_idx + np.where(valid_z > min_z)[0][-1]
+        except:
+            min_idx = 0
+        duration = row.seconds[min_idx] - row.seconds[max_idx]
+
+        times = row.seconds[max_idx:min_idx] - row.seconds[max_idx]
+        d[max_idx:min_idx] = D_START - times * VELOCITY
+        
+        if ax is not None:
+            ax.axvline(row.seconds[start_idx], color='r')
+            ax.axvline(row.seconds[max_idx], color='k', label='start (max)')
+            ax.axvline(row.seconds[min_idx], color='k', label=f'end (above {min_z})')
+            ax.axvline(row.seconds[end_idx], color='b')
+            ax.set_xlim(0, 35)
+            ax.set_title(f"duration: {duration:.1f}s")
+        
+    row['d_estimate'] = d
+
+    if ax is not None:
+        ax.scatter(row.seconds, d * 1000, color='k', label='distance')
+        ax.legend()
+    return row
+
+
+def add_spectrogram(row):
+    if row.frequencies_matrix is None:
+        return row
+
+    all_frequencies = np.fft.rfftfreq(N_BUFFER, 1/FS) 
+    
+    # spectrogram is of shape 1025 x n_times x n_mics
+    spectrogram = np.zeros((len(all_frequencies), row.signals_f.shape[0], row.signals_f.shape[1]), dtype=float) 
+    for t_idx in range(row.signals_f.shape[0]):
+        freqs = row.frequencies_matrix[t_idx, :]
+        for i, f in enumerate(freqs):
+            f_idx =  np.argmin(np.abs(f - all_frequencies))
+            if abs(all_frequencies[f_idx] - f) > 1: 
+                print(f'Warning: frequency {f} is far from {all_frequencies}')
+            if 0: #np.any(spectrogram[f_idx, t_idx, :] > 0):
+                print('overwriting', t_idx, f_idx, f, freqs[0])
+                err = np.max(np.abs(np.abs(row.signals_f[t_idx, :, i]) - spectrogram[f_idx, t_idx, :]))
+                # TODO(FD) find out why there is a difference between the
+                # first freq. bin (forced) and the one selected by snr scheme. 
+                if err > 0.1:
+                    print('big error:', err)
+            spectrogram[f_idx, t_idx, :] = np.abs(row.signals_f[t_idx, :, i])
+    row.spectrogram = spectrogram
+    return row
+
+
 def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     if exp_name == '2020_12_7_moving':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]
@@ -187,8 +266,13 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
             fname = get_fname(**params)
 
             if wav: 
-                df_wav = read_df_from_wav(f'../experiments/{exp_name}/export/{fname}.wav', n_buffer=N_BUFFER)
-                mic_dfs['measurement'] = df_wav
+
+                try:
+                    wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
+                    df_wav = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
+                    mic_dfs['measurement'] = df_wav
+                except:
+                    print('could not read', wav_fname)
             
         except FileNotFoundError as e:
             continue 
@@ -299,9 +383,9 @@ def parse_calibration_experiments():
 if __name__ == "__main__":
     import os 
 
-    exp_name = '2020_12_9_rotating'
+    #exp_name = '2020_12_9_rotating'
     #exp_name = '2020_12_18_flying'
-    #exp_name = '2020_12_18_stepper'
+    exp_name = '2020_12_18_stepper'
     fname = f'results/{exp_name}_real.pkl'
 
     dirname = os.path.dirname(fname)
@@ -318,3 +402,4 @@ if __name__ == "__main__":
         df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
         print('saved as', fname)
+
