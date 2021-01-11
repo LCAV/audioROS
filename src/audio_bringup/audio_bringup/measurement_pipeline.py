@@ -25,49 +25,19 @@ from serial_motors import SerialMotors
 from crazyflie_description_py.commands import command_dict, buzzer_dict
 from crazyflie_description_py.parameters import SOUND_EFFECTS
 
+from audio_bringup.helpers import get_filename, set_param, EXP_DIRNAME, CSV_DIRNAME, WAV_DIRNAME, TOPICS_TO_RECORD
+
 
 APPENDIX = None #"new" # set to None for no effect
 START_DISTANCE = 0
 START_ANGLE = 0
 
-EXP_DIRNAME = os.getcwd() + "/experiments/"
 #EXTRA_DIRNAME = '2020_12_7_moving'
 #EXTRA_DIRNAME = '2020_12_9_rotating'
 #EXTRA_DIRNAME = '2020_12_11_calibration'
 #EXTRA_DIRNAME = '2020_12_18_flying'
 #EXTRA_DIRNAME = '2020_12_18_stepper'
 EXTRA_DIRNAME = '2021_01_07_snr_study'
-
-TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
-#TOPICS_TO_RECORD = ['--all'] 
-CSV_DIRNAME = "csv_files/"
-WAV_DIRNAME = "export/"
-
-def get_filename(**params):
-    source_flag = "None" if params.get("source") is None else params.get("source")
-    props_flag = "" if params.get("props")==1 else "no"
-    snr_flag = "" if params.get("snr")==1 else "no"
-    motors = params.get("motors")
-    motors_flag = "" if ((type(motors) == str) or (motors > 0)) else "no"
-    ending = "" if params.get("degree", 0) == 0 else f"_{params.get('degree')}"
-    ending_distance = "" if params.get("distance", 0) == 0 else f"_{params.get('distance')}"
-    ending_distance += params.get("appendix", "")
-    fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}{ending_distance}"
-    return fname
-
-
-def set_param(node_name, param_name, param_value):
-    if type(param_value) != str:
-        param_value = str(param_value)
-    param_pid = subprocess.Popen(['ros2', 'param', 'set', node_name, param_name, param_value], stdout=subprocess.PIPE)
-    print('waiting to set params:', param_name, param_value)
-    out_bytes, err = param_pid.communicate()
-    out_string = out_bytes.decode("utf-8").strip()
-    if out_string == "Set parameter successful":
-        return True
-    else:
-        print("set_param error:", out_string)
-        return False
 
 
 def execute_commands(command_list, source='sweep_slow'):

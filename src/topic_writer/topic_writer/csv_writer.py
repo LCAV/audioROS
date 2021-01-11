@@ -8,6 +8,7 @@ from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 
+
 from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
 
 # Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
@@ -29,6 +30,7 @@ class CsvWriter(Node):
         self.subscription_status = self.create_subscription(
             CrazyflieStatus, "crazyflie/status", self.listener_callback_status, 10
         )
+
         self.subscription_motors = self.create_subscription(
             CrazyflieMotors, "crazyflie/motors", self.listener_callback_motors, 10
         )
