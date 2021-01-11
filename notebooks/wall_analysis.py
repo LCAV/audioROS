@@ -145,13 +145,14 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     elif exp_name == '2020_12_18_stepper':
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]
 
-    max_value = 100 # all signals received are actually between 0 and 2. 
     sys.path = [p for p in sys.path if not 'experiments' in p]
     sys.path.insert(0, f'../experiments/{exp_name}')
     from params import SOURCE_LIST, DISTANCE_LIST, DEGREE_LIST, MOTORS_LIST
-    N_BUFFER = 2048
+    from crazyflie_description_py.parameters import N_BUFFER
 
-    DEGREE_LIST = [0]
+
+    max_value = 100 # all signals received are actually between 0 and 2. 
+    #DEGREE_LIST = [0]
 
     pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
     df_total = pd.DataFrame(columns=[
@@ -296,10 +297,18 @@ def parse_calibration_experiments():
 
 
 if __name__ == "__main__":
-    #exp_name = '2020_12_9_rotating'
+    import os 
+
+    exp_name = '2020_12_9_rotating'
     #exp_name = '2020_12_18_flying'
-    exp_name = '2020_12_18_stepper'
+    #exp_name = '2020_12_18_stepper'
     fname = f'results/{exp_name}_real.pkl'
+
+    dirname = os.path.dirname(fname)
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+        print('created directory', dirname)
+
     try:
         raise 
         df_total = pd.read_pickle(fname)

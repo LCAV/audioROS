@@ -63,7 +63,7 @@ def get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     room.sources[0].add_signal(signal)
     room.simulate()
     
-    assert (n_times * n_buffer) < room.mic_array.signals.shape[1], f"{n_times}*{n_buffer}, {room.mic_array.signals.shape}"
+    assert (n_times * n_buffer) < room.mic_array.signals.shape[1], f"{n_times}*{n_buffer}={n_times * n_buffer}, {room.mic_array.signals.shape}"
     
     signals_f_list = []
     idx = 0
@@ -117,7 +117,8 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=0, signal=None):
     if signal is None:
         signal = pd.read_pickle('results/multi.pk')
 
-    signals_f = get_signals_f(room, signal) # n_buffer=N_BUFFER, n_times=5)
+    n_times = len(signal) // N_BUFFER
+    signals_f = get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=N_BUFFER, n_times=5)
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
     if len(frequencies) < len(freqs_all):
         bins_ = [np.argmin(np.abs(f - freqs_all)) for f in frequencies]

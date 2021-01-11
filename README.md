@@ -75,7 +75,12 @@ A diagram of the interactions of the different packages is shown below.
   ```
   python src/audio_bringup/audio_bringup/doa_pipeline.py
   ```
-
+- To convert bag file to csv: after editing the global variables in the node source code, 
+  run: 
+  ```
+  ros2 run audio_bringup convert_bag_to_csv
+  ```
+  Note that this function is experimental and only used when the bag to csv conversion did not happen correctly during experiments. 
 
 ## Requirements (WIP)
 

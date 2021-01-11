@@ -48,26 +48,27 @@ qtcreator-*
 CATKIN_IGNORE
 
 ####### Custom files
+
+# ros
 *.log
-install/
 *.swp
 *.swo
 *.orig
+install/
 debug/
 stash/
-#pycharm:
+
+# pycharm
 .idea/
-#bagfile stuff
+
+# bagfiles
 *.db3-shm
 *.db3-wal
 *.db3
-#evaluation
+
+# evaluation
 *.pk
+*.pkl
 notebooks/.ipynb_checkpoints
-notebooks/*.pkl
-notebooks/figures/
 notebooks/results/
-experiments/testing/*
-experiments/*/results/
-node_modules/
-experiments/
+notebooks/plots/

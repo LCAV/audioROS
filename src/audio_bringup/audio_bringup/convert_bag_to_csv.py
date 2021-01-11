@@ -4,7 +4,8 @@
 """
 convert_bag_to_csv.py:  
 
-Convert a bag file to a csv file.
+Convert bag files to csv files. This script needs to be run carefully as the csv_writer nodes are sometimes not 
+killed properly, which leads to many instances running at the same time. 
 """
 
 import os
@@ -38,20 +39,19 @@ def main(args=None):
                 filenames.append(filename)
                 print('found bag folder:', filename)
 
+    # TODO(FD) this would be cleaner with lifecycle nodes
+    # (or with the feature ros2 node kill, which doesn't 
+    # exist yet).
     subprocess.run(['sudo', 'pkill', 'csv_writer'])
     subprocess.run(['sudo', 'pkill', 'ros2'])
+
+    csv_pid = subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
 
     for filename in filenames: 
         print(f'treating {filename}...')
         bag_filename = os.path.join(EXP_DIRNAME, EXPERIMENT, filename) 
         csv_filename = os.path.join(EXP_DIRNAME, EXPERIMENT, CSV_DIRNAME, filename + ".csv")
 
-        # TODO(FD) this would be cleaner with lifecycle nodes
-        # (or with the feature ros2 node kill, which doesn't 
-        # exist yet).
-        # check that not multiple csv_writers are running
-
-        csv_pid = subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
         success = False
         while not success:
             print('trying to reset csv_writer...')
