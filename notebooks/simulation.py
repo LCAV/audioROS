@@ -9,7 +9,7 @@ from constants import SPEED_OF_SOUND
 from crazyflie_description_py.parameters import MIC_POSITIONS, FS, N_BUFFER
 
 sys.path.append('../crazyflie-audio/python')
-from signals import generate_signal
+from signals import generate_signal, amplify_signal
 
 DURATION_SEC = 38
 N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
@@ -75,7 +75,12 @@ def get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     return signals_f
 
 
-def generate_rir(frequencies, distance_cm=0, yaw_deg=0, single_mic=False, ax=None):
+def generate_rir(frequencies, distance_cm=0, yaw_deg=0, single_mic=False, ax=None, gain=1.0):
+    """ 
+    Generate one-wall RIR using analytical formula. 
+
+    Returns list of length n_mics, where each element contains n_frequencies complex values.
+    """
     source, mic_positions = get_setup(distance_cm, yaw_deg, ax, single_mic)
     source_image = [source[0], -source[1]]
 
@@ -90,8 +95,7 @@ def generate_rir(frequencies, distance_cm=0, yaw_deg=0, single_mic=False, ax=Non
         alpha1 = 10**(-a*reflect_path/20)
         n0 = direct_path / SPEED_OF_SOUND
         n1 = reflect_path / SPEED_OF_SOUND
-        
-        H_ij = alpha0 * np.exp(-1j*2*np.pi*frequencies*n0) + alpha1 * np.exp(-1j*2*np.pi*frequencies*n1)
+        H_ij = alpha0 * gain * np.exp(-1j*2*np.pi*frequencies*n0) + alpha1 * gain * np.exp(-1j*2*np.pi*frequencies*n1)
         Hs.append(H_ij)
     return Hs
 
@@ -100,25 +104,25 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=0, signal=None):
     import pandas as pd
     room = generate_room(distance_cm=distance_cm, single_mic=False)
 
-    # TODO(FD) ideally we would always generate a signal at the given frequencies only,
+    # TODO(fd) ideally we would always generate a signal at the given frequencies only,
     # as shown below.
-    # However, this takes long for many frequencies, so we don't do that and use
+    # however, this takes long for many frequencies, so we don't do that and use
     # a precomputed version, which as all frequencies present (but potentially not
     # exactly the ones given to the function...) 
 
     #duration_sec = 10
-    #n_samples = FS * duration_sec 
+    #n_samples = fs * duration_sec 
     #signal = np.zeros(n_samples)
     #for f in frequencies:
     #    phase = np.random.uniform(0, 2*np.pi)
-    #    signal += generate_signal(signal_type='mono', frequency_hz=f, duration_sec=10, Fs=FS, 
-    #            max_dB=-10,
+    #    signal += generate_signal(signal_type='mono', frequency_hz=f, duration_sec=10, fs=fs, 
+    #            max_db=-10,
     #            phase_offset=phase)
     if signal is None:
         signal = pd.read_pickle('results/multi.pk')
 
     n_times = len(signal) // N_BUFFER
-    signals_f = get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=N_BUFFER, n_times=5)
+    signals_f = get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
     if len(frequencies) < len(freqs_all):
         bins_ = [np.argmin(np.abs(f - freqs_all)) for f in frequencies]
@@ -130,3 +134,28 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=0, signal=None):
 def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0):
     Hs = generate_rir(frequencies, distance_cm, yaw_deg, single_mic=False, ax=None)
     return [np.abs(H) for H in Hs]
+
+
+def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
+    import pandas as pd
+    duration_sec = N_BUFFER * n_times / FS
+    signal = generate_signal(FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency)
+    freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
+    bin_ = np.argmin(np.abs(freqs_all - frequency))
+
+    Hs = []
+    for d in distances_cm:
+        room = generate_room(distance_cm=d, single_mic=False)
+        signals_f = get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
+        Hs.append(np.mean(np.abs(signals_f[:, :, bin_]), axis=0) / N_BUFFER)
+    return np.array(Hs)
+
+
+def get_dist_slice_theory(frequency, distances_cm, yaw_deg=0):
+    Hs = []
+    for d in distances_cm:
+        H = generate_rir(np.array([frequency]), d, yaw_deg, single_mic=False, ax=None, gain=5)
+        H = np.array(H)
+        assert H.shape[1] == 1, H.shape
+        Hs.append(np.abs(H[:, 0]))
+    return np.array(Hs)

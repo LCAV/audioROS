@@ -10,6 +10,15 @@ from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
 
+def clean_signals_f(signals_f, max_value=100):
+    """
+    # TODO(FD): find value X below from hardware 
+    signals_f is normally between X and X, so values outside of this range are due to communication errors.
+    """
+    signals_f[np.isnan(signals_f)] = 0.0
+    signals_f[np.abs(signals_f) > max_value] = 0.0
+    return signals_f
+
 
 def filter_by_dicts(df, dicts):
     mask = np.zeros(len(df), dtype=bool)
@@ -18,8 +27,10 @@ def filter_by_dicts(df, dicts):
         for key, val in dict_.items():
             this_mask = this_mask & (df.loc[:, key] == val)
         mask = np.bitwise_or(mask, this_mask)
-        assert np.any(mask)
-    return df.loc[mask, :]
+    if not np.any(mask):
+        return []
+    else:
+        return df.loc[mask, :]
 
 
 def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None, times=None):
@@ -84,7 +95,7 @@ def extract_psd_dict(signals_f, frequencies_matrix, min_t=0, max_t=None, n_freq=
         fs = frequencies_matrix[i_t, :n_freq]
         for i_mic in range(n_mics):
             for f_idx, f in enumerate(fs):
-                psd_dict[i_mic][f].append(np.abs(signals_f[i_t, i_mic, f_idx]))
+                psd_dict[i_mic][f].append(np.abs(signals_f[i_t, i_mic, f_idx])**2)
     return psd_dict
                 
 
@@ -92,7 +103,6 @@ def extract_psd(psd_dict_list, verbose=False, method='median'):
     """
     Combine hash tables in given list into one big hashtable, and return the unique keys
     and statistics of its values.
-    
     """
     # extract all the different frequencies from psd_dict_list.
     n_mics = len(psd_dict_list[0])
@@ -152,13 +162,16 @@ def get_psd(signals_f, frequencies, ax=None, fname='real'):
 
 def add_distance_estimates(row, ax=None, min_z=300):
     if row.distance == 51:
-        d = np.linspace(.1, .6, len(row.seconds))
+        d = np.full(len(row.seconds), np.nan)
+        d[row.seconds>=0] = 0.1 + row.seconds[row.seconds>=0] * 0.5 / 165  # takes 165 seconds for 50 cm
     elif row.distance == -51:
-        d = np.linspace(.1, .6, len(row.seconds))[::-1]
+        d = np.full(len(row.seconds), np.nan)
+        d[row.seconds>=0] = 0.6 - row.seconds[row.seconds>=0] * 0.5 / 165  # takes 165 seconds for 50 cm
     else:
         #TODO(FD): to be improved once we have better flow estimates. 
-        min_time = 5 # read from plot
-        max_time = 25 # read from plot
+        # read from plot in FlyingAnalysis.ipynb:
+        min_time = 5 
+        max_time = 25 
         
         d = np.full(len(row.seconds), np.nan)
         row.z[np.isnan(row.z)] = 0
@@ -199,29 +212,35 @@ def add_spectrogram(row):
     Usage: 
     df = df.apply(add_spectrogram, axis=1)
 
-    :param row: has 
+    new spectrogram column is of shape: n_times x n_mics x n_frequencies
     """
+
+    # TODO(FD) remove this sanity check 
+    assert row.signals_f.shape[1] in (1, 4)
+    assert row.signals_f.shape[2] in (32, 1025)
+
     if row.frequencies_matrix is None:
         row.spectrogram = np.abs(row.signals_f)
     else:
         all_frequencies = np.fft.rfftfreq(N_BUFFER, 1/FS) 
         
         # spectrogram is of shape 1025 x n_times x n_mics
-        spectrogram = np.zeros((len(all_frequencies), row.signals_f.shape[0], row.signals_f.shape[1]), dtype=float) 
+        spectrogram = np.zeros((row.signals_f.shape[0], row.signals_f.shape[1], len(all_frequencies)), dtype=float) 
         for t_idx in range(row.signals_f.shape[0]):
             freqs = row.frequencies_matrix[t_idx, :]
             for i, f in enumerate(freqs):
                 f_idx =  np.argmin(np.abs(f - all_frequencies))
                 if abs(all_frequencies[f_idx] - f) > 1: 
                     print(f'Warning: frequency {f} is far from {all_frequencies}')
+
                 if 0: #np.any(spectrogram[f_idx, t_idx, :] > 0):
                     print('overwriting', t_idx, f_idx, f, freqs[0])
-                    err = np.max(np.abs(np.abs(row.signals_f[t_idx, :, i]) - spectrogram[f_idx, t_idx, :]))
+                    err = np.max(np.abs(np.abs(row.signals_f[t_idx, :, i]) - spectrogram[t_idx, :, f_idx]))
                     # TODO(FD) find out why there is a difference between the
                     # first freq. bin (forced) and the one selected by snr scheme. 
                     if err > 0.1:
                         print('big error:', err)
-                spectrogram[f_idx, t_idx, :] = np.abs(row.signals_f[t_idx, :, i])
+                spectrogram[t_idx, :, f_idx] = np.abs(row.signals_f[t_idx, :, i])
         row.spectrogram = spectrogram
     return row
 
@@ -240,6 +259,9 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     sys.path.insert(0, f'../experiments/{exp_name}')
     from params import SOURCE_LIST, DISTANCE_LIST, DEGREE_LIST, MOTORS_LIST
     from crazyflie_description_py.parameters import N_BUFFER
+
+    # TODO(FD) remove this when we use more angles again.
+    DEGREE_LIST = [0]
 
     pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
 
@@ -292,6 +314,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 continue
             
             signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+            signals_f = clean_signals_f(signals_f)
 
             seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
             frequencies_matrix = np.array([*df.loc[:,'frequencies']])
@@ -353,6 +376,7 @@ def parse_calibration_experiments():
             continue 
             
         signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+        signals_f = clean_signals_f(signals_f)
 
         seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
         frequencies_matrix = np.array([*df.loc[:,'frequencies']])
