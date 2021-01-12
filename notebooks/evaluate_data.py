@@ -143,7 +143,7 @@ def read_df_from_wav(fname, n_buffer=2048):
     return df
 
 
-# TODO(FD) delete
+# TODO(FD) delete, duplicate
 def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
     from scipy.signal import stft
     from scipy.io import wavfile
@@ -162,9 +162,10 @@ def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=
     return f[mask], t, source_stft
 
 
+# TODO(FD) delete, duplicate
 def get_spectrogram(df):
     stft = np.array([*df.loc[:, "signals_f"]])  # n_times x n_mics x n_freqs
-    return np.mean(np.abs(stft), axis=1).T  # average over n_mics: n_freqs x n_times
+    return np.mean(np.abs(stft)**2, axis=1).T  # average over n_mics: n_freqs x n_times
 
 
 # TODO(FD) delete

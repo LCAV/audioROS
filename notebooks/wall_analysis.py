@@ -10,7 +10,7 @@ from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
 
-def clean_signals_f(signals_f, max_value=100):
+def clean_signals_f(signals_f, max_value=10):
     """
     # TODO(FD): find value X below from hardware 
     signals_f is normally between X and X, so values outside of this range are due to communication errors.
