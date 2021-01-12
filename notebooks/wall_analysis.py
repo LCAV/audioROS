@@ -54,12 +54,17 @@ def extract_psd_dict(signals_f, frequencies_matrix, min_t=0, max_t=None, n_freq=
     
     structure of output: 
     
-    mic0: {
+    [{ #mic0
         f0: [val0, val1],
         f1: [val0, val1, val2], 
         f2: [...]
-    }
-    mic1: ...
+     },
+     { #mic1
+        f0: 
+        ...
+     }
+     ...
+    ]
     """
     n_mics = signals_f.shape[1]
     all_frequencies = np.unique(frequencies_matrix.flatten())
@@ -189,28 +194,35 @@ def add_distance_estimates(row, ax=None, min_z=300):
 
 
 def add_spectrogram(row):
-    if row.frequencies_matrix is None:
-        return row
+    """  Add snr-based or normal spectrogram to row.
 
-    all_frequencies = np.fft.rfftfreq(N_BUFFER, 1/FS) 
-    
-    # spectrogram is of shape 1025 x n_times x n_mics
-    spectrogram = np.zeros((len(all_frequencies), row.signals_f.shape[0], row.signals_f.shape[1]), dtype=float) 
-    for t_idx in range(row.signals_f.shape[0]):
-        freqs = row.frequencies_matrix[t_idx, :]
-        for i, f in enumerate(freqs):
-            f_idx =  np.argmin(np.abs(f - all_frequencies))
-            if abs(all_frequencies[f_idx] - f) > 1: 
-                print(f'Warning: frequency {f} is far from {all_frequencies}')
-            if 0: #np.any(spectrogram[f_idx, t_idx, :] > 0):
-                print('overwriting', t_idx, f_idx, f, freqs[0])
-                err = np.max(np.abs(np.abs(row.signals_f[t_idx, :, i]) - spectrogram[f_idx, t_idx, :]))
-                # TODO(FD) find out why there is a difference between the
-                # first freq. bin (forced) and the one selected by snr scheme. 
-                if err > 0.1:
-                    print('big error:', err)
-            spectrogram[f_idx, t_idx, :] = np.abs(row.signals_f[t_idx, :, i])
-    row.spectrogram = spectrogram
+    Usage: 
+    df = df.apply(add_spectrogram, axis=1)
+
+    :param row: has 
+    """
+    if row.frequencies_matrix is None:
+        row.spectrogram = np.abs(row.signals_f)
+    else:
+        all_frequencies = np.fft.rfftfreq(N_BUFFER, 1/FS) 
+        
+        # spectrogram is of shape 1025 x n_times x n_mics
+        spectrogram = np.zeros((len(all_frequencies), row.signals_f.shape[0], row.signals_f.shape[1]), dtype=float) 
+        for t_idx in range(row.signals_f.shape[0]):
+            freqs = row.frequencies_matrix[t_idx, :]
+            for i, f in enumerate(freqs):
+                f_idx =  np.argmin(np.abs(f - all_frequencies))
+                if abs(all_frequencies[f_idx] - f) > 1: 
+                    print(f'Warning: frequency {f} is far from {all_frequencies}')
+                if 0: #np.any(spectrogram[f_idx, t_idx, :] > 0):
+                    print('overwriting', t_idx, f_idx, f, freqs[0])
+                    err = np.max(np.abs(np.abs(row.signals_f[t_idx, :, i]) - spectrogram[f_idx, t_idx, :]))
+                    # TODO(FD) find out why there is a difference between the
+                    # first freq. bin (forced) and the one selected by snr scheme. 
+                    if err > 0.1:
+                        print('big error:', err)
+                spectrogram[f_idx, t_idx, :] = np.abs(row.signals_f[t_idx, :, i])
+        row.spectrogram = spectrogram
     return row
 
 
@@ -229,33 +241,29 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     from params import SOURCE_LIST, DISTANCE_LIST, DEGREE_LIST, MOTORS_LIST
     from crazyflie_description_py.parameters import N_BUFFER
 
-
-    max_value = 100 # all signals received are actually between 0 and 2. 
-    #DEGREE_LIST = [0]
-
     pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
+
     df_total = pd.DataFrame(columns=[
-        'signals_f', 'degree', 'distance', 'source', 'snr', 
-        'motors', 'psd', 'spec', 'frequencies', 'appendix', 
-        'seconds', 'mic_type', 'frequencies_matrix', 'positions'] + pos_columns
+        'appendix', 'degree', 'distance', 'motors', 'mic_type', 'source', 'snr', 'props', # categories
+        'seconds', 'frequencies', 'frequencies_matrix', 'signals_f', 'positions'] + pos_columns # data
     )
 
-    params = dict(
-        props = False,
-        exp_name = exp_name
-    )
+    params = {
+        'props': False,
+        'exp_name': exp_name
+    }
     for degree, distance, source, motors, appendix, snr, props in itertools.product(
         DEGREE_LIST, DISTANCE_LIST, SOURCE_LIST, MOTORS_LIST, appendix_list, snr_list, props_list): 
 
         mic_dfs = {'audio_deck': None, 'measurement': None}
         try:
-            params['motors'] = motors
+            params['appendix'] = appendix
             params['degree'] = degree
             params['distance'] = distance
-            params['source'] = source
-            params['appendix'] = appendix
-            params['snr'] = snr
+            params['motors'] = motors
             params['props'] = props
+            params['source'] = source
+            params['snr'] = snr
 
             df_csv, df_pos = read_df(**params)
 
@@ -284,30 +292,22 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 continue
             
             signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
-            if np.any(np.abs(signals_f) > max_value):
-                signals_f[np.where(np.abs(signals_f) > max_value)] = 0
 
             seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
             frequencies_matrix = np.array([*df.loc[:,'frequencies']])
             frequencies = frequencies_matrix[0, :]
+
             # save frequency matrix only if frequencies vary.
             if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
                 frequencies_matrix = None
-            else:
-                print('saving frequencies matrix')
             
-            spec = np.sum(np.abs(signals_f), axis=1) # average over mics
-            psd = get_psd(signals_f, frequencies, fname='real')
-
             params['source'] = str(params['source'])
             all_items = dict(
                 mic_type=mic_type,
-                signals_f=signals_f,
+                seconds=seconds, 
                 frequencies=frequencies,
                 frequencies_matrix=frequencies_matrix,
-                spec=spec,
-                psd=psd,
-                seconds=seconds, 
+                signals_f=signals_f,
                 positions=positions)
             if 'dx' in df.columns: 
                 pos_dict = {
@@ -324,9 +324,8 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
 
 
 def parse_calibration_experiments():
-    max_value = 100 # all signals received are actually between 0 and 2. 
-    df_total = pd.DataFrame(columns=['signals_f', 'source', 'snr', 'motors', 'exp_name', 'appendix', 
-                                     'seconds', 'frequencies', 'frequencies_matrix'])
+    df_total = pd.DataFrame(columns=['source', 'snr', 'motors', 'exp_name', 'appendix', 
+                                     'seconds', 'frequencies', 'frequencies_matrix', 'signals_f'])
 
     exp_name_list = [
         '2020_12_11_calibration',
@@ -354,28 +353,25 @@ def parse_calibration_experiments():
             continue 
             
         signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
-        if np.any(np.abs(signals_f) > max_value):
-            signals_f[np.where(np.abs(signals_f) > max_value)] = 0
 
         seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
         frequencies_matrix = np.array([*df.loc[:,'frequencies']])
         frequencies = frequencies_matrix[0, :]
+
         # save frequency matrix only if frequencies vary.
         if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
             frequencies_matrix = None
-        else:
-            print('saving frequencies matrix')
         
         df_total.loc[len(df_total), :] = dict(
-            exp_name=exp_name, 
-            appendix=appendix, 
             source=str(source), 
             snr=filter_, 
             motors=motors, 
-            signals_f=signals_f, 
+            exp_name=exp_name, 
+            appendix=appendix, 
             seconds=seconds, 
             frequencies=frequencies, 
-            frequencies_matrix=frequencies_matrix
+            frequencies_matrix=frequencies_matrix,
+            signals_f=signals_f, 
         )
     return df_total
 
