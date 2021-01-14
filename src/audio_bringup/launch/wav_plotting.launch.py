@@ -14,8 +14,8 @@ from audio_bringup.helpers import get_launch_description
 LOG_LEVEL = "warn"
 
 MIN_FREQ = 100
-MAX_FREQ = 16000
-APPENDIX = "_3"
+MAX_FREQ = 10000
+APPENDIX = "_7"
 
 node_config = {
     "file": {
