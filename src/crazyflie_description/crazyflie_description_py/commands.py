@@ -41,6 +41,9 @@ command_dict = {
      'all50000': [
         ('/gateway', 'all', 50000, 1) 
      ],
+     'all55000': [
+        ('/gateway', 'all', 55000, 1) 
+     ],
 }
 
 # buzzer commands from the different sweeps.

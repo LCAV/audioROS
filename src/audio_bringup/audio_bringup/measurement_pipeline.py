@@ -37,7 +37,8 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = '2020_12_11_calibration'
 #EXTRA_DIRNAME = '2020_12_18_flying'
 #EXTRA_DIRNAME = '2020_12_18_stepper'
-EXTRA_DIRNAME = '2021_01_07_snr_study'
+#EXTRA_DIRNAME = '2021_01_07_snr_study'
+EXTRA_DIRNAME = '2021_01_14_snr_study'
 
 
 def execute_commands(command_list, source='sweep_slow'):
@@ -255,17 +256,25 @@ def main(args=None):
         min_freq = params.get('min_freq', None)
         max_freq = params.get('max_freq', None)
 
-        duration_motors = get_total_time(command_dict[params['motors']])
-        if duration_motors > duration:
-            print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
-            duration = duration_motors
+        if (type(params['motors']) == str) or (params['motors'] > 0):
+            duration_motors = get_total_time(command_dict[params['motors']])
+            if duration_motors > duration:
+                print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
+                duration = duration_motors
 
         
         # we set the frequency even though this drone 
         # is not playing, so that snr=2 works. 
-        freq = int(params["source"].strip("mono"))
-        set_param('/gateway', 'buzzer_freq', freq)
-        set_param('/gateway', 'buzzer_effect', 0)
+        if params["source"] is not None and ("mono" in params["source"]):
+            freq = int(params["source"].strip("mono"))
+            set_param('/gateway', 'buzzer_freq', freq)
+            set_param('/gateway', 'buzzer_effect', 0)
+        elif params["source"] is not None:
+            c, (min_freq_buzz, max_freq_buzz), duration_buzzer = SOUND_EFFECTS[params['source']]
+            if duration_buzzer > duration:
+                print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
+                duration = duration_buzzer
+
         input(f'make sure external buzzer plays {params["source"]}! Enter to continue')
 
         filter_snr = params.get('snr', 0) 
@@ -366,6 +375,7 @@ def main(args=None):
         while not (answer in ['y', 'n']):
             answer = input(f'start experiment with {params}? ([y]/n)') or 'y'
         if answer == 'n':
+            param_i += 1
             continue
         print(f'starting experiment {param_i+1}/{len(params_list)} with {params}')
 
