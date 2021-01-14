@@ -38,7 +38,7 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 METHOD_WINDOW = "tukey"
 
 
-def get_stft(signals, Fs, method_window, method_noise):
+def get_stft(signals, Fs, method_window="", method_noise=""):
     if method_window == "tukey":
         window = signal.tukey(signals.shape[1], alpha=TUKEY_ALPHA)
         signals *= window

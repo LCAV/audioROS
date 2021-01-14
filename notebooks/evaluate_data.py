@@ -119,24 +119,32 @@ def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp
 
 
 def read_df_from_wav(fname, n_buffer=2048):
-    from scipy.signal import stft
+    from audio_stack.processor import get_stft
+    #from scipy.signal import stft
     from scipy.io import wavfile
     
     n_mics = 1
     fs, source_data = wavfile.read(fname)
     print(f'read {fname}')
-    f, t, source_stft = stft(source_data, fs, nperseg=n_buffer, axis=0)
+
+    n_buffer_corr = int(n_buffer * fs / FS)
+
+    #f, t, source_stft = stft(source_data, fs, nperseg=n_buffer_corr, axis=0, window='boxcar') 
+    #source_freq = np.fft.rfftfreq(n=n_buffer_corr, d=1/fs) # n_frequencies x n_times
+    n_frames = len(source_data) // n_buffer_corr
     
-    source_freq = np.fft.rfftfreq(n=n_buffer, d=1/fs) # n_frequencies x n_times
 
     df = pd.DataFrame(columns=["index", "timestamp", "n_mics", "topic", "signals_f", "frequencies", "n_frequencies"])
-    for i in range(source_stft.shape[1]):
+    for i in range(n_frames):
+        # n_mics x n_frequencies
+        this_buffer = np.copy(source_data[i*n_buffer_corr:(i+1)*n_buffer_corr].reshape((1, -1)))
+        source_stft, source_freq = get_stft(this_buffer, fs, method_window="tukey", method_noise="")
         df.loc[len(df), :] = {
             "index": i,
             "timestamp": i * len(source_freq)/fs * 1000, # miliseconds
             "n_mics": n_mics,
             "topic": "measurement_mic",
-            "signals_f": source_stft[:, i].reshape((1, -1)),  # n_mics x n_frequencies
+            "signals_f": source_stft.T,  
             "frequencies": source_freq,
             "n_frequencies": len(source_freq)
         }
@@ -162,9 +170,8 @@ def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=
     return f[mask], t, source_stft
 
 
-# TODO(FD) delete, duplicate
 def get_spectrogram(df):
-    stft = np.array([*df.loc[:, "signals_f"]])  # n_times x n_mics x n_freqs
+    stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
     return np.mean(np.abs(stft)**2, axis=1).T  # average over n_mics: n_freqs x n_times
 
 
