@@ -38,7 +38,9 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = '2020_12_18_flying'
 #EXTRA_DIRNAME = '2020_12_18_stepper'
 #EXTRA_DIRNAME = '2021_01_07_snr_study'
-EXTRA_DIRNAME = '2021_01_14_snr_study'
+#EXTRA_DIRNAME = '2021_01_14_snr_study'
+#EXTRA_DIRNAME = '2021_01_15_snr_study'
+EXTRA_DIRNAME = '2021_01_15_snr_study_2'
 
 
 def execute_commands(command_list, source='sweep_slow'):

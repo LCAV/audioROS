@@ -30,19 +30,19 @@ command_dict = {
      ],
      # TODO(FD) solve this more elegantly
      'all30000': [
-        ('/gateway', 'all', 30000, 1) 
+        ('/gateway', 'all', 30000, 0) 
      ],
      'all43000': [
-        ('/gateway', 'all', 43000, 1) 
+        ('/gateway', 'all', 43000, 0) 
      ],
      'all45000': [
-        ('/gateway', 'all', 45000, 1) 
+        ('/gateway', 'all', 45000, 0) 
      ],
      'all50000': [
-        ('/gateway', 'all', 50000, 1) 
+        ('/gateway', 'all', 50000, 0) 
      ],
      'all55000': [
-        ('/gateway', 'all', 55000, 1) 
+        ('/gateway', 'all', 55000, 0) 
      ],
 }
 
