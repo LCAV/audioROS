@@ -151,6 +151,23 @@ def read_df_from_wav(fname, n_buffer=2048):
     return df
 
 
+def read_signal_from_wav(fname, n_buffer=2048):
+    from scipy.io import wavfile
+    n_mics = 1
+    fs, source_data = wavfile.read(fname)
+    print(f'read {fname}')
+
+    n_buffer_corr = int(n_buffer * fs / FS)
+    n_frames = len(source_data) // n_buffer_corr
+
+    signals = np.empty((n_frames, n_mics, n_buffer_corr))
+    for i in range(n_frames):
+        # n_mics x n_frequencies
+        this_buffer = np.copy(source_data[i*n_buffer_corr:(i+1)*n_buffer_corr].reshape((1, -1)))
+        signals[i, :, :] = this_buffer
+    return signals
+
+
 # TODO(FD) delete, duplicate
 def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
     from scipy.signal import stft
