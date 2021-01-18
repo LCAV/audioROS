@@ -10,10 +10,10 @@ from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
 
-def clean_signals_f(signals_f, max_value=10):
+def clean_signals_f(signals_f, max_value=N_BUFFER):
     """
-    # TODO(FD): find value X below from hardware 
-    signals_f is normally between X and X, so values outside of this range are due to communication errors.
+    The values in signals_f are normally between -N_BUFFER and N_BUFFER, 
+    so values outside of this range are due to communication errors.
     """
     signals_f[np.isnan(signals_f)] = 0.0
     signals_f[np.abs(signals_f) > max_value] = 0.0
@@ -422,4 +422,3 @@ if __name__ == "__main__":
         df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
         print('saved as', fname)
-
