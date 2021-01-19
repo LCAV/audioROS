@@ -40,6 +40,10 @@ class NodeWithParams(Node, ABC):
     def verify_validity(params):
         return True
 
+    def custom_set_params(self):
+        """ Called after set_params """ 
+        return
+
     def set_params(self, params):
         new_params = self.current_params.copy()
         for param in params:
@@ -53,6 +57,7 @@ class NodeWithParams(Node, ABC):
 
         if self.verify_validity(new_params):
             self.current_params = new_params
+            self.custom_set_params()
             return SetParametersResult(successful=True)
         else:
             return SetParametersResult(successful=False)

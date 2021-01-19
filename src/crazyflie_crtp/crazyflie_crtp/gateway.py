@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-cf_id = "E7E7E7E7E8"
-id = f"radio://0/80/2M/{cf_id}"
+#cf_id = "E7E7E7E7E8"
+#id = f"radio://0/80/2M/{cf_id}"
 
-#cf_id = "E7E7E7E7E7"
-#id = f"radio://0/70/2M/{cf_id}"
+cf_id = "E7E7E7E7E7"
+id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -170,7 +170,7 @@ class Gateway(Node):
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
 
         abs_signals_f = np.abs(signals_f)
-        if np.any(abs_signals_f[:3, :] > 1e5):
+        if np.any(abs_signals_f > N_BUFFER):
             self.get_logger().warn("Possibly in valid audio:")
             self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
             self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
@@ -199,6 +199,9 @@ class Gateway(Node):
         self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
+        """ Overwrite the function set_params by NodeWithParams. 
+        We need this so we commute new parameters directly to the Crazyflie drone.
+        """
         success = True
 
         for param in params: 

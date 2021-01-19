@@ -19,7 +19,7 @@ from audio_simulation.geometry import SOURCE_POS, ROOM_DIM, STARTING_POS
 
 from .live_plotter import LivePlotter
 
-MAX_LENGTH = 3 # number of positions to plot
+MAX_LENGTH = 1000 # number of positions to plot
 
 XLABEL = "x [m]"
 YLABEL = "y [m]"
@@ -75,8 +75,8 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
 
-            plot_room(self.plotter_dict[name].ax)
-            plot_source(self.plotter_dict[name].ax)
+            #plot_room(self.plotter_dict[name].ax)
+            #plot_source(self.plotter_dict[name].ax)
 
     def update_plotter(self, name, pose_list, yaw_deg=None, source_direction_deg=None, pose_label="pose estimates"):
         self.plotter_dict[name].update_scatter(
@@ -132,9 +132,11 @@ class GeometryPlotter(Node):
         if self.pose_kalman_list.shape[1] > MAX_LENGTH:
             self.pose_kalman_list = self.pose_kalman_list[:, -MAX_LENGTH:]
 
-        self.update_plotter("pose raw", self.pose_motion_list, yaw, msg_pose_raw.source_direction_deg, pose_label="motion")
-        self.update_plotter("pose raw", self.pose_imu_list, pose_label="imu")
+        #self.update_plotter("pose raw", self.pose_motion_list, yaw, msg_pose_raw.source_direction_deg, pose_label="motion")
+        #self.update_plotter("pose raw", self.pose_imu_list, pose_label="imu")
         self.update_plotter("pose raw", self.pose_kalman_list, pose_label="kalman")
+        #self.plotter_dict["pose raw"].ax.set_xlim(4.9, 5.3)
+        #self.plotter_dict["pose raw"].ax.set_ylim(0.1, 0.5)
         self.plotter_dict["pose raw"].fig.canvas.draw()
 
     def listener_callback_pose(self, msg_pose):
