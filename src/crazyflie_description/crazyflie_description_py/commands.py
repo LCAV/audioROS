@@ -29,6 +29,9 @@ command_dict = {
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
      # TODO(FD) solve this more elegantly
+     'all5000': [
+        ('/gateway', 'all', 5000, 0) 
+     ],
      'all30000': [
         ('/gateway', 'all', 30000, 0) 
      ],
@@ -53,8 +56,6 @@ buzzer_dict = {
 buzzer_dict['stop'] =  [
     ('/gateway', 'buzzer_effect', 0, 0), # off
 ]
-
-# TODO(FD) solve this more elegantly
 # buzzer command for mono signals: first set to bypass, then set frequency. 
 for key in SOUND_EFFECTS.keys():
     if 'mono' in key:

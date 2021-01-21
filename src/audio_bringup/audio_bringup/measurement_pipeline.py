@@ -40,7 +40,9 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = '2021_01_07_snr_study'
 #EXTRA_DIRNAME = '2021_01_14_snr_study'
 #EXTRA_DIRNAME = '2021_01_15_snr_study'
-EXTRA_DIRNAME = '2021_01_15_snr_study_2'
+#EXTRA_DIRNAME = '2021_01_15_snr_study_2'
+#EXTRA_DIRNAME = '2021_01_21_snr_study'
+EXTRA_DIRNAME = '2021_01_21_snr_study_foam'
 
 
 def execute_commands(command_list, source='sweep_slow'):
@@ -73,8 +75,6 @@ def get_active_nodes():
 
 
 def main(args=None): 
-    rclpy.init(args=args)
-
     def measure_doa(params):
         distance = params.get('distance', 0)
         angle = params.get('degree', 0)
@@ -328,6 +328,85 @@ def main(args=None):
             print('wrote wav file as', wav_filename)
         return
 
+    def measure_snr_onboard(params):
+        assert source_type == 'buzzer-onboard'
+        duration = global_params.get("duration", 30)
+
+        # If given in parameters, min_freq and max_freq overwrite all other settings. Otherwise 
+        # these parameters are read from the buzzer frequency characteristics.
+        min_freq = params.get('min_freq', None)
+        max_freq = params.get('max_freq', None)
+
+        if (type(params['motors']) == str) or (params['motors'] > 0):
+            duration_motors = get_total_time(command_dict[params['motors']])
+            if duration_motors > duration:
+                print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
+                duration = duration_motors
+
+        if params["source"] is not None:
+            c, (min_freq_buzz, max_freq_buzz), duration_buzzer = SOUND_EFFECTS[params['source']]
+            if duration_buzzer > duration:
+                print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
+                duration = duration_buzzer
+
+        filter_snr = params.get('snr', 0) 
+        set_param('/gateway', 'filter_snr_enable', str(filter_snr))
+        if (filter_snr > 0) and ((min_freq is None) or (max_freq is None)): 
+            raise Warning('Need to set min_freq and max_freq when using snr filtering!')
+        set_param('/gateway', 'filter_prop_enable', str(params['props']))
+        if min_freq is not None:
+            set_param('/gateway', 'min_freq', str(min_freq))
+        if max_freq is not None:
+            set_param('/gateway', 'max_freq', str(max_freq))
+
+        #### record ####
+        set_param('/csv_writer', 'filename', '')
+        bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
+        print('started bag record')
+
+        #### play ####
+
+        if params['source'] is not None:
+            print(f'executing buzzer commands')
+            execute_commands(buzzer_dict[params['source']])
+
+        start_time = time.time()
+        if global_params['n_meas_mics'] > 0:
+            print(f'recording sound for {duration} seconds...')
+            n_frames = int(duration * global_params['fs_soundcard'])
+            recording = sd.rec(n_frames, blocking=False)
+
+        if type(params['motors']) == str:
+            print(f'executing motor commands:')
+            execute_commands(command_dict[params['motors']], source=params['source'])
+            extra_idle_time = duration - (time.time() - start_time)
+            if extra_idle_time > 0:
+                print(f'finished motor commands faster than expected. sleeping for {extra_idle_time:.2f} seconds...')
+                time.sleep(extra_idle_time)
+            elif extra_idle_time < 0:
+                print(f'Warning: finished recording before finishing motor commands! {extra_idle_time:.2f}')
+        else: # if motors is set to 0, so no motor commands are sent. 
+            print(f'waiting for {duration} seconds...')
+            time.sleep(duration)
+
+        #### wrap up ####
+        print('...done')
+        set_param('/gateway', 'all', '0')
+        bag_pid.send_signal(signal.SIGINT)
+        set_param('/csv_writer', 'filename', csv_filename)
+
+        execute_commands(buzzer_dict['stop'])
+
+        if global_params['n_meas_mics'] > 0:
+            recording_float32 = recording.astype(np.float32)
+            wav_filename = os.path.join(wav_dirname, filename) + '.wav'
+            wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
+            print('wrote wav file as', wav_filename)
+        return
+
+
+    rclpy.init(args=args)
+
     extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
     exp_dirname = os.path.join(EXP_DIRNAME, extra_dirname)
     csv_dirname = os.path.join(exp_dirname, CSV_DIRNAME)
@@ -405,7 +484,8 @@ def main(args=None):
             continue
 
         #measure_doa(params)
-        measure_snr(params)
+        #measure_snr(params)
+        measure_snr_onboard(params)
         param_i += 1
 
     # after last experiment: move back to position 0
@@ -416,6 +496,7 @@ def main(args=None):
     if not (angle in [0, 360]):
         print('turning back by', angle)
         SerialIn.turn_back(angle)
+
 
 if __name__ == "__main__":
     main()
