@@ -42,6 +42,12 @@ def get_stft(signals, Fs, method_window="", method_noise=""):
     if method_window == "tukey":
         window = signal.tukey(signals.shape[1], alpha=TUKEY_ALPHA)
         signals *= window
+    elif method_window == "hann":
+        window = signal.hann(signals.shape[1])
+        signals *= window
+    elif method_window == "flattop":
+        window = signal.flattop(signals.shape[1])
+        signals *= window
     elif method_window == "":
         pass
     else:
@@ -69,7 +75,7 @@ def get_stft(signals, Fs, method_window="", method_noise=""):
         ValueError(method_noise)
 
     signals_f = np.fft.rfft(signals, n=signals.shape[1], axis=1).T  # n_samples x n_mics
-    freqs = np.fft.rfftfreq(n=signals.shape[1], d=1 / Fs)
+    freqs = np.fft.rfftfreq(n=signals.shape[1], d=1/Fs)
     return signals_f, freqs
 
 
