@@ -118,27 +118,25 @@ def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp
     return df_status, df_motors
 
 
-def read_df_from_wav(fname, n_buffer=2048):
+def read_df_from_wav(fname, n_buffer=2048, method_window=""):
     from audio_stack.processor import get_stft
-    #from scipy.signal import stft
     from scipy.io import wavfile
     
     n_mics = 1
     fs, source_data = wavfile.read(fname)
     print(f'read {fname}')
 
+    # correct for different sampling frequencies so that we 
+    # get roughly the same frequency bins. 
     n_buffer_corr = int(n_buffer * fs / FS)
 
-    #f, t, source_stft = stft(source_data, fs, nperseg=n_buffer_corr, axis=0, window='boxcar') 
-    #source_freq = np.fft.rfftfreq(n=n_buffer_corr, d=1/fs) # n_frequencies x n_times
     n_frames = len(source_data) // n_buffer_corr
-    
 
     df = pd.DataFrame(columns=["index", "timestamp", "n_mics", "topic", "signals_f", "frequencies", "n_frequencies"])
     for i in range(n_frames):
         # n_mics x n_frequencies
         this_buffer = np.copy(source_data[i*n_buffer_corr:(i+1)*n_buffer_corr].reshape((1, -1)))
-        source_stft, source_freq = get_stft(this_buffer, fs, method_window="tukey", method_noise="")
+        source_stft, source_freq = get_stft(this_buffer, fs, method_window=method_window, method_noise="")
         df.loc[len(df), :] = {
             "index": i,
             "timestamp": i * len(source_freq)/fs * 1000, # miliseconds
@@ -168,32 +166,9 @@ def read_signal_from_wav(fname, n_buffer=2048):
     return signals
 
 
-# TODO(FD) delete, duplicate
-def get_spec(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME):
-    from scipy.signal import stft
-    from scipy.io import wavfile
-
-    WAV_DIRNAME = f"../experiments/{exp_name}/export"
-    filename = get_fname(degree, props, snr, motors, source)
-    fname = f"{WAV_DIRNAME}/{filename}.wav"
-
-    fs, source_data = wavfile.read(fname)
-    
-    n_buffer = 1024
-    
-    f, t, source_stft = stft(source_data, fs, nperseg=n_buffer, axis=0)
-    mask = (f > 200) & (f < 7000)
-    source_stft = source_stft[mask, :]
-    return f[mask], t, source_stft
-
-
-def get_spectrogram(df):
-    stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
-    return np.mean(np.abs(stft)**2, axis=1).T  # average over n_mics: n_freqs x n_times
-
-
 # TODO(FD) delete
 def add_soundlevel(df, threshold=1e-4, duration=1000):
+    from frequency_analysis import get_spectrogram
     spectrogram = get_spectrogram(df)  # n_freqs x n_times
     sound_level = np.mean(spectrogram**2, axis=0)  # average over n_frequencies
     df.loc[:, "sound_level"] = sound_level
