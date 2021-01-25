@@ -9,16 +9,18 @@ from crazyflie_description_py.parameters import N_BUFFER, FS
 from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
-from frequency_analysis import *
 
-def clean_signals_f(signals_f, max_value=N_BUFFER):
+VELOCITY = 0.05 # [m/s], parameter in crazyflie
+D_START = 0.6 # [m], starting distance 
+
+def clean_stft(stft, max_value=N_BUFFER):
     """
-    The values in signals_f are normally between -N_BUFFER and N_BUFFER, 
+    The values in stft are normally between -N_BUFFER and N_BUFFER, 
     so values outside of this range are due to communication errors.
     """
-    signals_f[np.isnan(signals_f)] = 0.0
-    signals_f[np.abs(signals_f) > max_value] = 0.0
-    return signals_f
+    stft[np.isnan(stft)] = 0.0
+    stft[np.abs(stft) > max_value] = 0.0
+    return stft
 
 
 def filter_by_dicts(df, dicts):
@@ -102,7 +104,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
 
     df_total = pd.DataFrame(columns=[
         'appendix', 'degree', 'distance', 'motors', 'mic_type', 'source', 'snr', 'props', # categories
-        'seconds', 'frequencies', 'frequencies_matrix', 'signals_f', 'positions'] + pos_columns # data
+        'seconds', 'frequencies', 'frequencies_matrix', 'stft', 'positions'] + pos_columns # data
     )
 
     params = {
@@ -131,7 +133,6 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
             fname = get_fname(**params)
 
             if wav: 
-
                 try:
                     wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
                     df_wav = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
@@ -148,8 +149,8 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
             if not 'signals_f' in df.columns:
                 continue
             
-            signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
-            signals_f = clean_signals_f(signals_f)
+            stft = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+            stft = clean_stft(stft)
 
             seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
             frequencies_matrix = np.array([*df.loc[:,'frequencies']])
@@ -165,7 +166,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 seconds=seconds, 
                 frequencies=frequencies,
                 frequencies_matrix=frequencies_matrix,
-                signals_f=signals_f,
+                stft=stft,
                 positions=positions)
             if 'dx' in df.columns: 
                 pos_dict = {
@@ -183,7 +184,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
 
 def parse_calibration_experiments():
     df_total = pd.DataFrame(columns=['source', 'snr', 'motors', 'exp_name', 'appendix', 
-                                     'seconds', 'frequencies', 'frequencies_matrix', 'signals_f'])
+                                     'seconds', 'frequencies', 'frequencies_matrix', 'stft'])
 
     exp_name_list = [
         '2020_12_11_calibration',
@@ -210,8 +211,8 @@ def parse_calibration_experiments():
             print('could not read', params)
             continue 
             
-        signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
-        signals_f = clean_signals_f(signals_f)
+        stft = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+        stft = clean_stft(stft)
 
         seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
         frequencies_matrix = np.array([*df.loc[:,'frequencies']])
@@ -230,17 +231,18 @@ def parse_calibration_experiments():
             seconds=seconds, 
             frequencies=frequencies, 
             frequencies_matrix=frequencies_matrix,
-            signals_f=signals_f, 
+            stft=stft, 
         )
     return df_total
 
 
 if __name__ == "__main__":
-    import os 
+    import os
 
-    #exp_name = '2020_12_9_rotating'
+    exp_name = '2020_12_9_rotating'
     #exp_name = '2020_12_18_flying'
-    exp_name = '2020_12_18_stepper'
+    #exp_name = '2020_12_18_stepper'
+
     fname = f'results/{exp_name}_real.pkl'
 
     dirname = os.path.dirname(fname)

@@ -118,7 +118,7 @@ def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp
     return df_status, df_motors
 
 
-def read_df_from_wav(fname, n_buffer=2048, method_window=""):
+def read_df_from_wav(fname, n_buffer=2048, method_window="hann"):
     from audio_stack.processor import get_stft
     from scipy.io import wavfile
     
@@ -136,13 +136,13 @@ def read_df_from_wav(fname, n_buffer=2048, method_window=""):
     for i in range(n_frames):
         # n_mics x n_frequencies
         this_buffer = np.copy(source_data[i*n_buffer_corr:(i+1)*n_buffer_corr].reshape((1, -1)))
-        source_stft, source_freq = get_stft(this_buffer, fs, method_window=method_window, method_noise="")
+        signals_f, source_freq = get_stft(this_buffer, fs, method_window=method_window, method_noise="")
         df.loc[len(df), :] = {
             "index": i,
             "timestamp": i * len(source_freq)/fs * 1000, # miliseconds
             "n_mics": n_mics,
             "topic": "measurement_mic",
-            "signals_f": source_stft.T,  
+            "signals_f": signals_f.T,  
             "frequencies": source_freq,
             "n_frequencies": len(source_freq)
         }

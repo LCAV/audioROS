@@ -58,21 +58,21 @@ def generate_room(distance_cm=0, yaw_deg=0, ax=None, single_mic=False, fs_here=F
     return room
 
 
-def get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
+def get_stft(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     assert len(room.sources) == 1
     room.sources[0].add_signal(signal)
     room.simulate()
     
     assert (n_times * n_buffer) < room.mic_array.signals.shape[1], f"{n_times}*{n_buffer}={n_times * n_buffer}, {room.mic_array.signals.shape}"
     
-    signals_f_list = []
+    stft_list = []
     idx = 0
     for _ in range(n_times):
         signals_f = np.fft.rfft(room.mic_array.signals[:, idx:idx+n_buffer], axis=1)
-        signals_f_list.append(signals_f[None, ...])
+        stft_list.append(signals_f[None, ...])
         idx += n_buffer
-    signals_f = np.concatenate(signals_f_list, axis=0)
-    return signals_f
+    stft = np.concatenate(stft_list, axis=0)
+    return stft
 
 
 def generate_rir(frequencies, distance_cm=0, yaw_deg=0, single_mic=False, ax=None, gain=1.0):
@@ -95,8 +95,9 @@ def generate_rir(frequencies, distance_cm=0, yaw_deg=0, single_mic=False, ax=Non
         alpha1 = 10**(-a*reflect_path/20)
         n0 = direct_path / SPEED_OF_SOUND
         n1 = reflect_path / SPEED_OF_SOUND
-        H_ij = alpha0 * gain * np.exp(-1j*2*np.pi*frequencies*n0) + alpha1 * gain * np.exp(-1j*2*np.pi*frequencies*n1)
-        Hs.append(H_ij)
+        H_ij_sq = alpha0 * gain * np.exp(-1j*2*np.pi*frequencies*n0) + alpha1 * gain * np.exp(-1j*2*np.pi*frequencies*n1)
+        + gain**2 * alpha0**2 + gain**2 + alpha1**2
+        Hs.append(H_ij_sq)
     return Hs
 
 
@@ -122,13 +123,13 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=0, signal=None):
         signal = pd.read_pickle('results/multi.pk')
 
     n_times = len(signal) // N_BUFFER
-    signals_f = get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
+    stft = get_stft(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
     if len(frequencies) < len(freqs_all):
         bins_ = [np.argmin(np.abs(f - freqs_all)) for f in frequencies]
     else:
         bins_ = np.arange(len(frequencies))
-    return np.mean(np.abs(signals_f[:, :, bins_]), axis=0) / N_BUFFER
+    return np.mean(np.abs(stft[:, :, bins_]), axis=0) / N_BUFFER
 
 
 def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0):
@@ -146,8 +147,8 @@ def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
     Hs = []
     for d in distances_cm:
         room = generate_room(distance_cm=d, single_mic=False)
-        signals_f = get_signals_f(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
-        Hs.append(np.mean(np.abs(signals_f[:, :, bin_]), axis=0) / N_BUFFER)
+        stft = get_stft(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
+        Hs.append(np.mean(np.abs(stft[:, :, bin_]), axis=0) / N_BUFFER)
     return np.array(Hs)
 
 

@@ -51,12 +51,13 @@ if __name__ == "__main__":
     #exp_name = '2020_10_30_dynamic_move'; degree=0; start_idx=0
     #exp_name = '2020_11_03_sweep_old'; degree=90; start_idx = 20
     #exp_name = '2020_11_03_sweep'; degree=90; start_idx=20
-    #exp_name = '2020_11_10_buzzer'; degree=None; start_idx=20
-    exp_name = '2020_11_12_speaker360'; degree=360; start_idx=20
+    exp_name = '2020_11_10_buzzer'; degree=None; start_idx=20; distance=None
+    #exp_name = '2020_11_12_speaker360'; degree=360; start_idx=20; distance=0
 
-    fname = f'DynamicAnalaysis_{exp_name}.pkl'
+    fname = f'results/DynamicAnalaysis_{exp_name}.pkl'
 
     params = dict(
+        distance = distance,
         degree = degree,
         props = False,
         snr = False,
