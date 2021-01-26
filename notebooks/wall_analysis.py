@@ -13,6 +13,15 @@ from dynamic_analysis import add_pose_to_df
 VELOCITY = 0.05 # [m/s], parameter in crazyflie
 D_START = 0.6 # [m], starting distance 
 
+def load_params(exp_name):
+    """ load parameters module at the experiment of interest """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("params", f"../experiments/{exp_name}/params.py")
+    params = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(params)
+    return params
+
+
 def clean_stft(stft, max_value=N_BUFFER):
     """
     The values in stft are normally between -N_BUFFER and N_BUFFER, 
@@ -91,14 +100,15 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]; wav = False
     elif exp_name == '2020_12_18_stepper':
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]
+    elif exp_name == '2020_11_26_wall':
+        appendix_list = [""]; snr_list = [0]; props_list = [0]; wav = False
 
-    sys.path = [p for p in sys.path if not 'experiments' in p]
-    sys.path.insert(0, f'../experiments/{exp_name}')
-    from params import SOURCE_LIST, DISTANCE_LIST, DEGREE_LIST, MOTORS_LIST
     from crazyflie_description_py.parameters import N_BUFFER
 
+    params_file = load_params(exp_name)
+
     # TODO(FD) remove this when we use more angles again.
-    DEGREE_LIST = [0]
+    params_file.DEGREE_LIST = [0]
 
     pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
 
@@ -112,7 +122,13 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
         'exp_name': exp_name
     }
     for degree, distance, source, motors, appendix, snr, props in itertools.product(
-        DEGREE_LIST, DISTANCE_LIST, SOURCE_LIST, MOTORS_LIST, appendix_list, snr_list, props_list): 
+        params_file.DEGREE_LIST, 
+        params_file.DISTANCE_LIST, 
+        params_file.SOURCE_LIST, 
+        params_file.MOTORS_LIST, 
+        appendix_list, 
+        snr_list, 
+        props_list): 
 
         mic_dfs = {'audio_deck': None, 'measurement': None}
         try:
@@ -141,6 +157,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                     print('could not read', wav_fname)
             
         except FileNotFoundError as e:
+            print('skipping', params)
             continue 
             
         for mic_type, df in mic_dfs.items():
@@ -156,10 +173,6 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
             frequencies_matrix = np.array([*df.loc[:,'frequencies']])
             frequencies = frequencies_matrix[0, :]
 
-            # save frequency matrix only if frequencies vary.
-            if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
-                frequencies_matrix = None
-            
             params['source'] = str(params['source'])
             all_items = dict(
                 mic_type=mic_type,
@@ -180,6 +193,97 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
             all_items.update(params)
             df_total.loc[len(df_total), :] = all_items
     return df_total
+
+
+def parse_old_experiments(exp_name='2020_11_26_wall'):
+    from evaluate_data import read_df, integrate_yaw
+    from dynamic_analysis import add_pose_to_df
+    from frequency_analysis import get_psd, get_spectrogram_raw, psd_df_from_spec, extract_psd, apply_linear_mask, get_index_matrix
+
+    kwargs_all = {
+        '2020_11_26_wall': {
+            'slope': (4000 - 1000) / 200,
+            'offset': 200,
+            'delta': 50
+        }
+    }
+
+    kwargs = kwargs_all[exp_name]
+
+#fname = f'results/{exp_name}_simulated.pkl'
+    fname = f'results/{exp_name}_real.pkl'
+
+    SOURCE_LIST = ['mono4125', 'mono3500', None, 'sweep', 'sweep_low', 'sweep_high'] # 
+    DEGREE_LIST = [0, 27, 54, 81, 360]
+    DISTANCE_LIST = np.arange(50)
+
+    try:
+        raise
+        df_total = pd.read_pickle(fname)
+        frequencies = df_total.iloc[0].frequencies
+        print('read', fname)
+    except:
+        print('could not read', fname)
+        df_total = pd.DataFrame(columns=['stft', 'degree', 'yaw', 'distance', 'source', 'psd', 'freqs'])
+        params = dict(
+          props = False,
+          snr = False,
+          motors = False,
+          exp_name = exp_name
+        )
+        
+        for degree in DEGREE_LIST:
+            for distance in DISTANCE_LIST:
+                for source in SOURCE_LIST:
+                    try:
+                        params['degree'] = degree
+                        params['distance'] = distance
+                        params['source'] = source
+                        params['appendix'] = ""
+                        df, df_pos = read_df(**params)
+                    except Exception as e:
+                        continue 
+
+                    # detect index decrease (happens when two csv files are concatenated)
+                    sign = np.sign(df['index'].values[1:] - df['index'].values[:-1])
+                    if np.any(sign < 0):
+                        index = np.where(sign<0)[0][-1]
+                        print('Warning: found multiple start indices, start at', index)
+                        df = df.iloc[index:]
+                        index_start = df.iloc[0]['index']
+                        df_pos = df_pos.loc[df_pos.index >= index_start]
+
+                    stft = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+                    frequencies_matrix = np.array([*df.loc[:,'frequencies']])
+
+                    if degree == 360:
+                        add_pose_to_df(df, df_pos, max_allowed_lag_ms=50)
+                        yaw = integrate_yaw(df.timestamp.values, df.yaw_rate_deg.values)
+                    else:
+                        yaw = np.full(len(df), -degree)
+
+                    spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
+                    spec_masked, freqs = apply_linear_mask(spec, freqs, 
+                                                           kwargs['slope'], kwargs['offset'], kwargs['delta'])
+                    index_matrix = get_index_matrix(spec_masked)
+                    psd_df = psd_df_from_spec(spec_masked, freqs, index_matrix)
+                    psd, psd_freqs, freqs, std = extract_psd(psd_df)
+                    
+                    psd_old = get_psd(stft, freqs, fname='real')
+
+                    df_total.loc[len(df_total), :] = dict(
+                        degree=degree,
+                        yaw=yaw,
+                        distance=distance,
+                        source=str(source),
+                        stft=stft,
+                        freqs=freqs,
+                        spec=spec,
+                        psd=psd,
+                        psd_freqs=psd_freqs,
+                    )
+        pd.to_pickle(df_total, fname)
+        print('saved as', fname)
 
 
 def parse_calibration_experiments():
@@ -218,10 +322,6 @@ def parse_calibration_experiments():
         frequencies_matrix = np.array([*df.loc[:,'frequencies']])
         frequencies = frequencies_matrix[0, :]
 
-        # save frequency matrix only if frequencies vary.
-        if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
-            frequencies_matrix = None
-        
         df_total.loc[len(df_total), :] = dict(
             source=str(source), 
             snr=filter_, 
@@ -239,23 +339,27 @@ def parse_calibration_experiments():
 if __name__ == "__main__":
     import os
 
-    exp_name = '2020_12_9_rotating'
+    all_exp_names = ['2020_12_9_rotating',
+                     '2020_12_18_flying',
+                     '2020_12_18_stepper']
+    #exp_name = '2020_12_9_rotating'
     #exp_name = '2020_12_18_flying'
     #exp_name = '2020_12_18_stepper'
+    for exp_name in ['2020_11_26_wall']:
 
-    fname = f'results/{exp_name}_real.pkl'
+        fname = f'results/{exp_name}_real.pkl'
 
-    dirname = os.path.dirname(fname)
-    if not os.path.isdir(dirname):
-        os.makedirs(dirname)
-        print('created directory', dirname)
+        dirname = os.path.dirname(fname)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+            print('created directory', dirname)
 
-    try:
-        raise 
-        df_total = pd.read_pickle(fname)
-        print('read', fname)
-    except:
-        print('could not read', fname)
-        df_total = parse_experiments(exp_name=exp_name)
-        pd.to_pickle(df_total, fname)
-        print('saved as', fname)
+        try:
+            raise
+            df_total = pd.read_pickle(fname)
+            print('read', fname)
+        except:
+            print('could not read', fname)
+            df_total = parse_experiments(exp_name=exp_name)
+            pd.to_pickle(df_total, fname)
+            print('saved as', fname)

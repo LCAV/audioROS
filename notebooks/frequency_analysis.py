@@ -8,6 +8,20 @@ frequency_analysis.py:
 import pandas as pd
 import numpy as np
 
+
+def reset_lims(ax, frequencies, times):
+    ax.set_xlim(times[0], times[-1])
+    ax.set_ylim(frequencies[0], frequencies[-1])
+
+
+def get_bin(freqs, freq):
+    error = np.abs(freqs - freq)
+    bin_ = np.argmin(error)
+    if error[bin_] > 1:
+        print(f'Warning: chosen bin differs from {freq} by {error[bin_]}')
+    return bin_
+
+
 def get_spectrogram_varying_bins(frequencies_matrix, stft):
     """
     :param frequencies_matrix: frequencies matrix (n_times x n_freqs)
@@ -26,7 +40,7 @@ def get_spectrogram_varying_bins(frequencies_matrix, stft):
             spectrogram[f_idx, :, t_idx] = np.abs(stft[t_idx, :, i])
     return spectrogram, all_frequencies
 
-# below works for snr=0,1 and 2.
+
 def get_spectrogram(df):
     """ 
     :param df: pandas dataframe with signals_f (n_mics x n_freqs) and frequencies (n_freqs) in each row.
@@ -43,6 +57,25 @@ def get_spectrogram(df):
     else:
         return get_spectrogram_varying_bins(frequencies_matrix, stft)
 
+
+def get_spectrogram_raw(frequencies_matrix, stft):
+    """ 
+    :param df: pandas dataframe with signals_f (n_mics x n_freqs) and frequencies (n_freqs) in each row.
+    :return: spectrogram (absolute value squared) n_freqs x n_mics x n_times  
+    """
+    frequencies_start = frequencies_matrix[0, :]
+    varying_bins = True
+
+    if frequencies_matrix is not None:
+        varying_bins = np.any(np.any(frequencies_start[None, :] - frequencies_matrix, axis=0))
+
+    if varying_bins: 
+        return get_spectrogram_varying_bins(frequencies_matrix, stft)
+    else:
+        spectrogram = np.abs(np.transpose(stft, (2, 1, 0))) # n_freqs x n_mics x n_times
+        return spectrogram, frequencies_start 
+
+
 def add_spectrogram(row):
     """  Add spectrogram to rows (preprocessed, so they have stft and frequencies_matrix).
 
@@ -55,16 +88,17 @@ def add_spectrogram(row):
     assert row.stft.shape[1] in (1, 4)
     assert row.stft.shape[2] in (32, 1025, 1412), row.stft.shape
 
-    if row.frequencies_matrix is None:
-        row.spectrogram = np.abs(row.stft.T)
-    else:
-        spectrogram, freqs = get_spectrogram_varying_bins(row.frequencies_matrix, row.stft)
-        row.spectrogram = spectrogram
+    spectrogram, freqs = get_spectrogram_raw(row.frequencies_matrix, row.stft)
+    row.spectrogram = spectrogram
     return row
 
-# TODO(FD) works for snr=0 only. potentially generalize? 
-# TODO(FD) replace below with the spectrogram version? 
-# first apply mask, then get the spectrogram.
+
+def get_index_matrix(spec):
+    spec_avg = np.mean(spec, axis=1)
+    return np.argsort(spec_avg, axis=0)[::-1]
+
+
+# TODO(FD) replace below with the spectrogram masking version.
 def extract_linear_psd(stft, frequencies, slope, offset, delta=50, ax=None, times=None):
     eps = 1e-2
     times_window = (frequencies - offset) / slope
@@ -89,6 +123,54 @@ def extract_linear_psd(stft, frequencies, slope, offset, delta=50, ax=None, time
         psd[:, i] = np.mean(signals_nonzero**2, axis=0)
     return psd
 
+
+def apply_linear_mask(spec, frequencies, slope, offset, delta=50, ax=None, times=None):
+    times_window = (frequencies - offset) / slope
+    
+
+    psd = np.zeros((spec.shape[1], spec.shape[0])) # 4 x 32
+    if times is None:
+        times = np.arange(spec.shape[2])
+    for i, t in enumerate(times_window):
+        # reduce the signals to a valid window given by offset and slope
+        invalid_times = (times > t + delta) | (times < t - delta)
+        spec[i, :, invalid_times] = 0 
+
+    if ax is not None:
+        ax.plot(times_window-delta, frequencies, color='red')
+        ax.plot(times_window+delta, frequencies, color='red')
+        reset_lims(ax, frequencies, times)
+
+    mask = np.any(spec, axis=(1, 2))
+    frequencies = frequencies[mask]
+    spec = spec[mask, ...] 
+    return spec, frequencies
+
+
+def apply_box_mask(spec, frequencies, times=None, min_freq=None, max_freq=None, min_time=None, max_time=None, 
+                   ax=None):
+    if times is None:
+        times = np.arange(spec.shape[2])
+
+    if min_freq is not None:
+        spec[frequencies < min_freq, ...] = 0
+    if max_freq is not None:
+        spec[frequencies > max_freq, ...] = 0
+    if min_time is not None:
+        spec[..., times < min_time] = 0
+    if max_time is not None:
+        spec[..., times > max_time] = 0
+
+    if ax is not None:
+        [ax.axhline(freq, color='red') for freq in [min_freq, max_freq] if freq is not None]
+        [ax.axvline(time, color='red') for time in [min_time, max_time] if time is not None]
+        reset_lims(ax, frequencies, times)
+
+    mask = np.any(spec, axis=(1, 2))
+    frequencies = frequencies[mask]
+    spec = spec[mask, ...] 
+    return spec, frequencies
+    
 
 # TODO(FD) replace below with the spectrogram version!
 def extract_psd_dict(stft, frequencies_matrix, min_t=0, max_t=None, n_freq=1, ax=None):
@@ -131,13 +213,13 @@ def extract_psd_dict(stft, frequencies_matrix, min_t=0, max_t=None, n_freq=1, ax
     return psd_df
 
 
-def psd_df_from_spec(spec, freqs, mask, min_t=0, max_t=None, n_freq=1):
+def psd_df_from_spec(spec, freqs, index_matrix, min_t=0, max_t=None, n_freq=1):
     """
-    Extract distance-frequency information from spectrogram and mask.
+    Extract distance-frequency information from spectrogram and index_matrix.
 
     :param spec: spectrogram (n_freqs x n_mics x n_times)
     :param freqs: frequencies (n_freqs)
-    :param mask: mask containing the max amplitude indices at each time. (n_freq x n_times)
+    :param index_matrix: index_matrix containing the max amplitude indices at each time. (n_freq x n_times)
 
     structure of output: 
     | mic | frequency | distance | time | magnitude
@@ -145,21 +227,21 @@ def psd_df_from_spec(spec, freqs, mask, min_t=0, max_t=None, n_freq=1):
     :param return: psd_df
     """
 
-    if mask.ndim == 1:
+    if index_matrix.ndim == 1:
         assert n_freq == 1
-        mask = mask.reshape((1, -1))
+        index_matrix = index_matrix.reshape((1, -1))
 
-    assert mask.shape[0] >= n_freq 
+    assert index_matrix.shape[0] >= n_freq 
 
     distance = 0
     n_mics = spec.shape[1]
 
     psd_df = pd.DataFrame(columns=['time', 'counter', 'mic', 'frequency', 'distance', 'magnitude'])
     if max_t is None:
-        max_t = mask.shape[1]
+        max_t = index_matrix.shape[1]
         
     for i_t in range(min_t, max_t): # n_times x n_freqs 
-        for i_f in mask[:n_freq, i_t]:
+        for i_f in index_matrix[:n_freq, i_t]:
             f = freqs[i_f]
             for i_mic in range(n_mics):
                 psd_df.loc[len(psd_df), :] = {
@@ -172,7 +254,7 @@ def psd_df_from_spec(spec, freqs, mask, min_t=0, max_t=None, n_freq=1):
                 }
     psd_df = psd_df.apply(pd.to_numeric, axis=0, downcast='integer')
     return psd_df
-                
+
 
 def extract_psd(psd_df, verbose=False, method='median'):
     """
@@ -204,26 +286,3 @@ def extract_psd(psd_df, verbose=False, method='median'):
     # remove the frequencies for which we have no data
     mask = np.any(psd > 0, axis=0)
     return psd[:, mask], frequencies[mask], psd_std[:, mask]
-
-
-# TODO(FD) delete, only used by old experiments (in WallAnalysis.ipynb)
-def get_psd(stft, frequencies, ax=None, fname='real'):
-    """ 
-    :param stft: tensor of signals of shape n_times x n_mics x n_frequencies
-    :param frequencies: frequencies vector in Hz.
-    """
-
-    # read off from plot: 
-    if 'simulated' in fname:
-        slope = (4000 - 1000) / (200 - 50)
-        offset = -500
-    elif 'real' in fname:
-        # old dataset (2020_11_23_wall2)
-        #slope = (4000 - 1000) / (285 - 90)
-        #offset = -500
-        slope = (4000 - 1000) / (250 - 50)
-        offset = 200
-    else:
-        raise ValueError(exp_name)
-
-    return extract_linear_psd(stft, frequencies, slope, offset, delta=50, ax=ax)

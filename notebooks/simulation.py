@@ -7,6 +7,7 @@ import pyroomacoustics as pra
 from audio_stack.beam_former import rotate_mics
 from constants import SPEED_OF_SOUND
 from crazyflie_description_py.parameters import MIC_POSITIONS, FS, N_BUFFER
+from frequency_analysis import get_bin
 
 sys.path.append('../crazyflie-audio/python')
 from signals import generate_signal, amplify_signal
@@ -120,13 +121,16 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=0, signal=None):
     #            max_db=-10,
     #            phase_offset=phase)
     if signal is None:
-        signal = pd.read_pickle('results/multi.pk')
+        try:
+            signal = pd.read_pickle('results/multi.pk')
+        except FileNotFoundError:
+            print('Run WallStudy notebook to save multi.pk')
 
     n_times = len(signal) // N_BUFFER
     stft = get_stft(room, signal, n_buffer=N_BUFFER, n_times=n_times) # n_buffer=n_buffer, n_times=5)
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
     if len(frequencies) < len(freqs_all):
-        bins_ = [np.argmin(np.abs(f - freqs_all)) for f in frequencies]
+        bins_ = [get_bin(freqs_all, f) for f in frequencies]
     else:
         bins_ = np.arange(len(frequencies))
     return np.mean(np.abs(stft[:, :, bins_]), axis=0) / N_BUFFER
@@ -139,10 +143,12 @@ def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0):
 
 def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
     import pandas as pd
+    from frequency_analysis import get_bin
     duration_sec = N_BUFFER * n_times / FS
     signal = generate_signal(FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency)
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
-    bin_ = np.argmin(np.abs(freqs_all - frequency))
+
+    bin_ = get_bin(freqs_all, frequency)
 
     Hs = []
     for d in distances_cm:

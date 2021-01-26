@@ -30,7 +30,7 @@ SOUND_EFFECTS = {
     'sweep_buzzer':  (20, [0,   16000],  185), # 185 is duration of sweep
     'sweep_slow':   (21,  [1000, 5000], 0), # 1 will be overwritten
     'sweep_fast':   (22,  [1000, 5000], 0), # 1 will be overwritten
-    'mono3125':   (12,  [1,       2], 0), 
+    'mono3125':   (12,  [1,       2], 0), # 1, 2 will lead to hard-coded bins
     'mono4156':   (12,  [1,       2], 0), 
     'mono8000':   (12,  [1,       2], 0), 
 }
