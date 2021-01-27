@@ -139,7 +139,7 @@ def read_df_from_wav(fname, n_buffer=2048, method_window="hann"):
         signals_f, source_freq = get_stft(this_buffer, fs, method_window=method_window, method_noise="")
         df.loc[len(df), :] = {
             "index": i,
-            "timestamp": i * len(source_freq)/fs * 1000, # miliseconds
+            "timestamp": i * n_buffer_corr/fs * 1000, # miliseconds
             "n_mics": n_mics,
             "topic": "measurement_mic",
             "signals_f": signals_f.T,  

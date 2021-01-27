@@ -30,18 +30,23 @@ class WallDetector(object):
         self.n_mics = n_mics
 
 
-    def fill_from_raw(self, frequencies_matrix, stft, distance=DISTANCE, angle=ANGLE):
+    def fill_from_raw(self, frequencies_matrix, stft, distance=DISTANCE, angle=ANGLE, times=None, verbose=False):
         spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
-        spec_masked, freqs_masked = apply_linear_mask(spec, freqs, self.params['slope'], self.params['offset'], self.params['delta'])
+        spec_masked, freqs_masked = apply_linear_mask(spec, freqs, self.params['slope'], self.params['offset'], self.params['delta'], times=times)
+        if verbose:
+            print(f'after masking: found {len(freqs_masked)} bins.')
         index_matrix = get_index_matrix(spec_masked)
-        self.fill_from_spec(spec_masked, freqs_masked, index_matrix, distance, angle)
+        self.fill_from_spec(spec_masked, freqs_masked, index_matrix, distance, angle, verbose)
         return spec_masked, freqs_masked
 
 
-    def fill_from_spec(self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE):
+    def fill_from_spec(self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE, verbose=False):
         df = psd_df_from_spec(spec, freqs, index_matrix) 
+        if verbose:
+            print(f'filling with {len(df)} new rows')
         df.loc[:, 'distance'] = distance  
-        self.df = pd.concat([self.df, df])
+        # need ignore_index to make sure that the final index is unique.
+        self.df = pd.concat([self.df, df], ignore_index=True)
 
 
     def get_distances(self, min_dist=None, max_dist=None):
@@ -56,11 +61,17 @@ class WallDetector(object):
         """ 
         :return: slice along one distance, of shape (mic x frequencies), frequencies
         """
-        df = self.df.loc[self.df.distance == distance]
-        if not len(df):
-            return 
+        distances = self.get_distances()
+        if distance not in distances:
+            print(f'Warning: did not find {distance}')
+            bin_ = np.argmin(np.abs(distances - distance))
+            distance = distances[bin_]
+            print(f'Closest match: {distance}')
 
-        freqs = self.get_frequencies(min_freq, max_freq)
+        df = self.df.loc[self.df.distance == distance]
+
+        freqs = sort_and_clip(df.frequency.unique(), min_freq, max_freq)
+
         freq_slice = np.empty((self.n_mics, len(freqs)))
         for j, f in enumerate(freqs):
             for i in range(self.n_mics):
@@ -73,10 +84,16 @@ class WallDetector(object):
         """ 
         :return: slice along one distance, of shape (mic x frequencies), frequencies
         """
+        frequencies = self.get_frequencies()
+        if frequency not in frequencies:
+            print(f'Warning: did not find {frequency}')
+            bin_ = np.argmin(np.abs(frequencies - frequency))
+            frequency = frequencies[bin_]
+            print(f'Closest match: {frequency}')
+
         df = self.df.loc[self.df.frequency == frequency]
-        if not len(df):
-            return 
-        distances = self.get_distances(min_dist, max_dist)
+
+        distances = sort_and_clip(df.distance.unique(), min_dist, max_dist)
 
         distance_slice = np.empty((self.n_mics, len(distances)))
         for j, d in enumerate(distances):
@@ -86,7 +103,7 @@ class WallDetector(object):
         return distance_slice, distances
 
 
-    def get_df_matrix(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None):
+    def get_df_matrix(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None, method=np.nanmedian):
         distances = self.get_distances(min_dist, max_dist)
         frequencies = self.get_frequencies(min_freq, max_freq)
 
@@ -98,8 +115,7 @@ class WallDetector(object):
                 f_i = np.where(frequencies == f)[0][0]
             except:
                 continue
-            median = np.nanmedian(df.magnitude.values)
-            df_matrix[m, f_i, d_i] = median
+            df_matrix[m, f_i, d_i] = method(df.magnitude.values)
         return distances, frequencies, df_matrix
 
         for k, d in enumerate(distances):
@@ -109,3 +125,26 @@ class WallDetector(object):
                     f_idx = np.where(f == frequencies)[0][0]
                     df_matrix[i, f_idx, k] = psd[i, j]
         return distances, frequencies, df_matrix
+    
+
+    def fill_from_backup(self, exp_name, appendix=""):
+        fname = f'results/backup_{exp_name}{appendix}.pkl'
+        self.df = pd.read_pickle(fname)
+        print('read', fname)
+
+
+    def backup(self, exp_name, appendix=""):
+        fname = f'results/backup_{exp_name}{appendix}.pkl'
+        pd.to_pickle(self.df, fname)
+        print('saved', fname)
+
+
+    def remove_spurious_freqs(self, n_min=10):
+        """ Remove the frequencies for which we only have less than n_min measurements. """
+        remove_rows = []
+        for (freq, mic, distance), df in self.df.groupby(['frequency', 'mic', 'distance']):
+            if len(df) < n_min: 
+                remove_rows += list(df.index.values)
+        print(f'removing {len(remove_rows)} rows')
+        self.df = self.df.drop(index=remove_rows, inplace=False)
+        return len(remove_rows)

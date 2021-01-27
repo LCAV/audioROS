@@ -101,7 +101,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     elif exp_name == '2020_12_18_stepper':
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]
     elif exp_name == '2020_11_26_wall':
-        appendix_list = [""]; snr_list = [0]; props_list = [0]; wav = False
+        appendix_list = [""]; snr_list = [0]; props_list = [0]; wav = True
 
     from crazyflie_description_py.parameters import N_BUFFER
 
