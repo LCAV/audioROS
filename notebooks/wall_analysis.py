@@ -339,14 +339,17 @@ def parse_calibration_experiments():
 if __name__ == "__main__":
     import os
 
-    all_exp_names = ['2020_12_9_rotating',
-                     '2020_12_18_flying',
-                     '2020_12_18_stepper']
+    all_exp_names = [
+        '2020_12_9_rotating',
+        '2020_12_18_flying',
+        '2020_12_18_stepper',
+        '2020_11_26_wall',
+    ]
     #exp_name = '2020_12_9_rotating'
     #exp_name = '2020_12_18_flying'
     #exp_name = '2020_12_18_stepper'
-    for exp_name in ['2020_11_26_wall']:
-
+    #exp_name = '2020_11_26_wall'
+    for exp_name in all_exp_names[:-1]:
         fname = f'results/{exp_name}_real.pkl'
 
         dirname = os.path.dirname(fname)
