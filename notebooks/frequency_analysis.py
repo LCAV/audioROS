@@ -5,8 +5,30 @@
 frequency_analysis.py: 
 """
 
-import pandas as pd
+import matplotlib.pylab as plt
 import numpy as np
+import pandas as pd
+
+def plot_spectrogram(x, y, matrix, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    if matrix.ndim > 2:
+        assert matrix.shape[1] in [1, 4] # n_mics
+        matrix = np.mean(matrix, axis=tuple(range(1, matrix.ndim-1)))
+
+    if x is None:
+        x = np.arange(matrix.shape[1])
+    if y is None:
+        y = np.arange(matrix.shape[0])
+
+    matrix_log10 = np.full(matrix.shape, np.nan)
+    matrix_log10[matrix > 0] = np.log10(matrix[matrix > 0])
+    try:
+        ax.pcolorfast(x, y, matrix_log10)
+    except:
+        ax.pcolorfast(x, y, matrix_log10[:-1, :-1])
+    return ax
 
 
 def reset_lims(ax, frequencies, times):
@@ -41,6 +63,10 @@ def get_spectrogram_varying_bins(frequencies_matrix, stft):
     return spectrogram, all_frequencies
 
 
+def get_spectrogram_constant_bins(stft): 
+    return np.abs(np.transpose(stft, (2, 1, 0))) # n_freqs x n_mics x n_times
+
+
 def get_spectrogram(df):
     """ 
     :param df: pandas dataframe with signals_f (n_mics x n_freqs) and frequencies (n_freqs) in each row.
@@ -60,20 +86,14 @@ def get_spectrogram(df):
 
 def get_spectrogram_raw(frequencies_matrix, stft):
     """ 
-    :param df: pandas dataframe with signals_f (n_mics x n_freqs) and frequencies (n_freqs) in each row.
-    :return: spectrogram (absolute value squared) n_freqs x n_mics x n_times  
     """
     frequencies_start = frequencies_matrix[0, :]
-    varying_bins = True
-
-    if frequencies_matrix is not None:
-        varying_bins = np.any(np.any(frequencies_start[None, :] - frequencies_matrix, axis=0))
-
+    varying_bins = np.any(np.any(frequencies_start[None, :] - frequencies_matrix, axis=0))
     if varying_bins: 
         return get_spectrogram_varying_bins(frequencies_matrix, stft)
     else:
-        spectrogram = np.abs(np.transpose(stft, (2, 1, 0))) # n_freqs x n_mics x n_times
-        return spectrogram, frequencies_start 
+        frequencies = frequencies_matrix[0, :]
+        return get_spectrogram_constant_bins(stft), frequencies
 
 
 def add_spectrogram(row):
@@ -98,36 +118,9 @@ def get_index_matrix(spec):
     return np.argsort(spec_avg, axis=0)[::-1]
 
 
-# TODO(FD) replace below with the spectrogram masking version.
-def extract_linear_psd(stft, frequencies, slope, offset, delta=50, ax=None, times=None):
-    eps = 1e-2
-    times_window = (frequencies - offset) / slope
-    # freqs_window = offset + slope * times
-    
-    if ax is not None:
-        ax.plot(times_window-delta, frequencies, color='red')
-        ax.plot(times_window+delta, frequencies, color='red')
-
-    psd = np.zeros(stft.shape[1:]) # 4 x 32
-    if times is None:
-        times = np.arange(stft.shape[0])
-    for i, t in enumerate(times_window):
-
-        # reduce the signals to a valid window given by offset and slope
-        valid_times = (times <= t + delta) & (times >= t - delta)
-        signals_window = np.abs(stft[valid_times, : , i]) # n_times x n_mics
-
-        # within the window, choose only nonzero indices for average
-        signals_nonzero = signals_window[np.mean(signals_window, axis=1) > eps, :]
-        #print('reduced from:', signals_window.shape[0], signals_nonzero.shape[0])
-        psd[:, i] = np.mean(signals_nonzero**2, axis=0)
-    return psd
-
-
 def apply_linear_mask(spec, frequencies, slope, offset, delta=50, ax=None, times=None):
     times_window = (frequencies - offset) / slope
     
-
     psd = np.zeros((spec.shape[1], spec.shape[0])) # 4 x 32
     if times is None:
         times = np.arange(spec.shape[2])
@@ -213,6 +206,32 @@ def extract_psd_dict(stft, frequencies_matrix, min_t=0, max_t=None, n_freq=1, ax
     return psd_df
 
 
+# TODO(FD) replace below with the spectrogram masking version.
+def extract_linear_psd(stft, frequencies, slope, offset, delta=50, ax=None, times=None):
+    eps = 1e-2
+    times_window = (frequencies - offset) / slope
+    # freqs_window = offset + slope * times
+    
+    if ax is not None:
+        ax.plot(times_window-delta, frequencies, color='red')
+        ax.plot(times_window+delta, frequencies, color='red')
+
+    psd = np.zeros(stft.shape[1:]) # 4 x 32
+    if times is None:
+        times = np.arange(stft.shape[0])
+    for i, t in enumerate(times_window):
+
+        # reduce the signals to a valid window given by offset and slope
+        valid_times = (times <= t + delta) & (times >= t - delta)
+        signals_window = np.abs(stft[valid_times, : , i]) # n_times x n_mics
+
+        # within the window, choose only nonzero indices for average
+        signals_nonzero = signals_window[np.mean(signals_window, axis=1) > eps, :]
+        #print('reduced from:', signals_window.shape[0], signals_nonzero.shape[0])
+        psd[:, i] = np.mean(signals_nonzero**2, axis=0)
+    return psd
+
+
 def psd_df_from_spec(spec, freqs, index_matrix, min_t=0, max_t=None, n_freq=1):
     """
     Extract distance-frequency information from spectrogram and index_matrix.
@@ -236,22 +255,32 @@ def psd_df_from_spec(spec, freqs, index_matrix, min_t=0, max_t=None, n_freq=1):
     distance = 0
     n_mics = spec.shape[1]
 
-    psd_df = pd.DataFrame(columns=['time', 'counter', 'mic', 'frequency', 'distance', 'magnitude'])
+    upper_bound = spec.shape[1] * max(spec.shape[0], spec.shape[2])
+    psd_df = pd.DataFrame(columns=['time', 'counter', 'mic', 'frequency', 'distance', 'magnitude'], 
+                          index=range(upper_bound))
     if max_t is None:
         max_t = index_matrix.shape[1]
         
+    i_loc = 0
+    counter_dict = {}
     for i_t in range(min_t, max_t): # n_times x n_freqs 
         for i_f in index_matrix[:n_freq, i_t]:
+            counter_dict[i_f] = counter_dict.get(i_f, 0) + 1
+
             f = freqs[i_f]
             for i_mic in range(n_mics):
-                psd_df.loc[len(psd_df), :] = {
+
+                psd_df.loc[i_loc, :] = {
                     'mic': i_mic,
                     'time': i_t, 
-                    'counter': len(psd_df.loc[psd_df.frequency==f]),
+                    'counter': counter_dict[i_f], 
                     'frequency': f,
                     'magnitude': np.abs(spec[i_f, i_mic, i_t]),
                     'distance': distance
                 }
+                i_loc += 1
+    if i_loc > upper_bound:
+        print('Warning: upper bound was too small')
     psd_df = psd_df.apply(pd.to_numeric, axis=0, downcast='integer')
     return psd_df
 

@@ -50,7 +50,10 @@ def read_full_df(degree=0, props=True, snr=True, motors=True, source=True, exp_n
     return df
 
 
-def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
+def read_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix="", **kwargs):
+    #for key, val in kwargs.items():
+    #    print(f'unused {key}:{val}')
+
     def convert_audio(row):
         arrays = ["signals_real_vect", "signals_imag_vect", "frequencies", "mic_positions"]
         ints = ["n_mics", "n_frequencies", "timestamp", "audio_timestamp"]
