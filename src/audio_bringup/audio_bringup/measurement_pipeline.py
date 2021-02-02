@@ -15,7 +15,6 @@ import time
 import numpy as np
 import rclpy
 from scipy.io import wavfile
-import serial
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
@@ -166,7 +165,6 @@ def main(args=None):
             elif delta < 0:
                 print('turning back by', delta)
                 SerialIn.turn_back(-delta, blocking=True)
-            previous_angle = angle
 
         #### record ####
         set_param('/csv_writer', 'filename', '')

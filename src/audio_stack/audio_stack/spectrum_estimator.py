@@ -10,11 +10,10 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
-import numpy as np
 
-from audio_interfaces.msg import Correlations, Spectrum, SignalsFreq, PoseRaw
+from audio_interfaces.msg import PoseRaw, SignalsFreq, Spectrum
 from audio_interfaces_py.messages import create_spectrum_message, read_signals_freq_message 
-from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
+from audio_stack.beam_former import BeamFormer
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
 # Beamforming method, available: 
@@ -154,7 +153,7 @@ def main(args=None):
     import os
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = current_dir + "/../../../crazyflie-audio/data/simulated"
+    current_dir + "/../../../crazyflie-audio/data/simulated"
 
     rclpy.init(args=args)
 

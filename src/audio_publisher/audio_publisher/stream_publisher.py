@@ -5,19 +5,12 @@
 stream_publisher.py: 
 """
 
-import sys
-import time
 
-import numpy as np
-from scipy.io.wavfile import read, write
 
 import rclpy
-from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
 
 import sounddevice as sd
 
-from audio_interfaces.msg import Signals
 from .publisher import AudioPublisher
 
 

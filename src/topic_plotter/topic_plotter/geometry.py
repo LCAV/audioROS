@@ -10,7 +10,6 @@ from rclpy.node import Node
 from geometry_msgs.msg import Pose
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import PoseRaw, DoaEstimates
 from audio_interfaces_py.messages import read_pose_raw_message, read_pose_message

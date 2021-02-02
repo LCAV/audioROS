@@ -11,7 +11,7 @@ from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose 
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
-from audio_interfaces_py.messages import create_signals_freq_message, create_pose_message, create_pose_raw_message
+from audio_interfaces_py.messages import create_pose_raw_message, create_signals_freq_message
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
@@ -296,7 +296,7 @@ def main(args=None):
             reader_crtp.send_buzzer_freq(0)
             print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
-        except Exception as e:
+        except Exception:
             print('error occured')
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)

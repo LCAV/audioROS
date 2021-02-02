@@ -9,9 +9,6 @@ import time
 import numpy as np
 from scipy.io.wavfile import write
 
-import rclpy
-from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
 
 from audio_interfaces.msg import Signals
 from audio_interfaces_py.messages import create_signals_message

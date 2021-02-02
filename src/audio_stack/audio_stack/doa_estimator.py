@@ -14,9 +14,7 @@
 
 import rclpy
 from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
 
-import matplotlib.pylab as plt
 import numpy as np
 
 from audio_interfaces.msg import Spectrum, DoaEstimates
@@ -56,11 +54,6 @@ class DoaEstimator(Node):
 
 
 def main(args=None):
-    import os
-
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = current_dir + "/../../../crazyflie-audio/data/simulated"
-
     rclpy.init(args=args)
 
     estimator = DoaEstimator()

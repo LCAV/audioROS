@@ -1,4 +1,3 @@
-import argparse
 import csv
 import os
 

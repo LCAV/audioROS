@@ -8,7 +8,6 @@ from rclpy.node import Node
 from scipy.spatial.transform import Rotation as R
 
 from geometry_msgs.msg import Pose
-from std_msgs.msg import String
 
 from audio_simulation.geometry import get_starting_pose
 from audio_simulation.geometry import ROOM_DIM, STARTING_POS, YAW_DEG

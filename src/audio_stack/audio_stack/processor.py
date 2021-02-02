@@ -20,8 +20,8 @@ sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from noise_cancellation import filter_iir_bandpass
 from bin_selection import select_frequencies as embedded_select_frequencies
 
-from audio_interfaces.msg import Signals, SignalsFreq, Correlations
-from audio_interfaces_py.messages import create_correlations_message, create_signals_freq_message, read_signals_freq_message, read_signals_message
+from audio_interfaces.msg import Signals, SignalsFreq
+from audio_interfaces_py.messages import create_signals_freq_message, read_signals_message
 from audio_interfaces_py.node_with_params import NodeWithParams
 from crazyflie_description_py.parameters import TUKEY_ALPHA
 

@@ -10,7 +10,6 @@ from scipy.spatial.transform import Rotation as R
 
 from geometry_msgs.msg import Pose, Point
 
-from audio_interfaces.msg import PoseRaw
 from audio_interfaces_py.messages import get_quaternion
 
 ROOM_DIM = np.array([10., 7., 5.])  # room dimensions [m].

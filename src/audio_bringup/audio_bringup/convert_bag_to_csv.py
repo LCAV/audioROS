@@ -9,7 +9,6 @@ killed properly, which leads to many instances running at the same time.
 """
 
 import os
-import signal
 import subprocess
 
 import rclpy
@@ -45,7 +44,7 @@ def main(args=None):
     subprocess.run(['sudo', 'pkill', 'csv_writer'])
     subprocess.run(['sudo', 'pkill', 'ros2'])
 
-    csv_pid = subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
+    subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
 
     for filename in filenames: 
         print(f'treating {filename}...')

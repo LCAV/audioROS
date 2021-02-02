@@ -6,7 +6,6 @@ file_publisher.py: Publish audio data from file
 import os
 import sys
 
-import numpy as np
 from scipy.io.wavfile import read
 
 import rclpy
