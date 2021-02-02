@@ -1,11 +1,9 @@
 import itertools
-import sys
 
 import numpy as np
 import pandas as pd
-import progressbar
 
-from crazyflie_description_py.parameters import N_BUFFER, FS 
+from crazyflie_description_py.parameters import N_BUFFER 
 from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
@@ -151,7 +149,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 fname = get_fname(**params)
                 wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
                 df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             print('skipping', params)
             continue 
             

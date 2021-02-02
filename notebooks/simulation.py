@@ -1,6 +1,5 @@
 import sys
 
-import matplotlib.pylab as plt
 import numpy as np
 import pyroomacoustics as pra
 
@@ -10,7 +9,7 @@ from crazyflie_description_py.parameters import MIC_POSITIONS, FS, N_BUFFER
 from frequency_analysis import get_bin
 
 sys.path.append('../crazyflie-audio/python')
-from signals import generate_signal, amplify_signal
+from signals import generate_signal
 
 DURATION_SEC = 38
 N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
@@ -142,7 +141,6 @@ def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0):
 
 
 def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
-    import pandas as pd
     from frequency_analysis import get_bin
     duration_sec = N_BUFFER * n_times / FS
     signal = generate_signal(FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency)

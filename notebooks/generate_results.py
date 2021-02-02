@@ -128,7 +128,7 @@ def inner_loop(mics_drone, degrees, times_noisy, signals_f_list, signals_f_multi
 
 
 if __name__ == "__main__":
-    from mic_array import get_square_array, get_uniform_array
+    from mic_array import get_square_array
     from audio_stack.beam_former import rotate_mics
     from audio_stack.beam_former import BeamFormer
     import pandas as pd
