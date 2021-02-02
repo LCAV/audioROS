@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-doa_simulated.launch.py: Launch the doa pipeline in simulation. 
+wall_real.launch.py: Launch the wall detection pipeline on real drone. 
 """
 
 import sys
@@ -14,20 +14,19 @@ from audio_bringup.helpers import get_launch_description
 LOG_LEVEL = "warn"
 
 node_config = {
-    "crazyflie": {
-        "pkg": "audio_simulation", 
-        "params": [{"buzzer_freq":0, "source_type":"random"}]
+    "gateway": {
+        "pkg": "crazyflie_crtp", 
+        "params": [{
+            "buzzer_effect": 12, 
+            "buzzer_freq": 2000, 
+            "filter_snr_enable": 2,
+            "min_freq": 1000,
+            "max_freq": 5000
+        }]
     },
-    "linear_pose_publisher": {"pkg": "audio_simulation"},
-    "processor": {
-        "pkg": "audio_stack",
-        "params": [{"min_freq":1000, "max_freq":5000}]
-    },
-    "spectrum_estimator": {"pkg": "audio_stack"},
-    "doa_estimator": {"pkg": "audio_stack"},
-    #"audio": {"pkg": "topic_plotter"},
-    #"doa": {"pkg": "topic_plotter"}, is very slow
+    "audio": {"pkg": "topic_plotter"},
     "geometry": {"pkg": "topic_plotter"},
+    "wall": {"pkg": "topic_plotter"},
 }
 
 

@@ -5,43 +5,39 @@
 stream_publisher.py: 
 """
 
-import sys
-import time
 
-import numpy as np
-from scipy.io.wavfile import read, write
 
 import rclpy
-from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
 
 import sounddevice as sd
 
-from audio_interfaces.msg import Signals
 from .publisher import AudioPublisher
 
-N_MICS = 4
+
+N_MICS = 1
+N_BUFFER = 2048
 
 
 class StreamPublisher(AudioPublisher):
     def __init__(
-        self, Fs, n_buffer=256, publish_rate=None, blocking=False, mic_positions=None
+        self, Fs, publish_rate=None, blocking=False, mic_positions=None
     ):
         super().__init__(
             "stream_publisher",
             mic_positions=mic_positions,
-            n_buffer=n_buffer,
             publish_rate=publish_rate,
             Fs=Fs,
         )
 
-        self.duration_ms = 100 * 1000
         self.n_mics = N_MICS
+        self.duration_ms = 100 * 1000
 
         sd.default.device = "default"
         sd.check_input_settings(
             sd.default.device, channels=self.n_mics, samplerate=self.Fs
         )
+
+        n_buffer = self.current_params["n_buffer"]
 
         # blocking stream, more ROS-like, better for plotting. However might result in some lost samples
         if blocking:
@@ -68,8 +64,7 @@ class StreamPublisher(AudioPublisher):
         self.process_signals(signals_T.T)
 
     def publish_signals_timer(self):
-        n_buffer = self.n_buffer
-
+        n_buffer = self.current_params["n_buffer"]
         n_available = self.stream.read_available
         if n_buffer > n_available:
             self.get_logger().warn(
@@ -86,20 +81,11 @@ def main(args=None):
     rclpy.init(args=args)
 
     Fs = 44100
-    n_buffer = 2 ** 10
-    publish_rate = int(Fs / n_buffer)  # 11 # in Hz
     blocking = False
-
-    print(f"Publishing audio data from stream at {publish_rate}Hz.")
-
-    mic_positions = np.zeros((N_MICS, 2))
 
     publisher = StreamPublisher(
         Fs=Fs,
-        publish_rate=publish_rate,
-        n_buffer=n_buffer,
         blocking=blocking,
-        mic_positions=mic_positions,
     )
 
     rclpy.shutdown()

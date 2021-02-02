@@ -10,7 +10,6 @@ from rclpy.node import Node
 from geometry_msgs.msg import Pose
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 from audio_interfaces.msg import PoseRaw, DoaEstimates
 from audio_interfaces_py.messages import read_pose_raw_message, read_pose_message
@@ -19,7 +18,10 @@ from audio_simulation.geometry import SOURCE_POS, ROOM_DIM, STARTING_POS
 
 from .live_plotter import LivePlotter
 
-MAX_LENGTH = 2 # number of positions to plot
+MAX_LENGTH = 1000 # number of positions to plot
+
+XLABEL = "x [m]"
+YLABEL = "y [m]"
 
 def plot_room(ax):
     x, y = ROOM_DIM[:2]
@@ -51,7 +53,11 @@ class GeometryPlotter(Node):
 
         self.plotter_dict = {}
         # initialize a starting position for pose_raw, as it only contains delta positions
-        self.pose_raw_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
+        self.pose_motion_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
+        self.pose_imu_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
+        self.pose_kalman_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
+        self.kalman_start_pos = None
+        self.previous_time = None
 
         # need no starting position for pose as it has absolute positions
         self.pose_list = np.empty((2, 0))
@@ -68,43 +74,72 @@ class GeometryPlotter(Node):
             self.plotter_dict[name].ax.set_ylabel(ylabel)
             self.plotter_dict[name].ax.axis('equal')
 
-            plot_room(self.plotter_dict[name].ax)
-            plot_source(self.plotter_dict[name].ax)
+            #plot_room(self.plotter_dict[name].ax)
+            #plot_source(self.plotter_dict[name].ax)
 
-    def update_plotter(self, name, pose_list, yaw_deg, source_direction_deg=None):
+    def update_plotter(self, name, pose_list, yaw_deg=None, source_direction_deg=None, pose_label="pose estimates"):
         self.plotter_dict[name].update_scatter(
             pose_list[0, :], 
-            pose_list[1, :]
+            pose_list[1, :], 
+            label=pose_label
         )
 
-        self.plotter_dict[name].update_arrow(
-                pose_list[:, -1], yaw_deg, name="yaw_deg"
-        )
+        if yaw_deg is not None:
+            self.plotter_dict[name].update_arrow(
+                    pose_list[:, -1], yaw_deg, label="yaw_deg"
+            )
 
         if source_direction_deg is not None:
             self.plotter_dict[name].update_arrow(
-                pose_list[:, -1], source_direction_deg, name="source_direction_deg"
+                pose_list[:, -1], source_direction_deg, label="source_direction_deg"
             )
 
+        self.plotter_dict[name].ax.legend(loc='upper right')
+
     def listener_callback_pose_raw(self, msg_pose_raw):
-        xlabel = "x [m]"
-        ylabel = "y [m]"
-        self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
+        self.init_plotter("pose raw", xlabel=XLABEL, ylabel=YLABEL)
 
-        # TODO(FD) figure out what to do with yaw rate here
-        d_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
-        new_position = self.pose_raw_list[:, -1] + d_world
-        self.pose_raw_list = np.c_[self.pose_raw_list, new_position]
-        if self.pose_raw_list.shape[1] > MAX_LENGTH:
-            self.pose_raw_list = self.pose_raw_list[:, -MAX_LENGTH:]
+        r_world, d_motion, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
 
-        self.update_plotter("pose raw", self.pose_raw_list, yaw, msg_pose_raw.source_direction_deg)
+        if self.previous_time is None:
+            self.previous_time = msg_pose_raw.timestamp
+
+        delta_sec = (msg_pose_raw.timestamp - self.previous_time) / 1000.
+        d_imu = v_world * delta_sec 
+        self.previous_time = msg_pose_raw.timestamp 
+
+        self.get_logger().info(f"yaw [deg]: {yaw:3.0f}, global dx [mm]: {d_motion[0]*1000:4.0f}, global dy [mm]:{d_motion[1]*1000:4.0f}")
+
+        pose_motion = self.pose_motion_list[:, -1] + d_motion
+        self.pose_motion_list = np.c_[self.pose_motion_list, pose_motion]
+
+        pose_imu = self.pose_imu_list[:, -1] + d_imu
+        self.pose_imu_list = np.c_[self.pose_imu_list, pose_imu]
+        
+        # make sure we always start plotting at STARTING_POS, even though
+        # the Kalman estiamte might be non-zero in the beginning. 
+        if self.kalman_start_pos is None:
+            self.kalman_start_pos = r_world[:2] - STARTING_POS[:2]
+
+        pose_kalman = r_world[:2] - self.kalman_start_pos
+        self.pose_kalman_list = np.c_[self.pose_kalman_list, pose_kalman]
+
+        if self.pose_motion_list.shape[1] > MAX_LENGTH:
+            self.pose_motion_list = self.pose_motion_list[:, -MAX_LENGTH:]
+        if self.pose_imu_list.shape[1] > MAX_LENGTH:
+            self.pose_imu_list = self.pose_imu_list[:, -MAX_LENGTH:]
+        if self.pose_kalman_list.shape[1] > MAX_LENGTH:
+            self.pose_kalman_list = self.pose_kalman_list[:, -MAX_LENGTH:]
+
+        #self.update_plotter("pose raw", self.pose_motion_list, yaw, msg_pose_raw.source_direction_deg, pose_label="motion")
+        #self.update_plotter("pose raw", self.pose_imu_list, pose_label="imu")
+        self.update_plotter("pose raw", self.pose_kalman_list, pose_label="kalman")
+        #self.plotter_dict["pose raw"].ax.set_xlim(4.9, 5.3)
+        #self.plotter_dict["pose raw"].ax.set_ylim(0.1, 0.5)
         self.plotter_dict["pose raw"].fig.canvas.draw()
 
     def listener_callback_pose(self, msg_pose):
-        xlabel = "x [m]"
-        ylabel = "y [m]"
-        self.init_plotter("pose", xlabel=xlabel, ylabel=ylabel)
+        self.init_plotter("pose", xlabel=XLABEL, ylabel=YLABEL)
 
         new_position, yaw, pitch, roll = read_pose_message(msg_pose)
         assert pitch == 0, pitch
@@ -118,16 +153,13 @@ class GeometryPlotter(Node):
         self.plotter_dict["pose"].fig.canvas.draw()
 
     def listener_callback_doa(self, msg_doa):
-        # plot the doa estimates in 2D plot
-        xlabel = "x [m]"
-        ylabel = "y [m]"
-        self.init_plotter("pose raw", xlabel=xlabel, ylabel=ylabel)
+        self.init_plotter("pose raw", xlabel=XLABEL, ylabel=YLABEL)
 
         doa_estimates = list(msg_doa.doa_estimates_deg)
 
         for i, doa_estimate in enumerate(doa_estimates):
             self.plotter_dict["pose raw"].update_arrow(
-                self.pose_raw_list[:, -1], doa_estimate, name=f"doa {i}"
+                self.pose_motion_list[:, -1], doa_estimate, label=f"doa {i}"
             )
         self.plotter_dict["pose raw"].fig.canvas.draw()
 
@@ -148,9 +180,6 @@ def main(args=None):
 
     rclpy.spin(plotter)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     plotter.destroy_node()
     rclpy.shutdown()
 

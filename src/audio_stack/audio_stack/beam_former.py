@@ -5,7 +5,6 @@
 beam_former.py: Beamformer class for direction-of-arrival (DOA) estimation.
 """
 
-from copy import deepcopy
 import sys
 import os
 

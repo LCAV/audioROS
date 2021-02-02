@@ -1,4 +1,3 @@
-import argparse
 import csv
 import os
 
@@ -7,6 +6,7 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
+
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
 
@@ -29,6 +29,7 @@ class CsvWriter(Node):
         self.subscription_status = self.create_subscription(
             CrazyflieStatus, "crazyflie/status", self.listener_callback_status, 10
         )
+
         self.subscription_motors = self.create_subscription(
             CrazyflieMotors, "crazyflie/motors", self.listener_callback_motors, 10
         )
@@ -44,57 +45,29 @@ class CsvWriter(Node):
         self.rows = []
 
     def listener_callback_signals_f(self, msg):
-        row_dict = {
-          "index": len(self.rows),
-          "topic": "audio/signals_f",
-          # TODO(FD): can we read these fields automatically?  
-          "timestamp": msg.timestamp,
-          "audio_timestamp": msg.audio_timestamp,
-          "n_mics": msg.n_mics,
-          "n_frequencies": msg.n_frequencies,
-          "frequencies": np.array(msg.frequencies),
-          "signals_real_vect": np.array(msg.signals_real_vect),
-          "signals_imag_vect": np.array(msg.signals_imag_vect),
-          "mic_positions": np.array(msg.mic_positions),
-        }
-
-        self.header = set(row_dict.keys()).union(self.header)
-        self.rows.append(row_dict)
+        self.callback_message(msg, "audio/signals_f")
 
     def listener_callback_pose_raw(self, msg):
-        row_dict = {
-          "index": len(self.rows),
-          "topic": "geometry/pose_raw",
-          # TODO(FD): can we read these fields automatically?  
-          "timestamp": msg.timestamp,
-          "dx": msg.dx,
-          "dy": msg.dy,
-          "z": msg.z,
-          "yaw_deg": msg.yaw_deg,
-          "yaw_rate_deg": msg.yaw_rate_deg,
-          "source_direction_deg": msg.source_direction_deg,
-        }
-        self.header = set(row_dict.keys()).union(self.header)
-        self.rows.append(row_dict)
+        self.callback_message(msg, "geometry/pose_raw")
 
     def listener_callback_status(self, msg):
-        row_dict = {
-          "index": len(self.rows),
-          "topic": "crazyflie/status",
-          "timestamp": msg.timestamp,
-          "vbat": msg.vbat,
-        }
-        self.header = set(row_dict.keys()).union(self.header)
-        self.rows.append(row_dict)
+        self.callback_message(msg, "crazyflie/status")
 
     def listener_callback_motors(self, msg):
-        row_dict = {
-          "index": len(self.rows),
-          "topic": "crazyflie/motors",
-          "timestamp": msg.timestamp,
-          "motors_pwm": np.array(msg.motors_pwm),
-          "motors_thrust": np.array(msg.motors_thrust),
-        }
+        self.callback_message(msg, "crazyflie/motors")
+
+    def callback_message(self, msg, topic):
+        # fill the dictionary with all fields of this message.
+        # if the field is an array, we convert it to a numpy array. 
+        row_dict = {}
+        for key, type_ in msg.get_fields_and_field_types().items():
+            if 'sequence' in type_: 
+                row_dict[key] = np.array(msg.__getattribute__(key))
+            else:
+                row_dict[key] = msg.__getattribute__(key)
+        #row_dict = {key: msg.__getattribute__(key) for key in keys}
+        row_dict["index"] = len(self.rows)
+        row_dict["topic"] = topic
 
         self.header = set(row_dict.keys()).union(self.header)
         self.rows.append(row_dict)

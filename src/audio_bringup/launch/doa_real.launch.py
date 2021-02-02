@@ -11,24 +11,10 @@ import launch
 
 from audio_bringup.helpers import get_launch_description
 
-LOG_LEVEL = "info"
-BAG_FILE = ""
-
-PARAMS_GATEWAY = [
-    {
-        "all": 0,
-        "filter_snr_enable": 0,
-    }
-]
-PARAMS_SPECTRUM = [
-    {
-        "bf_method": "mvdr"
-    }
-]
-
 node_config = {
-    "gateway": {"params": PARAMS_GATEWAY, "pkg": "crazyflie_crtp"},
-    "spectrum_estimator": {"params": PARAMS_SPECTRUM, "pkg": "audio_stack"},
+    "gateway": {"params": [{"filter_snr_enable": 1}], "pkg": "crazyflie_crtp"},
+    # TODO(FD) make sure parameters are passed correctly to spectrum_estimator
+    "spectrum_estimator": {"params": ["bf_method": "das"], "pkg": "audio_stack"},
     "doa_estimator": {"pkg": "audio_stack"},
     "csv_writer": {"pkg": "topic_writer"},
     "audio": {"pkg": "topic_plotter"},

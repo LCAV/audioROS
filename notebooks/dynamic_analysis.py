@@ -9,7 +9,7 @@ import pandas as pd
 
 MAX_ALLOWED_LAG_MS = 20
 
-def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS):
+def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=False):
     """ For each row in df, add the latest position estimate, 
     as long as it is within an allowed time window. """
     last_idx = None
@@ -19,11 +19,13 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS):
         # most recent position timestamp
         if not len(df_pos[df_pos.timestamp <= timestamp]):
             df.loc[i, 'yaw_deg'] = None
-            print('Warning: no position before first audio:', timestamp, df_pos.timestamp.values)
+            if verbose: 
+                print('Warning: no position before first audio:', timestamp, df_pos.timestamp.values)
             continue
         pos_idx = df_pos[df_pos.timestamp <= timestamp].index[-1]
         if pos_idx == last_idx: 
-            print(f'Warning: using {pos_idx} again.')
+            if verbose: 
+                print(f'Warning: using {pos_idx} again.')
         row = df_pos.loc[pos_idx]
         lag = timestamp - row.timestamp
         if lag <= MAX_ALLOWED_LAG_MS:
@@ -35,7 +37,8 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS):
                 df.loc[i, 'yaw_rate_deg'] = row.yaw_rate_deg
         else:
             df.loc[i, 'yaw_deg'] = None
-            print(f'Warning for {pos_idx}: too high time lag {lag}ms')
+            if verbose:
+                print(f'Warning for {pos_idx}: too high time lag {lag}ms')
         last_idx = pos_idx
 
 if __name__ == "__main__":
@@ -48,12 +51,13 @@ if __name__ == "__main__":
     #exp_name = '2020_10_30_dynamic_move'; degree=0; start_idx=0
     #exp_name = '2020_11_03_sweep_old'; degree=90; start_idx = 20
     #exp_name = '2020_11_03_sweep'; degree=90; start_idx=20
-    #exp_name = '2020_11_10_buzzer'; degree=None; start_idx=20
-    exp_name = '2020_11_12_speaker360'; degree=360; start_idx=20
+    exp_name = '2020_11_10_buzzer'; degree=None; start_idx=20; distance=None
+    #exp_name = '2020_11_12_speaker360'; degree=360; start_idx=20; distance=0
 
-    fname = f'DynamicAnalaysis_{exp_name}.pkl'
+    fname = f'results/DynamicAnalaysis_{exp_name}.pkl'
 
     params = dict(
+        distance = distance,
         degree = degree,
         props = False,
         snr = False,

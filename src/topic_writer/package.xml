@@ -3,9 +3,9 @@
 <package format="3">
   <name>topic_writer</name>
   <version>0.0.1</version>
-  <description>TODO: Package description</description>
+  <description>Write data streams from topics to files</description>
   <maintainer email="frederike.duembgen@epfl.ch">duembgen</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache License 2.0</license>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

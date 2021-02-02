@@ -11,7 +11,7 @@ from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose 
 
 from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
-from audio_interfaces_py.messages import create_signals_freq_message, create_pose_message, create_pose_raw_message
+from audio_interfaces_py.messages import create_pose_raw_message, create_signals_freq_message
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
@@ -20,11 +20,11 @@ from reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-#cf_id = "E7E7E7E7E8"
-#id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/80/2M/{cf_id}"
 
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/70/2M/{cf_id}"
+#cf_id = "E7E7E7E7E7"
+#id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -170,7 +170,7 @@ class Gateway(Node):
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
 
         abs_signals_f = np.abs(signals_f)
-        if np.any(abs_signals_f[:3, :] > 1e5):
+        if np.any(abs_signals_f > N_BUFFER):
             self.get_logger().warn("Possibly in valid audio:")
             self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
             self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
@@ -199,12 +199,15 @@ class Gateway(Node):
         self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
+        """ Overwrite the function set_params by NodeWithParams. 
+        We need this so we commute new parameters directly to the Crazyflie drone.
+        """
         success = True
 
         for param in params: 
 
             # we need this in case this parameter
-            # was not set yet by the startup file. 
+            # was not set yet at startup. 
             # then we use the default values.
             if param.type_ == param.Type.NOT_SET:
                 param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
@@ -290,15 +293,16 @@ def main(args=None):
             print('node interrupted')
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
-            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            reader_crtp.send_buzzer_freq(0)
+            print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
-        except Exception as e:
+        except Exception:
             print('error occured')
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
-            print("reset audio.send_audio_enable and motorPowerSet.enable, wait for 1s...")
+            reader_crtp.send_buzzer_freq(0)
+            print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
-            print(e)
             raise
 
     publisher.destroy_node()

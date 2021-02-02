@@ -34,7 +34,7 @@ colcon build --symlink-install
 The stack is separated into the following modules:
 
 - `audio_interfaces` (C++): Custom ROS message definintions.
-- `audio_bringup` (python): Contains pipeline for recording measurements (`doa_pipeline.py`) and some commonly used launch files.  
+- `audio_bringup` (python): Contains pipeline for recording measurements (`measurement_pipeline.py`) and some commonly used launch files.  
 - `audio_stack` (python): Read and process audio signals.
 - `audio_simulation` (python): Simulated audio using pyroomacoustics.  
 - `audio_publisher` (python): Publish signals from file or computer's audio input stream. 
@@ -52,10 +52,35 @@ A diagram of the interactions of the different packages is shown below.
 
 ### Simulation 
 
-- To simulate the drone doing source localization inside a room, you can run: 
+- To simulate the drone doing sound source localization inside a room, run: 
   ```
   ros2 launch audio_bringup doa_simulated.launch.py
   ```
+- To simulate the drone doing wall detection, run: 
+  ```
+  ros2 launch audio_bringup wall_simulated.launch.py
+  ```
+
+### Experiments
+
+- To do real-time sound source localization on the Crazyflie drone, run: 
+  ```
+  ros2 launch audio_bringup doa_real.launch.py
+  ```
+- To do real-time wall detection on the Crazyflie drone, run: 
+  ```
+  ros2 launch audio_bringup wall_real.launch.py
+  ```
+- To run a new measurement campaign, run: 
+  ```
+  python src/audio_bringup/audio_bringup/measurement_pipeline.py
+  ```
+- To convert bag file to csv: after editing the global variables in the node source code, 
+  run: 
+  ```
+  ros2 run audio_bringup convert_bag_to_csv
+  ```
+  Note that this function is experimental and only used when the bag to csv conversion did not happen correctly during experiments. 
 
 ## Requirements (WIP)
 

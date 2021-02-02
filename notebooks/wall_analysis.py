@@ -5,9 +5,31 @@ import numpy as np
 import pandas as pd
 import progressbar
 
+from crazyflie_description_py.parameters import N_BUFFER, FS 
 from evaluate_data import read_df, read_df_from_wav, get_fname
 from evaluate_data import get_positions
 from dynamic_analysis import add_pose_to_df
+
+VELOCITY = 0.05 # [m/s], parameter in crazyflie
+D_START = 0.6 # [m], starting distance 
+
+def load_params(exp_name):
+    """ load parameters module at the experiment of interest """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("params", f"../experiments/{exp_name}/params.py")
+    params = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(params)
+    return params
+
+
+def clean_stft(stft, max_value=N_BUFFER):
+    """
+    The values in stft are normally between -N_BUFFER and N_BUFFER, 
+    so values outside of this range are due to communication errors.
+    """
+    stft[np.isnan(stft)] = 0.0
+    stft[np.abs(stft) > max_value] = 0.0
+    return stft
 
 
 def filter_by_dicts(df, dicts):
@@ -17,122 +39,56 @@ def filter_by_dicts(df, dicts):
         for key, val in dict_.items():
             this_mask = this_mask & (df.loc[:, key] == val)
         mask = np.bitwise_or(mask, this_mask)
-        assert np.any(mask)
-    return df.loc[mask, :]
-
-
-def extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=None):
-    # freqs_window = offset + slope * times
-    times_window = (frequencies - offset) / slope
-    
-    if ax is not None:
-        ax.plot(times_window-delta, frequencies, color='red')
-        ax.plot(times_window+delta, frequencies, color='red')
-
-    psd = np.zeros(signals_f.shape[1:]) # 4 x 32
-    times = np.arange(signals_f.shape[0])
-    for i, t in enumerate(times_window):
-        signals_window = signals_f[(times <= t + delta) & (times >= t - delta), : , i]
-        psd[:, i] = np.sum(np.abs(signals_window)**2 / signals_window.shape[0], axis=0)
-    return psd
-
-
-def extract_psd_dict(signals_f, frequencies_matrix, min_t=0, max_t=None, n_freq=1, ax=None):
-    """
-    Extract a hash table from the signals and frequencies information, one for 
-    each microphone.
-    
-    structure of output: 
-    
-    mic0: {
-        f0: [val0, val1],
-        f1: [val0, val1, val2], 
-        f2: [...]
-    }
-    mic1: ...
-    """
-    n_mics = signals_f.shape[1]
-    all_frequencies = np.unique(frequencies_matrix.flatten())
-
-    psd_dict = [{f:[] for f in all_frequencies} for i in range(n_mics)]
-
-    if max_t is None:
-        max_t = frequencies_matrix.shape[0]
-        
-    if ax is not None:
-        ax.plot(frequencies_matrix[:, 0])
-        ax.axvline(min_t, color='k')
-        ax.axvline(max_t, color='k')
-
-    for i_t in range(min_t, max_t): # n_times x n_freqs 
-        # save strongest n_freq frequencies
-        fs = frequencies_matrix[i_t, :n_freq]
-        for i_mic in range(n_mics):
-            for f_idx, f in enumerate(fs):
-                psd_dict[i_mic][f].append(np.abs(signals_f[i_t, i_mic, f_idx]))
-    return psd_dict
-                
-
-def extract_psd(psd_dict_list, verbose=False, method='median'):
-    """
-    Combine hash tables in given list into one big hashtable, and return the unique keys
-    and statistics of its values.
-    
-    """
-    # extract all the different frequencies from psd_dict_list.
-    n_mics = len(psd_dict_list[0])
-    frequencies = set().union(*(psd_dict[i].keys() for psd_dict in psd_dict_list for i in range(n_mics)))
-    frequencies = np.sort(list(frequencies))
-    
-    psd = np.zeros((n_mics, len(frequencies)))
-    psd_std = np.zeros((n_mics, len(frequencies)))
-    for i_mic in range(n_mics):
-        for j, f in enumerate(frequencies):
-            
-            # combine all values at this f and mic
-            vals = []
-            for psd_dict in psd_dict_list:
-                if f in psd_dict[i_mic].keys():
-                    vals += psd_dict[i_mic][f]
-                    
-            if verbose:
-                print(f'for frequency {f}, mic{i_mic}, found {vals}')
-            if len(vals):
-                
-                if ('reject' in method) and (len(vals) > 4):
-                    vals = vals[2:-2]
-                if 'median' in method: 
-                    psd[i_mic, j] = np.median(vals) 
-                if 'mean' in method: 
-                    psd[i_mic, j] = np.mean(vals) 
-                    
-                psd_std[i_mic, j] = np.std(vals) 
-                
-    # remove the frequencies for which we have no data
-    mask = np.any(psd > 0, axis=0)
-    return psd[:, mask], frequencies[mask], psd_std[:, mask]
-
-
-def get_psd(signals_f, frequencies, ax=None, fname='real'):
-    """ 
-    :param signals_f: tensor of signals of shape n_times x n_mics x n_frequencies
-    :param frequencies: frequencies vector in Hz.
-    """
-
-    # read off from plot: 
-    if 'simulated' in fname:
-        slope = (4000 - 1000) / (200 - 50)
-        offset = -500
-    elif 'real' in fname:
-        # old dataset (2020_11_23_wall2)
-        #slope = (4000 - 1000) / (285 - 90)
-        #offset = -500
-        slope = (4000 - 1000) / (250 - 50)
-        offset = 200
+    if not np.any(mask):
+        return []
     else:
-        raise ValueError(exp_name)
+        return df.loc[mask, :]
 
-    return extract_linear_psd(signals_f, frequencies, slope, offset, delta=50, ax=ax)
+
+def add_distance_estimates(row, ax=None, min_z=300):
+    if row.distance == 51:
+        d = np.full(len(row.seconds), np.nan)
+        d[row.seconds>=0] = 0.1 + row.seconds[row.seconds>=0] * 0.5 / 165  # takes 165 seconds for 50 cm
+    elif row.distance == -51:
+        d = np.full(len(row.seconds), np.nan)
+        d[row.seconds>=0] = 0.6 - row.seconds[row.seconds>=0] * 0.5 / 165  # takes 165 seconds for 50 cm
+    else:
+        #TODO(FD): to be improved once we have better flow estimates. 
+        # read from plot in FlyingAnalysis.ipynb:
+        min_time = 5 
+        max_time = 25 
+        
+        d = np.full(len(row.seconds), np.nan)
+        row.z[np.isnan(row.z)] = 0
+        start_idx = np.where(row.seconds > min_time)[0][0]
+        end_idx = np.where(row.seconds < max_time)[0][-1]
+
+        assert end_idx > start_idx, f"{start_idx}<={end_idx}"
+        valid_z = row.z[start_idx:end_idx]
+        max_idx = start_idx + np.argmax(valid_z)
+        try:
+            min_idx = start_idx + np.where(valid_z > min_z)[0][-1]
+        except:
+            min_idx = 0
+        duration = row.seconds[min_idx] - row.seconds[max_idx]
+
+        times = row.seconds[max_idx:min_idx] - row.seconds[max_idx]
+        d[max_idx:min_idx] = D_START - times * VELOCITY
+        
+        if ax is not None:
+            ax.axvline(row.seconds[start_idx], color='r')
+            ax.axvline(row.seconds[max_idx], color='k', label='start (max)')
+            ax.axvline(row.seconds[min_idx], color='k', label=f'end (above {min_z})')
+            ax.axvline(row.seconds[end_idx], color='b')
+            ax.set_xlim(0, 35)
+            ax.set_title(f"duration: {duration:.1f}s")
+        
+    row['d_estimate'] = d
+
+    if ax is not None:
+        ax.scatter(row.seconds, d * 1000, color='k', label='distance')
+        ax.legend()
+    return row
 
 
 def parse_experiments(exp_name='2020_12_9_moving', wav=True):
@@ -144,163 +100,112 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]; wav = False
     elif exp_name == '2020_12_18_stepper':
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]
+    elif exp_name == '2020_11_26_wall':
+        appendix_list = [""]; snr_list = [0]; props_list = [0]; wav = True
+    elif exp_name == '2020_12_11_calibration':
+        appendix_list = ['', '_BC329', '_HALL', '_HALL2', '_HALL3']
+        snr_list = [0, 1]; props_list=[0, 1]; wav=False
+    elif exp_name == '2020_12_2_chirp':
+        appendix_list = ['']; snr_list = [0]; props_list=[0]; wav=True
 
-    max_value = 100 # all signals received are actually between 0 and 2. 
-    sys.path = [p for p in sys.path if not 'experiments' in p]
-    sys.path.insert(0, f'../experiments/{exp_name}')
-    from params import SOURCE_LIST, DISTANCE_LIST, DEGREE_LIST, MOTORS_LIST
-    N_BUFFER = 2048
+    if wav:
+        mic_type_list = ['measurement', 'audio_deck']
+    else:
+        mic_type_list = ['audio_deck']
 
-    DEGREE_LIST = [0]
+    from crazyflie_description_py.parameters import N_BUFFER
 
-    df_total = pd.DataFrame(columns=[
-        'signals_f', 'degree', 'distance', 'source', 'snr', 
-        'motors', 'psd', 'spec', 'frequencies', 'appendix', 
-        'seconds', 'mic_type', 'frequencies_matrix', 'dx', 'dy', 'z', 'yaw_deg', 
-        'positions'
-    ])
+    params_file = load_params(exp_name)
 
-    params = dict(
-        props = False,
-        exp_name = exp_name
+    # TODO(FD) remove this when we use more angles again.
+    params_file.DEGREE_LIST = [0]
+
+    pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
+
+    cat_columns = {
+            'appendix':appendix_list , 
+            'degree': params_file.DEGREE_LIST, 
+            'distance': params_file.DISTANCE_LIST, 
+            'motors': params_file.MOTORS_LIST, 
+            'source': [str(s) for s in params_file.SOURCE_LIST], 
+            'snr': snr_list, 
+            'props': props_list,
+            'mic_type': mic_type_list,
+    }
+    df_total = pd.DataFrame(columns=list(cat_columns.keys()) +  # categories
+        ['seconds', 'frequencies_matrix', 'stft', 'positions'] + pos_columns # data
     )
-    for degree, distance, source, motors, appendix, snr, props in itertools.product(
-        DEGREE_LIST, DISTANCE_LIST, SOURCE_LIST, MOTORS_LIST, appendix_list, snr_list, props_list): 
 
-        mic_dfs = {'audio_deck': None, 'measurement': None}
+    params = {
+        'exp_name': exp_name
+    }
+    for cat_values in itertools.product(*cat_columns.values()):
+        params.update(dict(zip(cat_columns.keys(), cat_values)))
         try:
-            params['motors'] = motors
-            params['degree'] = degree
-            params['distance'] = distance
-            params['source'] = source
-            params['appendix'] = appendix
-            params['snr'] = snr
-            params['props'] = props
-
-            df_csv, df_pos = read_df(**params)
-
-            positions = get_positions(df_pos)
-            add_pose_to_df(df_csv, df_pos)
-            mic_dfs['audio_deck'] = df_csv
-            
-            fname = get_fname(**params)
-
-            if wav: 
-                df_wav = read_df_from_wav(f'../experiments/{exp_name}/export/{fname}.wav', n_buffer=N_BUFFER)
-                mic_dfs['measurement'] = df_wav
-            
+            positions = None
+            if params['mic_type'] == 'audio_deck':
+                df, df_pos = read_df(**params)
+                positions = get_positions(df_pos)
+                add_pose_to_df(df, df_pos)
+            elif params['mic_type'] == 'measurement': 
+                fname = get_fname(**params)
+                wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
+                df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
         except FileNotFoundError as e:
+            print('skipping', params)
             continue 
             
-        for mic_type, df in mic_dfs.items():
-            if df is None:
-                continue
-            if not 'signals_f' in df.columns:
-                continue
-            
-            signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
-            if np.any(np.abs(signals_f) > max_value):
-                signals_f[np.where(np.abs(signals_f) > max_value)] = 0
-
-            seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
-            frequencies_matrix = np.array([*df.loc[:,'frequencies']])
-            frequencies = frequencies_matrix[0, :]
-            # save frequency matrix only if frequencies vary.
-            if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
-                frequencies_matrix = None
-            else:
-                print('saving frequencies matrix')
-            
-            spec = np.sum(np.abs(signals_f), axis=1) # average over mics
-            psd = get_psd(signals_f, frequencies, fname='real')
-
-            params['source'] = str(params['source'])
-            all_items = dict(
-                mic_type=mic_type,
-                signals_f=signals_f,
-                frequencies=frequencies,
-                frequencies_matrix=frequencies_matrix,
-                spec=spec,
-                psd=psd,
-                seconds=seconds, 
-                dx=df.dx.values,
-                dy=df.dy.values,
-                z=df.z.values,
-                yaw_deg=df.yaw_deg.values,
-                positions=positions
-            )
-            all_items.update(params)
-            df_total.loc[len(df_total), :] = all_items
-    return df_total
-
-
-def parse_calibration_experiments():
-    max_value = 100 # all signals received are actually between 0 and 2. 
-    df_total = pd.DataFrame(columns=['signals_f', 'source', 'snr', 'motors', 'exp_name', 'appendix', 
-                                     'seconds', 'frequencies', 'frequencies_matrix'])
-
-    exp_name_list = [
-        '2020_12_11_calibration',
-    ]
-    source_list = ['sweep', 'sweep_buzzer']
-    appendix_list = ['', '_BC329', '_HALL', '_HALL2', '_HALL3', '_HALL3ok']
-    filter_list = [0, 1] # snr and props
-    motors_list = [0, 'all43000']
-
-    for exp_name, source, motors, appendix, filter_ in itertools.product(exp_name_list, source_list, motors_list, appendix_list, filter_list):
-        params = dict(
-            exp_name=exp_name,
-            motors=motors,
-            degree=0 ,
-            distance=0 ,
-            source=source,
-            appendix=appendix,
-            snr=filter_,
-            props=filter_,
-        )
-        try:
-            df, __ = read_df(**params)
-        except FileNotFoundError as e:
-            print('could not read', params)
-            continue 
-            
-        signals_f = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
-        if np.any(np.abs(signals_f) > max_value):
-            signals_f[np.where(np.abs(signals_f) > max_value)] = 0
+        stft = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
+        stft = clean_stft(stft)
 
         seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
         frequencies_matrix = np.array([*df.loc[:,'frequencies']])
-        frequencies = frequencies_matrix[0, :]
-        # save frequency matrix only if frequencies vary.
-        if not np.any(np.any(frequencies_matrix - frequencies[None, :], axis=0)):
-            frequencies_matrix = None
-        else:
-            print('saving frequencies matrix')
-        
-        df_total.loc[len(df_total), :] = dict(
-            exp_name=exp_name, 
-            appendix=appendix, 
-            source=str(source), 
-            snr=filter_, 
-            motors=motors, 
-            signals_f=signals_f, 
+
+        all_items = dict(
             seconds=seconds, 
-            frequencies=frequencies, 
-            frequencies_matrix=frequencies_matrix
+            frequencies_matrix=frequencies_matrix,
+            stft=stft,
+            positions=positions
         )
+        if 'dx' in df.columns: 
+            pos_dict = {
+                col:df[col].values for col in pos_columns
+            }
+        else:
+            pos_dict = {
+                col:None for col in pos_columns
+            }
+        all_items.update(pos_dict)
+        all_items.update(params)
+        df_total.loc[len(df_total), :] = all_items
     return df_total
 
 
 if __name__ == "__main__":
-    #exp_name = '2020_12_9_rotating'
-    exp_name = '2020_12_18_flying'
-    fname = f'results/{exp_name}_real.pkl'
-    try:
-        raise 
-        df_total = pd.read_pickle(fname)
-        print('read', fname)
-    except:
-        print('could not read', fname)
-        df_total = parse_experiments(exp_name=exp_name)
-        pd.to_pickle(df_total, fname)
-        print('saved as', fname)
+    import os
+
+    exp_names = [
+        '2020_12_2_chirp',
+        #'2020_12_11_calibration',
+        #'2020_12_9_rotating',
+        #'2020_12_18_flying',
+        #'2020_12_18_stepper',
+        #'2020_11_26_wall',
+    ]
+    for exp_name in exp_names:
+        fname = f'results/{exp_name}_real.pkl'
+
+        dirname = os.path.dirname(fname)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+            print('created directory', dirname)
+
+        try:
+            raise
+            df_total = pd.read_pickle(fname)
+            print('read', fname)
+        except:
+            print('could not read', fname)
+            df_total = parse_experiments(exp_name=exp_name)
+            pd.to_pickle(df_total, fname)
+            print('saved as', fname)

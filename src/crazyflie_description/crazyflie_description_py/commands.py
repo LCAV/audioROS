@@ -28,11 +28,24 @@ command_dict = {
         ('/gateway', 'move_forward', 0.05, 8), # 50 cm
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
+     # TODO(FD) solve this more elegantly
+     'all5000': [
+        ('/gateway', 'all', 5000, 0) 
+     ],
+     'all30000': [
+        ('/gateway', 'all', 30000, 0) 
+     ],
      'all43000': [
-        ('/gateway', 'all', 43000, 1) # 165 is duration of the 50cm move
+        ('/gateway', 'all', 43000, 0) 
      ],
      'all45000': [
-        ('/gateway', 'all', 45000, 1) # 165 is duration of the 50cm move
+        ('/gateway', 'all', 45000, 0) 
+     ],
+     'all50000': [
+        ('/gateway', 'all', 50000, 0) 
+     ],
+     'all55000': [
+        ('/gateway', 'all', 55000, 0) 
      ],
 }
 
@@ -40,7 +53,9 @@ command_dict = {
 buzzer_dict = {
     key: [('/gateway', 'buzzer_effect', value[0], 0)] for key, value in SOUND_EFFECTS.items() if 'sweep' in key
 }
-
+buzzer_dict['stop'] =  [
+    ('/gateway', 'buzzer_effect', 0, 0), # off
+]
 # buzzer command for mono signals: first set to bypass, then set frequency. 
 for key in SOUND_EFFECTS.keys():
     if 'mono' in key:
@@ -49,6 +64,3 @@ for key in SOUND_EFFECTS.keys():
             ('/gateway', 'buzzer_effect', 12, 0), # bypass
             ('/gateway', 'buzzer_freq', f, 0),
         ]
-buzzer_dict['stop'] =  [
-    ('/gateway', 'buzzer_effect', 0, 0), # off
-]

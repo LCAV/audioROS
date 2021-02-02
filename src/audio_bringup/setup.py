@@ -23,6 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'measurement_pipeline = audio_bringup.measurement_pipeline:main',
+            'convert_bag_to_csv = audio_bringup.convert_bag_to_csv:main'
         ],
     },
 )

@@ -6,7 +6,6 @@ file_publisher.py: Publish audio data from file
 import os
 import sys
 
-import numpy as np
 from scipy.io.wavfile import read
 
 import rclpy
@@ -14,6 +13,9 @@ import rclpy
 from audio_publisher.publisher import AudioPublisher
 from audio_interfaces.msg import PoseRaw
 
+N_BUFFER = 2048
+
+# for older datsets only. 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
 import file_parser as fp
@@ -22,24 +24,43 @@ GT_DEGREES = 20
 LOUDNESS = "high"
 SOURCE = "white_noise"
 
-N_BUFFER = 2024
+def read_recordings(exp_name, appendix=""):
+    if exp_name == "2021_01_07_snr_study": 
+        fname = f"experiments/{exp_name}/export/motors_nosnr_noprops_mono1750{appendix}.wav"
+    else:
+        raise ValueError(exp_name)
+    fs_here, signals = read(fname)
+
+    if signals.ndim == 1:
+        signals = signals.reshape((1, -1))
+    return signals
+
 
 class FilePublisher(AudioPublisher):
-    def __init__(
-        self, file_source, Fs, loop=False, n_buffer=256, publish_rate=None, mic_positions=None
-    ):
+    def __init__(self, file_source, loop=False, publish_rate=None, mic_positions=None):
         """
         :param publish_rate: in Hz, at which rate to publish
         """
+        PARAMS_DICT = AudioPublisher.PARAMS_DICT 
+        PARAMS_DICT["appendix"] = ""
+
+        # for old datasets only
+        if file_source in fp.parameters.keys():
+            Fs = fp.parameters[file_source]["Fs"]
+        else:
+            sys.path.append(f"experiments/{file_source}/")
+            from params import global_params
+            Fs = global_params["fs_soundcard"]
+
         super().__init__(
             "file_publisher",
             mic_positions=mic_positions,
-            n_buffer=n_buffer,
             publish_rate=publish_rate,
             Fs=Fs
         )
         self.loop = loop
         self.read_file_source(file_source)
+
         self.file_idx = 0
         self.create_timer(1.0 / self.publish_rate, self.publish_signals)
 
@@ -59,23 +80,27 @@ class FilePublisher(AudioPublisher):
             signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(gt_degrees=GT_DEGREES)
         elif file_source == "recordings_9_7_20":
             signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=GT_DEGREES)
+        elif file_source == "2021_01_07_snr_study":
+            signals_all = read_recordings(file_source, appendix=self.current_params["appendix"])
         else:
             raise ValueError(file_source)
 
         signals_full = signals_all
-        start_idx = fp.parameters[file_source]["time_index"]
+        if file_source in fp.parameters.keys():
+            start_idx = fp.parameters[file_source]["time_index"]
+        else:
+            start_idx = 0
         self.signals_full = signals_full[:, start_idx:]
         self.len = self.signals_full.shape[1]
 
     def publish_signals(self):
-        n_buffer = self.n_buffer
+        n_buffer = self.current_params["n_buffer"]
 
         signals = self.signals_full[:, self.file_idx:self.file_idx + n_buffer]
-
         self.process_signals(signals)
         self.publish_position()
 
-        self.file_idx += self.n_between_buffers
+        self.file_idx += n_buffer
         if self.file_idx + n_buffer >= self.len:
             if self.loop:
                 self.file_idx = 0
@@ -100,22 +125,10 @@ def main(args=None):
     #file_source = "pyroomacoustics"
     #file_source = "recordings_9_7_20"
     #file_source = "recordings_14_7_20"
-    file_source = "recordings_16_7_20"
+    #file_source = "recordings_16_7_20"
+    file_source = "2021_01_07_snr_study"
 
-    Fs = fp.parameters[file_source]["Fs"]
-    mic_positions = fp.parameters[file_source]["mic_positions"]
-
-    publish_rate = int(Fs / N_BUFFER)  # 11 # in Hz
-    print(f"Publishing audio data from file at {publish_rate}Hz.")
-        
-    publisher = FilePublisher(
-        file_source,
-        Fs=Fs,
-        n_buffer=N_BUFFER,
-        publish_rate=publish_rate,
-        loop=True,
-        mic_positions=mic_positions,
-    )
+    publisher = FilePublisher(file_source, loop=True)
     rclpy.spin(publisher)
 
     rclpy.shutdown()

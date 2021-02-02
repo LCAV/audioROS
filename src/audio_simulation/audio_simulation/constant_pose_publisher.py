@@ -6,7 +6,6 @@ import rclpy
 from rclpy.node import Node
 
 from geometry_msgs.msg import Pose
-from std_msgs.msg import String
 
 from audio_simulation.geometry import get_starting_pose
 

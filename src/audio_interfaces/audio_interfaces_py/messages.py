@@ -11,8 +11,6 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 from audio_interfaces.msg import Signals, SignalsFreq, Correlations, Spectrum, DoaEstimates
 from audio_interfaces.msg import PoseRaw
 
-N_MICS = 4
-#N_FREQS = 32
 
 def get_quaternion(yaw_deg):
     from scipy.spatial.transform import Rotation
@@ -40,9 +38,13 @@ def create_pose_raw_message(motion_dict, timestamp):
     msg = PoseRaw()
     msg.dx = float(motion_dict["dx"])
     msg.dy = float(motion_dict["dy"])
+    msg.vx = float(motion_dict.get("vx", 0))
+    msg.vy = float(motion_dict.get("vy", 0))
+    msg.x = float(motion_dict["x"])
+    msg.y = float(motion_dict["y"])
     msg.z = float(motion_dict["z"])
     msg.yaw_deg = float(motion_dict["yaw"])
-    msg.yaw_rate_deg = float(motion_dict["yaw_rate"])
+    msg.yaw_rate_deg = float(motion_dict.get("yaw_rate", 0))
     msg.source_direction_deg = 0.0
     msg.timestamp = timestamp
     return msg
@@ -74,7 +76,9 @@ def create_pose_raw_message_from_poses(previous_pose, current_pose):
     delta = r.inv().apply(delta_global)
     pose_raw.dx = delta[0]
     pose_raw.dy = delta[1] 
-    pose_raw.z = delta[2]
+    pose_raw.x = current_pose.position.x
+    pose_raw.y = current_pose.position.y
+    pose_raw.z = current_pose.position.z
     pose_raw.yaw_deg = yaw_deg
 
     # have to be filled later: 
@@ -119,8 +123,6 @@ def create_signals_freq_message(signals_f, freqs, mic_positions, timestamp, audi
     msg.timestamp = timestamp
     msg.audio_timestamp = audio_timestamp
     msg.n_mics = signals_f.shape[1] 
-    # TODO(FD) remove this debugging check
-    assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
     msg.frequencies = [int(f) for f in freqs]
 
@@ -143,8 +145,6 @@ def create_correlations_message(R, freqs, mic_positions, timestamp):
     """
     msg = Correlations()
     msg.n_mics = int(R.shape[1])
-    # TODO(FD) remove this debugging check
-    assert msg.n_mics == N_MICS
     msg.n_frequencies = len(freqs)
     msg.frequencies = [int(f) for f in freqs]
     msg.corr_real_vect = list(R.real.astype(float).flatten())
@@ -188,12 +188,15 @@ def read_pose_message(msg):
 def read_pose_raw_message(msg):
     """ Read PoseRaw message.  """
     from scipy.spatial.transform import Rotation
-    d_local = np.array((msg.dx, msg.dy, msg.z))
+    d_local = np.array((msg.dx, msg.dy, 0))
+    v_local = np.array((msg.vx, msg.vy, 0))
+    r_world = np.array((msg.x, msg.y, msg.z))
     yaw = msg.yaw_deg
     yaw_rate = msg.yaw_rate_deg
     r = Rotation.from_euler('z', yaw, degrees=True)
     d_world = r.apply(d_local)[:2]
-    return d_world, yaw, yaw_rate
+    v_world = r.apply(v_local)[:2]
+    return r_world, d_world, v_world, yaw, yaw_rate
 
 
 def read_signals_message(msg):
