@@ -178,7 +178,7 @@ def extract_psd_dict(stft, frequencies_matrix, min_t=0, max_t=None, n_freq=1, ax
     """
     distance = 0
     n_mics = stft.shape[1]
-    all_frequencies = np.unique(frequencies_matrix.flatten())
+    np.unique(frequencies_matrix.flatten())
 
     psd_df = pd.DataFrame(columns=['time', 'counter', 'mic', 'frequency', 'distance', 'magnitude'])
     if max_t is None:
