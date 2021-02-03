@@ -8,6 +8,7 @@ wall_detector.py: Create and exploit distance-frequency matrix.
 import time
 
 import pandas as pd
+import scipy.interpolate
 
 from frequency_analysis import *
 
@@ -37,8 +38,49 @@ FREQUENCY = 0
 N_MICS = 4
 METHOD = np.nanmedian
 
-def normalize_df_matrix(df_matrix, freqs, method): 
-    pass
+def normalize_df_matrix(df_matrix, freqs, method='calibration'): 
+    df_matrix_normalized = np.zeros_like(df_matrix)
+    if method == 'calibration': 
+        from calibration import get_calibration_function
+        calib_function = get_calibration_function(plot=False)
+        calib_values = calib_function(list(freqs))
+
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i, :, None]
+
+    # we already pass the interpolation function (more efficient)
+    elif type(method) == scipy.interpolate.interpolate.interp1d:
+        calib_values = method(list(freqs))
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i, :, None]
+
+    elif method == 'sum_to_one':
+        calib_values = np.nansum(df_matrix, axis=2)[:, :, None]
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+        # sanity check
+        np.testing.assert_allclose(np.nansum(df_matrix_normalized, axis=2), 1.0)
+
+    elif method == 'mean':
+        calib_values = np.nanmean(df_matrix, axis=2)[:, :, None]
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+
+    elif method == 'standardize':
+        calib_values = np.nanmean(df_matrix, axis=2)[:, :, None]
+        calib_std = np.nanstd(df_matrix, axis=2)[:, :, None]
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = (df_matrix[i] - calib_values) / calib_std
+
+        # sanity check
+        new_std = np.nanstd(df_matrix_normalized, axis=2)
+        np.testing.assert_allclose(new_std[~np.isnan(new_std)], 1.0)
+        new_mean = np.nanmean(df_matrix_normalized, axis=2)
+        np.testing.assert_allclose(new_mean[~np.isnan(new_mean)], 0.0)
+    else:
+        raise ValueError(method)
+
+    return df_matrix_normalized, calib_values
 
 
 def sort_and_clip(df, min_val, max_val, name='frequency'):
@@ -48,6 +90,7 @@ def sort_and_clip(df, min_val, max_val, name='frequency'):
     if max_val is None:
         max_val = max(df[name])
     return df.loc[(df[name] > min_val) & (df[name] < max_val)]
+
 
 def sort_and_clip_both(df, min_freq, max_freq, min_dist, max_dist):
     df = df.sort_values(by=['frequency', 'distance'], axis=0, inplace=False)
@@ -128,11 +171,14 @@ class WallDetector(object):
 
     def fill_from_spec(self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE, verbose=False):
         df = psd_df_from_spec(spec, freqs, index_matrix) 
+        assert np.all(df.magnitude.values >= 0)
         if verbose:
             print(f'filling with {len(df)} new rows')
+
         df.loc[:, 'distance'] = distance  
         df.loc[:, 'angle'] = angle
 
+        df = df.apply(pd.to_numeric, axis=0, downcast='integer')
         # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
 
@@ -206,14 +252,18 @@ class WallDetector(object):
     def get_df_matrix(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None, method=METHOD):
         df = sort_and_clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
 
-        frequencies = df.frequency.unique()
-        distances = df.distance.unique()
+        frequencies = np.array(df.frequency.unique(), dtype=np.float)
+        distances = np.array(df.distance.unique(), dtype=np.float)
 
         # Attention: below only works if ferquency and distance "masks" are the same for each mic. 
         # This is currently the case. 
         df_matrix = np.zeros((self.n_mics, len(frequencies), len(distances)))
         for i_mic, df_mic in df.groupby('mic'):
-            df_matrix[i_mic, :, :] = df_mic.pivot_table(index='frequency', columns='distance', values='magnitude', aggfunc=method).values
+            df_matrix[i_mic, :, :] = df_mic.pivot_table(
+                    index='frequency', 
+                    columns='distance', 
+                    values='magnitude', 
+                    aggfunc=method).values
         return df_matrix, distances, frequencies
 
         # TODO(FD) test above, otherwise return to below version.
@@ -225,7 +275,7 @@ class WallDetector(object):
                 continue
             df_matrix[m, f_i, d_i] = method(df.magnitude.values)
         return distances, frequencies, df_matrix
-    
+   
 
     def remove_spurious_freqs(self, n_spurious=None, verbose=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """

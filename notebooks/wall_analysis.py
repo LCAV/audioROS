@@ -30,19 +30,6 @@ def clean_stft(stft, max_value=N_BUFFER):
     return stft
 
 
-def filter_by_dicts(df, dicts):
-    mask = np.zeros(len(df), dtype=bool)
-    for dict_ in dicts:
-        this_mask = np.ones(len(df), dtype=bool)
-        for key, val in dict_.items():
-            this_mask = this_mask & (df.loc[:, key] == val)
-        mask = np.bitwise_or(mask, this_mask)
-    if not np.any(mask):
-        return []
-    else:
-        return df.loc[mask, :]
-
-
 def add_distance_estimates(row, ax=None, min_z=300):
     if row.distance == 51:
         d = np.full(len(row.seconds), np.nan)
