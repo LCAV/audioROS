@@ -22,20 +22,34 @@ kwargs_standard = {
 
 kwargs_datasets = {
     '2020_12_9_rotating': {
-        **kwargs_standard,
-        'min_time': 12,
-        'max_time': 40, 
-     },
+        'audio_deck': {
+            **kwargs_standard,
+            'min_time': 9,
+            'max_time': 36, 
+         },
+        'measurement': {
+            **kwargs_standard,
+            'min_time': 7,
+            'max_time': 34, 
+         },
+    },
     '2020_11_26_wall': {
-        **kwargs_standard,
+        'audio_deck': {
+            **kwargs_standard,
+            'min_time': 9,
+            'max_time': 36, 
+        },
+        'measurement': {
+            **kwargs_standard,
+            'min_time': 6,
+            'max_time': 31.5, 
+         },
     },
 }    
 
 
 ANGLE = 0
 DISTANCE = 0
-FREQUENCY = 0
-N_MICS = 4
 METHOD = np.nanmedian
 
 def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'): 
@@ -99,6 +113,16 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
 
     return df_matrix_normalized, calib_values
 
+def clip(df, min_val, max_val, name='frequency'):
+    if min_val is None:
+        min_val = min(df[name])
+    if max_val is None:
+        max_val = max(df[name])
+    return df.loc[(df[name] >= min_val) & (df[name] <= max_val)]
+
+def clip_both(df, min_freq, max_freq, min_dist, max_dist):
+    df = clip(df, min_freq, max_freq, name='frequency')
+    return clip(df, min_dist, max_dist, name='distance')
 
 def sort_and_clip(df, min_val, max_val, name='frequency'):
     df = df.sort_values(by=name, axis=0, inplace=False)
@@ -106,23 +130,7 @@ def sort_and_clip(df, min_val, max_val, name='frequency'):
         min_val = min(df[name])
     if max_val is None:
         max_val = max(df[name])
-    return df.loc[(df[name] > min_val) & (df[name] < max_val)]
-
-
-def sort_and_clip_both(df, min_freq, max_freq, min_dist, max_dist):
-    df = df.sort_values(by=['frequency', 'distance'], axis=0, inplace=False)
-    if min_freq is None:
-        min_freq = min(df['frequency'])
-    if max_freq is None:
-        max_freq = max(df['frequency'])
-    if min_dist is None:
-        min_dist = min(df['distance'])
-    if max_dist is None:
-        max_dist = max(df['distance'])
-    return df.loc[(df['frequency'] > min_freq) 
-                & (df['frequency'] < max_freq)
-                & (df['distance'] < max_dist)
-                & (df['distance'] < max_dist)]
+    return df.loc[(df[name] >= min_val) & (df[name] <= max_val)]
 
 
 def normalized_std(values, method=METHOD):
@@ -141,7 +149,7 @@ class WallDetector(object):
         #self.n_spurious = 1 if (mic_type == 'audio_deck') else 10
         self.mic_indices = range(4) if (mic_type == 'audio_deck') else [1]
         if exp_name is not None:
-            self.params.update(kwargs_datasets[exp_name])
+            self.params.update(kwargs_datasets[exp_name][mic_type])
 
 
     def get_linear_kwargs(self):
@@ -198,14 +206,6 @@ class WallDetector(object):
         df = df.apply(pd.to_numeric, axis=0, downcast='integer')
         # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
-
-
-    def get_distances(self, min_dist=None, max_dist=None):
-        return sort_and_clip(self.df, min_dist, max_dist, 'distance').distance.unique()
-
-
-    def get_frequencies(self, min_freq=None, max_freq=None):
-        return sort_and_clip(self.df, min_freq, max_freq, 'frequency').frequency.unique()
 
 
     def get_frequency_slice(self, distance=None, min_freq=None, max_freq=None, method=METHOD):
@@ -267,23 +267,45 @@ class WallDetector(object):
 
 
     def get_df_matrix(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None, method=METHOD):
-        df = sort_and_clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
+        df = clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
 
-        frequencies = np.array(df.frequency.unique(), dtype=np.float)
-        distances = np.array(df.distance.unique(), dtype=np.float)
+        frequencies = np.sort(np.array(df.frequency.unique(), dtype=np.float))
+        distances = np.sort(np.array(df.distance.unique(), dtype=np.float))
 
         # Attention: below only works if ferquency and distance "masks" are the same for each mic. 
         # This is currently the case. 
-        df_matrix = np.zeros((self.n_mics, len(frequencies), len(distances)))
-        for i_mic, df_mic in df.groupby('mic'):
-            df_matrix[i_mic, :, :] = df_mic.pivot_table(
+        # Otherwise, get_df_matrix_old can be used. 
+        df_matrix = np.full((self.n_mics, len(frequencies), len(distances)), np.nan)
+        for i_mic, df_mic in df.groupby('mic', sort=True):
+            pt = df_mic.pivot_table(
                     index='frequency', 
                     columns='distance', 
                     values='magnitude', 
-                    aggfunc=method).values
+                    aggfunc=method)
+            frequencies_pt = pt.index.values
+
+            distances_pt =  pt.columns.values
+            np.testing.assert_allclose(distances_pt, distances)
+
+            # find frequencies mask
+            if (len(frequencies_pt)  != len(frequencies)) or not np.allclose(frequencies, frequencies_pt):
+                print(f'Warning: mismatch between freqs for mic{i_mic}')
+                f_indices = np.where((frequencies[None, :] == frequencies_pt[:, None]))[0]
+                np.testing.assert_allclose(frequencies[f_indices], frequencies_pt)
+                df_matrix[i_mic, f_indices, :] = pt.values
+            else:
+                df_matrix[i_mic, :, :] = pt.values
+
         return df_matrix, distances, frequencies
 
-        # TODO(FD) test above, otherwise return to below version.
+
+    def get_df_matrix_old(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None, method=METHOD):
+        df = clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
+
+        frequencies = np.sort(np.array(df.frequency.unique(), dtype=np.float))
+        distances = np.sort(np.array(df.distance.unique(), dtype=np.float))
+
+        df_matrix = np.full((self.n_mics, len(frequencies), len(distances)), np.nan)
         for (d, f, m), df in self.df.groupby(['distance', 'frequency', 'mic']):
             try:
                 d_i = np.where(distances == d)[0][0]
@@ -291,10 +313,10 @@ class WallDetector(object):
             except:
                 continue
             df_matrix[m, f_i, d_i] = method(df.magnitude.values)
-        return distances, frequencies, df_matrix
+        return df_matrix, distances, frequencies
    
 
-    def remove_spurious_freqs(self, n_spurious=None, verbose=False):
+    def remove_spurious_freqs(self, n_spurious=None, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """
         remove_rows = []
 
@@ -314,7 +336,29 @@ class WallDetector(object):
                 remove_rows += list(df.index.values)
         if verbose:
             print(f'removing {len(remove_rows)} rows.')
-        self.df = self.df.drop(index=remove_rows, inplace=False)
+        if not dryrun: 
+            self.df = self.df.drop(index=remove_rows, inplace=False)
+        return len(remove_rows)
+
+    def remove_bad_freqs(self, mag_thresh=1e-10, std_thresh=100, verbose=False, dryrun=False):
+        """ Remove the frequencies for which we only have less than n_min measurements. """
+        remove_rows = []
+
+        if verbose:
+            print(f'remove frequencies with less than {mag_thresh} average magnitude and more than {std_thresh} std.')
+
+        for freq, df in self.df.groupby('frequency'):
+            vals = df.magnitude.values
+            if verbose:
+                print(f'{freq}Hz: median {np.nanmedian(vals):.2e}, std {normalized_std(vals):.2e}')
+            if np.nanmedian(vals) < mag_thresh: 
+                remove_rows += list(df.index.values)
+            elif normalized_std(vals) > std_thresh:
+                remove_rows += list(df.index.values)
+        if verbose:
+            print(f'removing {len(remove_rows)} rows.')
+        if not dryrun: 
+            self.df = self.df.drop(index=remove_rows, inplace=False)
         return len(remove_rows)
 
 
