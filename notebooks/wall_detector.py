@@ -108,6 +108,11 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
         np.testing.assert_allclose(new_std[~np.isnan(new_std)], 1.0)
         new_mean = np.nanmedian(df_matrix_normalized, axis=2)
         np.testing.assert_allclose(new_mean[~np.isnan(new_mean)], 0.0, rtol=1, atol=1e-10)
+
+    elif method == 'normalize':
+        calib_values = np.linalg.norm(df_matrix, axis=2)[:, :, None]
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
     else:
         raise ValueError(method)
 
