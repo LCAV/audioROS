@@ -68,12 +68,24 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
         for i in range(df_matrix.shape[0]):
             df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
 
+    elif callable(method):
+        calib_values = method(list(freqs))[:, :, None]
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+
+    elif type(method) == np.ndarray:
+        calib_values = method
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+
     elif method == 'calibration-online':
         calib_values = np.nanmedian(df_matrix, axis=2)[:, :, None]
         for i in range(df_matrix.shape[0]):
             df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+
         # sanity check
-        np.testing.assert_allclose(np.nanmedian(df_matrix_normalized, axis=2), 1.0)
+        medians =  np.nanmedian(df_matrix_normalized, axis=2)
+        np.testing.assert_allclose(medians[~np.isnan(medians)], 1.0)
 
     elif method == 'zero_to_one':
         calib_values = np.nanmin(df_matrix, axis=2)[:, :, None]
@@ -110,9 +122,10 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
         np.testing.assert_allclose(new_mean[~np.isnan(new_mean)], 0.0, rtol=1, atol=1e-10)
 
     elif method == 'normalize':
-        calib_values = np.linalg.norm(df_matrix, axis=2)[:, :, None]
+        #print(calib_values.shape)
+        calib_values = np.sqrt(np.nansum(df_matrix**2, axis=2))[:, :, None]
         for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i] * 3
     else:
         raise ValueError(method)
 
