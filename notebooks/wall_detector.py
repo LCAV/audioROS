@@ -16,8 +16,8 @@ kwargs_standard = {
     'slope': 4000/30,
     'offset': 400,
     'delta': 6,
-    'min_freq': 1500,
-    'max_freq': 4800,
+    'min_freq': 900,
+    'max_freq': 5000,
 }
 
 kwargs_datasets = {
@@ -29,8 +29,10 @@ kwargs_datasets = {
          },
         'measurement': {
             **kwargs_standard,
-            'min_time': 7,
-            'max_time': 34, 
+            'min_time': 2,
+            'max_time': 35, 
+            #'min_time': 7,
+            #'max_time': 34, 
          },
     },
     '2020_11_26_wall': {
@@ -214,7 +216,8 @@ class WallDetector(object):
 
     def fill_from_spec(self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE, verbose=False):
         df = psd_df_from_spec(spec, freqs, index_matrix) 
-        assert np.all(df.magnitude.values >= 0)
+        vals = df.magnitude.values 
+        assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         if verbose:
             print(f'filling with {len(df)} new rows')
 

@@ -5,8 +5,9 @@ import sys
 import numpy as np
 import pandas as pd
 
+from audio_bringup.helpers import get_filename
 from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
-from crazyflie_description_py.parameters import FS
+from crazyflie_description_py.parameters import FS, N_BUFFER
 
 #EXP_NAME = "2020_09_17_white-noise-static"
 #EXP_NAME = "2020_10_14_static"
@@ -20,10 +21,6 @@ RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
 combine_list = ["product", "sum"]
 normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
-
-def get_fname(degree, props, snr, motors, source, distance=None, appendix="", **kwargs):
-    from audio_bringup.doa_pipeline import get_filename
-    return get_filename(degree=degree, props=props, snr=snr, motors=motors, source=source,distance=distance, appendix=appendix, **kwargs)
 
 
 def get_fname_old(degree, props, snr, motors, source, **kwargs):
@@ -43,7 +40,7 @@ def read_full_df(degree=0, props=True, snr=True, motors=True, source=True, exp_n
     if exp_name == "2020_09_17_white-noise-static":
         filename = get_fname_old(degree, props, snr, motors, source)
     else:
-        filename = get_fname(degree, props, snr, motors, source, distance=distance, appendix=appendix)
+        filename = get_filename(degree, props, snr, motors, source, distance=distance, appendix=appendix)
     fname = f"{CSV_DIRNAME}/{filename}.csv"
     df = pd.read_csv(fname)
     print('read', fname)
@@ -121,7 +118,7 @@ def read_df_others(degree=0, props=True, snr=True, motors=True, source=True, exp
     return df_status, df_motors
 
 
-def read_df_from_wav(fname, n_buffer=2048, method_window="hann"):
+def read_df_from_wav(fname, n_buffer=N_BUFFER, method_window="hann", fs_ref=FS):
     from audio_stack.processor import get_stft
     from scipy.io import wavfile
     
@@ -131,7 +128,10 @@ def read_df_from_wav(fname, n_buffer=2048, method_window="hann"):
 
     # correct for different sampling frequencies so that we 
     # get roughly the same frequency bins. 
-    n_buffer_corr = int(n_buffer * fs / FS)
+    if fs_ref is not None:
+        n_buffer_corr = int(n_buffer * fs / fs_ref)
+    else:
+        n_buffer_corr = n_buffer
 
     n_frames = len(source_data) // n_buffer_corr
 
@@ -152,13 +152,17 @@ def read_df_from_wav(fname, n_buffer=2048, method_window="hann"):
     return df
 
 
-def read_signal_from_wav(fname, n_buffer=2048):
+def read_signal_from_wav(fname, n_buffer=N_BUFFER, fs_ref=FS):
     from scipy.io import wavfile
     n_mics = 1
     fs, source_data = wavfile.read(fname)
     print(f'read {fname}')
 
-    n_buffer_corr = int(n_buffer * fs / FS)
+    if fs_ref is not None:
+        n_buffer_corr = int(n_buffer * fs / fs_ref)
+    else:
+        n_buffer_corr = n_buffer
+
     n_frames = len(source_data) // n_buffer_corr
 
     signals = np.empty((n_frames, n_mics, n_buffer_corr))
