@@ -19,7 +19,7 @@ from scipy.io import wavfile
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
-from serial_motors import SerialMotors
+from serial_motors import SerialMotors, DURATION_50, DURATION_360
 
 from crazyflie_description_py.commands import command_dict, buzzer_dict
 from crazyflie_description_py.parameters import SOUND_EFFECTS
@@ -77,10 +77,11 @@ def get_active_nodes():
 
 def main(args=None): 
     def measure_doa(params):
+        assert source_type in ['buzzer', 'soundcard']
         distance = params.get('distance', 0)
         angle = params.get('degree', 0)
         #### prepare sound and turntable interfaces ####
-        if (previous_angle != angle) or (distance != previous_distance):
+        if (previous_angle != angle) or (previous_distance != distance):
             SerialIn = SerialMotors(verbose=False)
 
         duration = global_params.get("duration", 30)
@@ -90,38 +91,21 @@ def main(args=None):
         min_freq = params.get('min_freq', None)
         max_freq = params.get('max_freq', None)
 
-        if type(params['motors']) == str:
+        if params['motors'] != 0:
             duration_motors = get_total_time(command_dict[params['motors']])
             if duration_motors > duration:
                 print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
                 duration = duration_motors
-        if ('buzzer-onboard' in source_type) and (params['source'] is not None):
-            c, (min_freq_buzz, max_freq_buzz), duration_buzzer = SOUND_EFFECTS[params['source']]
-            if duration_buzzer > duration:
-                print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
-                duration = duration_buzzer
-            if min_freq is None:
-                print(f'Using buzzer min_freq {min_freq_buzz}.')
-                min_freq = min_freq_buzz
-            if max_freq is None:
-                print(f'Using buzzer max_freq {max_freq_buzz}.')
-                max_freq = max_freq_buzz
 
 
-        if distance == 51:
-            duration_move = 100 #165  
+        if distance in [51, -51]:
+            duration_move = DURATION_50
             if duration_move > duration:
-                print(f'ignoring global duration {duration} and using turn command duration {duration_move}')
-                duration = duration_move
-        elif distance == -51:
-            duration_move = 165
-            if duration_move > duration:
-                print(f'ignoring global duration {duration} and using turn command duration {duration_move}')
+                print(f'ignoring global duration {duration} and using move command duration {duration_move}')
                 duration = duration_move
 
         if angle == 360:
-            # TODO(FD) replace below with serial_motors.py command durations
-            duration_turn = 18  
+            duration_turn = DURATION_360
             if duration_turn > duration:
                 print(f'ignoring global duration {duration} and using turn command duration {duration_turn}')
                 duration = duration_turn
@@ -149,38 +133,21 @@ def main(args=None):
         #### move ####
         if (distance is not None) and not (distance in [-51, 51]):
             delta = distance - previous_distance 
-            if delta > 0:
-                print('moving forward by', delta)
-                SerialIn.move(delta)
-            elif delta < 0:
-                print('moving backward by', delta)
-                SerialIn.move_back(-delta)
+            print('moving by', delta)
+            SerialIn.move(delta)
             previous_distance = distance
 
         if not (angle == 360):
             delta = angle - previous_angle
-            if delta > 0:
-                print('turning by', delta)
-                SerialIn.turn(delta, blocking=True)
-            elif delta < 0:
-                print('turning back by', delta)
-                SerialIn.turn_back(-delta, blocking=True)
+            print('turning by', delta)
+            SerialIn.turn(delta, blocking=True)
 
         #### record ####
         set_param('/csv_writer', 'filename', '')
         bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
         print('started bag record')
 
-
         #### play ####
-        if source_type == 'buzzer-onboard':
-            if params['source'] is not None:
-                execute_commands(buzzer_dict[params['source']])
-        elif source_type == 'buzzer-onboard-flying':
-            source = params['source']
-            if source not in [None, 'sweep_slow','sweep_fast']:
-                execute_commands(buzzer_dict[source])
-
         if angle == 360:
             print('starting turning by 360')
             SerialIn.turn(angle, blocking=False)
@@ -192,7 +159,7 @@ def main(args=None):
 
         if distance == -51:
             print('start moving back by 50') 
-            SerialIn.move_back(50, blocking=False)
+            SerialIn.move(-50, blocking=False)
             previous_distance = previous_distance - 50
 
         # when we use an external speaker, we play and record. 
@@ -204,7 +171,7 @@ def main(args=None):
                 print('playing (not recording) sound...')
                 sd.play(out_signal, blocking=True)
         # when we use the buzzer, we simply record what the measurement mics get.    
-        elif ('buzzer-onboard' in source_type) or (source_type == 'buzzer'):
+        elif source_type == 'buzzer':
             start_time = time.time()
 
             if global_params['n_meas_mics'] > 0:
@@ -230,8 +197,6 @@ def main(args=None):
                 time.sleep(duration)
 
         #### wrap up ####
-        if 'buzzer-onboard' in source_type:
-            execute_commands(buzzer_dict['stop'])
         print('...done')
 
         set_param('/gateway', 'all', '0')
@@ -246,7 +211,105 @@ def main(args=None):
 
         if angle == 360:
             print('turning back by 360')
-            SerialIn.turn_back(angle, blocking=True)
+            SerialIn.turn(-angle, blocking=True)
+        return
+
+    def measure_wall(params):
+        assert source_type == 'buzzer-onboard'
+
+        #### prepare sound and turntable interfaces ####
+        distance = params.get('distance', 0)
+        angle = params.get('degree', 0)
+        if (previous_angle != angle) or (previous_distance != distance):
+            SerialIn = SerialMotors(verbose=False)
+
+        duration = global_params.get("duration", 30)
+
+        # If given in parameters, min_freq and max_freq overwrite all other settings. Otherwise 
+        # these parameters are read from the buzzer frequency characteristics.
+        min_freq = params.get('min_freq', None)
+        max_freq = params.get('max_freq', None)
+
+        if params['motors'] != 0:
+            duration_motors = get_total_time(command_dict[params['motors']])
+            if duration_motors > duration:
+                print(f'ignoring global duration {duration} and using motor command duration {duration_motors}')
+                duration = duration_motors
+
+        if params['source'] is not None:
+            c, (min_freq_buzz, max_freq_buzz), duration_buzzer = SOUND_EFFECTS[params['source']]
+            if duration_buzzer > duration:
+                print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
+                duration = duration_buzzer
+            if min_freq is None:
+                print(f'Using buzzer min_freq {min_freq_buzz}.')
+                min_freq = min_freq_buzz
+            if max_freq is None:
+                print(f'Using buzzer max_freq {max_freq_buzz}.')
+                max_freq = max_freq_buzz
+
+        filter_snr = params.get('snr', 0) 
+        set_param('/gateway', 'filter_snr_enable', str(filter_snr))
+        if (filter_snr > 0) and ((min_freq is None) or (max_freq is None)): 
+            raise Warning('Need to set min_freq and max_freq when using snr filtering!')
+        set_param('/gateway', 'filter_prop_enable', str(params['props']))
+        if min_freq is not None:
+            set_param('/gateway', 'min_freq', str(min_freq))
+        if max_freq is not None:
+            set_param('/gateway', 'max_freq', str(max_freq))
+
+        #### move ####
+        if (distance is not None):
+            delta = distance - previous_distance 
+            print('moving by', delta)
+            SerialIn.move(delta)
+            previous_distance = distance
+
+            delta = angle - previous_angle
+            print('turning by', delta)
+            SerialIn.turn(delta, blocking=True)
+
+        #### record ####
+        set_param('/csv_writer', 'filename', '')
+        bag_pid = subprocess.Popen(['ros2', 'bag', 'record', '-o', bag_filename] + TOPICS_TO_RECORD)
+        print('started bag record')
+
+        if params['source'] is not None:
+            execute_commands(buzzer_dict[params['source']])
+
+        start_time = time.time()
+
+        if global_params['n_meas_mics'] > 0:
+            print(f'recording sound for {duration} seconds...')
+            n_frames = int(duration * global_params['fs_soundcard'])
+            recording = sd.rec(n_frames, blocking=False)
+
+        if params['motors'] != 0:
+            print(f'executing motor commands:')
+            execute_commands(command_dict[params['motors']], source=params['source'])
+            extra_idle_time = duration - (time.time() - start_time)
+            if extra_idle_time > 0:
+                print(f'finished motor commands faster than expected. sleeping for {extra_idle_time:.2f} seconds...')
+                time.sleep(extra_idle_time)
+            elif extra_idle_time < 0:
+                print(f'Warning: finished recording before finishing motor commands! {extra_idle_time:.2f}')
+        else: # motors is 0
+            print(f'waiting for {duration} seconds...')
+            time.sleep(duration)
+
+        #### wrap up ####
+        execute_commands(buzzer_dict['stop'])
+        print('...done')
+
+        set_param('/gateway', 'all', '0')
+        bag_pid.send_signal(signal.SIGINT)
+        set_param('/csv_writer', 'filename', csv_filename)
+
+        if global_params['n_meas_mics'] > 0:
+            recording_float32 = recording.astype(np.float32)
+            wav_filename = os.path.join(wav_dirname, filename) + '.wav'
+            wavfile.write(wav_filename, global_params['fs_soundcard'], recording_float32)
+            print('wrote wav file as', wav_filename)
         return
 
     def measure_snr(params):
@@ -404,7 +467,6 @@ def main(args=None):
             print('wrote wav file as', wav_filename)
         return
 
-
     rclpy.init(args=args)
 
     extra_dirname = input(f'enter experiment folder: (appended to {EXP_DIRNAME}, default:{EXTRA_DIRNAME})') or EXTRA_DIRNAME
@@ -483,19 +545,19 @@ def main(args=None):
         if answer == 'n':
             continue
 
-        #measure_doa(params)
+        measure_wall(params)
         #measure_snr(params)
-        measure_snr_onboard(params)
+        #measure_snr_onboard(params)
         param_i += 1
 
     # after last experiment: move back to position 0
     if (distance is not None) and not (distance in [0, 51, -51]):
         print('moving back by', distance)
-        SerialIn.move_back(distance)
+        SerialIn.move(-distance)
 
     if not (angle in [0, 360]):
         print('turning back by', angle)
-        SerialIn.turn_back(angle)
+        SerialIn.turn(-angle)
 
 
 if __name__ == "__main__":
