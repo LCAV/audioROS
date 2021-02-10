@@ -54,7 +54,8 @@ buzzer_dict = {
     key: [('/gateway', 'buzzer_effect', value[0], 0)] for key, value in SOUND_EFFECTS.items() if 'sweep' in key
 }
 buzzer_dict['stop'] =  [
-    ('/gateway', 'buzzer_effect', 0, 0), # off
+    ('/gateway', 'buzzer_freq', 0, 0), # set frequency to 0 (for effect 12 only)
+    ('/gateway', 'buzzer_effect', 0, 0), # turn effect off
 ]
 # buzzer command for mono signals: first set to bypass, then set frequency. 
 for key in SOUND_EFFECTS.keys():

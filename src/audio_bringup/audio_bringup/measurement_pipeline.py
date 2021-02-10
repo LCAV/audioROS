@@ -40,10 +40,11 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = '2021_01_14_snr_study'
 #EXTRA_DIRNAME = '2021_01_15_snr_study'
 #EXTRA_DIRNAME = '2021_01_15_snr_study_2'
-#EXTRA_DIRNAME = '2021_01_21_snr_study'
-EXTRA_DIRNAME = '2021_01_21_snr_study_foam'
 #EXTRA_DIRNAME = '2021_01_15_snr_study_3'
 #EXTRA_DIRNAME = '2021_01_15_snr_study_4'
+#EXTRA_DIRNAME = '2021_01_21_snr_study'
+#EXTRA_DIRNAME = '2021_01_21_snr_study_foam'
+EXTRA_DIRNAME = '2021_02_09_wall'
 
 
 def execute_commands(command_list, source='sweep_slow'):
@@ -78,11 +79,6 @@ def get_active_nodes():
 def main(args=None): 
     def measure_doa(params):
         assert source_type in ['buzzer', 'soundcard']
-        distance = params.get('distance', 0)
-        angle = params.get('degree', 0)
-        #### prepare sound and turntable interfaces ####
-        if (previous_angle != angle) or (previous_distance != distance):
-            SerialIn = SerialMotors(verbose=False)
 
         duration = global_params.get("duration", 30)
 
@@ -130,17 +126,6 @@ def main(args=None):
         if max_freq is not None:
             set_param('/gateway', 'max_freq', str(max_freq))
 
-        #### move ####
-        if (distance is not None) and not (distance in [-51, 51]):
-            delta = distance - previous_distance 
-            print('moving by', delta)
-            SerialIn.move(delta)
-            previous_distance = distance
-
-        if not (angle == 360):
-            delta = angle - previous_angle
-            print('turning by', delta)
-            SerialIn.turn(delta, blocking=True)
 
         #### record ####
         set_param('/csv_writer', 'filename', '')
@@ -155,12 +140,10 @@ def main(args=None):
         if distance == 51:
             print('start moving by 50')
             SerialIn.move(50, blocking=False)
-            previous_distance = 50 + previous_distance
 
         if distance == -51:
             print('start moving back by 50') 
             SerialIn.move(-50, blocking=False)
-            previous_distance = previous_distance - 50
 
         # when we use an external speaker, we play and record. 
         if source_type == 'soundcard':
@@ -220,9 +203,6 @@ def main(args=None):
         #### prepare sound and turntable interfaces ####
         distance = params.get('distance', 0)
         angle = params.get('degree', 0)
-        if (previous_angle != angle) or (previous_distance != distance):
-            SerialIn = SerialMotors(verbose=False)
-
         duration = global_params.get("duration", 30)
 
         # If given in parameters, min_freq and max_freq overwrite all other settings. Otherwise 
@@ -257,17 +237,6 @@ def main(args=None):
             set_param('/gateway', 'min_freq', str(min_freq))
         if max_freq is not None:
             set_param('/gateway', 'max_freq', str(max_freq))
-
-        #### move ####
-        if (distance is not None):
-            delta = distance - previous_distance 
-            print('moving by', delta)
-            SerialIn.move(delta)
-            previous_distance = distance
-
-            delta = angle - previous_angle
-            print('turning by', delta)
-            SerialIn.turn(delta, blocking=True)
 
         #### record ####
         set_param('/csv_writer', 'filename', '')
@@ -504,9 +473,10 @@ def main(args=None):
             print(f'created {dirname}')
         print(f'saving under {dirname}')
 
+    timestamp = int(time.time())
     previous_distance = START_DISTANCE
     previous_angle = START_ANGLE
-    timestamp = int(time.time())
+    SerialIn = SerialMotors(verbose=False)
 
     distance = None
     angle = 0
@@ -544,6 +514,26 @@ def main(args=None):
             csv_filename = os.path.join(csv_dirname, filename)
         if answer == 'n':
             continue
+
+        distance = params.get('distance', 0)
+        angle = params.get('degree', 0)
+
+        #### move ####
+        if (distance is not None) and not (distance in [-51, 51]):
+            delta = distance - previous_distance 
+            print('moving by', delta)
+            SerialIn.move(delta, blocking=True)
+            previous_distance = distance
+        elif distance == 51:
+            previous_distance = 50 + previous_distance
+        elif distance == -51:
+            previous_distance = previous_distance - 50
+
+        if not (angle == 360):
+            delta = angle - previous_angle
+            print('turning by', delta)
+            SerialIn.turn(delta, blocking=True)
+            previous_angle = angle
 
         measure_wall(params)
         #measure_snr(params)
