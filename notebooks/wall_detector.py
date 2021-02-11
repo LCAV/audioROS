@@ -47,6 +47,30 @@ kwargs_datasets = {
             'max_time': 31.5, 
          },
     },
+    '2021_02_09_wall': {
+        'audio_deck': {
+            **kwargs_standard,
+            'min_time': 5,
+            'max_time': 37, 
+        },
+        'measurement': {
+            **kwargs_standard,
+            'min_time': 6,
+            'max_time': 31.5, 
+         },
+    },
+    '2021_02_09_wall_tukey': {
+        'audio_deck': {
+            **kwargs_standard,
+            'min_time': 5,
+            'max_time': 37, 
+        },
+        'measurement': {
+            **kwargs_standard,
+            'min_time': 2,
+            'max_time': 34, 
+         },
+    },
 }    
 
 
@@ -359,6 +383,8 @@ class WallDetector(object):
             print(f'removing {len(remove_rows)} rows.')
         if not dryrun: 
             self.df = self.df.drop(index=remove_rows, inplace=False)
+        if len(self.df) == 0:
+            print('Warning: remove_spurious_freqs removed all rows.')
         return len(remove_rows)
 
     def remove_bad_freqs(self, mag_thresh=1e-10, std_thresh=100, verbose=False, dryrun=False):
@@ -380,6 +406,9 @@ class WallDetector(object):
             print(f'removing {len(remove_rows)} rows.')
         if not dryrun: 
             self.df = self.df.drop(index=remove_rows, inplace=False)
+
+        if len(self.df) == 0:
+            print('Warning: remove_bad_freqs removed all rows.')
         return len(remove_rows)
 
 

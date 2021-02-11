@@ -79,20 +79,26 @@ def add_distance_estimates(row, ax=None, min_z=300):
 
 def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     if exp_name == '2020_12_7_moving':
-        appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]
+        appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]; wav = True
     elif exp_name == '2020_12_9_rotating':
-        appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list = [0, 1]
+        appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list = [0, 1]; wav = True
     elif exp_name == '2020_12_18_flying':
         appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]; wav = False
     elif exp_name == '2020_12_18_stepper':
-        appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]
+        appendix_list = ["", "_new"]; snr_list = [2]; props_list = [0, 1]; wav = True
     elif exp_name == '2020_11_26_wall':
         appendix_list = [""]; snr_list = [0]; props_list = [0]; wav = True
     elif exp_name == '2020_12_11_calibration':
         appendix_list = ['', '_BC329', '_HALL', '_HALL2', '_HALL3']
-        snr_list = [0, 1]; props_list=[0, 1]; wav=False
+        snr_list = [0, 1]; props_list=[0, 1]; wav = False
     elif exp_name == '2020_12_2_chirp':
-        appendix_list = ['']; snr_list = [0]; props_list=[0]; wav=True
+        appendix_list = ['']; snr_list = [0]; props_list=[0]; wav =True
+    elif exp_name == '2021_02_09_wall':
+        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True
+    elif exp_name == '2021_02_09_wall_tukey':
+        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True
+    else:
+        raise ValueError(exp_name)
 
     if wav:
         mic_type_list = ['measurement', 'audio_deck']
@@ -172,6 +178,12 @@ def parse_experiments_wav(exp_name='2020_12_9_rotating', n_buffer=44100):
         appendix_list = ["", "_new"]; snr_list = [0]; props_list = [0]
     elif exp_name == '2020_11_26_wall':
         appendix_list = [""]; snr_list = [0]; props_list = [0]; 
+    elif exp_name == '2021_02_09_wall':
+        appendix_list = [""]; snr_list = [0]; props_list = [0]; 
+    elif exp_name == '2021_02_09_wall_tukey':
+        appendix_list = [""]; snr_list = [0]; props_list = [0]; 
+    else:
+        raise ValueError(exp_name)
     params_file = load_params(exp_name)
 
     cat_columns = {
@@ -219,7 +231,9 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        '2020_12_2_chirp',
+        '2021_02_09_wall_tukey',
+        #'2021_02_09_wall',
+        #'2020_12_2_chirp',
         #'2020_12_11_calibration',
         #'2020_12_9_rotating',
         #'2020_12_18_flying',

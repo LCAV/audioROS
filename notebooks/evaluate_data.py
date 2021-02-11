@@ -38,9 +38,9 @@ def get_fname_old(degree, props, snr, motors, source, **kwargs):
 def read_full_df(degree=0, props=True, snr=True, motors=True, source=True, exp_name=EXP_NAME, distance=None, appendix=""):
     CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
     if exp_name == "2020_09_17_white-noise-static":
-        filename = get_fname_old(degree, props, snr, motors, source)
+        filename = get_fname_old(degree=degree, props=props, snr=snr, motors=motors, source=source)
     else:
-        filename = get_filename(degree, props, snr, motors, source, distance=distance, appendix=appendix)
+        filename = get_filename(degree=degree, props=props, snr=snr, motors=motors, source=source, distance=distance, appendix=appendix)
     fname = f"{CSV_DIRNAME}/{filename}.csv"
     df = pd.read_csv(fname)
     print('read', fname)
@@ -124,7 +124,7 @@ def read_df_from_wav(fname, n_buffer=N_BUFFER, method_window="hann", fs_ref=FS):
     
     n_mics = 1
     fs, source_data = wavfile.read(fname)
-    print(f'read {fname}')
+    print(f'read {fname}, fs:{fs}Hz')
 
     # correct for different sampling frequencies so that we 
     # get roughly the same frequency bins. 
