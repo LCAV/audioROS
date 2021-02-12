@@ -238,9 +238,9 @@ if __name__ == "__main__":
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',
-        '2020_12_11_calibration',
+        #'2020_12_11_calibration',
         #'2020_12_9_rotating',
-        '2020_12_18_flying',
+        #'2020_12_18_flying',
         #'2020_12_18_stepper',
         '2020_11_26_wall',
     ]
