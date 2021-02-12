@@ -250,7 +250,7 @@ def psd_df_from_spec(spec, freqs, index_matrix, min_t=0, max_t=None, n_freq=1):
         assert n_freq == 1
         index_matrix = index_matrix.reshape((1, -1))
 
-    assert index_matrix.shape[0] >= n_freq 
+    assert index_matrix.shape[0] >= n_freq , f'index matrix shape: {index_matrix.shape}'
 
     distance = 0
     n_mics = spec.shape[1]

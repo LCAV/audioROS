@@ -55,8 +55,8 @@ kwargs_datasets = {
         },
         'measurement': {
             **kwargs_standard,
-            'min_time': 6,
-            'max_time': 31.5, 
+            'min_time': 2,
+            'max_time': 34, 
          },
     },
     '2021_02_09_wall_tukey': {
@@ -157,6 +157,11 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
 
     return df_matrix_normalized, calib_values
 
+def prune_df_matrix(df_matrix, frequencies, ratio_missing_allowed=0.0):
+    count_missing = np.sum(np.isnan(df_matrix), axis=(2))
+    freq_i  = np.where(np.all(count_missing / df_matrix.shape[2] <= ratio_missing_allowed, axis=0))[0]
+    return df_matrix[:, freq_i, :], frequencies[freq_i], freq_i
+
 def clip(df, min_val, max_val, name='frequency'):
     if min_val is None:
         min_val = min(df[name])
@@ -175,7 +180,6 @@ def sort_and_clip(df, min_val, max_val, name='frequency'):
     if max_val is None:
         max_val = max(df[name])
     return df.loc[(df[name] >= min_val) & (df[name] <= max_val)]
-
 
 def normalized_std(values, method=METHOD):
     method_values = method(values)
@@ -386,6 +390,7 @@ class WallDetector(object):
         if len(self.df) == 0:
             print('Warning: remove_spurious_freqs removed all rows.')
         return len(remove_rows)
+
 
     def remove_bad_freqs(self, mag_thresh=1e-10, std_thresh=100, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """

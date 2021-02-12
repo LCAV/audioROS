@@ -77,7 +77,7 @@ def add_distance_estimates(row, ax=None, min_z=300):
     return row
 
 
-def parse_experiments(exp_name='2020_12_9_moving', wav=True):
+def parse_experiments(exp_name='2020_12_9_moving'):
     if exp_name == '2020_12_7_moving':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]; wav = True
     elif exp_name == '2020_12_9_rotating':
@@ -96,7 +96,7 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
     elif exp_name == '2021_02_09_wall':
         appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True
     elif exp_name == '2021_02_09_wall_tukey':
-        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True
+        appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]; snr_list = [3]; props_list = [0]; wav = True
     else:
         raise ValueError(exp_name)
 
@@ -143,9 +143,13 @@ def parse_experiments(exp_name='2020_12_9_moving', wav=True):
                 fname = get_filename(**params)
                 wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
                 df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
-        except FileNotFoundError:
-            print('skipping', params)
+        except FileNotFoundError as e:
+            print('skipping', e)
             continue 
+
+        if not 'signals_f' in df.columns:
+            print('error, signals_f is empty. skipping...') 
+            continue
             
         stft = np.array([*df.signals_f.values]) # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
@@ -231,17 +235,18 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        '2021_02_09_wall_tukey',
+        #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',
-        #'2020_12_11_calibration',
+        '2020_12_11_calibration',
         #'2020_12_9_rotating',
-        #'2020_12_18_flying',
+        '2020_12_18_flying',
         #'2020_12_18_stepper',
-        #'2020_11_26_wall',
+        '2020_11_26_wall',
     ]
     for exp_name in exp_names:
-        fname = f'results/{exp_name}_real.pkl'
+        #fname = f'results/{exp_name}_real.pkl'
+        fname = f'../experiments/{exp_name}/all_data.pkl'
 
         dirname = os.path.dirname(fname)
         if not os.path.isdir(dirname):

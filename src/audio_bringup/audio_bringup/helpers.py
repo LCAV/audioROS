@@ -26,7 +26,7 @@ def get_filename(**params):
     motors = params.get("motors")
     motors_flag = "" if ((type(motors) == str) or (motors > 0)) else "no"
     ending = "" if params.get("degree", 0) == 0 else f"_{params.get('degree')}"
-    ending_distance = "" if params.get("distance", 0) == 0 else f"_{params.get('distance')}"
+    ending_distance = "" if params.get("distance", None) in [0, None] else f"_{params.get('distance')}"
     ending_distance += params.get("appendix", "")
     fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}{ending_distance}"
     return fname
