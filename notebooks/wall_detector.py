@@ -55,8 +55,8 @@ kwargs_datasets = {
         },
         'measurement': {
             **kwargs_standard,
-            'min_time': 2,
-            'max_time': 34, 
+            'min_time': 3,
+            'max_time': 35, 
          },
     },
     '2021_02_09_wall_tukey': {
