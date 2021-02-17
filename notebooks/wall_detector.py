@@ -78,18 +78,16 @@ ANGLE = 0
 DISTANCE = 0
 METHOD = np.nanmedian
 
+# parameters for cleaning
+N_SPURIOUS = 2
+MAG_THRESH = 1e-3
+STD_THRESH = 1
+RATIO_MISSING_ALLOWED = 0.2
+
 def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'): 
     df_matrix_normalized = np.zeros_like(df_matrix)
-    if method == 'calibration-offline': 
-        from calibration import get_calibration_function
-        calib_function = get_calibration_function(plot=False)
-        calib_values = calib_function(list(freqs))[i, :, None]
-
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
-
     # we already pass the interpolation function (more efficient)
-    elif type(method) == scipy.interpolate.interpolate.interp1d:
+    if type(method) == scipy.interpolate.interpolate.interp1d:
         calib_values = method(list(freqs))[:, :, None]
         for i in range(df_matrix.shape[0]):
             df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
@@ -101,6 +99,14 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
 
     elif type(method) == np.ndarray:
         calib_values = method
+        for i in range(df_matrix.shape[0]):
+            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
+
+    elif method == 'calibration-offline': 
+        from calibration import get_calibration_function
+        calib_function = get_calibration_function(plot=False)
+        calib_values = calib_function(list(freqs))[i, :, None]
+
         for i in range(df_matrix.shape[0]):
             df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
 
@@ -157,9 +163,12 @@ def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'):
 
     return df_matrix_normalized, calib_values
 
-def prune_df_matrix(df_matrix, frequencies, ratio_missing_allowed=0.0):
+def prune_df_matrix(df_matrix, frequencies, ratio_missing_allowed=RATIO_MISSING_ALLOWED, verbose=False):
+    """ Remove all rows with more than a certain percentage of missing values """ 
     count_missing = np.sum(np.isnan(df_matrix), axis=(2))
     freq_i  = np.where(np.all(count_missing / df_matrix.shape[2] <= ratio_missing_allowed, axis=0))[0]
+    if verbose:
+        print(f'keeping {len(freq_i)}/{len(frequencies)} frequencies')
     return df_matrix[:, freq_i, :], frequencies[freq_i], freq_i
 
 def clip(df, min_val, max_val, name='frequency'):
@@ -365,7 +374,7 @@ class WallDetector(object):
         return df_matrix, distances, frequencies
    
 
-    def remove_spurious_freqs(self, n_spurious=None, verbose=False, dryrun=False):
+    def remove_spurious_freqs(self, n_spurious=N_SPURIOUS, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """
         remove_rows = []
 
@@ -392,7 +401,7 @@ class WallDetector(object):
         return len(remove_rows)
 
 
-    def remove_bad_freqs(self, mag_thresh=1e-10, std_thresh=100, verbose=False, dryrun=False):
+    def remove_bad_freqs(self, mag_thresh=MAG_THRESH, std_thresh=STD_THRESH, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """
         remove_rows = []
 

@@ -21,6 +21,7 @@ Y_OFFSET = 0.08 # in meters
 YAW_OFFSET = -132 
 ROOM_DIM = [10, 8]
 
+
 def get_setup(distance_cm=0, yaw_deg=0, ax=None, single_mic=False):
     source = [ROOM_DIM[0] / 2, Y_OFFSET + distance_cm * 1e-2]
     if single_mic:
@@ -45,6 +46,13 @@ def get_setup(distance_cm=0, yaw_deg=0, ax=None, single_mic=False):
         #ax.axis('equal')
 
     return source, mic_positions
+
+
+def get_real_distance(distance_cm=0, yaw_deg=0, mic_idx=0):
+    source, mic_positions = get_setup(distance_cm=distance_cm, yaw_deg=yaw_deg, single_mic=False)
+    source_image = [source[0], -source[1]]
+    mic = mic_positions[mic_idx] 
+    return 100*(np.linalg.norm(source_image - mic) - np.linalg.norm(source - mic))
 
 
 def generate_room(distance_cm=0, yaw_deg=0, ax=None, single_mic=False, fs_here=FS):
@@ -101,7 +109,6 @@ def get_slice_theory(mic_positions, source, frequencies, gain=1.0):
                alpha1 * gain * np.exp(-1j*2*np.pi*frequencies*n1) 
         H[i, :] = np.abs(H_ij)
     return H
-
 
 
 def get_df_theory(frequencies, distances, gain=1.0, chosen_mics=range(4)):

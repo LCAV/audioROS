@@ -77,7 +77,7 @@ def add_distance_estimates(row, ax=None, min_z=300):
     return row
 
 
-def parse_experiments(exp_name='2020_12_9_moving'):
+def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_distance=None):
     if exp_name == '2020_12_7_moving':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]; wav = True
     elif exp_name == '2020_12_9_rotating':
@@ -99,6 +99,10 @@ def parse_experiments(exp_name='2020_12_9_moving'):
         appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]; snr_list = [3]; props_list = [0]; wav = True
     else:
         raise ValueError(exp_name)
+
+    if save_intermediate:
+        counter = 0
+        save_fname = f'../experiments/{exp_name}/all_data.pkl'
 
     if wav:
         mic_type_list = ['measurement', 'audio_deck']
@@ -133,6 +137,10 @@ def parse_experiments(exp_name='2020_12_9_moving'):
     }
     for cat_values in itertools.product(*cat_columns.values()):
         params.update(dict(zip(cat_columns.keys(), cat_values)))
+
+        if (max_distance is not None) and (params['distance'] > max_distance):
+            continue
+
         try:
             positions = None
             if params['mic_type'] == 'audio_deck':
@@ -144,7 +152,6 @@ def parse_experiments(exp_name='2020_12_9_moving'):
                 wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
                 df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
         except FileNotFoundError as e:
-            print('skipping', e)
             continue 
 
         if not 'signals_f' in df.columns:
@@ -174,6 +181,16 @@ def parse_experiments(exp_name='2020_12_9_moving'):
         all_items.update(pos_dict)
         all_items.update(params)
         df_total.loc[len(df_total), :] = all_items
+
+
+        if not save_intermediate:
+            continue
+
+        counter += 1
+        if counter % 10 == 0:
+            pd.to_pickle(df_total, save_fname)
+            print('saved intermediate as', save_fname)
+
     return df_total
 
 
@@ -205,6 +222,7 @@ def parse_experiments_wav(exp_name='2020_12_9_rotating', n_buffer=44100):
     params = {
         'exp_name': exp_name
     }
+
     for cat_values in itertools.product(*cat_columns.values()):
         params.update(dict(zip(cat_columns.keys(), cat_values)))
         try:
@@ -228,6 +246,7 @@ def parse_experiments_wav(exp_name='2020_12_9_rotating', n_buffer=44100):
         )
         all_items.update(params)
         df_total.loc[len(df_total), :] = all_items
+        
     return df_total
 
 
@@ -235,14 +254,14 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        #'2021_02_09_wall_tukey',
+        '2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',
         #'2020_12_11_calibration',
         #'2020_12_9_rotating',
         #'2020_12_18_flying',
         #'2020_12_18_stepper',
-        '2020_11_26_wall',
+        #'2020_11_26_wall',
     ]
     for exp_name in exp_names:
         #fname = f'results/{exp_name}_real.pkl'
@@ -253,12 +272,10 @@ if __name__ == "__main__":
             os.makedirs(dirname)
             print('created directory', dirname)
 
-        try:
-            raise
-            df_total = pd.read_pickle(fname)
-            print('read', fname)
-        except:
-            print('could not read', fname)
+        print('parsing', exp_name)
+        if exp_name == '2021_02_09_wall_tukey': # there is an issue with space when trying to read all distances
+            df_total = parse_experiments(exp_name=exp_name, max_distance=30)
+        else:
             df_total = parse_experiments(exp_name=exp_name)
-            pd.to_pickle(df_total, fname)
-            print('saved as', fname)
+        pd.to_pickle(df_total, fname)
+        print('saved as', fname)
