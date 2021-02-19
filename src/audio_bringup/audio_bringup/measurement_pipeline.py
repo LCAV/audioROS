@@ -267,10 +267,11 @@ def main(args=None):
             time.sleep(duration)
 
         #### wrap up ####
+        set_param('/gateway', 'all', '0')
+
         execute_commands(buzzer_dict['stop'])
         print('...done')
 
-        set_param('/gateway', 'all', '0')
         bag_pid.send_signal(signal.SIGINT)
         set_param('/csv_writer', 'filename', csv_filename)
 
