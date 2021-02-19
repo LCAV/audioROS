@@ -27,7 +27,6 @@ from crazyflie_description_py.parameters import SOUND_EFFECTS
 from audio_bringup.helpers import get_filename, set_param, EXP_DIRNAME, CSV_DIRNAME, WAV_DIRNAME, TOPICS_TO_RECORD
 
 
-APPENDIX = None #"new" # set to None for no effect
 START_DISTANCE = 0
 START_ANGLE = 0
 
@@ -44,7 +43,8 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = '2021_01_15_snr_study_4'
 #EXTRA_DIRNAME = '2021_01_21_snr_study'
 #EXTRA_DIRNAME = '2021_01_21_snr_study_foam'
-EXTRA_DIRNAME = '2021_02_09_wall'
+#EXTRA_DIRNAME = '2021_02_09_wall'
+EXTRA_DIRNAME = '2021_02_19_windows'
 
 
 def execute_commands(command_list, source='sweep_slow'):
@@ -209,6 +209,7 @@ def main(args=None):
         # these parameters are read from the buzzer frequency characteristics.
         min_freq = params.get('min_freq', None)
         max_freq = params.get('max_freq', None)
+        window_type = params.get('window_type', None)
 
         if params['motors'] != 0:
             duration_motors = get_total_time(command_dict[params['motors']])
@@ -222,10 +223,10 @@ def main(args=None):
                 print(f'ignoring global duration {duration} and using buzzer command duration {duration_buzzer}')
                 duration = duration_buzzer
             if min_freq is None:
-                print(f'Using buzzer min_freq {min_freq_buzz}.')
+                print(f'Overwriting min_freq {min_freq} with buzzer {min_freq_buzz}.')
                 min_freq = min_freq_buzz
             if max_freq is None:
-                print(f'Using buzzer max_freq {max_freq_buzz}.')
+                print(f'Overwriting max_freq {max_freq} with buzzer {max_freq_buzz}.')
                 max_freq = max_freq_buzz
 
         filter_snr = params.get('snr', 0) 
@@ -237,6 +238,8 @@ def main(args=None):
             set_param('/gateway', 'min_freq', str(min_freq))
         if max_freq is not None:
             set_param('/gateway', 'max_freq', str(max_freq))
+        if window_type is not None:
+            set_param('/gateway', 'window_type', str(window_type))
 
         #### record ####
         set_param('/csv_writer', 'filename', '')
@@ -503,16 +506,18 @@ def main(args=None):
         csv_filename = os.path.join(csv_dirname, filename)
 
         answer = ''
+        appendix = params.get('appendix', None)
+        if appendix is not None:
+            filename = f'{filename}_{appendix}'
+            bag_filename = os.path.join(exp_dirname, filename)
+            csv_filename = os.path.join(csv_dirname, filename)
+
         while os.path.exists(bag_filename):
-            if APPENDIX is None:
-                answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
-            else:
-                answer = APPENDIX 
-            if answer == 'n':
-                break
+            answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
             filename = f'{filename}_{answer}'
             bag_filename = os.path.join(exp_dirname, filename)
             csv_filename = os.path.join(csv_dirname, filename)
+
         if answer == 'n':
             continue
 
