@@ -78,6 +78,7 @@ def add_distance_estimates(row, ax=None, min_z=300):
 
 
 def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_distance=None):
+    method_window = "hann"
     if exp_name == '2020_12_7_moving':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]; wav = True
     elif exp_name == '2020_12_9_rotating':
@@ -92,9 +93,9 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
         appendix_list = ['', '_BC329', '_HALL', '_HALL2', '_HALL3']
         snr_list = [0, 1]; props_list=[0, 1]; wav = False
     elif exp_name == '2020_12_2_chirp':
-        appendix_list = ['']; snr_list = [0]; props_list=[0]; wav =True
+        appendix_list = ['']; snr_list = [0]; props_list=[0]; wav = True
     elif exp_name == '2021_02_09_wall':
-        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True
+        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True; method_window = "flattop"
     elif exp_name == '2021_02_09_wall_tukey':
         appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]; snr_list = [3]; props_list = [0]; wav = True
     else:
@@ -150,7 +151,7 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
             elif params['mic_type'] == 'measurement': 
                 fname = get_filename(**params)
                 wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
-                df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER)
+                df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER, method_window=method_window)
         except FileNotFoundError as e:
             continue 
 
@@ -254,8 +255,8 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        '2021_02_09_wall_tukey',
-        #'2021_02_09_wall',
+        #'2021_02_09_wall_tukey',
+        '2021_02_09_wall',
         #'2020_12_2_chirp',
         #'2020_12_11_calibration',
         #'2020_12_9_rotating',
