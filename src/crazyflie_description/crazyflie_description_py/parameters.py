@@ -23,6 +23,7 @@ MONO_FREQS = [3500, 4125, 1750, 2375, 3125, 3875]
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
 SOUND_EFFECTS = {
     'sweep':      (15, [1000, 5000], 38.0), # 38s is duration of sweep
+    'sweep_high': (16, [2000, 6000], 38.0), # 38s is duration of sweep
     'sweep_all':  (18, [0,   16000],  513), # 513 is duration of sweep
     'sweep_hard': (19, [1,       2], 12.0), # 12s is duration of sweep
     'sweep_buzzer':  (20, [0,   16000],  185), # 185 is duration of sweep
