@@ -27,6 +27,8 @@ if __name__ == "__main__":
     mic_locs = np.c_[[1, 4, 1], [6, 4, 1]].T  # mics positions [m]
     plot_mic_idx = 0  # index of mic to plot
 
+    # TODO(FD) add also a variable source_times, with the times at which the source is at below 
+    # positions. Currently the times are implicitly assumed to be exactly n_buffer*fs appart. 
     source_pos = np.c_[
         [2, 3, 1], [3, 3, 1], [4, 3, 1], [5, 3, 1],
     ].T  # source's consecutive positions [m]
