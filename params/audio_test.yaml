@@ -7,8 +7,8 @@ gateway:
     min_freq: 1000
     max_freq: 2000
     delta_freq: 100 # not used without prop
-    n_average: 5 # not used without snr
-    filter_snr_enable: 0
+    n_average: 1 # not used without snr
+    filter_snr_enable: 3
     filter_prop_enable: 0
     window_type: 1
 audio_plotter:
