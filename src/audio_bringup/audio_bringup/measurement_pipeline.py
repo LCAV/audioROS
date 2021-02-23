@@ -506,12 +506,6 @@ def main(args=None):
         csv_filename = os.path.join(csv_dirname, filename)
 
         answer = ''
-        appendix = params.get('appendix', None)
-        if appendix is not None:
-            filename = f'{filename}_{appendix}'
-            bag_filename = os.path.join(exp_dirname, filename)
-            csv_filename = os.path.join(csv_dirname, filename)
-
         while os.path.exists(bag_filename):
             answer = input(f'Path {filename} exists, append something? (default:{timestamp}, n to skip)') or timestamp
             filename = f'{filename}_{answer}'
