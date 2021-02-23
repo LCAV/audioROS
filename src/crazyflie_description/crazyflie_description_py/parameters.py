@@ -35,3 +35,10 @@ SOUND_EFFECTS = {
 }
 for f in MONO_FREQS:
     SOUND_EFFECTS[f'mono{f}'] = (12,  [1000, 5000], 0)
+
+WINDOW_TYPES = {
+    0: '',
+    1: 'hann',
+    2: 'flattop',
+    3: 'tukey'
+}

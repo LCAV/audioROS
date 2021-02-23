@@ -71,6 +71,24 @@ kwargs_datasets = {
             'max_time': 34, 
          },
     },
+    '2021_02_19_windows': {
+        'audio_deck': {
+            **kwargs_standard,
+            'offset': 1400,
+            'min_freq': 2000,
+            'max_freq': 6000,
+            'min_time': 5,
+            'max_time': 37, 
+        },
+        'measurement': {
+            **kwargs_standard,
+            'offset': 1400,
+            'min_freq': 2000,
+            'max_freq': 6000,
+            'min_time': 3,
+            'max_time': 35, 
+         },
+    },
 }    
 
 

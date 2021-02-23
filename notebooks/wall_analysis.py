@@ -98,6 +98,10 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
         appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True; method_window = "flattop"
     elif exp_name == '2021_02_09_wall_tukey':
         appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]; snr_list = [3]; props_list = [0]; wav = True
+    elif exp_name == '2021_02_19_windows':
+        appendix_list = [f"_window{i}" for i in range(4)]; snr_list = [3]; props_list = [0]; wav = True
+    elif exp_name == '2021_02_19_windows_newbuzzer':
+        appendix_list = [f"_window{i}" for i in range(4)]; snr_list = [3]; props_list = [0]; wav = True
     else:
         raise ValueError(exp_name)
 
@@ -110,7 +114,7 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
     else:
         mic_type_list = ['audio_deck']
 
-    from crazyflie_description_py.parameters import N_BUFFER
+    from crazyflie_description_py.parameters import N_BUFFER, WINDOW_TYPES
 
     params_file = load_params(exp_name)
 
@@ -151,8 +155,12 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
             elif params['mic_type'] == 'measurement': 
                 fname = get_filename(**params)
                 wav_fname = f'../experiments/{exp_name}/export/{fname}.wav'
+
+                if 'window' in params.get('appendix', ''):
+                    method_window = WINDOW_TYPES[int(params['appendix'].replace('_window',''))]
                 df = read_df_from_wav(wav_fname, n_buffer=N_BUFFER, method_window=method_window)
         except FileNotFoundError as e:
+            print('skipping', e)
             continue 
 
         if not 'signals_f' in df.columns:
@@ -255,8 +263,9 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
+        '2021_02_19_windows',
         #'2021_02_09_wall_tukey',
-        '2021_02_09_wall',
+        #'2021_02_09_wall',
         #'2020_12_2_chirp',
         #'2020_12_11_calibration',
         #'2020_12_9_rotating',

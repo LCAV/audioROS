@@ -1,3 +1,7 @@
+
+import matplotlib.pylab as plt
+import numpy as np
+
 def make_dirs(fname):
     import os
 
