@@ -27,7 +27,7 @@ from crazyflie_description_py.parameters import SOUND_EFFECTS
 from audio_bringup.helpers import get_filename, set_param, EXP_DIRNAME, CSV_DIRNAME, WAV_DIRNAME, TOPICS_TO_RECORD
 
 
-START_DISTANCE = 0
+START_DISTANCE = 20
 START_ANGLE = 0
 
 #EXTRA_DIRNAME = '2020_12_7_moving'
