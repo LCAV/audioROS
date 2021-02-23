@@ -27,7 +27,7 @@ from crazyflie_description_py.parameters import SOUND_EFFECTS
 from audio_bringup.helpers import get_filename, set_param, EXP_DIRNAME, CSV_DIRNAME, WAV_DIRNAME, TOPICS_TO_RECORD
 
 
-START_DISTANCE = 20
+START_DISTANCE = 0
 START_ANGLE = 0
 
 #EXTRA_DIRNAME = '2020_12_7_moving'
@@ -44,7 +44,8 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = '2021_01_21_snr_study'
 #EXTRA_DIRNAME = '2021_01_21_snr_study_foam'
 #EXTRA_DIRNAME = '2021_02_09_wall'
-EXTRA_DIRNAME = '2021_02_19_windows'
+#EXTRA_DIRNAME = '2021_02_19_windows'
+EXTRA_DIRNAME = '2021_02_23_wall'
 
 
 def execute_commands(command_list, source='sweep_slow'):

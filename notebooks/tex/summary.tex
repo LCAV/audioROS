@@ -1,0 +1,63 @@
+\documentclass{article}
+
+\usepackage{placeins}
+\usepackage{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[pdftex]{graphicx}
+\usepackage{subcaption}
+\usepackage{geometry}
+\usepackage{indentfirst}
+\usepackage[boxed]{algorithm2e}
+\usepackage{mwe, tikz}
+\geometry{
+  a4paper,
+  top=20mm,
+  left=15mm,
+  right=15mm,
+  bottom=20mm
+}
+\usepackage{epstopdf}
+\usepackage{units}
+\usepackage{todonotes}
+
+
+% set figure path (such that it works for eps files too. 
+% \newcommand{\figurepath}{figures/Dynamic/}
+\newcommand{\figurepath}{../plots/}
+\graphicspath{\figurepath}
+\epstopdfsetup{outdir=\figurepath}
+
+\newcommand{\inR}[1]{\ensuremath{\in\mathbb{R}^{#1}}}
+% \newcommand{\min}[1]{\underset{#1}{\operatorname{min}\;}}
+
+\renewcommand{\ln}[1]{\operatorname{ln}\left( #1 \right)}
+
+\newcommand{\argmin}[1]{\underset{#1}{\operatorname{arg}\,\operatorname{min}}\;}
+\newcommand{\argmax}[1]{\underset{#1}{\operatorname{arg}\,\operatorname{max}}\;}
+\newcommand{\pderiv}[2]{\ensuremath{\frac{\partial #1}{\partial #2}}}
+% absolute values and norms
+\usepackage[showonlyrefs]{mathtools}
+\DeclarePairedDelimiter\abs{\lvert}{\rvert}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\makeatletter
+\let\oldabs\abs
+\let\oldnorm\norm
+\def\abs{\@ifstar{\oldabs}{\oldabs*}}
+\def\norm{\@ifstar{\oldnorm}{\oldnorm*}}
+\def\vc#1{\ensuremath{\mathbf{#1}}}
+\makeatother
+\newcommand{\gaussian}[2]{\frac{1}{#1\sqrt{2\pi}} e^{-\frac{#2^2}{2#1^2}}}
+
+\title{Summary}
+
+\begin{document}
+\maketitle
+
+% \begin{abstract}
+% \end{abstract}
+
+\input{window_study.tex}
+
+\end{document}
