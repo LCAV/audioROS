@@ -118,6 +118,7 @@ METHOD = np.nanmedian
 N_SPURIOUS = 2
 MAG_THRESH = 1e-3
 STD_THRESH = 1
+DELTA_MERGE_FREQ = 20
 RATIO_MISSING_ALLOWED = 0.2
 
 def normalize_df_matrix(df_matrix, freqs, method='calibration-offline'): 
@@ -409,6 +410,23 @@ class WallDetector(object):
             df_matrix[m, f_i, d_i] = method(df.magnitude.values)
         return df_matrix, distances, frequencies
    
+
+    def merge_close_freqs(self, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False, dryrun=False):
+        """ Merge frequency bins that are closer than delta. """
+        unique_frequencies = np.sort(self.df.frequency.unique())
+        indices = np.where(np.abs(unique_frequencies[1:] - unique_frequencies[:-1]) > delta_merge_freq)[0]
+        new_frequencies = unique_frequencies[[0] + list(indices + 1)]
+        if verbose: 
+            print(f'reducing from {len(unique_frequencies)} to {len(new_frequencies)}')
+
+        if dryrun:
+            return unique_frequencies, new_frequencies
+
+        for f in new_frequencies:
+            self.df.loc[np.abs(self.df.frequency - f) < delta_merge_freq, 'frequency'] =  f
+
+        return unique_frequencies, new_frequencies
+
 
     def remove_spurious_freqs(self, n_spurious=N_SPURIOUS, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """
