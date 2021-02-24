@@ -24,7 +24,7 @@ from serial_motors import SerialMotors, DURATION_50, DURATION_360
 from crazyflie_description_py.commands import command_dict, buzzer_dict
 from crazyflie_description_py.parameters import SOUND_EFFECTS
 
-from audio_bringup.helpers import get_filename, set_param, EXP_DIRNAME, CSV_DIRNAME, WAV_DIRNAME, TOPICS_TO_RECORD
+from audio_bringup.helpers import get_active_nodes, get_filename, set_param, EXP_DIRNAME, CSV_DIRNAME, WAV_DIRNAME, TOPICS_TO_RECORD
 
 
 START_DISTANCE = 0
@@ -68,13 +68,6 @@ def get_total_time(command_list):
         time += command[3]
     #time += 25 # extra 10 seconds for unexpected waiting times 
     return time
-
-
-def get_active_nodes():
-    param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
-    out_bytes, err = param_pid.communicate()
-    out_string = out_bytes.decode("utf-8").strip()
-    return out_string
 
 
 def main(args=None): 
