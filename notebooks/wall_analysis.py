@@ -77,7 +77,7 @@ def add_distance_estimates(row, ax=None, min_z=300):
     return row
 
 
-def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_distance=None):
+def parse_experiments(exp_name='2020_12_9_moving', save_intermediate='', max_distance=None, pos=True):
     method_window = "hann"
     if exp_name == '2020_12_7_moving':
         appendix_list = ["", "_new"]; snr_list = [0, 1]; props_list=[0]; wav = True
@@ -95,19 +95,20 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
     elif exp_name == '2020_12_2_chirp':
         appendix_list = ['']; snr_list = [0]; props_list=[0]; wav = True
     elif exp_name == '2021_02_09_wall':
-        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True; method_window = "flattop"
+        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True; method_window = ""; pos = False
     elif exp_name == '2021_02_09_wall_tukey':
-        appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]; snr_list = [3]; props_list = [0]; wav = True
+        appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]; snr_list = [3]; props_list = [0]; wav = True; method_window = ""
     elif exp_name == '2021_02_19_windows':
         appendix_list = [f"_window{i}" for i in range(4)]; snr_list = [3]; props_list = [0]; wav = True
     elif exp_name == '2021_02_19_windows_newbuzzer':
         appendix_list = [f"_window{i}" for i in range(4)]; snr_list = [3]; props_list = [0]; wav = True
+    elif exp_name == '2021_02_23_wall':
+        appendix_list = [""]; snr_list = [3]; props_list = [0]; wav = True; pos = False; method_window = "flattop"
     else:
         raise ValueError(exp_name)
 
-    if save_intermediate:
+    if save_intermediate != '':
         counter = 0
-        save_fname = f'../experiments/{exp_name}/all_data.pkl'
 
     if wav:
         mic_type_list = ['measurement', 'audio_deck']
@@ -121,7 +122,10 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
     # TODO(FD) remove this when we use more angles again.
     params_file.DEGREE_LIST = [0]
 
-    pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
+    if pos: 
+        pos_columns = ['dx', 'dy', 'z', 'yaw_deg']
+    else:
+        pos_columns = []
 
     cat_columns = {
             'appendix':appendix_list , 
@@ -192,13 +196,13 @@ def parse_experiments(exp_name='2020_12_9_moving', save_intermediate=False, max_
         df_total.loc[len(df_total), :] = all_items
 
 
-        if not save_intermediate:
+        if save_intermediate == '':
             continue
 
         counter += 1
         if counter % 10 == 0:
-            pd.to_pickle(df_total, save_fname)
-            print('saved intermediate as', save_fname)
+            pd.to_pickle(df_total, save_intermediate)
+            print('saved intermediate as', save_intermediate)
 
     return df_total
 
@@ -263,7 +267,8 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        '2021_02_19_windows',
+        '2021_02_23_wall',
+        #'2021_02_19_windows',
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',
@@ -276,6 +281,7 @@ if __name__ == "__main__":
     for exp_name in exp_names:
         #fname = f'results/{exp_name}_real.pkl'
         fname = f'../experiments/{exp_name}/all_data.pkl'
+        #fname = f'../experiments/{exp_name}/battery_data.pkl'
 
         dirname = os.path.dirname(fname)
         if not os.path.isdir(dirname):
