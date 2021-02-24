@@ -234,6 +234,44 @@ def normalized_std(values, method=METHOD):
     else:
         return 0
 
+def get_probability_fft(f_slice, frequencies, window=None):
+    import scipy.signal.windows
+    from constants import SPEED_OF_SOUND
+
+    n = max(len(f_slice), 1000)
+    
+    f_slice_norm = f_slice - np.mean(f_slice)
+    fft = np.abs(np.fft.rfft(f_slice_norm, n=n))
+    if window is not None:
+        w = scipy.signal.windows.get_window(window, len(fft))
+        fft *= w
+    
+    df = np.mean(frequencies[1:] - frequencies[:-1]) 
+    distances = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
+    prob = fft / np.sum(fft)
+    return distances / 2, prob
+
+def get_probability_cost(f_slice, frequencies, distances, ax=None, mic_idx=1):
+    from simulation import get_freq_slice_theory
+
+    f_slice_norm = f_slice - np.mean(f_slice)
+    f_slice_norm /= np.std(f_slice_norm)
+    
+    probs = []
+    for d in distances:
+        f_slice_theory = get_freq_slice_theory(frequencies, d, yaw_deg=0)[mic_idx]
+        f_slice_theory -= np.mean(f_slice_theory)
+        f_slice_theory /= np.std(f_slice_theory)
+        probs.append(np.exp(-np.linalg.norm(f_slice_theory-f_slice_norm)))
+        
+        if ax is not None:
+            ax.plot(frequencies, f_slice_theory, color='black')
+            
+    if ax is not None:
+        ax.plot(frequencies, f_slice_norm, color='green')
+        
+    probs /= np.sum(probs)
+    return probs
 
 class WallDetector(object): 
     def __init__(self, params={}, exp_name=None, mic_type='audio_deck'):
