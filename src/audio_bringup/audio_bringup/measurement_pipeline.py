@@ -255,8 +255,10 @@ def main(args=None):
         """
         assert source_type == "buzzer-onboard"
 
-        # do not play onboard sound yet,
-        # this is part of the motor commands.
+        # Unless the source is of type mono, do not play onboard sound yet,
+        # as this is part of the motor commands.
+        if (params["source"] is not None) and ("mono" in params["source"]):
+            execute_commands(params["source"])
 
         start_bag_recording(bag_filename)
         return perform_experiment()
