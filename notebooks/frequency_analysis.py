@@ -45,7 +45,7 @@ def get_bin(freqs, freq):
     return bin_
 
 
-def get_spectrogram_varying_bins(frequencies_matrix, stft):
+def _get_spectrogram_varying_bins(frequencies_matrix, stft):
     """
     :param frequencies_matrix: frequencies matrix (n_times x n_freqs)
     :param stft: blockwise fft (n_times x n_mics x n_freqs)
@@ -66,7 +66,7 @@ def get_spectrogram_varying_bins(frequencies_matrix, stft):
     return spectrogram, all_frequencies
 
 
-def get_spectrogram_constant_bins(stft):
+def _get_spectrogram_constant_bins(stft):
     return np.abs(np.transpose(stft, (2, 1, 0)))  # n_freqs x n_mics x n_times
 
 
@@ -80,15 +80,12 @@ def get_spectrogram(df):
     any_different = np.any(
         np.any(frequencies_start[None, :] - frequencies_matrix, axis=0)
     )
-
     stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
     if not any_different:
-        spectrogram = np.abs(
-            np.transpose(stft, (2, 1, 0))
-        )  # n_freqs x n_mics x n_times
+        spectrogram = _get_spectrogram_constant_bins(stft)        
         return spectrogram, frequencies_start
     else:
-        return get_spectrogram_varying_bins(frequencies_matrix, stft)
+        return _get_spectrogram_varying_bins(frequencies_matrix, stft)
 
 
 def get_spectrogram_raw(frequencies_matrix, stft):
@@ -99,19 +96,20 @@ def get_spectrogram_raw(frequencies_matrix, stft):
         np.any(frequencies_start[None, :] - frequencies_matrix, axis=0)
     )
     if varying_bins:
-        return get_spectrogram_varying_bins(frequencies_matrix, stft)
+        return _get_spectrogram_varying_bins(frequencies_matrix, stft)
     else:
         frequencies = frequencies_matrix[0, :]
-        return get_spectrogram_constant_bins(stft), frequencies
+        return _get_spectrogram_constant_bins(stft), frequencies
 
 
 def add_spectrogram(row):
     """  Add spectrogram to rows (preprocessed, so they have stft and frequencies_matrix).
 
     Usage: 
+    df = df.assign(spectrogram=None)
     df = df.apply(add_spectrogram, axis=1)
 
-    new spectrogram column is of shape: n_freqs x n_mics x n_times
+    spectrogram is of shape: n_freqs x n_mics x n_times
     """
     # TODO(FD) remove this sanity check
     assert row.stft.shape[1] in (1, 4)

@@ -140,6 +140,8 @@ def read_df(
         [
             "dx",
             "dy",
+            "x",
+            "y",
             "z",
             "yaw_deg",
             "yaw_rate_deg",
@@ -314,6 +316,23 @@ def get_positions(df_pos):
         new_pos = start_pos + length * np.array([np.cos(yaw_rad), np.sin(yaw_rad)])
         positions[i, :2] = new_pos
         positions[i, 2] = z
+    return positions
+
+
+def get_positions_absolute(df_pos):
+    """ Get absolute positions
+    """
+    if isinstance(df_pos, pd.DataFrame):
+        xs = df_pos.x.values
+        ys = df_pos.y.values
+        zs = df_pos.z.values
+        yaws = df_pos.yaw_deg.values
+    elif isinstance(df_pos, pd.Series):
+        xs = df_pos.x
+        ys = df_pos.y
+        zs = df_pos.z
+        yaws = df_pos.yaw_deg
+    positions = np.c_[xs, ys, zs, yaws]
     return positions
 
 

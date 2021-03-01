@@ -6,7 +6,7 @@ import pandas as pd
 from audio_bringup.helpers import get_filename
 from crazyflie_description_py.parameters import N_BUFFER
 from evaluate_data import read_df, read_df_from_wav
-from evaluate_data import get_positions
+from evaluate_data import get_positions_absolute
 from dynamic_analysis import add_pose_to_df
 
 VELOCITY = 0.05  # [m/s], parameter in crazyflie
@@ -36,56 +36,6 @@ def clean_stft(stft, max_value=N_BUFFER):
     return stft
 
 
-def add_distance_estimates(row, ax=None, min_z=300):
-    if row.distance == 51:
-        d = np.full(len(row.seconds), np.nan)
-        d[row.seconds >= 0] = (
-            0.1 + row.seconds[row.seconds >= 0] * 0.5 / 165
-        )  # takes 165 seconds for 50 cm
-    elif row.distance == -51:
-        d = np.full(len(row.seconds), np.nan)
-        d[row.seconds >= 0] = (
-            0.6 - row.seconds[row.seconds >= 0] * 0.5 / 165
-        )  # takes 165 seconds for 50 cm
-    else:
-        # TODO(FD): to be improved once we have better flow estimates.
-        # read from plot in FlyingAnalysis.ipynb:
-        min_time = 5
-        max_time = 25
-
-        d = np.full(len(row.seconds), np.nan)
-        row.z[np.isnan(row.z)] = 0
-        start_idx = np.where(row.seconds > min_time)[0][0]
-        end_idx = np.where(row.seconds < max_time)[0][-1]
-
-        assert end_idx > start_idx, f"{start_idx}<={end_idx}"
-        valid_z = row.z[start_idx:end_idx]
-        max_idx = start_idx + np.argmax(valid_z)
-        try:
-            min_idx = start_idx + np.where(valid_z > min_z)[0][-1]
-        except:
-            min_idx = 0
-        duration = row.seconds[min_idx] - row.seconds[max_idx]
-
-        times = row.seconds[max_idx:min_idx] - row.seconds[max_idx]
-        d[max_idx:min_idx] = D_START - times * VELOCITY
-
-        if ax is not None:
-            ax.axvline(row.seconds[start_idx], color="r")
-            ax.axvline(row.seconds[max_idx], color="k", label="start (max)")
-            ax.axvline(row.seconds[min_idx], color="k", label=f"end (above {min_z})")
-            ax.axvline(row.seconds[end_idx], color="b")
-            ax.set_xlim(0, 35)
-            ax.set_title(f"duration: {duration:.1f}s")
-
-    row["d_estimate"] = d
-
-    if ax is not None:
-        ax.scatter(row.seconds, d * 1000, color="k", label="distance")
-        ax.legend()
-    return row
-
-
 def get_df_matrices(exp_name, max_distance=None, plot=False):
     import progressbar
     from pandas_utils import fill_df
@@ -107,8 +57,6 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
     )
 
     for chosen_tuple, df_mic in df_freq.groupby(FILTERS, sort=False):
-        # if chosen_tuple[0] == 'audio_deck':
-        #    continue
         filter_dict = dict(zip(FILTERS, chosen_tuple))
 
         wall_detector = WallDetector(
@@ -148,13 +96,10 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
                     ax.set_title(f"distance={distance}cm")
 
         wall_detector.remove_bad_freqs(verbose=False, dryrun=False)
-        wall_detector.remove_spurious_freqs(verbose=False)
         wall_detector.merge_close_freqs()
+        wall_detector.remove_spurious_freqs(verbose=False)
 
         df_amp, distances, frequencies = wall_detector.get_df_matrix()
-        # df_std, *_ = wall_detector.get_df_matrix(method=normalized_std)
-
-        assert df_amp.shape[1:] == (len(frequencies), len(distances)), df_amp.shape
 
         filter_dict.update({"exp_name": exp_name})
         fill_dict = {"df_dist": distances, "df_freq": frequencies, "df_matrix": df_amp}
@@ -164,8 +109,7 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
 
 
 def parse_experiments(
-    exp_name="2020_12_9_moving", save_intermediate="", max_distance=None, pos=True
-):
+    exp_name="2020_12_9_moving", save_intermediate="", max_distance=None):
     method_window = "hann"
     if exp_name == "2020_12_7_moving":
         appendix_list = ["", "_new"]
@@ -208,7 +152,6 @@ def parse_experiments(
         props_list = [0]
         wav = True
         method_window = ""
-        pos = False
     elif exp_name == "2021_02_09_wall_tukey":
         appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]
         snr_list = [3]
@@ -230,7 +173,21 @@ def parse_experiments(
         snr_list = [3]
         props_list = [0]
         wav = True
-        pos = False
+        method_window = "flattop"
+    elif exp_name == "2021_02_25_wall":
+        appendix_list = ["", "_externalpsu"]
+        snr_list = [3]
+        props_list = [0]
+        wav = True
+        method_window = "flattop"
+    elif exp_name == "2021_03_01_flying":
+        appendix_list = ["_30cm-paper", "_50cm-paper", 
+                         "_30cm-nopaper", "_50cm-nopaper",
+                         "_30cm-newbuzzer", "_50cm-newbuzzer",
+                        ]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
         method_window = "flattop"
     else:
         raise ValueError(exp_name)
@@ -250,11 +207,6 @@ def parse_experiments(
     # TODO(FD) remove this when we use more angles again.
     params_file.DEGREE_LIST = [0]
 
-    if pos:
-        pos_columns = ["dx", "dy", "z", "yaw_deg"]
-    else:
-        pos_columns = []
-
     cat_columns = {
         "appendix": appendix_list,
         "degree": params_file.DEGREE_LIST,
@@ -266,9 +218,8 @@ def parse_experiments(
         "mic_type": mic_type_list,
     }
     df_total = pd.DataFrame(
-        columns=list(cat_columns.keys())
-        + ["seconds", "frequencies_matrix", "stft", "positions"]  # categories
-        + pos_columns  # data
+        columns=list(cat_columns.keys()) # categories
+        + ["seconds", "frequencies_matrix", "stft", "positions"] # data
     )
 
     params = {"exp_name": exp_name}
@@ -282,8 +233,8 @@ def parse_experiments(
             positions = None
             if params["mic_type"] == "audio_deck":
                 df, df_pos = read_df(**params)
-                positions = get_positions(df_pos)
-                add_pose_to_df(df, df_pos)
+                add_pose_to_df(df, df_pos) # synchronize position and audio measurements
+                positions = get_positions_absolute(df) # get positions as matrix
             elif params["mic_type"] == "measurement":
                 fname = get_filename(**params)
                 wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"
@@ -315,11 +266,6 @@ def parse_experiments(
             stft=stft,
             positions=positions,
         )
-        if "dx" in df.columns:
-            pos_dict = {col: df[col].values for col in pos_columns}
-        else:
-            pos_dict = {col: None for col in pos_columns}
-        all_items.update(pos_dict)
         all_items.update(params)
         df_total.loc[len(df_total), :] = all_items
 
@@ -400,7 +346,9 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_02_23_wall",
+        "2021_03_01_flying",
+        #"2021_02_25_wall",
+        #"2021_02_23_wall",
         #'2021_02_19_windows',
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',

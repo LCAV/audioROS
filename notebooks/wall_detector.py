@@ -21,8 +21,8 @@ METHOD = np.nanmedian
 # parameters for cleaning
 N_SPURIOUS = 2
 MAG_THRESH = 1e-3
-STD_THRESH = 1.0 # TODO(FD) this doesn't behave as expected
-DELTA_MERGE_FREQ = 30
+STD_THRESH = 2.0 # TODO(FD) this doesn't behave as expected
+DELTA_MERGE_FREQ = 50
 RATIO_MISSING_ALLOWED = 0.2
 
 
@@ -215,13 +215,21 @@ class WallDetector(object):
             self.params.update(kwargs_datasets[exp_name][mic_type])
 
     def get_linear_kwargs(self):
-        return {key: self.params.get(key, None) for key in ["delta", "offset", "slope"]}
+        kwargs = {key: self.params.get(key, None) for key in ["delta", "offset", "slope"]}
+        if any([v is None for v in kwargs.values()]):
+            return None
+        else:
+            return kwargs
 
     def get_box_kwargs(self):
-        return {
+        kwargs = {
             key: self.params.get(key, None)
             for key in ["min_freq", "max_freq", "min_time", "max_time"]
         }
+        if any([v is None for v in kwargs.values()]):
+            return None
+        else:
+            return kwargs
 
     def fill_from_row(self, row, verbose=False, mask=True):
         distance = row.get("distance", DISTANCE)
@@ -251,27 +259,29 @@ class WallDetector(object):
         if verbose:
             t1 = time.time()
         spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
+
         if mask:
-            spec_masked, freqs_masked = apply_linear_mask(
-                spec, freqs, times=times, **self.get_linear_kwargs()
-            )
-            spec_masked, freqs_masked = apply_box_mask(
-                spec_masked, freqs_masked, times=times, **self.get_box_kwargs()
-            )
-        else:
-            spec_masked = spec
-            freqs_masked = freqs
+            linear_kwargs = self.get_linear_kwargs()
+            if linear_kwargs is not None:
+                spec, freqs = apply_linear_mask(
+                    spec, freqs, times=times, **linear_kwargs
+                )
+            box_kwargs = self.get_box_kwargs()
+            if box_kwargs is not None:
+                spec, freqs = apply_box_mask(
+                    spec, freqs, times=times, **box_kwargs
+                )
 
         if verbose:
-            print(f"after masking: found {len(freqs_masked)} bins.")
-        index_matrix = get_index_matrix(spec_masked)
+            print(f"after masking: found {len(freqs)} bins.")
+        index_matrix = get_index_matrix(spec)
         self.fill_from_spec(
-            spec_masked, freqs_masked, index_matrix, distance, angle, verbose
+            spec, freqs, index_matrix, distance, angle, verbose
         )
         if verbose:
             print("fill_from_data time:", time.time() - t1)
             t1 = time.time()
-        return spec_masked, freqs_masked
+        return spec, freqs
 
     def fill_from_spec(
         self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE, verbose=False
@@ -475,6 +485,10 @@ class WallDetector(object):
             self.df = self.df.drop(index=remove_rows, inplace=False)
         if len(self.df) == 0:
             print("Warning: remove_spurious_freqs removed all rows.")
+
+        # if there are no nans left in certain columns, we can 
+        # convert them to numeric.
+        self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)
 
     def remove_bad_freqs(
@@ -502,6 +516,10 @@ class WallDetector(object):
 
         if len(self.df) == 0:
             print("Warning: remove_bad_freqs removed all rows.")
+
+        # if there are no nans left in certain columns, we can 
+        # convert them to numeric.
+        self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)
 
     def fill_from_backup(self, exp_name, mic_type=""):

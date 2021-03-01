@@ -19,7 +19,6 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=Fa
 
         # most recent position timestamp
         if not len(df_pos[df_pos.timestamp <= timestamp]):
-            df.loc[i, "yaw_deg"] = None
             if verbose:
                 print(
                     "Warning: no position before first audio:",
@@ -33,15 +32,12 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=Fa
                 print(f"Warning: using {pos_idx} again.")
         row = df_pos.loc[pos_idx]
         lag = timestamp - row.timestamp
+
+        # find position columns
+        pos_columns = set(row.index).intersection(df.columns)
         if lag <= MAX_ALLOWED_LAG_MS:
-            df.loc[i, "yaw_deg"] = row.yaw_deg
-            df.loc[i, "dx"] = row.dx
-            df.loc[i, "dy"] = row.dy
-            df.loc[i, "z"] = row.z
-            if "yaw_rate_deg" in df_pos.columns:
-                df.loc[i, "yaw_rate_deg"] = row.yaw_rate_deg
+            df.loc[i, pos_columns] = row[pos_columns]
         else:
-            df.loc[i, "yaw_deg"] = None
             if verbose:
                 print(f"Warning for {pos_idx}: too high time lag {lag}ms")
         last_idx = pos_idx

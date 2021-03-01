@@ -72,4 +72,32 @@ kwargs_datasets = {
             "max_time": 19,
         },
     },
+    "2021_02_25_wall": {
+        "audio_deck": {
+            **kwargs_standard,
+            "offset": 2400,
+            "min_freq": 2900,
+            "max_freq": 5000,
+            "min_time": 5,
+            "max_time": 22,
+        },
+        "measurement": {
+            **kwargs_standard,
+            "offset": 2400,
+            "min_freq": 2900,
+            "max_freq": 5000,
+            "min_time": 2,
+            "max_time": 19,
+        },
+    },
+    "2021_03_01_flying": {
+        "audio_deck": {
+            "offset": None,
+            "slope": None,
+            "min_freq": 2900,
+            "max_freq": 5000,
+            "min_time": 10,
+            "max_time": 27,
+        },
+    },
 }
