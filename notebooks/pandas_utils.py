@@ -29,40 +29,40 @@ def fill_df(df, filter_dict, fill_dict, verbose=False):
     """
     filter_v = list(filter_dict.values())
     filter_k = list(filter_dict.keys())
-    
+
     # add missing columns
     missing_keys = set(fill_dict.keys()).difference(set(df.columns))
     if verbose:
-        print('missing keys', missing_keys)
-    df = df.assign(**dict(zip(missing_keys, [None]*len(missing_keys))))
-    
+        print("missing keys", missing_keys)
+    df = df.assign(**dict(zip(missing_keys, [None] * len(missing_keys))))
+
     series = pd.Series(index=filter_k, data=filter_v)
     mask = (df[filter_k] == series).all(axis=1)
     if verbose:
-        print('filling:\n', mask.values, np.any(mask.values))
-        
+        print("filling:\n", mask.values, np.any(mask.values))
+
     rows_to_fill = np.where(mask.values)[0]
     if not len(rows_to_fill):
-        print(f'did not find {filter_dict} in df') 
+        print(f"did not find {filter_dict} in df")
         data_dict = fill_dict
         data_dict.update(filter_dict)
         df.loc[len(df), data_dict.keys()] = list(data_dict.values())
     else:
-        print(f'overwriting rows {rows_to_fill}')
+        print(f"overwriting rows {rows_to_fill}")
         for r in rows_to_fill:
             df.loc[r, fill_dict.keys()] = list(fill_dict.values())
 
-    df = df.apply(pd.to_numeric, downcast='integer', errors='ignore')
+    df = df.apply(pd.to_numeric, downcast="integer", errors="ignore")
     return df
-    
+
 
 if __name__ == "__main__":
-    df = pd.DataFrame({'a': [1, 2, 3], 'b':[1, 3, 4], 'c':[3, 4, 5]})
-    df_new = fill_df(df, {'a': 1, 'b':1}, {'d': 5})
-    df_new = fill_df(df_new, {'a': 1, 'b':1}, {'d': 6}, verbose=True)
-    df_new = fill_df(df_new, {'a': 3, 'b':1}, {'d': 6})
-    print(df_new, end='\n\n')
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [1, 3, 4], "c": [3, 4, 5]})
+    df_new = fill_df(df, {"a": 1, "b": 1}, {"d": 5})
+    df_new = fill_df(df_new, {"a": 1, "b": 1}, {"d": 6}, verbose=True)
+    df_new = fill_df(df_new, {"a": 3, "b": 1}, {"d": 6})
+    print(df_new, end="\n\n")
 
-    df = pd.DataFrame({'a': [1, 2, 3], 'b':[1, 3, 4], 'c':[3, 4, 5]})
-    df_sub = filter_by_dicts(df, [{'a': 1}, {'b': 1}])
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [1, 3, 4], "c": [3, 4, 5]})
+    df_sub = filter_by_dicts(df, [{"a": 1}, {"b": 1}])
     print(df_sub)

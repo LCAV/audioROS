@@ -45,6 +45,7 @@ def set_param(node_name, param_name, param_value):
         print("set_param error:", out_string)
         return False
 
+
 def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
     logger = launch.substitutions.LaunchConfiguration("log_level")
     launch_arguments = [
@@ -73,3 +74,12 @@ def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
         for executable, dict_ in node_config.items()
     ]
     return launch.LaunchDescription(launch_arguments)
+
+
+def get_active_nodes():
+    param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
+    out_bytes, err = param_pid.communicate()
+    out_string = out_bytes.decode("utf-8").strip()
+    return out_string
+
+

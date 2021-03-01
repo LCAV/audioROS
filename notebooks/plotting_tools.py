@@ -1,6 +1,6 @@
-
 import matplotlib.pylab as plt
 import numpy as np
+
 
 def make_dirs(fname):
     import os
@@ -60,7 +60,7 @@ def plot_df_matrix(
     return ax, im
 
 
-def add_colorbar(ax, im):
+def add_colorbar(fig, ax, im):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     divider = make_axes_locatable(ax)

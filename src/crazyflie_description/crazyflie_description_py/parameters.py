@@ -18,24 +18,16 @@ FFTSIZE = 32 # number of frequency bins that are sent.
 
 TUKEY_ALPHA = 0.2 # alpha parameter for tukey window
 
-MONO_FREQS = [3500, 4125, 1750, 2375, 3125, 3875] 
-
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
 SOUND_EFFECTS = {
     'sweep':      (15, [1000, 5000], 38.0),  
     'sweep_high': (16, [2000, 6000], 38.0),  
     'sweep_short': (17, [3000, 5000], 20.0), 
-    'sweep_all':  (18, [0,   16000],  513),  
-    'sweep_hard': (19, [1,       2], 12.0),  
+    'sweep_all':    (18, [0,   16000],  513),  
     'sweep_buzzer':  (20, [0,   16000],  185),
     'sweep_slow':   (21,  [1000, 5000], 0), # will be overwritten
     'sweep_fast':   (22,  [1000, 5000], 0), # will be overwritten
-    'mono3125':   (12,  [1,       2], 0), # 1, 2 will lead to hard-coded bins
-    'mono4156':   (12,  [1,       2], 0), 
-    'mono8000':   (12,  [1,       2], 0), 
 }
-for f in MONO_FREQS:
-    SOUND_EFFECTS[f'mono{f}'] = (12,  [1000, 5000], 0)
 
 WINDOW_TYPES = {
     0: '',
