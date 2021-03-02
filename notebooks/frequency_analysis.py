@@ -121,6 +121,7 @@ def add_spectrogram(row):
 
 
 def get_index_matrix(spec):
+    assert spec.ndim == 3
     spec_avg = np.mean(spec, axis=1)
     return np.argsort(spec_avg, axis=0)[::-1]
 
