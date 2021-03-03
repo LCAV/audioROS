@@ -42,7 +42,7 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
     from wall_detector import WallDetector
 
     fname = f"../experiments/{exp_name}/all_data.pkl"
-    df_freq = pd.read_pickle(fname) 
+    df_freq = pd.read_pickle(fname)
 
     results_df = pd.DataFrame(
         columns=[
@@ -109,7 +109,8 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
 
 
 def parse_experiments(
-    exp_name="2020_12_9_moving", save_intermediate="", max_distance=None):
+    exp_name="2020_12_9_moving", save_intermediate="", max_distance=None
+):
     method_window = "hann"
     if exp_name == "2020_12_7_moving":
         appendix_list = ["", "_new"]
@@ -181,10 +182,14 @@ def parse_experiments(
         wav = True
         method_window = "flattop"
     elif exp_name == "2021_03_01_flying":
-        appendix_list = ["_30cm-paper", "_50cm-paper", 
-                         "_30cm-nopaper", "_50cm-nopaper",
-                         "_30cm-newbuzzer", "_50cm-newbuzzer",
-                        ]
+        appendix_list = [
+            "_30cm-paper",
+            "_50cm-paper",
+            "_30cm-nopaper",
+            "_50cm-nopaper",
+            "_30cm-newbuzzer",
+            "_50cm-newbuzzer",
+        ]
         snr_list = [3]
         props_list = [0]
         wav = False
@@ -218,8 +223,8 @@ def parse_experiments(
         "mic_type": mic_type_list,
     }
     df_total = pd.DataFrame(
-        columns=list(cat_columns.keys()) # categories
-        + ["seconds", "frequencies_matrix", "stft", "positions"] # data
+        columns=list(cat_columns.keys())  # categories
+        + ["seconds", "frequencies_matrix", "stft", "positions"]  # data
     )
 
     params = {"exp_name": exp_name}
@@ -233,8 +238,10 @@ def parse_experiments(
             positions = None
             if params["mic_type"] == "audio_deck":
                 df, df_pos = read_df(**params)
-                add_pose_to_df(df, df_pos) # synchronize position and audio measurements
-                positions = get_positions_absolute(df) # get positions as matrix
+                add_pose_to_df(
+                    df, df_pos
+                )  # synchronize position and audio measurements
+                positions = get_positions_absolute(df)  # get positions as matrix
             elif params["mic_type"] == "measurement":
                 fname = get_filename(**params)
                 wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"
@@ -347,8 +354,8 @@ if __name__ == "__main__":
 
     exp_names = [
         "2021_03_01_flying",
-        #"2021_02_25_wall",
-        #"2021_02_23_wall",
+        # "2021_02_25_wall",
+        # "2021_02_23_wall",
         #'2021_02_19_windows',
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',

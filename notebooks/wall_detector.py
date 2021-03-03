@@ -21,7 +21,7 @@ METHOD = np.nanmedian
 # parameters for cleaning
 N_SPURIOUS = 2
 MAG_THRESH = 1e-3
-STD_THRESH = 2.0 # TODO(FD) this doesn't behave as expected
+STD_THRESH = 2.0  # TODO(FD) this doesn't behave as expected
 DELTA_MERGE_FREQ = 50
 RATIO_MISSING_ALLOWED = 0.2
 
@@ -171,15 +171,30 @@ def get_probability_fft(f_slice, frequencies, window=None):
     return distances / 2, prob
 
 
-def get_probability_cost(f_slice, frequencies, distances, ax=None, mic_idx=1):
+def get_probability_cost(
+    f_slice,
+    frequencies,
+    distances,
+    ax=None,
+    mic_idx=1,
+    relative_ds=None,
+    absolute_yaws=None,
+):
     from simulation import get_freq_slice_theory
+
+    if absolute_yaws is not None:
+        yaw_deg = absolute_yaws
+    else:
+        yaw_deg = 0
 
     f_slice_norm = f_slice - np.mean(f_slice)
     f_slice_norm /= np.std(f_slice_norm)
 
     probs = []
     for d in distances:
-        f_slice_theory = get_freq_slice_theory(frequencies, d, yaw_deg=0)[mic_idx]
+        if relative_ds is not None:
+            d += relative_ds
+        f_slice_theory = get_freq_slice_theory(frequencies, d, yaw_deg)[:, mic_idx]
         f_slice_theory -= np.mean(f_slice_theory)
         f_slice_theory /= np.std(f_slice_theory)
         probs.append(np.exp(-np.linalg.norm(f_slice_theory - f_slice_norm)))
@@ -215,7 +230,9 @@ class WallDetector(object):
             self.params.update(kwargs_datasets[exp_name][mic_type])
 
     def get_linear_kwargs(self):
-        kwargs = {key: self.params.get(key, None) for key in ["delta", "offset", "slope"]}
+        kwargs = {
+            key: self.params.get(key, None) for key in ["delta", "offset", "slope"]
+        }
         if any([v is None for v in kwargs.values()]):
             return None
         else:
@@ -268,16 +285,12 @@ class WallDetector(object):
                 )
             box_kwargs = self.get_box_kwargs()
             if box_kwargs is not None:
-                spec, freqs = apply_box_mask(
-                    spec, freqs, times=times, **box_kwargs
-                )
+                spec, freqs = apply_box_mask(spec, freqs, times=times, **box_kwargs)
 
         if verbose:
             print(f"after masking: found {len(freqs)} bins.")
         index_matrix = get_index_matrix(spec)
-        self.fill_from_spec(
-            spec, freqs, index_matrix, distance, angle, verbose
-        )
+        self.fill_from_spec(spec, freqs, index_matrix, distance, angle, verbose)
         if verbose:
             print("fill_from_data time:", time.time() - t1)
             t1 = time.time()
@@ -441,7 +454,9 @@ class WallDetector(object):
         )[0]
         new_frequencies = unique_frequencies[[0] + list(indices + 1)]
         if verbose:
-            print(f"merge_close_freqs: removing {len(unique_frequencies)-len(new_frequencies)} rows.")
+            print(
+                f"merge_close_freqs: removing {len(unique_frequencies)-len(new_frequencies)} rows."
+            )
 
         if dryrun:
             return unique_frequencies, new_frequencies
@@ -486,7 +501,7 @@ class WallDetector(object):
         if len(self.df) == 0:
             print("Warning: remove_spurious_freqs removed all rows.")
 
-        # if there are no nans left in certain columns, we can 
+        # if there are no nans left in certain columns, we can
         # convert them to numeric.
         self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)
@@ -501,13 +516,13 @@ class WallDetector(object):
             vals = df.magnitude.values
             if np.nanmedian(vals) < mag_thresh:
                 if verbose:
-                    print(f'removing {freq} with median {np.nanmedian(vals)}' )
+                    print(f"removing {freq} with median {np.nanmedian(vals)}")
                 remove_rows += list(df.index.values)
             elif normalized_std(vals) > std_thresh:
                 if verbose:
-                    print(f'removing {freq} with std {normalized_std(vals)}' )
+                    print(f"removing {freq} with std {normalized_std(vals)}")
                 remove_rows += list(df.index.values)
-            #else:
+            # else:
             #    print(f"keeping {freq}: {np.nanmedian(vals):.2e}, {normalized_std(vals):.2e}")
         if verbose:
             print(f"remove_bad_freqs: removing {len(remove_rows)} rows.")
@@ -517,7 +532,7 @@ class WallDetector(object):
         if len(self.df) == 0:
             print("Warning: remove_bad_freqs removed all rows.")
 
-        # if there are no nans left in certain columns, we can 
+        # if there are no nans left in certain columns, we can
         # convert them to numeric.
         self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)

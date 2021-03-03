@@ -82,7 +82,7 @@ def get_spectrogram(df):
     )
     stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
     if not any_different:
-        spectrogram = _get_spectrogram_constant_bins(stft)        
+        spectrogram = _get_spectrogram_constant_bins(stft)
         return spectrogram, frequencies_start
     else:
         return _get_spectrogram_varying_bins(frequencies_matrix, stft)
