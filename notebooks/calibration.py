@@ -9,8 +9,20 @@ import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 
+def plot_calibration(x, ys, function, ax): 
+    uniform_x = np.linspace(min(x), max(x), 100)
+    uniform_ys = function(uniform_x)
+    for i in range(ys.shape[0]):
+        ax.semilogy(x, ys[i], color=f"C{i}", label=f"mic{i}")
+        ax.scatter(uniform_x, uniform_ys[i], color=f"C{i}")
+    ax.grid("both")
+    ax.set_xlabel("frequency [Hz]")
+    ax.set_ylabel("amplitude")
+    ax.set_ylim(1e-3, 1e2)
+    ax.legend()
 
-def get_calibration_function(plot=False):
+
+def get_calibration_function(ax=None):
     from scipy.interpolate import interp1d
     from pandas_utils import filter_by_dicts
 
@@ -20,31 +32,38 @@ def get_calibration_function(plot=False):
         "method": np.median,
     }
     calib_df = filter_by_dicts(calib_df, [chosen_dict])
-    assert len(calib_df) == 1
+    assert len(calib_df) == 1, calib_df
     row = calib_df.iloc[0]
 
     calib_psd = row.psd
     calib_f = row.frequencies
-    uniform_f = np.linspace(1000, 5000, 50)
     calib_function = interp1d(
         x=calib_f, y=calib_psd, kind="linear", fill_value="extrapolate"
     )
-    uniform_psd = calib_function(uniform_f)
 
-    if plot:
-        fig, axs = plt.subplots(
-            1, row.psd.shape[0], squeeze=False, sharey=True, sharex=True
-        )
-        fig.set_size_inches(10, 5)
-        for i in range(row.psd.shape[0]):
-            axs[0, i].semilogy(row.frequencies, row.psd[i], color=f"C{i}")
-            axs[0, i].set_xlabel("frequency [Hz]")
-            axs[0, i].set_title(f"mic{i}")
-
-            axs[0, i].scatter(uniform_f, uniform_psd[i], color=f"C{i}")
-            axs[0, i].grid("both")
-
-        axs[0, 0].set_ylabel("amplitude")
-        axs[0, i].set_ylim(1e-3, 20)
-
+    if ax is not None:
+        plot_calibration(row.frequencies, row.psd, calib_function, ax)
     return calib_function
+
+
+def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
+    from scipy.interpolate import interp1d
+    from wall_detector import prune_df_matrix
+
+    df_matrix_pruned, df_freq, __ = prune_df_matrix(df_matrix, df_freq)
+    median_values = np.median(df_matrix_pruned, axis=2)
+    calib_function = interp1d(df_freq, median_values, 
+                              kind="quadratic", fill_value="extrapolate")
+    if ax is not None:
+        plot_calibration(df_freq, median_values, calib_function, ax=ax)
+    return calib_function
+
+
+def get_calibration_function_dict(ax=None, **filter_dict):
+    from pandas_utils import filter_by_dicts
+    fname = "results/wall_analysis.pkl"
+    results_df = pd.read_pickle(fname)
+    df = filter_by_dicts(results_df, [filter_dict])
+    assert len(df) == 1, df
+    row = df.iloc[0]
+    return get_calibration_function_matrix(row.df_matrix, row.df_freq, ax=ax)

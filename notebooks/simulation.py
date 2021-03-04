@@ -174,7 +174,7 @@ def get_df_theory(frequencies, distances, chosen_mics=range(4)):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
         deltas = get_deltas_from_global(yaw_deg=0, distances_cm=distances, mic_idx=mic)
-        H[i, :, :] = get_df_theory_simple(deltas, frequencies)
+        H[i, :, :] = get_df_theory_simple(deltas, frequencies).T
     return H
 
 
