@@ -300,7 +300,6 @@ class WallDetector(object):
         self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE, verbose=False
     ):
         df = psd_df_from_spec(spec, freqs, index_matrix)
-        vals = df.magnitude.values
         assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         if verbose:
             print(f"filling with {len(df)} new rows")

@@ -35,3 +35,11 @@ WINDOW_TYPES = {
     2: 'flattop',
     3: 'tukey'
 }
+
+# below is found by increasing n_buffer and finding to what sum(window)/n_buffer converges.
+WINDOW_CORRECTION = {
+    '': 1.0,
+    'hann': 0.5, 
+    'flattop': 0.215579,
+    'tukey': 0.9,
+}

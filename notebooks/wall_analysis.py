@@ -205,7 +205,7 @@ def parse_experiments(
     else:
         mic_type_list = ["audio_deck"]
 
-    from crazyflie_description_py.parameters import N_BUFFER, WINDOW_TYPES
+    from crazyflie_description_py.parameters import N_BUFFER, WINDOW_TYPES, WINDOW_CORRECTION
 
     params_file = load_params(exp_name)
 
@@ -235,6 +235,12 @@ def parse_experiments(
             continue
 
         try:
+            # for experiments where window types were changed by appendix
+            if "window" in params.get("appendix", ""):
+                method_window = WINDOW_TYPES[
+                        int(params["appendix"].replace("_window", ""))
+            ]
+
             positions = None
             if params["mic_type"] == "audio_deck":
                 df, df_pos = read_df(**params)
@@ -245,11 +251,6 @@ def parse_experiments(
             elif params["mic_type"] == "measurement":
                 fname = get_filename(**params)
                 wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"
-
-                if "window" in params.get("appendix", ""):
-                    method_window = WINDOW_TYPES[
-                        int(params["appendix"].replace("_window", ""))
-                    ]
                 df = read_df_from_wav(
                     wav_fname, n_buffer=N_BUFFER, method_window=method_window
                 )
@@ -260,6 +261,8 @@ def parse_experiments(
         if not "signals_f" in df.columns:
             print("error, signals_f is empty. skipping...")
             continue
+
+        df.signals_f /= WINDOW_CORRECTION[method_window]
 
         stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
@@ -353,10 +356,10 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_03_01_flying",
+        #"2021_03_01_flying",
         # "2021_02_25_wall",
         # "2021_02_23_wall",
-        #'2021_02_19_windows',
+        '2021_02_19_windows',
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',

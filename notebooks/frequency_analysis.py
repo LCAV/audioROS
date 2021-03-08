@@ -281,7 +281,7 @@ def psd_df_from_spec(spec, freqs, index_matrix, min_t=0, max_t=None, n_freq=1):
     distance = 0
     n_mics = spec.shape[1]
 
-    upper_bound = spec.shape[1] * max(spec.shape[0], spec.shape[2])
+    upper_bound = spec.shape[1] * spec.shape[2] * n_freq
     psd_df = pd.DataFrame(
         columns=["time", "counter", "mic", "frequency", "distance", "magnitude"],
         index=range(upper_bound),

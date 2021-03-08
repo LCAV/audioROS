@@ -21,6 +21,7 @@ N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
 ATTENUATION = (
     20  # attenuation coefficient in dB / m, 10: between 100-200 degrees, 4000+ Hz
 )
+D0 = 0.1 # default difference between mic and speaker, in meters
 
 # this corresponds to the setup in BC325 with stepper motor:
 Y_OFFSET = 0.08  # in meters
@@ -105,7 +106,7 @@ def get_deltas_from_global(yaw_deg, distances_cm, mic_idx, ax=None):
             label=f"mic{mic_idx}",
             marker="o",
         )
-    return deltas
+    return deltas, d0_cm*1e-2
 
 
 def generate_room(distance_cm=0, yaw_deg=0, ax=None, fs_here=FS):
@@ -123,20 +124,18 @@ def generate_room(distance_cm=0, yaw_deg=0, ax=None, fs_here=FS):
 ### simulation ###
 
 
-def get_df_theory_simple(deltas_m, frequencies_hz, flat=False):
-    alpha0 = 0.9  # how much we loose in direct path
-    alpha1 = 10 ** (-ATTENUATION * deltas_m / 20)
+def get_df_theory_simple(deltas_m, frequencies_hz, flat=False, attenuation=ATTENUATION, d0=D0, wall_absorption=0, offset=0):
+    alpha0 = attenuation / d0
+    alpha1 = attenuation / deltas_m - wall_absorption  
+
     if not flat:
         deltas_m = np.array(deltas_m).reshape((-1, 1))
         alpha1 = alpha1.reshape((-1, 1))
         frequencies_hz = np.array(frequencies_hz).reshape((1, -1))
+
     mag_squared = (
-        alpha0 ** 2
-        + alpha1 ** 2
-        + 2
-        * alpha0
-        * alpha1
-        * np.cos(2 * np.pi * frequencies_hz * deltas_m / SPEED_OF_SOUND)
+        alpha0 ** 2 + alpha1 ** 2
+        + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / SPEED_OF_SOUND)
     )  # n_deltas x n_freqs or n_freqs
     return np.sqrt(mag_squared)
 
@@ -173,8 +172,8 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
 def get_df_theory(frequencies, distances, chosen_mics=range(4)):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
-        deltas = get_deltas_from_global(yaw_deg=0, distances_cm=distances, mic_idx=mic)
-        H[i, :, :] = get_df_theory_simple(deltas, frequencies).T
+        deltas, d0 = get_deltas_from_global(yaw_deg=0, distances_cm=distances, mic_idx=mic)
+        H[i, :, :] = get_df_theory_simple(deltas, frequencies, d0=d0).T
     return H
 
 
@@ -235,16 +234,16 @@ def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0, chosen_mics=range
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m = get_deltas_from_global(yaw_deg, distance_cm, mic)
-        pattern = get_df_theory_simple(deltas_m, frequencies, flat=True)
+        deltas_m, d0 = get_deltas_from_global(yaw_deg, distance_cm, mic)
+        pattern = get_df_theory_simple(deltas_m, frequencies, flat=True, d0=d0)
         Hs[:, i] = pattern
     return Hs
 
 
-def get_dist_slice_theory(frequency, distances_cm, yaw_deg=0, chosen_mics=range(4)):
+def get_dist_slice_theory(frequency, distances_cm, yaw_deg=0, chosen_mics=range(4), attenuation=ATTENUATION, wall_absorption=0, offset=0):
     Hs = np.zeros((len(distances_cm), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m = get_deltas_from_global(yaw_deg, distances_cm, mic)
-        pattern = get_df_theory_simple(deltas_m, [frequency])
+        deltas_m, d0 = get_deltas_from_global(yaw_deg, distances_cm, mic)
+        pattern = get_df_theory_simple(deltas_m, [frequency], d0=d0, attenuation=attenuation, wall_absorption=wall_absorption, offset=offset)
         Hs[:, i] = pattern.flatten()
     return Hs

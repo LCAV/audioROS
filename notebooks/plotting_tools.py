@@ -96,32 +96,43 @@ def plot_spectrograms(df_freq):
             axs[0, j].set_title(f"motors {motors}")
 
 
-def plot_raw_signals(spec_masked_all, freqs_masked, mic_idx=0):
+def plot_raw_signals(spec_masked_all, freqs_masked, mic_idx=0, delta=50):
+    """ 
+    :param delta: consider frequencies more than delta Hz appart as new frequency.
+    """
     spec_mic = spec_masked_all[:, mic_idx, :]
 
     start_idx = None
     counter = 0
+    indices = []
 
     fig, ax = plt.subplots()
     fig.set_size_inches(15, 5)
     for i in range(spec_mic.shape[1]):
-        freq_indices = np.where(spec_mic[:, i] > 0)[0]
-        if len(freq_indices) == 0:
-            continue
+        new_idx = np.argmax(spec_mic[:, i])
+        if (start_idx is None) or (abs(freqs_masked[new_idx] - freqs_masked[start_idx]) > delta):
 
-        new_idx = freq_indices[0]
-        if new_idx != start_idx:
-            counter += 1
+            # plot old frequencies.
+            # some frequencies have only one or two realizations, they are typically outliers.
+            if len(indices) > 2:
+                label = f"{counter}:{freqs_masked[new_idx]}Hz"
+                for idx in indices: 
+                    freq_indices = np.where(spec_mic[:, idx] > 0)[0]
+                    ax.plot(
+                        freqs_masked[freq_indices],
+                        spec_mic[freq_indices, idx],
+                        color=f"C{counter}",
+                        label=label,
+                    )
+                    label = None
+                counter += 1
+
+            # initialize new frequencies
             start_idx = new_idx
-            label = f"{counter}:{freqs_masked[new_idx]}Hz"
+            indices = []
 
-        ax.plot(
-            freqs_masked[freq_indices],
-            spec_mic[freq_indices, i],
-            color=f"C{counter}",
-            label=label,
-        )
-        label = None
+        indices.append(i)
+
     ax.set_yscale("log")
     ax.grid(which="both")
     ax.set_xlabel("frequency [Hz]")
