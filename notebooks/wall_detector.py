@@ -223,7 +223,7 @@ def get_probability_cost(
 
 
 class WallDetector(object):
-    def __init__(self, params={}, exp_name=None, mic_type="audio_deck"):
+    def __init__(self, params={}, exp_name=None, mic_type="audio_deck", interpolate=False):
         self.df = pd.DataFrame(
             columns=[
                 "time",
@@ -236,6 +236,7 @@ class WallDetector(object):
             ]
         )
         self.params = params
+        self.interpolate = interpolate
         self.n_mics = 4 if (mic_type == "audio_deck") else 1
         # self.n_spurious = 1 if (mic_type == 'audio_deck') else 10
         self.mic_indices = range(4) if (mic_type == "audio_deck") else [1]
@@ -302,25 +303,19 @@ class WallDetector(object):
 
         if verbose:
             print(f"after masking: found {len(freqs)} bins.")
-        index_matrix = get_index_matrix(spec)
-        self.fill_from_spec(spec, freqs, index_matrix, distance, angle, verbose)
+        self.fill_from_spec(spec, freqs, distance, angle, verbose)
         if verbose:
             print("fill_from_data time:", time.time() - t1)
             t1 = time.time()
         return spec, freqs
 
     def fill_from_spec(
-        self, spec, freqs, index_matrix, distance=DISTANCE, angle=ANGLE, verbose=False
+        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False
     ):
-        df = psd_df_from_spec(spec, freqs, index_matrix)
+        df = psd_df_from_spec(spec, freqs, interpolate=self.interpolate, verbose=verbose)
         assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
-        if verbose:
-            print(f"filling with {len(df)} new rows")
-
         df.loc[:, "distance"] = distance
         df.loc[:, "angle"] = angle
-
-        df = df.apply(pd.to_numeric, axis=0, downcast="integer")
         # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
 
