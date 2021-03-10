@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 
-def plot_calibration(x, ys, function, ax): 
+def plot_calibration(x, ys, function, ax):
     uniform_x = np.linspace(min(x), max(x), 100)
     uniform_ys = function(uniform_x)
     for i in range(ys.shape[0]):
@@ -52,9 +52,10 @@ def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
     from wall_detector import prune_df_matrix
 
     df_matrix_pruned, df_freq, __ = prune_df_matrix(df_matrix, df_freq)
-    median_values = np.nanmedian(df_matrix_pruned, axis=2) # n_mics x n_freqs
-    calib_function = interp1d(df_freq, median_values, 
-                              kind="quadratic", fill_value="extrapolate")
+    median_values = np.nanmedian(df_matrix_pruned, axis=2)  # n_mics x n_freqs
+    calib_function = interp1d(
+        df_freq, median_values, kind="quadratic", fill_value="extrapolate"
+    )
     if ax is not None:
         plot_calibration(df_freq, median_values, calib_function, ax=ax)
     np.testing.assert_allclose(calib_function(df_freq[0]), median_values[:, 0])
@@ -63,6 +64,7 @@ def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
 
 def get_calibration_function_dict(ax=None, **filter_dict):
     from pandas_utils import filter_by_dicts
+
     fname = "results/wall_analysis.pkl"
     results_df = pd.read_pickle(fname)
     df = filter_by_dicts(results_df, [filter_dict])

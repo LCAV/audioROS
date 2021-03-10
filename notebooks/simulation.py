@@ -18,10 +18,9 @@ from signals import generate_signal
 
 DURATION_SEC = 38
 N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
-ATTENUATION = (
-    20  # attenuation coefficient in dB / m, 10: between 100-200 degrees, 4000+ Hz
-)
-D0 = 0.1 # default difference between mic and speaker, in meters
+ATTENUATION = 1.0  # attenuation coefficient in  1/m
+D0 = 0.1  # default difference between mic and speaker, in meters
+WALL_ABSORPTION = 0.2
 
 # this corresponds to the setup in BC325 with stepper motor:
 Y_OFFSET = 0.08  # in meters
@@ -106,7 +105,21 @@ def get_deltas_from_global(yaw_deg, distances_cm, mic_idx, ax=None):
             label=f"mic{mic_idx}",
             marker="o",
         )
-    return deltas, d0_cm*1e-2
+    return deltas, d0_cm * 1e-2
+
+
+def get_orthogonal_distance_from_global(yaw_deg, deltas_cm, mic_idx, ax=None):
+    mic = np.array(MIC_POSITIONS)[mic_idx, :2]
+    source = np.array(BUZZER_POSITION)[:2]
+    vec = (mic - source).flatten()
+    d0_cm = np.linalg.norm(vec) * 100
+
+    yaw_here = (YAW_OFFSET - np.array(yaw_deg)) / 180 * np.pi
+    beta_here = np.arctan2(vec[1], vec[0]) + np.pi / 2 + yaw_here
+
+    distances_cm = get_orthogonal_distance(deltas_cm, beta_here, d0_cm=d0_cm).flatten()
+    distances_here = np.array(distances_cm) - (Y_OFFSET * 100)
+    return distances_here
 
 
 def generate_room(distance_cm=0, yaw_deg=0, ax=None, fs_here=FS):
@@ -124,18 +137,29 @@ def generate_room(distance_cm=0, yaw_deg=0, ax=None, fs_here=FS):
 ### simulation ###
 
 
-def get_df_theory_simple(deltas_m, frequencies_hz, flat=False, attenuation=ATTENUATION, d0=D0, wall_absorption=0, offset=0):
+def get_df_theory_simple(
+    deltas_m,
+    frequencies_hz,
+    flat=False,
+    attenuation=ATTENUATION,
+    d0=D0,
+    wall_absorption=0,
+    c=SPEED_OF_SOUND,
+):
     alpha0 = attenuation / d0
-    alpha1 = attenuation / deltas_m - wall_absorption  
+    alpha1 = attenuation / (deltas_m + d0) - wall_absorption
 
+    frequencies_hz = np.array(frequencies_hz)
+    deltas_m = np.array(deltas_m)
     if not flat:
         deltas_m = np.array(deltas_m).reshape((-1, 1))
         alpha1 = alpha1.reshape((-1, 1))
         frequencies_hz = np.array(frequencies_hz).reshape((1, -1))
 
     mag_squared = (
-        alpha0 ** 2 + alpha1 ** 2
-        + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / SPEED_OF_SOUND)
+        alpha0 ** 2
+        + alpha1 ** 2
+        + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / c)
     )  # n_deltas x n_freqs or n_freqs
     return np.sqrt(mag_squared)
 
@@ -172,7 +196,9 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
 def get_df_theory(frequencies, distances, chosen_mics=range(4)):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
-        deltas, d0 = get_deltas_from_global(yaw_deg=0, distances_cm=distances, mic_idx=mic)
+        deltas, d0 = get_deltas_from_global(
+            yaw_deg=0, distances_cm=distances, mic_idx=mic
+        )
         H[i, :, :] = get_df_theory_simple(deltas, frequencies, d0=d0).T
     return H
 
@@ -230,7 +256,7 @@ def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
 def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0, chosen_mics=range(4)):
     """ 
     We can incorporate relative movement by providing
-    distance_cm and yaw_deg of same length as frequencies
+    distance_cm and yaw_deg of same length as frequencies. 
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
@@ -240,10 +266,29 @@ def get_freq_slice_theory(frequencies, distance_cm, yaw_deg=0, chosen_mics=range
     return Hs
 
 
-def get_dist_slice_theory(frequency, distances_cm, yaw_deg=0, chosen_mics=range(4), attenuation=ATTENUATION, wall_absorption=0, offset=0):
+def get_dist_slice_theory(
+    frequency,
+    distances_cm,
+    yaw_deg=0,
+    chosen_mics=range(4),
+    attenuation=ATTENUATION,
+    wall_absorption=WALL_ABSORPTION,
+):
+    """ 
+    We can incorporate relative movement by providing
+    distance_cm and yaw_deg of same length as frequencies. 
+    """
     Hs = np.zeros((len(distances_cm), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
         deltas_m, d0 = get_deltas_from_global(yaw_deg, distances_cm, mic)
-        pattern = get_df_theory_simple(deltas_m, [frequency], d0=d0, attenuation=attenuation, wall_absorption=wall_absorption, offset=offset)
+        pattern = get_df_theory_simple(
+            deltas_m,
+            [frequency],
+            flat=True,
+            d0=d0,
+            attenuation=attenuation,
+            wall_absorption=wall_absorption,
+            c=SPEED_OF_SOUND,
+        )
         Hs[:, i] = pattern.flatten()
     return Hs

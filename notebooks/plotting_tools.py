@@ -110,13 +110,15 @@ def plot_raw_signals(spec_masked_all, freqs_masked, mic_idx=0, delta=50):
     fig.set_size_inches(15, 5)
     for i in range(spec_mic.shape[1]):
         new_idx = np.argmax(spec_mic[:, i])
-        if (start_idx is None) or (abs(freqs_masked[new_idx] - freqs_masked[start_idx]) > delta):
+        if (start_idx is None) or (
+            abs(freqs_masked[new_idx] - freqs_masked[start_idx]) > delta
+        ):
 
             # plot old frequencies.
             # some frequencies have only one or two realizations, they are typically outliers.
             if len(indices) > 2:
                 label = f"{counter}:{freqs_masked[new_idx]}Hz"
-                for idx in indices: 
+                for idx in indices:
                     freq_indices = np.where(spec_mic[:, idx] > 0)[0]
                     ax.plot(
                         freqs_masked[freq_indices],

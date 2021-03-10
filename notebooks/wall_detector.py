@@ -18,7 +18,9 @@ ANGLE = 0
 DISTANCE = 0
 METHOD = np.nanmedian
 
-# parameters for cleaning
+YAW_DEG = 0  # drone angle used for when nothing else is given.
+
+# parameters for cleaning signals
 N_SPURIOUS = 2
 MAG_THRESH = 1e-3
 STD_THRESH = 2.0  # TODO(FD) this doesn't behave as expected
@@ -153,9 +155,12 @@ def normalized_std(values, method=METHOD):
         return 0
 
 
-def get_probability_fft(f_slice, frequencies, window=None):
+def get_probability_fft(
+    f_slice, frequencies, window=None, mic_idx=1, distance_range=None
+):
     import scipy.signal.windows
     from constants import SPEED_OF_SOUND
+    from simulation import get_orthogonal_distance_from_global
 
     n = max(len(f_slice), 1000)
 
@@ -166,9 +171,17 @@ def get_probability_fft(f_slice, frequencies, window=None):
         fft *= w
 
     df = np.mean(frequencies[1:] - frequencies[:-1])
-    distances = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
+    deltas = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
+
+    distances = get_orthogonal_distance_from_global(
+        yaw_deg=YAW_DEG, deltas_cm=deltas, mic_idx=mic_idx
+    )
+    if distance_range is not None:
+        mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
+        distances = distances[mask]
+        fft = fft[mask]
     prob = fft / np.sum(fft)
-    return distances / 2, prob
+    return distances, prob
 
 
 def get_probability_cost(
@@ -185,7 +198,7 @@ def get_probability_cost(
     if absolute_yaws is not None:
         yaw_deg = absolute_yaws
     else:
-        yaw_deg = 0
+        yaw_deg = YAW_DEG
 
     f_slice_norm = f_slice - np.mean(f_slice)
     f_slice_norm /= np.std(f_slice_norm)
