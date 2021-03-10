@@ -25,14 +25,14 @@ def plot_calibration(x, ys, function, ax):
 
 def get_calibration_function(ax=None):
     from scipy.interpolate import interp1d
-    from pandas_utils import filter_by_dicts
+    from pandas_utils import filter_by_dict
 
     calib_df = pd.read_pickle("results/calibration_results.pkl")
     chosen_dict = {
         "source": "sweep_buzzer",
         "method": np.median,
     }
-    calib_df = filter_by_dicts(calib_df, [chosen_dict])
+    calib_df = filter_by_dict(calib_df, chosen_dict)
     assert len(calib_df) == 1, calib_df
     row = calib_df.iloc[0]
 
@@ -63,11 +63,11 @@ def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
 
 
 def get_calibration_function_dict(ax=None, **filter_dict):
-    from pandas_utils import filter_by_dicts
+    from pandas_utils import filter_by_dict
 
     fname = "results/wall_analysis.pkl"
     results_df = pd.read_pickle(fname)
-    df = filter_by_dicts(results_df, [filter_dict])
+    df = filter_by_dict(results_df, filter_dict)
     assert len(df) == 1, df
     row = df.iloc[0]
     return get_calibration_function_matrix(row.df_matrix, row.df_freq, ax=ax)

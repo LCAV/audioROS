@@ -9,24 +9,6 @@ import pandas as pd
 import numpy as np
 
 
-def filter_by_dicts(df, dicts):
-    """ Return the rows of df for which any of the dicts applies. """
-    if len(dicts) == 1:
-        print("Warning: filter_by_dicts is deprecated, replace with filter_by_dict.")
-        return filter_by_dict(df, dicts[0])
-
-    mask = np.zeros(len(df), dtype=bool)
-    for dict_ in dicts:
-        this_mask = np.ones(len(df), dtype=bool)
-        for key, val in dict_.items():
-            this_mask = this_mask & (df.loc[:, key] == val)
-        mask = np.bitwise_or(mask, this_mask)
-    if not np.any(mask):
-        return []
-    else:
-        return df.loc[mask, :]
-
-
 def filter_by_dict(df, dict_):
     """ Return the rows of df for which dict_ applies. """
     mask = np.ones(len(df), dtype=bool)
