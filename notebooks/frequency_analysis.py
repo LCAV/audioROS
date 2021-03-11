@@ -9,8 +9,9 @@ import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 
+PAD_FACTOR = 5 # for interpolating peaks
 
-def interpolate_peak(spec_slice, freqs, pad_factor=10, ax=None):
+def interpolate_peak(spec_slice, freqs, pad_factor=PAD_FACTOR, ax=None):
     from crazyflie_description_py.parameters import FS, N_BUFFER
     assert len(spec_slice) == len(freqs), (len(spec_slice), len(freqs))
 
@@ -45,12 +46,19 @@ def fit_peak(abs_spec_slice, bin_max=None):
     Peak parabola fitting as explained in 
     https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html 
     """
+    assert not np.any(np.iscomplex(abs_spec_slice)), 'need to give magnitude to fit_peak'
     if bin_max is None:
         bin_max = np.argmax(abs_spec_slice)
+    if bin_max == 0:
+        return 0.0, 0.0
+
     alpha, beta, gamma  = abs_spec_slice[bin_max-1:bin_max+2]
     assert beta >= alpha
     assert beta >= gamma
-    p = 0.5 * (alpha - gamma) / (alpha - 2*beta + gamma)
+    if alpha - 2*beta + gamma == 0:
+        p = 0
+    else:
+        p = 0.5 * (alpha - gamma) / (alpha - 2*beta + gamma)
     return beta - (alpha - gamma) * p / 4, p
 
 
@@ -232,7 +240,7 @@ def apply_box_mask(
     spec = spec[mask, ...]
     return spec, frequencies
 
-def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolate=False, verbose=False):
+def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation='', verbose=False):
     """
     Extract distance-frequency information from spectrogram and index_matrix.
 
@@ -264,10 +272,15 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolate=False, verbos
 
             max_amp = np.abs(spec_slice[i_f])
             max_f = freqs[i_f]
-            if interpolate:
+            if interpolation == 'lagrange':
                 magnitude_estimate, frequency = interpolate_peak(spec_slice, freqs)
                 if verbose and (frequency != 0):
                     print(f'peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}')
+            elif interpolation == 'quadratic':
+                magnitude_estimate, p=fit_peak(np.abs(spec_slice))
+                # TODO(FD) not exactly correct, should be using p from above.
+                # to be changed if we decide to use fit_peak.
+                frequency = max_f
             else:
                 magnitude_estimate = max_amp 
                 frequency = max_f

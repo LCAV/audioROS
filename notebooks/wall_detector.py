@@ -223,7 +223,7 @@ def get_probability_cost(
 
 
 class WallDetector(object):
-    def __init__(self, params={}, exp_name=None, mic_type="audio_deck", interpolate=False):
+    def __init__(self, params={}, exp_name=None, mic_type="audio_deck", interpolation=''):
         self.df = pd.DataFrame(
             columns=[
                 "time",
@@ -236,12 +236,26 @@ class WallDetector(object):
             ]
         )
         self.params = params
-        self.interpolate = interpolate
+        self.current_spectrogram = self.current_freqs = None
+        self.interpolation = interpolation
         self.n_mics = 4 if (mic_type == "audio_deck") else 1
         # self.n_spurious = 1 if (mic_type == 'audio_deck') else 10
         self.mic_indices = range(4) if (mic_type == "audio_deck") else [1]
         if exp_name is not None:
             self.params.update(kwargs_datasets[exp_name][mic_type])
+
+    def init_from_row(exp_name, row, interpolation='', verbose=False):
+        wall_detector = WallDetector(exp_name=exp_name, mic_type=row.mic_type, interpolation=interpolation)
+        try:
+            wall_detector.fill_from_row(row, verbose=verbose)
+        except:
+            print("skipping", row)
+            raise
+            return None
+        wall_detector.remove_bad_freqs(verbose=verbose)
+        wall_detector.merge_close_freqs(verbose=verbose)
+        wall_detector.remove_spurious_freqs(verbose=verbose)
+        return wall_detector
 
     def get_linear_kwargs(self):
         kwargs = {
@@ -287,8 +301,6 @@ class WallDetector(object):
         verbose=False,
         mask=True,
     ):
-        if verbose:
-            t1 = time.time()
         spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
 
         if mask:
@@ -301,18 +313,15 @@ class WallDetector(object):
             if box_kwargs is not None:
                 spec, freqs = apply_box_mask(spec, freqs, times=times, **box_kwargs)
 
-        if verbose:
-            print(f"after masking: found {len(freqs)} bins.")
         self.fill_from_spec(spec, freqs, distance, angle, verbose)
-        if verbose:
-            print("fill_from_data time:", time.time() - t1)
-            t1 = time.time()
+        self.current_spectrogram = spec
+        self.current_freqs = freqs
         return spec, freqs
 
     def fill_from_spec(
         self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False
     ):
-        df = psd_df_from_spec(spec, freqs, interpolate=self.interpolate, verbose=verbose)
+        df = psd_df_from_spec(spec, freqs, interpolation=self.interpolation, verbose=verbose)
         assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         df.loc[:, "distance"] = distance
         df.loc[:, "angle"] = angle
