@@ -143,7 +143,8 @@ def get_df_theory_simple(
     flat=False,
     attenuation=ATTENUATION,
     d0=D0,
-    wall_absorption=0,
+    wall_absorption=WALL_ABSORPTION,
+    gain_x=1.0,
     c=SPEED_OF_SOUND,
 ):
     alpha0 = attenuation / d0
@@ -161,7 +162,7 @@ def get_df_theory_simple(
         + alpha1 ** 2
         + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / c)
     )  # n_deltas x n_freqs or n_freqs
-    return np.sqrt(mag_squared)
+    return np.sqrt(mag_squared) * gain_x
 
 
 def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
@@ -273,6 +274,7 @@ def get_dist_slice_theory(
     chosen_mics=range(4),
     attenuation=ATTENUATION,
     wall_absorption=WALL_ABSORPTION,
+    gain_x=1.0
 ):
     """ 
     We can incorporate relative movement by providing
@@ -288,6 +290,7 @@ def get_dist_slice_theory(
             d0=d0,
             attenuation=attenuation,
             wall_absorption=wall_absorption,
+            gain_x=gain_x,
             c=SPEED_OF_SOUND,
         )
         Hs[:, i] = pattern.flatten()

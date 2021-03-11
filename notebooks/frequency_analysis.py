@@ -107,19 +107,19 @@ def _get_spectrogram_varying_bins(frequencies_matrix, stft):
     all_frequencies = np.unique(frequencies_matrix)
 
     spectrogram = np.zeros(
-        (len(all_frequencies), stft.shape[1], stft.shape[0]), dtype=float
+        (len(all_frequencies), stft.shape[1], stft.shape[0]), dtype=complex
     )
 
     for t_idx in range(stft.shape[0]):
         freqs = frequencies_matrix[t_idx, :]
         for i, f in enumerate(freqs):
             f_idx = np.argmin(np.abs(f - all_frequencies))
-            spectrogram[f_idx, :, t_idx] = np.abs(stft[t_idx, :, i])
+            spectrogram[f_idx, :, t_idx] = stft[t_idx, :, i]
     return spectrogram, all_frequencies
 
 
 def _get_spectrogram_constant_bins(stft):
-    return np.abs(np.transpose(stft, (2, 1, 0)))  # n_freqs x n_mics x n_times
+    return np.transpose(stft, (2, 1, 0))  # n_freqs x n_mics x n_times
 
 
 def get_spectrogram(df):

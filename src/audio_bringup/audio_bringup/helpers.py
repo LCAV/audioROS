@@ -7,10 +7,6 @@ helpers.py: general launching functions.
 import os
 import subprocess
 
-import launch
-import launch.actions
-import launch.substitutions
-import launch_ros.actions
 
 LOG_LEVEL = "info"
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
@@ -47,6 +43,10 @@ def set_param(node_name, param_name, param_value):
 
 
 def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
+    import launch.Launchdescription
+    import launch.actions
+    import launch.substitutions
+    import launch_ros.actions
     logger = launch.substitutions.LaunchConfiguration("log_level")
     launch_arguments = [
         launch.actions.DeclareLaunchArgument(
