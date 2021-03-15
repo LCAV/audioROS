@@ -18,9 +18,11 @@ from signals import generate_signal
 
 DURATION_SEC = 38
 N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
-ATTENUATION = 1.0  # attenuation coefficient in  1/m
-D0 = 0.1  # default difference between mic and speaker, in meters
+# default difference between mic and speaker, in meters:
+D0 = 0.1
+# default wall absorption (percentage of amplitude that is lost in reflection):
 WALL_ABSORPTION = 0.2
+GAIN = 1.0
 
 # this corresponds to the setup in BC325 with stepper motor:
 Y_OFFSET = 0.08  # in meters
@@ -141,14 +143,13 @@ def get_df_theory_simple(
     deltas_m,
     frequencies_hz,
     flat=False,
-    attenuation=ATTENUATION,
     d0=D0,
     wall_absorption=WALL_ABSORPTION,
-    gain_x=1.0,
+    gain_x=GAIN,
     c=SPEED_OF_SOUND,
 ):
-    alpha0 = attenuation / d0
-    alpha1 = attenuation / (deltas_m + d0) - wall_absorption
+    alpha0 = 1 / (4 * np.pi * d0)  #
+    alpha1 = (1 - wall_absorption) / (4 * np.pi * (deltas_m + d0))
 
     frequencies_hz = np.array(frequencies_hz)
     deltas_m = np.array(deltas_m)
@@ -162,7 +163,7 @@ def get_df_theory_simple(
         + alpha1 ** 2
         + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / c)
     )  # n_deltas x n_freqs or n_freqs
-    return np.sqrt(mag_squared) * gain_x
+    return mag_squared * gain_x ** 2
 
 
 def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
@@ -229,7 +230,7 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=0, signal=None):
         bins_ = [get_bin(freqs_all, f) for f in frequencies]
     else:
         bins_ = np.arange(len(frequencies))
-    return mag[:, bins_]
+    return mag[:, bins_] ** 2
 
 
 def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
@@ -272,9 +273,8 @@ def get_dist_slice_theory(
     distances_cm,
     yaw_deg=0,
     chosen_mics=range(4),
-    attenuation=ATTENUATION,
     wall_absorption=WALL_ABSORPTION,
-    gain_x=1.0
+    gain_x=GAIN,
 ):
     """ 
     We can incorporate relative movement by providing
@@ -288,7 +288,6 @@ def get_dist_slice_theory(
             [frequency],
             flat=True,
             d0=d0,
-            attenuation=attenuation,
             wall_absorption=wall_absorption,
             gain_x=gain_x,
             c=SPEED_OF_SOUND,

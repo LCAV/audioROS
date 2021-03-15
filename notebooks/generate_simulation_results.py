@@ -26,6 +26,7 @@ def simulate_error(
     mic_idx = 1
     n_methods = 2
     distances_grid = np.arange(100)
+    deltas_m, d0 = get_deltas_from_global(yaw_deg, distances_cm, mic_idx)
 
     n_total = (
         n_instances
@@ -48,11 +49,11 @@ def simulate_error(
         ]
     )
 
+    # for normalizing sigmay:
+
     i = 0
     with progressbar.ProgressBar(max_value=n_total) as p:
-        for distance_cm in distances_cm:
-            delta_m, d0 = get_deltas_from_global(yaw_deg, distance_cm, mic_idx)
-
+        for distance_cm, delta_m in zip(distances_cm, deltas_m):
             for (sigma_delta_cm, sigma_f, sigma_y) in itertools.product(
                 sigmas_delta_cm, sigmas_f, sigmas_y
             ):
@@ -150,21 +151,27 @@ if __name__ == "__main__":
     fname = "results/simulation/amplitude_noise.pkl"
     sigmas_delta_cm = [0]  # np.arange(20, step=2) # in meters!
     sigmas_f = [0]  # np.arange(100, step=20)
-    sigmas_y = np.arange(10)
-    n_instances = 10
-    # results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    #sigmas_y = np.arange(1.05, step=0.05)
+    sigmas_y = np.linspace(0, 2, 100)
+    n_instances = 10  
+    #print('generating', fname)
+    #results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances) 
+    #pd.to_pickle(results_df, fname)
+    #print('saved as', fname)
 
     ### delta noise study
-    fname = "results/simulation/delta_noise.pkl"
-    sigmas_delta_cm = np.arange(20)
+    #fname = "results/simulation/delta_noise.pkl"
+    #sigmas_delta_cm = np.arange(30, step=2)
+    #n_instances = 100
+    fname = "results/simulation/delta_noise_high.pkl"
+    sigmas_delta_cm = np.arange(100, step=5)
+    n_instances = 10
     sigmas_f = [0]  # np.arange(100, step=20)
     sigmas_y = [0]  # np.arange(10)
-    n_instances = 10
-    # results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    print('generating', fname)
+    results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
+    pd.to_pickle(results_df, fname)
+    print('saved as', fname)
 
     ### frequency noise study
     fname = "results/simulation/frequency_noise.pkl"
@@ -172,18 +179,19 @@ if __name__ == "__main__":
     sigmas_f = np.arange(200, step=10)
     sigmas_y = [0]  # np.arange(10)
     n_instances = 10
-    # results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    #results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
+    #pd.to_pickle(results_df, fname)
+    #print('saved as', fname)
 
     fname = "results/simulation/joint_noise.pkl"
     sigmas_f = [0]
-    sigmas_delta_cm = np.arange(20)
-    sigmas_y = np.arange(10)
-    n_instances = 10
-    # results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    sigmas_delta_cm = np.arange(30, step=2)
+    sigmas_y = [0.1, 0.3, 0.5]
+    n_instances = 100
+    #print('generating', fname)
+    #results_df = simulate_error(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
+    #pd.to_pickle(results_df, fname)
+    #print('saved as', fname)
 
     n_instances = 100
     times = compare_timing(n_instances)

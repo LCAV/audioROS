@@ -9,29 +9,31 @@ import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 
-PAD_FACTOR = 5 # for interpolating peaks
+PAD_FACTOR = 5  # for interpolating peaks
+
 
 def interpolate_peak(spec_slice, freqs, pad_factor=PAD_FACTOR, ax=None):
     from crazyflie_description_py.parameters import FS, N_BUFFER
+
     assert len(spec_slice) == len(freqs), (len(spec_slice), len(freqs))
 
     # create full frequency response by padding with zeros
-    freqs_all = np.fft.rfftfreq(N_BUFFER, 1/FS)
+    freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
     f_indices = np.argmin(np.abs(freqs[:, None] - freqs_all[None, :]), axis=1)
     max_freq_error = np.max(freqs_all[f_indices] - freqs)
-    assert max_freq_error < 1.0, f'max frequency error too high: {max_freq_error}'
+    assert max_freq_error < 1.0, f"max frequency error too high: {max_freq_error}"
     spec_all = np.zeros(len(freqs_all), dtype=np.complex)
     spec_all[f_indices] = spec_slice
 
     if ax is not None:
-        ax.plot(freqs_all, np.abs(spec_all), color='C0')
-        ax.scatter(freqs, np.abs(spec_slice), color='C0')
+        ax.plot(freqs_all, np.abs(spec_all), color="C0")
+        ax.scatter(freqs, np.abs(spec_slice), color="C0")
 
-    # go to time domain, do zero-padding, and back to frequency domain. 
+    # go to time domain, do zero-padding, and back to frequency domain.
     time_slice = np.fft.irfft(spec_all)
     n = int(pad_factor * len(time_slice))
     spec_slice_cont = np.fft.rfft(time_slice, n=n)
-    freq_cont = np.fft.rfftfreq(n=n, d=1/FS)
+    freq_cont = np.fft.rfftfreq(n=n, d=1 / FS)
 
     # find the maximum of this higher-resolved frequency response
     max_idx = np.argmax(np.abs(spec_slice_cont))
@@ -46,19 +48,21 @@ def fit_peak(abs_spec_slice, bin_max=None):
     Peak parabola fitting as explained in 
     https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html 
     """
-    assert not np.any(np.iscomplex(abs_spec_slice)), 'need to give magnitude to fit_peak'
+    assert not np.any(
+        np.iscomplex(abs_spec_slice)
+    ), "need to give magnitude to fit_peak"
     if bin_max is None:
         bin_max = np.argmax(abs_spec_slice)
     if bin_max == 0:
         return 0.0, 0.0
 
-    alpha, beta, gamma  = abs_spec_slice[bin_max-1:bin_max+2]
+    alpha, beta, gamma = abs_spec_slice[bin_max - 1 : bin_max + 2]
     assert beta >= alpha
     assert beta >= gamma
-    if alpha - 2*beta + gamma == 0:
+    if alpha - 2 * beta + gamma == 0:
         p = 0
     else:
-        p = 0.5 * (alpha - gamma) / (alpha - 2*beta + gamma)
+        p = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
     return beta - (alpha - gamma) * p / 4, p
 
 
@@ -240,7 +244,8 @@ def apply_box_mask(
     spec = spec[mask, ...]
     return spec, frequencies
 
-def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation='', verbose=False):
+
+def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose=False):
     """
     Extract distance-frequency information from spectrogram and index_matrix.
 
@@ -257,14 +262,22 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation='', verbose
     n_times = spec.shape[2]
     upper_bound = n_mics * n_times
     psd_df = pd.DataFrame(
-        columns=["time", "counter", "mic", "frequency", "distance", "angle", "magnitude"],
+        columns=[
+            "time",
+            "counter",
+            "mic",
+            "frequency",
+            "distance",
+            "angle",
+            "magnitude",
+        ],
         index=range(upper_bound),
     )
     if max_t is None:
         max_t = n_times
 
     counter_dict = {}
-    for i_t in range(min_t, max_t): 
+    for i_t in range(min_t, max_t):
         for i_mic in range(n_mics):
             spec_slice = spec[:, i_mic, i_t]
             i_f = np.argmax(np.abs(spec_slice))
@@ -272,17 +285,19 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation='', verbose
 
             max_amp = np.abs(spec_slice[i_f])
             max_f = freqs[i_f]
-            if interpolation == 'lagrange':
+            if interpolation == "lagrange":
                 magnitude_estimate, frequency = interpolate_peak(spec_slice, freqs)
                 if verbose and (frequency != 0):
-                    print(f'peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}')
-            elif interpolation == 'quadratic':
-                magnitude_estimate, p=fit_peak(np.abs(spec_slice))
+                    print(
+                        f"peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}"
+                    )
+            elif interpolation == "quadratic":
+                magnitude_estimate, p = fit_peak(np.abs(spec_slice))
                 # TODO(FD) not exactly correct, should be using p from above.
                 # to be changed if we decide to use fit_peak.
                 frequency = max_f
             else:
-                magnitude_estimate = max_amp 
+                magnitude_estimate = max_amp
                 frequency = max_f
 
             update_dict = {
@@ -292,7 +307,9 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation='', verbose
                 "frequency": frequency,
                 "magnitude": magnitude_estimate,
             }
-            psd_df.loc[len(psd_df), list(update_dict.keys())] = list(update_dict.values())
+            psd_df.loc[len(psd_df), list(update_dict.keys())] = list(
+                update_dict.values()
+            )
     psd_df.dropna(axis=1, inplace=True, how="all")
-    psd_df = psd_df.apply(pd.to_numeric, axis=0, downcast="integer", errors='ignore')
+    psd_df = psd_df.apply(pd.to_numeric, axis=0, downcast="integer", errors="ignore")
     return psd_df

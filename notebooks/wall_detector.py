@@ -156,19 +156,21 @@ def normalized_std(values, method=METHOD):
 
 
 def get_probability_fft(
-    f_slice, frequencies, window=None, mic_idx=1, distance_range=None
+    f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000
 ):
     import scipy.signal.windows
     from constants import SPEED_OF_SOUND
     from simulation import get_orthogonal_distance_from_global
 
-    n = max(len(f_slice), 1000)
+    n = max(len(f_slice), n_max)
 
     f_slice_norm = f_slice - np.mean(f_slice)
-    fft = np.abs(np.fft.rfft(f_slice_norm, n=n))
+
     if window is not None:
-        w = scipy.signal.windows.get_window(window, len(fft))
-        fft *= w
+        w = scipy.signal.windows.get_window(window, len(f_slice_norm))
+        f_slice_norm *= w
+
+    fft = np.abs(np.fft.rfft(f_slice_norm, n=n))
 
     df = np.mean(frequencies[1:] - frequencies[:-1])
     deltas = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
@@ -222,8 +224,37 @@ def get_probability_cost(
     return probs
 
 
+def get_approach_angle_fft(
+    d_slice, frequency, relative_estimates_cm, window=None, n_max=1000
+):
+    import scipy.signal.windows
+    from constants import SPEED_OF_SOUND
+    from math import floor
+
+    n = max(len(d_slice), n_max)
+    d_slice_norm = d_slice - np.mean(d_slice)
+
+    if window is not None:
+        w = scipy.signal.windows.get_window(window, len(d_slice_norm))
+        d_slice_norm *= w
+
+    fft = np.abs(np.fft.rfft(d_slice_norm, n=n))
+    d_m = np.mean(relative_estimates_cm[1:] - relative_estimates_cm[:-1]) * 1e-2
+
+    # TODO: figure out if the K and the factor of 2 below is correct, for angles other than 90. 
+    K = floor(n/2)
+    cosines_gamma = 2 * frequency * d_m * 1e-2 * K / SPEED_OF_SOUND / np.arange(1, K+1)
+    if np.any(cosines_gamma>1):
+        #print(f'Values bigger than 1 at {np.where(cosines_gamma>1)[0]}: {cosines_gamma[cosines_gamma>1]}')
+        cosines_gamma[cosines_gamma>1] = 1.0
+    prob = np.abs(fft[1:]) / np.sum(np.abs(fft[1:]))
+    return cosines_gamma, prob
+
+
 class WallDetector(object):
-    def __init__(self, params={}, exp_name=None, mic_type="audio_deck", interpolation=''):
+    def __init__(
+        self, params={}, exp_name=None, mic_type="audio_deck", interpolation=""
+    ):
         self.df = pd.DataFrame(
             columns=[
                 "time",
@@ -244,8 +275,10 @@ class WallDetector(object):
         if exp_name is not None:
             self.params.update(kwargs_datasets[exp_name][mic_type])
 
-    def init_from_row(exp_name, row, interpolation='', verbose=False):
-        wall_detector = WallDetector(exp_name=exp_name, mic_type=row.mic_type, interpolation=interpolation)
+    def init_from_row(exp_name, row, interpolation="", verbose=False):
+        wall_detector = WallDetector(
+            exp_name=exp_name, mic_type=row.mic_type, interpolation=interpolation
+        )
         try:
             wall_detector.fill_from_row(row, verbose=verbose)
         except:
@@ -321,7 +354,9 @@ class WallDetector(object):
     def fill_from_spec(
         self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False
     ):
-        df = psd_df_from_spec(spec, freqs, interpolation=self.interpolation, verbose=verbose)
+        df = psd_df_from_spec(
+            spec, freqs, interpolation=self.interpolation, verbose=verbose
+        )
         assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         df.loc[:, "distance"] = distance
         df.loc[:, "angle"] = angle

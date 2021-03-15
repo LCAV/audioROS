@@ -60,12 +60,14 @@ def plot_df_matrix(
     return ax, im
 
 
-def add_colorbar(fig, ax, im):
+def add_colorbar(fig, ax, im, title=None):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     fig.colorbar(im, cax=cax, orientation="vertical")
+    if title is not None:
+        cax.set_ylabel(title)
 
 
 def plot_spectrograms(df_freq):
