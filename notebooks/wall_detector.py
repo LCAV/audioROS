@@ -225,7 +225,7 @@ def get_probability_cost(
 
 
 def get_approach_angle_fft(
-    d_slice, frequency, relative_estimates_cm, window=None, n_max=1000
+    d_slice, frequency, relative_distances_cm, window=None, n_max=1000
 ):
     import scipy.signal.windows
     from constants import SPEED_OF_SOUND
@@ -239,7 +239,7 @@ def get_approach_angle_fft(
         d_slice_norm *= w
 
     fft = np.abs(np.fft.rfft(d_slice_norm, n=n))
-    d_m = np.mean(relative_estimates_cm[1:] - relative_estimates_cm[:-1]) * 1e-2
+    d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
 
     # TODO: figure out if the K and the factor of 2 below is correct, for angles other than 90. 
     K = floor(n/2)
@@ -250,6 +250,36 @@ def get_approach_angle_fft(
     prob = np.abs(fft[1:]) / np.sum(np.abs(fft[1:]))
     return cosines_gamma, prob
 
+def get_approach_angle_cost(
+        d_slice, frequency, relative_distances_cm, 
+        start_distances_grid, gammas_grid, mic_idx=1, ax=None
+    ): 
+    from simulation import get_dist_slice_theory
+    yaw_deg = YAW_DEG
+
+    d_slice_norm = d_slice - np.mean(d_slice)
+    d_slice_norm /= np.std(d_slice_norm)
+
+    probs = np.zeros((len(start_distances_grid), len(gammas_grid))) 
+    for i, start_distance in enumerate(start_distances_grid):
+        for j, gamma in enumerate(gammas_grid):
+            distances = start_distance + relative_distances_cm * np.cos(gamma)
+            d_slice_theory = get_dist_slice_theory(frequency, distances, yaw_deg)[:, mic_idx]
+            d_slice_theory -= np.mean(d_slice_theory)
+            d_slice_theory /= np.std(d_slice_theory)
+            loss = np.linalg.norm(d_slice_theory - d_slice_norm)
+            probs[i, j] = np.exp(-loss)
+
+            if ax is not None:
+                ax.plot(distances, d_slice_theory, color="black")
+
+    if ax is not None:
+        ax.plot(frequencies, f_slice_norm, color="green")
+
+    probs /= np.sum(probs)
+    return probs
+
+    # is of shape n_start_distances x n_gammas_grid
 
 class WallDetector(object):
     def __init__(
