@@ -238,21 +238,24 @@ def get_approach_angle_fft(
         w = scipy.signal.windows.get_window(window, len(d_slice_norm))
         d_slice_norm *= w
 
-    fft = np.abs(np.fft.rfft(d_slice_norm, n=n))
+    fft = np.fft.rfft(d_slice_norm, n=n)
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
 
-    # TODO: figure out if the K and the factor of 2 below is correct, for angles other than 90. 
-    K = floor(n/2)
-    cosines_gamma = 2 * frequency * d_m * 1e-2 * K / SPEED_OF_SOUND / np.arange(1, K+1)
-    if np.any(cosines_gamma>1):
-        #print(f'Values bigger than 1 at {np.where(cosines_gamma>1)[0]}: {cosines_gamma[cosines_gamma>1]}')
-        cosines_gamma[cosines_gamma>1] = 1.0
-    prob = np.abs(fft[1:]) / np.sum(np.abs(fft[1:]))
-    return cosines_gamma, prob
+    # TODO: figure out when period_k is smaller than period_90
+    period_90 = SPEED_OF_SOUND / (2*frequency) # m
+    periods_k = d_m * n / np.arange(1, n//2+1) # m
+    sines_gamma = period_90 / periods_k
+    #if np.any(sines_gamma>1):
+        #print(f'Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}')
+    abs_fft = np.abs(fft[1:])[sines_gamma <= 1]
+    sines_gamma = sines_gamma[sines_gamma <= 1]
+    prob = abs_fft / np.sum(abs_fft)
+    return sines_gamma, prob
+
 
 def get_approach_angle_cost(
         d_slice, frequency, relative_distances_cm, 
-        start_distances_grid, gammas_grid, mic_idx=1, ax=None
+        start_distances_grid_cm, gammas_grid_deg, mic_idx=1, ax=None
     ): 
     from simulation import get_dist_slice_theory
     yaw_deg = YAW_DEG
@@ -260,26 +263,25 @@ def get_approach_angle_cost(
     d_slice_norm = d_slice - np.mean(d_slice)
     d_slice_norm /= np.std(d_slice_norm)
 
-    probs = np.zeros((len(start_distances_grid), len(gammas_grid))) 
-    for i, start_distance in enumerate(start_distances_grid):
-        for j, gamma in enumerate(gammas_grid):
-            distances = start_distance + relative_distances_cm * np.cos(gamma)
-            d_slice_theory = get_dist_slice_theory(frequency, distances, yaw_deg)[:, mic_idx]
-            d_slice_theory -= np.mean(d_slice_theory)
-            d_slice_theory /= np.std(d_slice_theory)
+    probs = np.zeros((len(start_distances_grid_cm), len(gammas_grid_deg))) 
+    for i, start_distance_cm in enumerate(start_distances_grid_cm):
+        for j, gamma_deg in enumerate(gammas_grid_deg):
+            distances_cm = start_distance_cm - relative_distances_cm * np.sin(gamma_deg/180*np.pi)
+            assert np.all(distances_cm >= 0)
+            d_slice_theory = get_dist_slice_theory(frequency, distances_cm, yaw_deg)[:, mic_idx]
+            d_slice_theory -= np.nanmean(d_slice_theory)
+            std = np.nanstd(d_slice_theory)
+            if std > 0:
+                d_slice_theory /= std
+            assert d_slice_theory.shape == d_slice_norm.shape
             loss = np.linalg.norm(d_slice_theory - d_slice_norm)
             probs[i, j] = np.exp(-loss)
 
             if ax is not None:
-                ax.plot(distances, d_slice_theory, color="black")
-
-    if ax is not None:
-        ax.plot(frequencies, f_slice_norm, color="green")
-
-    probs /= np.sum(probs)
+                ax.plot(distances_cm, d_slice_theory, label=f"{start_distance_cm}cm, {gamma_deg}deg")
+    probs /= np.nansum(probs)
     return probs
 
-    # is of shape n_start_distances x n_gammas_grid
 
 class WallDetector(object):
     def __init__(
