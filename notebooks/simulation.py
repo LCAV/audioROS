@@ -251,7 +251,7 @@ def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=0, n_times=100):
     for d in distances_cm:
         room = generate_room(distance_cm=d, yaw_deg=yaw_deg)
         mag = get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=n_times)
-        Hs.append(mag[:, bin_])
+        Hs.append(mag[:, bin_] ** 2)
     return np.array(Hs)
 
 

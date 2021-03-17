@@ -155,35 +155,77 @@ def normalized_std(values, method=METHOD):
         return 0
 
 
-def get_probability_fft(
-    f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000
-):
+def get_abs_fft(f_slice, window=None, n_max=1000 ):
     import scipy.signal.windows
-    from constants import SPEED_OF_SOUND
-    from simulation import get_orthogonal_distance_from_global
-
-    n = max(len(f_slice), n_max)
-
     f_slice_norm = f_slice - np.mean(f_slice)
-
+    n = max(len(f_slice), n_max)
     if window is not None:
         w = scipy.signal.windows.get_window(window, len(f_slice_norm))
         f_slice_norm *= w
+    return np.abs(np.fft.rfft(f_slice_norm, n=n))
 
-    fft = np.abs(np.fft.rfft(f_slice_norm, n=n))
+def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_max=1000):
+    from constants import SPEED_OF_SOUND
+    from simulation import get_orthogonal_distance_from_global
 
+    n = max(len(frequencies), n_max)
     df = np.mean(frequencies[1:] - frequencies[:-1])
-    deltas = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
-
+    deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
     distances = get_orthogonal_distance_from_global(
-        yaw_deg=YAW_DEG, deltas_cm=deltas, mic_idx=mic_idx
+        yaw_deg=YAW_DEG, deltas_cm=deltas_cm, mic_idx=mic_idx
     )
     if distance_range is not None:
         mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
         distances = distances[mask]
-        fft = fft[mask]
-    prob = fft / np.sum(fft)
+    else:
+        mask = None
+    return distances, mask
+
+
+def get_probability_fft(
+    f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000
+):
+    abs_fft = get_abs_fft(f_slice, window, n_max)
+    distances, mask = get_interference_distances(frequencies, mic_idx, distance_range, n_max=n_max)
+    if mask is not None:
+        abs_fft = abs_fft[mask]
+    prob = abs_fft / np.sum(abs_fft)
     return distances, prob
+
+
+def get_posterior(abs_fft, sigma=None):
+    N = len(abs_fft)
+    periodogram = 1/N * abs_fft**2
+    #print('periodogram:', np.min(periodogram), np.max(periodogram))
+
+    if sigma is not None:
+        periodogram /= sigma**2
+
+        # TODO(FD) we do below for numerical reasons. its effect 
+        # is undone by later exponentiation anyways. Make sure
+        # this really as no effect on the result.
+        periodogram -= np.max(periodogram) 
+        #print('exponent:', np.min(periodogram), np.max(periodogram))
+        posterior = np.exp(periodogram)
+    else:
+        d_bar = 1/N * np.sum(abs_fft**2)
+        posterior = (1 - 2*periodogram/(N*d_bar))**((2-N)/2)
+        #posterior = np.exp(periodogram)
+
+    posterior /= np.sum(posterior)
+    return posterior
+
+
+def get_probability_bayes(
+    f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000, sigma=None
+):
+    abs_fft = get_abs_fft(f_slice, window, n_max=n_max) # magnitude
+    distances, mask = get_interference_distances(frequencies, mic_idx, distance_range, n_max=n_max)
+    if mask is not None:
+        abs_fft = abs_fft[mask]
+
+    posterior = get_posterior(abs_fft, sigma)
+    return distances, posterior
 
 
 def get_probability_cost(
@@ -225,7 +267,7 @@ def get_probability_cost(
 
 
 def get_approach_angle_fft(
-    d_slice, frequency, relative_distances_cm, window=None, n_max=1000
+    d_slice, frequency, relative_distances_cm, window=None, n_max=1000, bayes=False, sigma=None
 ):
     import scipy.signal.windows
     from constants import SPEED_OF_SOUND
@@ -241,15 +283,19 @@ def get_approach_angle_fft(
     fft = np.fft.rfft(d_slice_norm, n=n)
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
 
-    # TODO: figure out when period_k is smaller than period_90
-    period_90 = SPEED_OF_SOUND / (2*frequency) # m
-    periods_k = d_m * n / np.arange(1, n//2+1) # m
-    sines_gamma = period_90 / periods_k
+    # TODO(FD) fix below approximation. 
+    period_90 = (2*frequency) / SPEED_OF_SOUND # 1/m in terms of orthogonal distance (approximation)
+    periods_k = (np.arange(0, n//2+1)) / (d_m * n) # 1/m
+    sines_gamma = periods_k / period_90
     #if np.any(sines_gamma>1):
-        #print(f'Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}')
-    abs_fft = np.abs(fft[1:])[sines_gamma <= 1]
+    #    print(f'Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}')
+    abs_fft = np.abs(fft)[sines_gamma <= 1]
     sines_gamma = sines_gamma[sines_gamma <= 1]
-    prob = abs_fft / np.sum(abs_fft)
+
+    if bayes: 
+        prob = get_posterior(abs_fft, sigma)
+    else:
+        prob = abs_fft / np.sum(abs_fft)
     return sines_gamma, prob
 
 
