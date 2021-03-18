@@ -155,14 +155,18 @@ def normalized_std(values, method=METHOD):
         return 0
 
 
-def get_abs_fft(f_slice, window=None, n_max=1000 ):
+def get_abs_fft(f_slice, window=None, n_max=1000, norm=True):
     import scipy.signal.windows
-    f_slice_norm = f_slice - np.mean(f_slice)
+    if norm:
+        f_slice_norm = f_slice - np.mean(f_slice)
+    else:
+        f_slice_norm = f_slice
     n = max(len(f_slice), n_max)
     if window is not None:
         w = scipy.signal.windows.get_window(window, len(f_slice_norm))
         f_slice_norm *= w
     return np.abs(np.fft.rfft(f_slice_norm, n=n))
+
 
 def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_max=1000):
     from constants import SPEED_OF_SOUND
@@ -193,25 +197,26 @@ def get_probability_fft(
     return distances, prob
 
 
-def get_posterior(abs_fft, sigma=None):
+def get_posterior(abs_fft, sigma=None, data=None):
     N = len(abs_fft)
     periodogram = 1/N * abs_fft**2
     #print('periodogram:', np.min(periodogram), np.max(periodogram))
 
     if sigma is not None:
-        periodogram /= sigma**2
-
-        # TODO(FD) we do below for numerical reasons. its effect 
-        # is undone by later exponentiation anyways. Make sure
-        # this really as no effect on the result.
-        periodogram -= np.max(periodogram) 
-        #print('exponent:', np.min(periodogram), np.max(periodogram))
-        posterior = np.exp(periodogram)
+        if sigma > 0:
+            periodogram /= sigma**2
+            # TODO(FD) we do below for numerical reasons. its effect 
+            # is undone by later exponentiation anyways. Make sure
+            # this really as no effect on the result.
+            periodogram -= np.max(periodogram) 
+            posterior = np.exp(periodogram)
+        else: # this is the limit of exp for sigma > 0
+            posterior = np.zeros(len(periodogram))
+            posterior[np.argmax(periodogram)] = 1.0
     else:
-        d_bar = 1/N * np.sum(abs_fft**2)
+        d_bar = 1/len(data) * np.sum((data-np.mean(data))**2)
         posterior = (1 - 2*periodogram/(N*d_bar))**((2-N)/2)
         #posterior = np.exp(periodogram)
-
     posterior /= np.sum(posterior)
     return posterior
 
@@ -219,12 +224,12 @@ def get_posterior(abs_fft, sigma=None):
 def get_probability_bayes(
     f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000, sigma=None
 ):
-    abs_fft = get_abs_fft(f_slice, window, n_max=n_max) # magnitude
+    abs_fft = get_abs_fft(f_slice, window, n_max=n_max, norm=True) 
     distances, mask = get_interference_distances(frequencies, mic_idx, distance_range, n_max=n_max)
     if mask is not None:
         abs_fft = abs_fft[mask]
 
-    posterior = get_posterior(abs_fft, sigma)
+    posterior = get_posterior(abs_fft, sigma, data=f_slice)
     return distances, posterior
 
 
@@ -273,30 +278,27 @@ def get_approach_angle_fft(
     from constants import SPEED_OF_SOUND
     from math import floor
 
-    n = max(len(d_slice), n_max)
-    d_slice_norm = d_slice - np.mean(d_slice)
-
-    if window is not None:
-        w = scipy.signal.windows.get_window(window, len(d_slice_norm))
-        d_slice_norm *= w
-
-    fft = np.fft.rfft(d_slice_norm, n=n)
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
 
     # TODO(FD) fix below approximation. 
+    n = max(len(d_slice), n_max) 
     period_90 = (2*frequency) / SPEED_OF_SOUND # 1/m in terms of orthogonal distance (approximation)
     periods_k = (np.arange(0, n//2+1)) / (d_m * n) # 1/m
     sines_gamma = periods_k / period_90
     #if np.any(sines_gamma>1):
     #    print(f'Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}')
-    abs_fft = np.abs(fft)[sines_gamma <= 1]
+
+    abs_fft = get_abs_fft(d_slice, window=window, n_max=1000, norm=True)
+    abs_fft = abs_fft[sines_gamma <= 1]
+
     sines_gamma = sines_gamma[sines_gamma <= 1]
+    gammas = np.arcsin(sines_gamma) * 180 / np.pi
 
     if bayes: 
-        prob = get_posterior(abs_fft, sigma)
+        prob = get_posterior(abs_fft, sigma, d_slice)
     else:
         prob = abs_fft / np.sum(abs_fft)
-    return sines_gamma, prob
+    return gammas, prob
 
 
 def get_approach_angle_cost(
@@ -325,8 +327,9 @@ def get_approach_angle_cost(
 
             if ax is not None:
                 ax.plot(distances_cm, d_slice_theory, label=f"{start_distance_cm}cm, {gamma_deg}deg")
-    probs /= np.nansum(probs)
-    return probs
+    probs_angle = np.nanmax(probs, axis=0) # take maximum across distances
+    probs_angle /= np.nansum(probs_angle)
+    return probs_angle
 
 
 class WallDetector(object):
