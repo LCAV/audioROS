@@ -294,3 +294,8 @@ def get_dist_slice_theory(
         )
         Hs[:, i] = pattern.flatten()
     return Hs
+
+def factor_distance_to_delta(distance, mic):
+    delta_m, d0 = get_deltas_from_global(0, distance, mic)
+    delta_cm = delta_m[0]*1e2
+    return delta_cm/distance

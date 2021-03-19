@@ -155,16 +155,12 @@ def normalized_std(values, method=METHOD):
         return 0
 
 
-def get_abs_fft(f_slice, window=None, n_max=1000, norm=True):
-    import scipy.signal.windows
+def get_abs_fft(f_slice, n_max=1000, norm=True):
     if norm:
         f_slice_norm = f_slice - np.mean(f_slice)
     else:
         f_slice_norm = f_slice
     n = max(len(f_slice), n_max)
-    if window is not None:
-        w = scipy.signal.windows.get_window(window, len(f_slice_norm))
-        f_slice_norm *= w
     return np.abs(np.fft.rfft(f_slice_norm, n=n))
 
 
@@ -187,9 +183,9 @@ def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_ma
 
 
 def get_probability_fft(
-    f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000
+    f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000
 ):
-    abs_fft = get_abs_fft(f_slice, window, n_max)
+    abs_fft = get_abs_fft(f_slice, n_max)
     distances, mask = get_interference_distances(frequencies, mic_idx, distance_range, n_max=n_max)
     if mask is not None:
         abs_fft = abs_fft[mask]
@@ -222,9 +218,9 @@ def get_posterior(abs_fft, sigma=None, data=None):
 
 
 def get_probability_bayes(
-    f_slice, frequencies, window=None, mic_idx=1, distance_range=None, n_max=1000, sigma=None
+    f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000, sigma=None
 ):
-    abs_fft = get_abs_fft(f_slice, window, n_max=n_max, norm=True) 
+    abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True) 
     distances, mask = get_interference_distances(frequencies, mic_idx, distance_range, n_max=n_max)
     if mask is not None:
         abs_fft = abs_fft[mask]
@@ -272,33 +268,33 @@ def get_probability_cost(
 
 
 def get_approach_angle_fft(
-    d_slice, frequency, relative_distances_cm, window=None, n_max=1000, bayes=False, sigma=None
+    d_slice, frequency, relative_distances_cm, mic_idx=1, n_max=1000, bayes=False, sigma=None
 ):
-    import scipy.signal.windows
+    from simulation import factor_distance_to_delta
     from constants import SPEED_OF_SOUND
-    from math import floor
 
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
 
-    # TODO(FD) fix below approximation. 
     n = max(len(d_slice), n_max) 
-    period_90 = (2*frequency) / SPEED_OF_SOUND # 1/m in terms of orthogonal distance (approximation)
-    periods_k = (np.arange(0, n//2+1)) / (d_m * n) # 1/m
+
+    period_90 = 2 * frequency / SPEED_OF_SOUND # 1/m in terms of orthogonal distance
+    periods_k = (np.arange(0, n//2+1)) / (d_m * n) # 1/m in terms of delta
     sines_gamma = periods_k / period_90
-    #if np.any(sines_gamma>1):
-    #    print(f'Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}')
+    if np.any(sines_gamma>1):
+        print(f'Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}')
 
-    abs_fft = get_abs_fft(d_slice, window=window, n_max=1000, norm=True)
-    abs_fft = abs_fft[sines_gamma <= 1]
-
-    sines_gamma = sines_gamma[sines_gamma <= 1]
-    gammas = np.arcsin(sines_gamma) * 180 / np.pi
+    abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
+    #abs_fft = abs_fft[sines_gamma <= 1]
+    #sines_gamma= sines_gamma[sines_gamma <= 1]
+    #sines_gamma[sines_gamma>1] = 1 
+    gammas = np.full(len(sines_gamma), 90)
+    gammas[sines_gamma <= 1]= np.arcsin(sines_gamma[sines_gamma <= 1]) * 180 / np.pi
 
     if bayes: 
         prob = get_posterior(abs_fft, sigma, d_slice)
     else:
         prob = abs_fft / np.sum(abs_fft)
-    return gammas, prob
+    return gammas, prob, periods_k
 
 
 def get_approach_angle_cost(
