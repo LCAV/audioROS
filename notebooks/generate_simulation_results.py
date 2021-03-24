@@ -152,12 +152,15 @@ def simulate_distance_slice(
         ):
             for counter in range(n_instances):
                 relative_cm_noisy = relative_distances_cm + np.random.normal(
-                        scale=sigma_relative_cm, 
-                        size=len(relative_distances_cm)
+                    scale=sigma_relative_cm, size=len(relative_distances_cm)
                 )
                 start_distance_random = start_distance_cm + np.random.uniform(-10, 10)
-                distances_cm = start_distance_random - relative_cm_noisy * np.sin(gamma_deg / 180 * np.pi)
-                deltas_m_noisy, d0 = get_deltas_from_global(YAW_DEG, distances_cm, MIC_IDX)
+                distances_cm = start_distance_random - relative_cm_noisy * np.sin(
+                    gamma_deg / 180 * np.pi
+                )
+                deltas_m_noisy, d0 = get_deltas_from_global(
+                    YAW_DEG, distances_cm, MIC_IDX
+                )
 
                 slice_d = get_df_theory_simple(
                     deltas_m_noisy, frequency, flat=True, d0=d0
@@ -178,9 +181,7 @@ def simulate_distance_slice(
                 )  # is of shape n_start_distances x n_gammas_grid
 
                 for method, probs, gammas in zip(
-                    ["fft", "cost"],
-                    [probs_fft, probs_cost],
-                    [gammas_fft, gammas_grid],
+                    ["fft", "cost"], [probs_fft, probs_cost], [gammas_fft, gammas_grid],
                 ):
                     gamma_estimate = gammas[np.argmax(probs)]
                     error = np.abs(gamma_estimate - gamma_deg)
@@ -246,9 +247,11 @@ if __name__ == "__main__":
     start_distance_cm = 50
     relative_distances_cm = np.arange(20)
     frequencies = np.linspace(1000, 5000, 10)
-    step = 5 
+    step = 5
     gammas_deg = np.arange(step, 91, step=step, dtype=np.float)
-    gammas_deg += np.random.uniform(low=-step//2, high=step//2, size=len(gammas_deg))
+    gammas_deg += np.random.uniform(
+        low=-step // 2, high=step // 2, size=len(gammas_deg)
+    )
 
     fname = "results/simulation/angle_noiseless.pkl"
     sigmas_relative_cm = [0]
@@ -267,14 +270,13 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
-
     ## noisy
     frequencies = np.linspace(1000, 5000, 5)
     n_instances = 10
 
     fname = "results/simulation/angle_relative_noise.pkl"
-    sigmas_relative_cm = np.linspace(0, 5, 11)  
-    sigmas_y = [0] #np.linspace(0, 2, 10)
+    sigmas_relative_cm = np.linspace(0, 5, 11)
+    sigmas_y = [0]  # np.linspace(0, 2, 10)
     print("generating", fname)
     results_df = simulate_distance_slice(
         gammas_deg,
@@ -288,10 +290,9 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
-
     fname = "results/simulation/angle_amplitude_noise.pkl"
-    sigmas_relative_cm = [0] #np.arange(10, step=2)  
-    #sigmas_y = np.linspace(0, 2, 5)
+    sigmas_relative_cm = [0]  # np.arange(10, step=2)
+    # sigmas_y = np.linspace(0, 2, 5)
     sigmas_y = np.logspace(-2, 0, 10)
     print("generating", fname)
     results_df = simulate_distance_slice(
@@ -306,12 +307,11 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
-
     fname = "results/simulation/angle_joint_noise.pkl"
     frequencies = [3000]
-    sigmas_relative_cm = np.linspace(0, 5, 11)  
-    sigmas_y = [0.1, 0.3, 0.5] #np.logspace(-2, 0, 5)
-    #sigmas_y = np.linspace(0, 2, 5)
+    sigmas_relative_cm = np.linspace(0, 5, 11)
+    sigmas_y = [0.1, 0.3, 0.5]  # np.logspace(-2, 0, 5)
+    # sigmas_y = np.linspace(0, 2, 5)
     print("generating", fname)
     results_df = simulate_distance_slice(
         gammas_deg,
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     print("saved as", fname)
 
 
-elif 0: 
+elif 0:
     ######### frequency slice study
     ### amplitude noise study
     np.random.seed(1)

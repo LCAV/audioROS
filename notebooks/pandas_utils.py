@@ -61,6 +61,13 @@ def fill_df(df, filter_dict, fill_dict, verbose=False):
     return df
 
 
+def fill_nans(slice_f, xs):
+    for m in range(slice_f.shape[0]):
+        mask = np.isfinite(slice_f[m])
+        slice_f[m, :] = np.interp(xs, xs[mask], slice_f[m, mask])
+    return slice_f
+
+
 if __name__ == "__main__":
     df = pd.DataFrame({"a": [1, 2, 3], "b": [1, 3, 4], "c": [3, 4, 5]})
     df_new = fill_df(df, {"a": 1, "b": 1}, {"d": 5})

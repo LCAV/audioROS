@@ -36,6 +36,7 @@ def clean_stft(stft, max_value=N_BUFFER):
     return stft
 
 
+# TODO(FD) probably deprecated, can be removed.
 def get_df_matrices(exp_name, max_distance=None, plot=False):
     import progressbar
     from pandas_utils import fill_df
@@ -67,25 +68,21 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
             continue
 
         d_idx = 0
-        max_value = max_distance if max_distance is not None else len(df_mic)
-        with progressbar.ProgressBar(max_value=max_value) as p:
-            for distance, df_this in df_mic.groupby("distance"):
-                if len(df_this) != 1:
-                    print(f"{len(df_this)} findings for {distance, filter_dict}")
-                    continue
-                if max_distance is not None and (distance > max_distance):
-                    continue
 
-                row = df_this.iloc[0]
+        if max_distance is not None:
+            df_mic = df_mic[df_mic.distance < max_distance]
+        max_value = len(df_mic)
+        with progressbar.ProgressBar(max_value=max_value) as p:
+            for counter, (i, row) in enumerate(df_mic.iterrows()):
+                if max_distance is not None and (row.distance > max_distance):
+                    continue
                 try:
                     spec_masked_all, freqs_masked = wall_detector.fill_from_row(row)
                 except Exception as e:
                     print("error with row", row)
                     print(e)
                     continue
-                p.update(d_idx)
-                d_idx += 1
-
+                p.update(counter)
                 if plot:
                     fig, ax = plt.subplots()
                     ax.pcolorfast(
@@ -93,12 +90,8 @@ def get_df_matrices(exp_name, max_distance=None, plot=False):
                         freqs_masked,
                         np.log10(spec_masked_all[:, 0, :]),
                     )
-                    ax.set_title(f"distance={distance}cm")
-
-        wall_detector.remove_bad_freqs(verbose=False, dryrun=False)
-        wall_detector.merge_close_freqs()
-        wall_detector.remove_spurious_freqs(verbose=False)
-
+                    ax.set_title(f"distance={row.distance}cm")
+        wall_detector.cleanup()
         df_amp, distances, frequencies = wall_detector.get_df_matrix()
 
         filter_dict.update({"exp_name": exp_name})

@@ -74,54 +74,66 @@ def get_calibration_function_dict(ax=None, **filter_dict):
 
 
 def fit_distance_slice(
-    slice_exp,
+    d_slice_exp,
     distances_cm,
     yaw_deg,
     frequency,
     chosen_mics,
     method="brute",
     optimize_absorption=False,
+    fit_one_gain=False,
 ):
+    """
+    :param d_slice_exp: matrix of magnitude measurements. shape: n_distances x n_mics x n_meas
+
+    """
     from scipy.optimize import minimize, brute
     from simulation import get_dist_slice_theory, WALL_ABSORPTION
 
-    def distance_slice_cost(coeffs, d_slice_exp_flat, chosen_mics):
+    def distance_slice_cost(coeffs, chosen_mics):
         if not optimize_absorption:
             coeffs = [WALL_ABSORPTION, *coeffs]
 
         d_slice = get_dist_slice_theory(
             frequency,
-            distances_cm=distances_cm + coeffs[2],
+            distances_cm=distances_cm + coeffs[1],
             yaw_deg=yaw_deg,
             wall_absorption=coeffs[0],
-            gain_x=coeffs[1],
+            gains=coeffs[2:],
             chosen_mics=chosen_mics,
         )
-        # Need to pass d_slice flattened because otherwise
-        # there is an error with args.
-        d_slice_exp = d_slice_exp_flat.reshape((-1, 4))[:, chosen_mics]
-
         # sanity check
-        assert d_slice.shape == d_slice_exp.shape
-        return np.linalg.norm(d_slice - d_slice_exp, ord=1)
+        assert d_slice.shape[:2] == d_slice_exp.shape[:2], (
+            d_slice.shape,
+            d_slice_exp.shape,
+        )
+        if d_slice_exp.ndim == 3:
+            diff = (
+                d_slice[:, :, None] - d_slice_exp
+            )  # can have multiple meas. along 3rd dimension
+        else:
+            diff = d_slice - d_slice_exp
+        return np.linalg.norm(diff[d_slice_exp > 0], ord=1)
 
-    assert slice_exp.shape[1] <= 4, "input has to be of shape n_freqs x n_mics!"
+    assert d_slice_exp.shape[1] == len(
+        chosen_mics
+    ), f"{d_slice_exp.shape}, {len(chosen_mics)}"
 
-    bounds = [[0.1, 10], [-1, 1]]
+    if fit_one_gain:
+        bounds = [[-1, 1], [0.1, 10]]  # offset, gains
+    else:
+        bounds = [[-1, 1]] + [[0.1, 10]] * len(chosen_mics)
+
     if optimize_absorption:
-        bounds = [[0, 1.0]] + bounds
+        bounds = [
+            [0, 0.99]
+        ] + bounds  # 1 would mean all energy lost and no interference.
+
     if method == "brute":
-        coeffs = brute(
-            distance_slice_cost, bounds, args=(slice_exp.flatten(), chosen_mics)
-        )
+        coeffs = brute(distance_slice_cost, bounds, args=(chosen_mics,))
     elif method == "minimize":
-        x0 = [(b[1] + b[0] / 2) for b in bounds]
-        sol = minimize(
-            distance_slice_cost,
-            x0,
-            args=(slice_exp.flatten(), chosen_mics),
-            bounds=bounds,
-        )
+        x0 = [(b[1] + b[0]) / 2 for b in bounds]
+        sol = minimize(distance_slice_cost, x0, args=(chosen_mics), bounds=bounds,)
         if not sol.success:
             print("Warning: did not converge", sol.message)
         coeffs = sol.x
@@ -131,14 +143,10 @@ def fit_distance_slice(
 
     d_slice = get_dist_slice_theory(
         frequency,
-        distances_cm=distances_cm + coeffs[2],
+        distances_cm=distances_cm + coeffs[1],
         yaw_deg=yaw_deg,
         wall_absorption=coeffs[0],
-        gain_x=coeffs[1],
+        gains=coeffs[2:],
         chosen_mics=chosen_mics,
     )
-    return (
-        coeffs,
-        d_slice,
-        distance_slice_cost(coeffs, slice_exp.flatten(), chosen_mics),
-    )
+    return coeffs, d_slice, distance_slice_cost(coeffs, chosen_mics)
