@@ -6,6 +6,10 @@ import pandas as pd
 from pandas_utils import filter_by_dict
 from wall_detector import WallDetector
 
+mag_threshs = {
+    '2021_02_25_wall': 1,
+    '2021_02_23_wall': 1e-2
+}
 
 def wall_detector_from_df(df_all, exp_name, mic_type, motors):
     chosen_dict = {
@@ -21,7 +25,7 @@ def wall_detector_from_df(df_all, exp_name, mic_type, motors):
 
     for i_row, row in df_filtered.iterrows():
         wall_detector.fill_from_row(row)
-    wall_detector.cleanup(verbose=True)
+    wall_detector.cleanup(mag_thresh=mag_threshs[exp_name], verbose=True)
     return wall_detector
 
 
@@ -45,5 +49,5 @@ if __name__ == "__main__":
             print("Error: run wall_analysis.py to parse experiments.")
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
-            generate_df_results(df_all, exp_name, mic_type, motors)
+            wall_detector = wall_detector_from_df(df_all, exp_name, mic_type, motors)
             wall_detector.backup(exp_name, mic_type, motors)

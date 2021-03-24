@@ -40,6 +40,7 @@ def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_ma
 def get_probability_fft(
     f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000
 ):
+    assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max)
     distances, mask = get_interference_distances(
         frequencies, mic_idx, distance_range, n_max=n_max
@@ -77,6 +78,7 @@ def get_posterior(abs_fft, sigma=None, data=None):
 def get_probability_bayes(
     f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000, sigma=None
 ):
+    assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
     distances, mask = get_interference_distances(
         frequencies, mic_idx, distance_range, n_max=n_max

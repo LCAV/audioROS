@@ -115,6 +115,8 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
 
 def find_indices(values_here, values):
     """ find the closest indices of an array (values_here) inside another array (values) """
+    values_here = np.array(values_here)
+    values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
         d_indices = np.where((values[:, None] == values_here[None, :]))[0]
         np.testing.assert_allclose(values[d_indices], values_here)
@@ -297,11 +299,14 @@ class WallDetector(object):
         max_freq=None,
         method=METHOD,
         normalize_method="",
+        mics=None
     ):
         """ 
         :return: slice along one distance, of shape (mic x frequencies), frequencies
         """
         df = sort_and_clip(self.df, min_freq, max_freq, name="frequency")
+        if mics is not None:
+            df = df.loc[df.mic.isin(mics)]
 
         distances = df.distance.unique()
         if distance is None:
@@ -318,12 +323,20 @@ class WallDetector(object):
         else:
             df = df.loc[df.distance == distance]
 
-        slice_f = df.pivot_table(
+        # it can happen that not all mics measure
+        # at the given frequency. 
+
+        pt = df.pivot_table(
             index="mic", columns="frequency", values="magnitude", aggfunc=method
-        ).values
-        freqs = df.frequency.unique()
+        )
+        slice_f = pt.values
+        freqs = pt.columns.values
+        all_mics = np.sort(self.df.mic.unique())
+        mics_here = pt.index.values
+        indices = find_indices(mics_here, all_mics)
         if normalize_method != "":
             gains_f = normalize_method(freqs)
+            gains_f = gains_f[indices, :]
             slice_f /= gains_f  # n_mics x n_freqs
 
             # TODO(FD): below is expensive and might not be necessary.
@@ -344,26 +357,8 @@ class WallDetector(object):
             # print("raw vs. median std:", np.round(stds, 2), np.round(stds_median))
             return slice_f, freqs, stds
         else:
-            stds = df.groupby("mic").magnitude.std()
+            stds = df.groupby("mic").magnitude.std().values
             return slice_f, freqs, stds
-
-    def get_frequency_slice_with_std(
-        self, distance=None, min_freq=None, max_freq=None, method=METHOD
-    ):
-        """ 
-        :return: slice along one distance, of shape (mic x frequencies), std dev (mic x frequencies), frequencies
-        """
-        slice_f, freqs = self.get_frequency_slice(
-            distance, min_freq, max_freq, method=METHOD
-        )
-        std_f, std_freqs = self.get_frequency_slice(
-            distance,
-            min_freq,
-            max_freq,
-            method=lambda x: normalized_std(x, method=METHOD),
-        )
-        np.testing.assert_equal(freqs, std_freqs)
-        return slice_f, std_f, freqs
 
     def get_distance_slice(
         self, frequency, min_dist=None, max_dist=None, method=METHOD, mics=None,
@@ -384,8 +379,8 @@ class WallDetector(object):
         mics = pt.index.values
         slice_d = pt.values
 
-        std = df.groupby("mic").magnitude.std()
-        return slice_d, distances, mics, std
+        stds = df.groupby("mic").magnitude.std()
+        return slice_d, distances, mics, stds
 
     def get_df_matrix(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None):
         df = clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
@@ -402,7 +397,6 @@ class WallDetector(object):
             distance_slice, distances_here, mics_here, std = self.get_distance_slice(
                 frequency
             )
-
             d_indices = find_indices(distances_here, distances)
             mic_indices = find_indices(mics_here, mics)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
@@ -531,9 +525,9 @@ class WallDetector(object):
         )
         self.df = self.df[mask]
 
-    def cleanup(self, verbose=False):
-        self.remove_bad_measurements()
-        self.remove_bad_freqs(verbose=verbose)
+    def cleanup(self, mag_thresh=MAG_THRESH, verbose=False):
+        self.remove_bad_measurements(mag_thresh)
+        self.remove_bad_freqs(mag_thresh, verbose=verbose)
         self.remove_outliers()
         self.merge_close_freqs(verbose=verbose)
         self.remove_spurious_freqs(verbose=verbose)
@@ -566,40 +560,105 @@ class WallDetector(object):
         """
         self.cleanup()
 
-        if method == "median":
-            pt = pd.pivot_table(
-                self.df,
-                values="magnitude",
-                index="mic",
-                columns="frequency",
-                aggfunc="median",
-            )
-            freqs = pt.columns.values
-            gains = pt.values
-            gains = fill_nans(gains, freqs)
-        elif method in ["fit", "fit-one"]:
-            mics = np.sort(self.df.mic.unique())
-            freqs = np.sort(self.df.frequency.unique())
-            gains = np.zeros((len(mics), len(freqs)))
-            for i_freq, freq in enumerate(freqs):
-                slice_d, distances, mics_here, *_ = self.get_distance_slice(freq)
-                slice_d = fill_nans(slice_d, distances)
-                coeffs_raw, d_slice_raw, cost_raw = fit_distance_slice(
-                    slice_d.T,
-                    distances,
-                    method="minimize",
-                    yaw_deg=0,
-                    frequency=freq,
-                    chosen_mics=mics_here,
-                    optimize_absorption=True,
-                    fit_one_gain=method == "fit-one",
-                )
-                mic_indices = np.where(mics_here[None, :] == mics[:, None])[0]
-                gains[mic_indices, i_freq] = coeffs_raw[2:]
+        mics = np.sort(self.df.mic.unique())
+        freqs = np.sort(self.df.frequency.unique())
+        gains = np.zeros((len(mics), len(freqs)))
+        n_dist = len(self.df.distance.unique())
+
+        for i_freq, freq in enumerate(freqs): 
+            df = self.df.loc[self.df.frequency==freq]
+
+            # do not have enough data to fit distance slice.
+            if len(df.distance.unique())/n_dist <= RATIO_MISSING_ALLOWED:
+                continue
+            if method == "fit-one":
+                coeffs_one, *_ = self.fit_to_median(freq, fit_one_gain=True)
+                gains[:, i_freq] = coeffs_one[2:]
+            else:
+                for i_mic, mic in enumerate(mics):
+                    df_here = df.loc[df.mic==mic]
+                    if len(df_here.distance.unique())/n_dist <= RATIO_MISSING_ALLOWED:
+                        continue
+                    if method == "median":
+                        gains[i_mic, i_freq] = df_here.magnitude.median()
+                    elif method == "fit":
+                        coeffs, *_ = self.fit_to_median(freq, mic_idx=mic)
+                        if coeffs is not None:
+                            gains[i_mic, i_freq] = coeffs[2]
+
+        # TODO(FD) figure out more elegant way to do this. 
+        missing = np.any(gains<1, axis=0)
+        freqs = freqs[~missing]
+        gains = gains[:, ~missing]
 
         calib_function = interp1d(
-            freqs, gains, kind="quadratic", fill_value="extrapolate", assume_sorted=True
+            freqs, gains, kind="cubic", fill_value="extrapolate", assume_sorted=True
         )
         if ax is not None:
             plot_calibration(freqs, gains, calib_function, ax=ax)
         return calib_function
+
+    def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
+        from calibration import fit_distance_slice
+        df_here = self.filter_by_freq(frequency)
+        frequency_here = df_here.frequency.unique()[0]
+        if mic_idx is not None:
+            df_here = df_here.loc[df_here.mic == mic_idx]
+            chosen_mics = [mic_idx]
+        else:
+            chosen_mics = np.sort(df_here.mic.unique())
+
+        distances_raw = np.sort(df_here.distance.unique())
+        mags_pt = pd.pivot_table(
+            df_here, values="magnitude", index=["mic", "distance"], columns="counter", fill_value=0.0)
+        counters = mags_pt.columns.values
+        raw_values = np.empty((len(distances_raw), len(chosen_mics), len(counters)))
+        for i, mic in enumerate(chosen_mics): 
+            # get table corresponding to this mic
+            table = mags_pt[(mags_pt.index.get_level_values("mic")==mic)]
+
+            # will raw values with corresponding magnitudes
+            distances_here = table.index.get_level_values("distance")
+            indices = find_indices(distances_here, distances_raw)
+            new_values = table.values
+            raw_values[indices, i, :new_values.shape[-1]] = new_values 
+
+        coeffs_raw, d_slice_raw, cost_raw = fit_distance_slice(
+            raw_values,
+            distances_raw,
+            method="minimize",
+            yaw_deg=YAW_DEG,
+            frequency=frequency_here,
+            chosen_mics=chosen_mics,
+            optimize_absorption=True,
+            fit_one_gain=fit_one_gain,
+        )
+        return coeffs_raw, distances_raw, d_slice_raw, cost_raw
+
+    def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
+        from calibration import fit_distance_slice
+        df_here = self.filter_by_freq(frequency)
+        frequency_here = df_here.frequency.unique()[0]
+        if mic_idx is not None:
+            df_here = df_here.loc[df_here.mic == mic_idx]
+            chosen_mics = [mic_idx]
+        else:
+            chosen_mics = np.sort(df_here.mic.unique())
+
+        distance_slices, distances_median, mics_here, *_ = self.get_distance_slice(frequency)
+        if not len(set(chosen_mics).intersection(mics_here)):
+            return None, None, None, None
+        indices = find_indices(chosen_mics, mics_here)
+        distance_slices = distance_slices[indices, :]
+        
+        coeffs_median, d_slice_median, cost_median = fit_distance_slice(
+            distance_slices.T,
+            distances_median,
+            method="minimize",
+            yaw_deg=YAW_DEG,
+            frequency=frequency_here,
+            chosen_mics=chosen_mics,
+            optimize_absorption=True,
+            fit_one_gain=fit_one_gain,
+        )
+        return coeffs_median, d_slice_median, distances_median, cost_median

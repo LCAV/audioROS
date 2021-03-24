@@ -9,13 +9,17 @@ import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 
+OFFSET_BOUNDS = [-1, 1]
+GAIN_BOUNDS = [0.1, 10]
+# wall absorption bounds: 1 would mean all energy lost and no interference.
+ABS_BOUNDS = [0.2, 0.8] 
 
 def plot_calibration(x, ys, function, ax):
     uniform_x = np.linspace(min(x), max(x), 100)
     uniform_ys = function(uniform_x)
     for i in range(ys.shape[0]):
-        ax.semilogy(x, ys[i], color=f"C{i}", label=f"mic{i}")
-        ax.scatter(uniform_x, uniform_ys[i], color=f"C{i}")
+        ax.scatter(x, ys[i], color=f"C{i}", label=f"mic{i}")
+        ax.semilogy(uniform_x, uniform_ys[i], color=f"C{i}")
     ax.grid("both")
     ax.set_xlabel("frequency [Hz]")
     ax.set_ylabel("amplitude")
@@ -73,6 +77,13 @@ def get_calibration_function_dict(ax=None, **filter_dict):
     return get_calibration_function_matrix(row.df_matrix, row.df_freq, ax=ax)
 
 
+def get_calibration_function_new(exp_name, mic_type, method="fit", ax=None, motors=0):
+    from wall_detector import WallDetector
+    wall_detector = WallDetector()
+    wall_detector.fill_from_backup(exp_name, mic_type, motors=motors)
+    return wall_detector.get_calib_function(method=method, ax=ax)
+
+
 def fit_distance_slice(
     d_slice_exp,
     distances_cm,
@@ -85,6 +96,7 @@ def fit_distance_slice(
 ):
     """
     :param d_slice_exp: matrix of magnitude measurements. shape: n_distances x n_mics x n_meas
+    set missing measurements to zero or nan
 
     """
     from scipy.optimize import minimize, brute
@@ -119,15 +131,15 @@ def fit_distance_slice(
         chosen_mics
     ), f"{d_slice_exp.shape}, {len(chosen_mics)}"
 
+    if np.any(np.isnan(d_slice_exp)):
+        d_slice_exp[np.isnan(d_slice_exp)] = 0
     if fit_one_gain:
-        bounds = [[-1, 1], [0.1, 10]]  # offset, gains
+        bounds = [OFFSET_BOUNDS, GAIN_BOUNDS]  # offset, gains
     else:
-        bounds = [[-1, 1]] + [[0.1, 10]] * len(chosen_mics)
+        bounds = [OFFSET_BOUNDS] + [GAIN_BOUNDS]*len(chosen_mics)
 
     if optimize_absorption:
-        bounds = [
-            [0, 0.99]
-        ] + bounds  # 1 would mean all energy lost and no interference.
+        bounds = [ABS_BOUNDS] + bounds  
 
     if method == "brute":
         coeffs = brute(distance_slice_cost, bounds, args=(chosen_mics,))
