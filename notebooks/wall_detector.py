@@ -25,9 +25,13 @@ YAW_DEG = 0  # drone angle used for when nothing else is given.
 # parameters for cleaning signals
 N_SPURIOUS = 2  # number of samples per frequency
 MAG_THRESH = 1e-3  # minimum magnitude
-STD_THRESH = 2.0  # maximum std deviation
-DELTA_MERGE_FREQ = 100  # frequencies spaced by less than this are considered one
+STD_THRESH = 0.5  # maximum normalized std deviation
+DELTA_MERGE_FREQ = 50  # frequencies spaced by less than this are considered one. current buzzer spacing: 125
 RATIO_MISSING_ALLOWED = 0.2
+
+
+def sorted_and_unique(df, name):
+    return np.sort(df[name].dropna().unique())
 
 
 def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
@@ -114,7 +118,7 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
 
 
 def find_indices(values_here, values):
-    """ find the closest indices of an array (values_here) inside another array (values) """
+    """ find the indices of an array (values_here) inside another array (values) """
     values_here = np.array(values_here)
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
@@ -125,33 +129,51 @@ def find_indices(values_here, values):
     return d_indices
 
 
+def find_closest_indices(values_here, values):
+    """ find the closest indices of an array (values_here) inside another array (values) """
+    values_here = np.array(values_here)
+    values = np.array(values)
+    if (len(values_here) != len(values)) or not np.allclose(values, values_here):
+        d_indices = np.argmin(np.abs(values[:, None] - values_here[None, :]), axis=0)
+    else:
+        d_indices = np.arange(len(values))
+    return d_indices
+
+
 def prune_df_matrix(
     df_matrix, frequencies, ratio_missing_allowed=RATIO_MISSING_ALLOWED, verbose=False
 ):
     """ Remove all rows with more than a certain percentage of missing values """
+    df_matrix[np.isnan(df_matrix)] = 0
 
-    count_missing = np.sum(np.isnan(df_matrix), axis=(2))
+    # we also consider very small values as missing.
+    eps = 1e-10
+    count_missing = np.sum(df_matrix < eps, axis=2)
     freq_i = np.where(
         np.all(count_missing / df_matrix.shape[2] <= ratio_missing_allowed, axis=0)
     )[0]
     if verbose:
         print(f"keeping {len(freq_i)}/{len(frequencies)} frequencies")
+    df_matrix[df_matrix < eps] = np.nan
     return df_matrix[:, freq_i, :], frequencies[freq_i], freq_i
 
 
+# TODO: remove?
 def clip(df, min_val, max_val, name="frequency"):
     if min_val is None:
-        min_val = min(df[name])
+        min_val = df[name].min()
     if max_val is None:
-        max_val = max(df[name])
+        max_val = df[name].max()
     return df.loc[(df[name] >= min_val) & (df[name] <= max_val)]
 
 
+# TODO: remove?
 def clip_both(df, min_freq, max_freq, min_dist, max_dist):
     df = clip(df, min_freq, max_freq, name="frequency")
     return clip(df, min_dist, max_dist, name="distance")
 
 
+# TODO: remove?
 def sort_and_clip(df, min_val, max_val, name="frequency"):
     df = df.sort_values(by=name, axis=0, inplace=False)
     if min_val is None:
@@ -202,21 +224,17 @@ class WallDetector(object):
         wall_detector.cleanup(verbose=verbose)
         return wall_detector
 
-    def filter_by_freq(self, frequency):
-        frequencies = self.df.frequency.unique()
-        if frequency is None:
-            if len(frequencies) > 1:
-                print(
-                    f"Warning: taking distance slice over multiple frequencies: {frequencies}"
-                )
-        elif frequency not in frequencies:
-            print(f"Warning: did not find frequency {frequency}Hz")
-            bin_ = np.argmin(np.abs(frequencies - frequency))
-            frequency = frequencies[bin_]
-            print(f"Closest match: {frequency}Hz")
-            df = self.df.loc[self.df.frequency == frequency]
-        else:
-            df = self.df.loc[self.df.frequency == frequency]
+    def filter_by_column(self, column_value, column_name="frequency"):
+        values = self.df[column_name].unique()
+        if column_value is None:
+            if len(values) > 1:
+                print(f"Warning: taking slice over multiple values: {values}")
+        elif column_value not in values:
+            print(f"Warning: did not find {column_name} {column_value}Hz")
+            bin_ = np.argmin(np.abs(values - column_value))
+            column_value = values[bin_]
+            print(f"Closest match: {column_value}Hz")
+        df = self.df.loc[self.df[column_name] == column_value]
         return df
 
     def get_linear_kwargs(self):
@@ -237,6 +255,15 @@ class WallDetector(object):
             return None
         else:
             return kwargs
+
+    def get_mics(self):
+        return sorted_and_unique(self.df, "mic")
+
+    def get_distances(self):
+        return sorted_and_unique(self.df, "distance")
+
+    def get_frequencies(self):
+        return sorted_and_unique(self.df, "frequency")
 
     def fill_from_row(self, row, verbose=False, mask=True):
         distance = row.get("distance", DISTANCE)
@@ -292,46 +319,23 @@ class WallDetector(object):
         # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
 
-    def get_frequency_slice(
-        self,
-        distance=None,
-        min_freq=None,
-        max_freq=None,
-        method=METHOD,
-        normalize_method="",
-        mics=None
-    ):
+    def get_frequency_slice(self, distance=None, normalize_method="", mics=None):
         """ 
-        :return: slice along one distance, of shape (mic x frequencies), frequencies
+        :return: slice along one distance, of shape (mic x frequencies), frequencies, stds
         """
-        df = sort_and_clip(self.df, min_freq, max_freq, name="frequency")
+        df = self.filter_by_column(distance, "distance")
+
         if mics is not None:
             df = df.loc[df.mic.isin(mics)]
 
-        distances = df.distance.unique()
-        if distance is None:
-            if len(distances) > 1:
-                print(
-                    f"Warning: taking frequency slice over multiple distances: {distances}"
-                )
-        elif distance not in distances:
-            print(f"Warning: did not find distance {distance}cm")
-            bin_ = np.argmin(np.abs(distances - distance))
-            distance = distances[bin_]
-            print(f"Closest match: {distance}cm")
-            df = df.loc[df.distance == distance]
-        else:
-            df = df.loc[df.distance == distance]
-
         # it can happen that not all mics measure
-        # at the given frequency. 
-
+        # at the given frequency.
+        all_mics = self.get_mics()
         pt = df.pivot_table(
-            index="mic", columns="frequency", values="magnitude", aggfunc=method
+            index="mic", columns="frequency", values="magnitude", aggfunc=METHOD
         )
         slice_f = pt.values
         freqs = pt.columns.values
-        all_mics = np.sort(self.df.mic.unique())
         mics_here = pt.index.values
         indices = find_indices(mics_here, all_mics)
         if normalize_method != "":
@@ -360,20 +364,70 @@ class WallDetector(object):
             stds = df.groupby("mic").magnitude.std().values
             return slice_f, freqs, stds
 
-    def get_distance_slice(
-        self, frequency, min_dist=None, max_dist=None, method=METHOD, mics=None,
+    def get_frequency_slice_fixed(
+        self,
+        frequencies,
+        distance=None,
+        normalize_method="",
+        mics=None,
+        verbose=False,
+        allowed_delta=50,
     ):
-        """ 
-        :return: slice along one frequency, of shape (mic x distances), distances
+        """ Give frequency slice for fixed frequencies.
+
+        :param frequencies: list of frequencies we want to evaluate at. 
+        :param allowed_delta: if absolute difference between measured frequency and given frequency
+        is smaller than this, we still use it in the frequency slice. 
+
+        :return: slice along one distance, of shape (mic x frequencies), used frequencies, stds.
         """
-        df = sort_and_clip(self.df, min_dist, max_dist, name="distance")
-        df = self.filter_by_freq(frequency)
+        df = self.filter_by_column(distance, "distance")
 
         if mics is not None:
             df = df.loc[df.mic.isin(mics)]
 
+        # it can happen that not all mics measure
+        # at the given frequency.
+        all_mics = self.get_mics()
         pt = df.pivot_table(
-            index="mic", columns="distance", values="magnitude", aggfunc=method
+            index="mic", columns="frequency", values="magnitude", aggfunc=METHOD
+        )
+        slice_f = pt.values
+        freqs_here = pt.columns.values
+        f_indices = find_closest_indices(frequencies, freqs_here)
+
+        if verbose:
+            diff = freqs_here[f_indices] - frequencies
+            print("evaluating at", freqs_here[f_indices], "instead of", frequencies)
+            print("difference:", diff)
+            f_indices = f_indices[np.abs(diff) < allowed_delta]
+        slice_f = slice_f[:, f_indices]
+        freqs = freqs_here[f_indices]
+
+        mics_here = pt.index.values
+        m_indices = find_indices(mics_here, all_mics)
+        if normalize_method != "":
+            gains_f = normalize_method(freqs)
+            gains_f = gains_f[m_indices, :]
+            slice_f /= gains_f  # n_mics x n_freqs
+
+            stds = np.nanstd(slice_f, axis=1)
+            return slice_f, freqs, stds
+        else:
+            stds = df.groupby("mic").magnitude.std().values
+            return slice_f, freqs, stds
+
+    def get_distance_slice(self, frequency, mic=None):
+        """ 
+        :return: slice along one frequency, of shape (mic x distances), distances
+        """
+        df = self.filter_by_column(frequency, "frequency")
+
+        if mic is not None:
+            df = df.loc[df.mic == mic]
+
+        pt = df.pivot_table(
+            index="mic", columns="distance", values="magnitude", aggfunc=METHOD
         )
         distances = pt.columns.values
         mics = pt.index.values
@@ -382,16 +436,12 @@ class WallDetector(object):
         stds = df.groupby("mic").magnitude.std()
         return slice_d, distances, mics, stds
 
-    def get_df_matrix(self, max_freq=None, min_freq=None, min_dist=None, max_dist=None):
-        df = clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
-        mics = np.sort(np.array(df.mic.unique(), dtype=np.int))
+    def get_df_matrix(self):
+        mics = sorted_and_unique(self.df, "mic").astype(np.int)
+        frequencies = sorted_and_unique(self.df, "frequency").astype(np.float)
+        distances = sorted_and_unique(self.df, "distance").astype(np.float)
         n_mics = len(mics)
-        frequencies = np.sort(np.array(df.frequency.unique(), dtype=np.float))
-        distances = np.sort(np.array(df.distance.unique(), dtype=np.float))
 
-        # Attention: below only works if distance "masks" are the same for each mic.
-        # This is currently the case.
-        # Otherwise, get_df_matrix_old can be used.
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
         for i_f, frequency in enumerate(frequencies):
             distance_slice, distances_here, mics_here, std = self.get_distance_slice(
@@ -402,14 +452,12 @@ class WallDetector(object):
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
         return df_matrix, distances, frequencies
 
-    def get_df_matrix_old(
-        self, max_freq=None, min_freq=None, min_dist=None, max_dist=None, method=METHOD
-    ):
-        df = clip_both(self.df, min_dist, max_dist, min_freq, max_freq)
+    def get_df_matrix_old(self):
+        df = self.df
         n_mics = len(df.mic.unique())
 
-        frequencies = np.sort(np.array(df.frequency.unique(), dtype=np.float))
-        distances = np.sort(np.array(df.distance.unique(), dtype=np.float))
+        frequencies = sorted_and_unique(df, "frequency")
+        distances = sorted_and_unique(df, "distance")
 
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
         for (d, f, m), df in self.df.groupby(["distance", "frequency", "mic"]):
@@ -418,26 +466,31 @@ class WallDetector(object):
                 f_i = np.where(frequencies == f)[0][0]
             except:
                 continue
-            df_matrix[m, f_i, d_i] = method(df.magnitude.values)
+            df_matrix[m, f_i, d_i] = METHOD(df.magnitude.values)
         return df_matrix, distances, frequencies
 
-    def remove_nan_rows(self):
+    def remove_nan_rows(self, verbose=False):
+        if verbose:
+            print(f"dropping {len(self.df.loc[self.df.magnitude.isnull()])} rows")
         self.df.dropna(axis=0, subset=["magnitude"], inplace=True)
 
     def merge_close_freqs(
         self, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False, dryrun=False
     ):
         """ Merge frequency bins that are closer than delta. """
-        curr_f = curr_unique = self.df.frequency.min()
+        curr_unique = self.df.frequency.dropna().min()
         merge_dict = {curr_unique: []}
-        # for f in unique_frequencies[1:]:
         for f, df in self.df.groupby("frequency", sort=True):
+            # print(f'delta for {f}: {f - curr_unique}')
             if f - curr_unique < delta_merge_freq:
                 merge_dict[curr_unique] += list(df.index)
             else:
-                merge_dict[f] = list(df.index)
-                curr_uniqe = f
-            curr_f = f
+                if verbose:
+                    print(
+                        f"will be merged to {curr_unique}: {self.df.loc[merge_dict[curr_unique]].frequency.unique()}"
+                    )
+                curr_unique = f
+                merge_dict[curr_unique] = list(df.index)
 
         if verbose:
             print(
@@ -445,7 +498,8 @@ class WallDetector(object):
             )
         for start_f, index in merge_dict.items():
             average_f = np.round(self.df.loc[index].frequency.mean())
-            self.df.loc[index].frequency = average_f
+            self.df.loc[index, "frequency"] = average_f
+        assert len(self.df.frequency.unique()) == len(merge_dict)
 
     def remove_spurious_freqs(self, n_spurious=N_SPURIOUS, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """
@@ -467,6 +521,7 @@ class WallDetector(object):
                 f"remove frequencies with less than {n_spurious} measurements. {np.min(values), np.max(values), np.median(values)}"
             )
 
+        remove_names = []
         for (freq, mic, distance), df in self.df.groupby(
             ["frequency", "mic", "distance"]
         ):
@@ -474,8 +529,11 @@ class WallDetector(object):
                 # if verbose:
                 #   print('removing', df)
                 remove_rows += list(df.index.values)
+                remove_names += [(freq, mic, distance)]
         if verbose:
-            print(f"remove_spurious_freqs: removing {len(remove_rows)} rows.")
+            print(
+                f"remove_spurious_freqs: removing {len(remove_rows)} rows: {remove_names}"
+            )
         if not dryrun:
             self.df = self.df.drop(index=remove_rows, inplace=False)
         if len(self.df) == 0:
@@ -486,10 +544,11 @@ class WallDetector(object):
         self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)
 
-    def remove_bad_freqs(
-        self, mag_thresh=MAG_THRESH, std_thresh=STD_THRESH, verbose=False, dryrun=False
-    ):
+    # TODO(FD) remove if not used anymore
+    def remove_bad_freqs(self, verbose=False, dryrun=False):
         """ Remove the frequencies with too low medians or too high standard deviation. """
+        mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
+        std_thresh = self.params.get("std_thresh", STD_THRESH)
         remove_rows = []
 
         for freq, df in self.df.groupby("frequency", sort=True):
@@ -502,8 +561,10 @@ class WallDetector(object):
                 if verbose:
                     print(f"removing {freq} with std {normalized_std(vals)}")
                 remove_rows += list(df.index.values)
-            # else:
-            #    print(f"keeping {freq}: {np.nanmedian(vals):.2e}, {normalized_std(vals):.2e}")
+            else:
+                print(
+                    f"keeping {freq}: {np.nanmedian(vals):.2e}, {normalized_std(vals):.2e}"
+                )
         if verbose:
             print(f"remove_bad_freqs: removing {len(remove_rows)} rows.")
         if not dryrun:
@@ -513,29 +574,50 @@ class WallDetector(object):
             print("Warning: remove_bad_freqs removed all rows.")
         return len(remove_rows)
 
-    def remove_bad_measurements(self, mag_thresh=MAG_THRESH):
-        self.df = self.df[self.df.magnitude > mag_thresh]
+    # TODO(FD) remove if not used anymore
+    def remove_bad_measurements(self, mag_thresh=MAG_THRESH, verbose=False):
+        mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
+        mask = self.df.magnitude < mag_thresh
+        if verbose:
+            print(f"removing {np.sum(mask)} rows")
+        self.df = self.df.loc[~mask]
+        mask = self.df.magnitude > mag_thresh
 
-    def remove_outliers(self, factor=3):
-        median_magnitude = self.df.magnitude.median()
-        window = self.df.magnitude.std() * factor
-        mask = np.bitwise_and(
-            self.df.magnitude > median_magnitude - window,
-            self.df.magnitude < median_magnitude + window,
-        )
-        self.df = self.df[mask]
+    def remove_outliers(self, factor=3, normalize=True, verbose=False):
+        index_remove = []
+        for (mic, d, f), df_dist in self.df.groupby(["mic", "distance", "frequency"]):
+            median_magnitude = df_dist.magnitude.median()
+            if normalize:
+                std = normalized_std(df_dist.magnitude.values)
+            else:
+                std = df_dist.magnitude.std()
+            window = std * factor
+            index_here = df_dist[
+                (df_dist.magnitude < median_magnitude - window)
+                | (df_dist.magnitude > median_magnitude + window)
+            ].index
+            index_remove += list(index_here)
+            if verbose and len(index_here) > 0:
+                print(
+                    f"{mic, d, f}: removing {len(index_here)} measurements outside of {median_magnitude - window:.1f}, {median_magnitude + window:.1f}"
+                )
+        self.df = self.df.drop(index=index_remove)
 
-    def cleanup(self, mag_thresh=MAG_THRESH, verbose=False):
-        self.remove_bad_measurements(mag_thresh)
-        self.remove_bad_freqs(mag_thresh, verbose=verbose)
-        self.remove_outliers()
+    def cleanup(self, verbose=False):
+        self.remove_nan_rows()
+        # TODO(FD) make sure these don't really help
+        # self.remove_bad_measurements()
+        # self.remove_bad_freqs(verbose=verbose)
         self.merge_close_freqs(verbose=verbose)
+        self.remove_outliers()
         self.remove_spurious_freqs(verbose=verbose)
         self.remove_nan_rows()
         self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
 
-    def fill_from_backup(self, exp_name, mic_type="audio_deck", motors="0"):
-        fname = f"results/backup_{exp_name}_{mic_type}_{motors}.pkl"
+    def fill_from_backup(
+        self, exp_name, mic_type="audio_deck", motors="0", appendix=""
+    ):
+        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{appendix}.pkl"
         try:
             self.df = pd.read_pickle(fname)
             print("read", fname)
@@ -544,11 +626,12 @@ class WallDetector(object):
             print(f"did not find {fname}")
             return False
 
-    def backup(self, exp_name, mic_type="audio_deck", motors="0"):
-        fname = f"results/backup_{exp_name}_{mic_type}_{motors}.pkl"
+    def backup(self, exp_name, mic_type="audio_deck", motors="0", appendix=""):
+        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{appendix}.pkl"
         pd.to_pickle(self.df, fname)
         print("saved", fname)
 
+    # TODO(FD): below are potentially deprecated.
     def get_calib_function(self, method="median", ax=None):
         from scipy.interpolate import interp1d
         from calibration import plot_calibration
@@ -558,41 +641,42 @@ class WallDetector(object):
         calib_function(freqs) => (n_mics x n_freqs) calibration gains. 
 
         """
-        self.cleanup()
+        mics = self.get_mics()
+        freqs = self.get_frequencies()
+        distances = self.get_distances()
 
-        mics = np.sort(self.df.mic.unique())
-        freqs = np.sort(self.df.frequency.unique())
+        n_dist = len(distances)
         gains = np.zeros((len(mics), len(freqs)))
-        n_dist = len(self.df.distance.unique())
 
-        for i_freq, freq in enumerate(freqs): 
-            df = self.df.loc[self.df.frequency==freq]
-
-            # do not have enough data to fit distance slice.
-            if len(df.distance.unique())/n_dist <= RATIO_MISSING_ALLOWED:
+        for i_freq, (freq, df) in enumerate(self.df.groupby("frequency")):
+            # don't have enough data to fit distance slice.
+            if len(sorted_and_unique(df, "distance")) / n_dist <= RATIO_MISSING_ALLOWED:
                 continue
             if method == "fit-one":
                 coeffs_one, *_ = self.fit_to_median(freq, fit_one_gain=True)
                 gains[:, i_freq] = coeffs_one[2:]
             else:
-                for i_mic, mic in enumerate(mics):
-                    df_here = df.loc[df.mic==mic]
-                    if len(df_here.distance.unique())/n_dist <= RATIO_MISSING_ALLOWED:
+                for i_mic, (mic, df_here) in enumerate(df.groupby("mic")):
+                    if (
+                        len(sorted_and_unique(df_here, "distance")) / n_dist
+                        <= RATIO_MISSING_ALLOWED
+                    ):
                         continue
                     if method == "median":
                         gains[i_mic, i_freq] = df_here.magnitude.median()
+
                     elif method == "fit":
                         coeffs, *_ = self.fit_to_median(freq, mic_idx=mic)
                         if coeffs is not None:
                             gains[i_mic, i_freq] = coeffs[2]
 
-        # TODO(FD) figure out more elegant way to do this. 
-        missing = np.any(gains<1, axis=0)
-        freqs = freqs[~missing]
-        gains = gains[:, ~missing]
+        # TODO(FD) figure out more elegant way to do this.
+        not_all_missing = np.any(gains > 0, axis=0)
+        freqs = freqs[not_all_missing]
+        gains = gains[:, not_all_missing]
 
         calib_function = interp1d(
-            freqs, gains, kind="cubic", fill_value="extrapolate", assume_sorted=True
+            freqs, gains, kind="linear", fill_value="extrapolate", assume_sorted=True
         )
         if ax is not None:
             plot_calibration(freqs, gains, calib_function, ax=ax)
@@ -600,28 +684,34 @@ class WallDetector(object):
 
     def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
         from calibration import fit_distance_slice
-        df_here = self.filter_by_freq(frequency)
+
+        df_here = self.filter_by_column(frequency, "frequency")
         frequency_here = df_here.frequency.unique()[0]
         if mic_idx is not None:
             df_here = df_here.loc[df_here.mic == mic_idx]
             chosen_mics = [mic_idx]
         else:
-            chosen_mics = np.sort(df_here.mic.unique())
+            chosen_mics = sorted_and_unique(df_here, "mic")
 
-        distances_raw = np.sort(df_here.distance.unique())
+        distances_raw = sorted_and_unique(df_here, "distance")
         mags_pt = pd.pivot_table(
-            df_here, values="magnitude", index=["mic", "distance"], columns="counter", fill_value=0.0)
+            df_here,
+            values="magnitude",
+            index=["mic", "distance"],
+            columns="counter",
+            fill_value=0.0,
+        )
         counters = mags_pt.columns.values
         raw_values = np.empty((len(distances_raw), len(chosen_mics), len(counters)))
-        for i, mic in enumerate(chosen_mics): 
+        for i, mic in enumerate(chosen_mics):
             # get table corresponding to this mic
-            table = mags_pt[(mags_pt.index.get_level_values("mic")==mic)]
+            table = mags_pt[(mags_pt.index.get_level_values("mic") == mic)]
 
             # will raw values with corresponding magnitudes
             distances_here = table.index.get_level_values("distance")
             indices = find_indices(distances_here, distances_raw)
             new_values = table.values
-            raw_values[indices, i, :new_values.shape[-1]] = new_values 
+            raw_values[indices, i, : new_values.shape[-1]] = new_values
 
         coeffs_raw, d_slice_raw, cost_raw = fit_distance_slice(
             raw_values,
@@ -637,27 +727,20 @@ class WallDetector(object):
 
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
         from calibration import fit_distance_slice
-        df_here = self.filter_by_freq(frequency)
-        frequency_here = df_here.frequency.unique()[0]
-        if mic_idx is not None:
-            df_here = df_here.loc[df_here.mic == mic_idx]
-            chosen_mics = [mic_idx]
-        else:
-            chosen_mics = np.sort(df_here.mic.unique())
 
-        distance_slices, distances_median, mics_here, *_ = self.get_distance_slice(frequency)
-        if not len(set(chosen_mics).intersection(mics_here)):
-            return None, None, None, None
-        indices = find_indices(chosen_mics, mics_here)
-        distance_slices = distance_slices[indices, :]
-        
+        df_here = self.filter_by_column(frequency, "frequency")
+        frequency_here = df_here.frequency.unique()[0]
+
+        distance_slices, distances_median, mics_here, *_ = self.get_distance_slice(
+            frequency, mic=mic_idx
+        )
         coeffs_median, d_slice_median, cost_median = fit_distance_slice(
             distance_slices.T,
             distances_median,
             method="minimize",
             yaw_deg=YAW_DEG,
             frequency=frequency_here,
-            chosen_mics=chosen_mics,
+            chosen_mics=mics_here,
             optimize_absorption=True,
             fit_one_gain=fit_one_gain,
         )

@@ -12,7 +12,7 @@ YAW_DEG = 0
 
 def get_abs_fft(f_slice, n_max=1000, norm=True):
     if norm:
-        f_slice_norm = f_slice - np.mean(f_slice)
+        f_slice_norm = f_slice - np.nanmean(f_slice)
     else:
         f_slice_norm = f_slice
     n = max(len(f_slice), n_max)
