@@ -4,126 +4,24 @@ import numpy as np
 import pyroomacoustics as pra
 
 from audio_stack.beam_former import rotate_mics
+from crazyflie_description_py.parameters import FS, N_BUFFER
+
 from constants import SPEED_OF_SOUND
-from crazyflie_description_py.parameters import (
-    MIC_POSITIONS,
-    BUZZER_POSITION,
-    FS,
-    N_BUFFER,
-)
 from frequency_analysis import get_bin
+from geometry import *
 
 sys.path.append("../crazyflie-audio/python")
 from signals import generate_signal
 
 DURATION_SEC = 38
 N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
-# default difference between mic and speaker, in meters:
-D0 = 0.1
+
 # default wall absorption (percentage of amplitude that is lost in reflection):
 WALL_ABSORPTION = 0.2
 GAIN = 1.0
 YAW_DEG = 0
-
-# this corresponds to the setup in BC325 with stepper motor:
-Y_OFFSET = 0.08  # in meters
-YAW_OFFSET = -132  # in degrees
-ROOM_DIM = [10, 8]
-
-### geometry ###
-
-
-def get_delta(distance_cm, beta_rad, d0_cm=5):
-    """
-    :param distance_cm: orthogonal distance from wall
-    :param beta_rad: angle between mic-source and wall normal
-    :return: difference in path length between reflection and direct path and 
-    """
-    distance_cm = (
-        np.array([distance_cm]) if type(distance_cm) != np.ndarray else distance_cm
-    )
-    beta_rad = np.array([beta_rad]) if type(beta_rad) != np.ndarray else beta_rad
-    d1_cm = np.sqrt(
-        d0_cm ** 2 + 4 * distance_cm ** 2 - 4 * distance_cm * d0_cm * np.cos(beta_rad)
-    )
-    return d1_cm - d0_cm
-
-
-def get_orthogonal_distance(delta_cm, beta_rad, d0_cm=5):
-    """
-    :param delta_cm: difference in path length between reflection and direct path
-    :param beta_rad: angle between mic-source and wall normal
-    :return: orthogonal distance from wall
-    """
-    delta_cm = np.array([delta_cm]) if type(delta_cm) != np.ndarray else delta_cm
-    beta_rad = np.array([beta_rad]) if type(beta_rad) != np.ndarray else beta_rad
-    d1 = delta_cm + d0_cm
-    d0cos = d0_cm * np.cos(beta_rad)
-    d_cm = 0.5 * (
-        d0cos[:, None] + np.sqrt(d0cos[:, None] ** 2 + d1[None, :] ** 2 - d0_cm ** 2)
-    )
-    return d_cm
-
-
-def get_setup(distance_cm=0, yaw_deg=YAW_DEG, ax=None):
-    offset = [ROOM_DIM[0] / 2, Y_OFFSET + distance_cm * 1e-2]
-    mic_positions = np.array(MIC_POSITIONS)
-    source = np.array(BUZZER_POSITION).flatten() + offset
-    mic_positions = offset + rotate_mics(mic_positions, YAW_OFFSET - yaw_deg)
-
-    if ax is not None:
-        source_image = [source[0], -source[1]]
-        for i, mic in enumerate(mic_positions):
-            d = mic[1] * 100
-            ax.scatter(*mic, label=f"mic{i}, d={d:.1f}cm", color=f"C{i}")
-        ax.plot([0, ROOM_DIM[0]], [0, 0], label="wall", color="k")
-        ax.scatter(*source, label="buzzer", color="C4")
-        ax.scatter(*source_image, label="buzzer image", color="C4", marker="x")
-        ymin = -source[1] - 0.5
-        ymax = source[1] + 0.5
-        delta = (ymax - ymin) / 2
-        ax.set_ylim(ymin, ymax)
-        ax.set_xlim(source[0] - delta, source[0] + delta)
-        # ax.axis('equal')
-
-    return source, mic_positions
-
-
-def get_deltas_from_global(yaw_deg, distances_cm, mic_idx, ax=None):
-    mic = np.array(MIC_POSITIONS)[mic_idx, :2]
-    source = np.array(BUZZER_POSITION)[:2]
-    vec = (mic - source).flatten()
-    d0_cm = np.linalg.norm(vec) * 100
-
-    distances_here = np.array(distances_cm) + (Y_OFFSET * 100)
-    yaw_here = (YAW_OFFSET - np.array(yaw_deg)) / 180 * np.pi
-    beta_here = np.arctan2(vec[1], vec[0]) + np.pi / 2 + yaw_here
-
-    deltas = get_delta(distances_here, beta_here, d0_cm=d0_cm).flatten() * 1e-2
-    if ax is not None:
-        ax.plot(
-            [0, d0_cm * np.cos(beta_here)],
-            [0, d0_cm * np.sin(beta_here)],
-            color=f"C{mic_idx}",
-            label=f"mic{mic_idx}",
-            marker="o",
-        )
-    return deltas, d0_cm * 1e-2
-
-
-def get_orthogonal_distance_from_global(yaw_deg, deltas_cm, mic_idx, ax=None):
-    mic = np.array(MIC_POSITIONS)[mic_idx, :2]
-    source = np.array(BUZZER_POSITION)[:2]
-    vec = (mic - source).flatten()
-    d0_cm = np.linalg.norm(vec) * 100
-
-    yaw_here = (YAW_OFFSET - np.array(yaw_deg)) / 180 * np.pi
-    beta_here = np.arctan2(vec[1], vec[0]) + np.pi / 2 + yaw_here
-
-    distances_cm = get_orthogonal_distance(deltas_cm, beta_here, d0_cm=d0_cm).flatten()
-    distances_here = np.array(distances_cm) - (Y_OFFSET * 100)
-    return distances_here
-
+D0=None
+ROOM_DIM = [10, 8] # in meters
 
 def generate_room(distance_cm=0, yaw_deg=YAW_DEG, ax=None, fs_here=FS):
     source, mic_positions = get_setup(distance_cm, yaw_deg, ax)
@@ -137,7 +35,33 @@ def generate_room(distance_cm=0, yaw_deg=YAW_DEG, ax=None, fs_here=FS):
     return room
 
 
-### simulation ###
+def get_setup(distance_cm=0, yaw_deg=YAW_DEG, ax=None):
+    context = Context.get_crazyflie_setup(yaw_offset=YAW_OFFSET)
+
+    d_wall_m = D_OFFSET + distance_cm * 1e-2
+    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1]/2]
+    mic_positions = context.mics
+    source = context.source + offset
+    mic_positions = offset + rotate_mics(mic_positions, yaw_deg)
+
+    if ax is not None:
+        source_image = [source[0] + d_wall_m * 2, source[1]]
+        for i, mic in enumerate(mic_positions):
+            d = (ROOM_DIM[0] - mic[0]) * 100
+            ax.scatter(*mic, label=f"mic{i}, d={d:.1f}cm", color=f"C{i}")
+        ax.plot([ROOM_DIM[0], ROOM_DIM[0]], [0, ROOM_DIM[1]], label="wall", color="k")
+        ax.scatter(*source, label="buzzer", color="C4")
+        ax.scatter(*source_image, label="buzzer image", color="C4", marker="x")
+        ymin = source[1] - 0.2
+        ymax = source[1] + 0.2
+        delta = (ymax - ymin) / 2
+        ax.set_ylim(ymin, ymax)
+        ax.set_xlim(source[0] - delta, source[0] + delta)
+        #ax.axis('equal')
+    return source, mic_positions
+
+
+# ## simulation ###
 
 
 def get_amplitude_function(

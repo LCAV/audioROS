@@ -1,0 +1,225 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+geometry.py: 
+"""
+import numpy as np
+
+from audio_stack.beam_former import rotate_mics
+
+DIM = 2
+
+# this corresponds to the setup in BC325 with stepper motor:
+D_OFFSET = 0.08  # actual distance at zero-distance, in meters
+YAW_OFFSET = -42  # in degrees
+
+# old functions, kept for compatibility.
+def get_deltas_from_global(yaw_deg, distances_cm, mic_idx, ax=None, yaw_offset=YAW_OFFSET):
+    context = Context.get_crazyflie_setup(yaw_offset=YAW_OFFSET)
+
+    distances_here = np.array(distances_cm)*1e-2 + D_OFFSET 
+    normal = get_normal(distances_here, yaw_deg)
+    if np.ndim(normal) > 1:
+        normal = normal[:, :2]
+    else:
+        normal = normal[:2]
+    delta = context.get_delta_from_normal(normal, mic_idx)
+    d0 = context.get_direct_path(mic_idx)
+    return delta, d0
+
+
+def get_orthogonal_distance_from_global(yaw_deg, deltas_cm, mic_idx, ax=None):
+    context = Context.get_crazyflie_setup(yaw_offset=YAW_OFFSET)
+    distances_m = context.get_total_distance(deltas_cm * 1e-2, yaw_deg, mic_idx)
+    distances_cm = (distances_m - D_OFFSET) * 1e2
+    return distances_cm
+
+
+# any dimension
+def convert_angle(theta):
+    theta = np.round(theta * 180 / np.pi, 2)
+    if theta >= 360:
+        theta -= 360
+    if theta < 0:
+        theta += 360 
+    return theta
+
+
+def get_normal(distance, yaw_deg, elevation_deg=0): 
+    """
+    both distance and yaw_deg can be vectors, in which case they hav eto be of equal length.
+    """
+    assert np.ndim(elevation_deg) == 0
+    yaw = yaw_deg / 180 * np.pi
+    elevation = elevation_deg / 180 * np.pi
+
+    if (np.ndim(yaw) > 0) and (np.ndim(distance) > 0):
+        assert len(yaw) == len(distance), (yaw, distance)
+
+    if np.ndim(yaw) > 0:
+        dir_vector = np.c_[
+                np.cos(yaw)*np.cos(elevation),
+                np.sin(yaw) * np.cos(elevation),
+                np.full(yaw.shape, np.sin(elevation))
+        ]
+    else:
+        dir_vector = np.array([
+                np.cos(yaw) * np.cos(elevation),
+                np.sin(yaw) * np.cos(elevation),
+                np.sin(elevation)
+        ])
+
+    if np.ndim(distance) > 0 and np.ndim(yaw) == 0:
+        n = distance[:, None] * dir_vector[None, :]
+    elif np.ndim(distance) > 0 and np.ndim(yaw) > 0:
+        n = distance[:, None] * dir_vector
+    else:
+        n = distance * dir_vector
+    return n
+
+
+def get_source_image(normal, source):
+    d = np.linalg.norm(normal)
+    l = 2 * (1 - source.dot(normal) / (d**2))
+    return source + l*normal
+
+
+def get_delta_from_normal(mic, source, normal): 
+    """ 
+    :param normal: kcan be of shape (n_distances x dim)
+    """
+    vec = source - mic
+    r0 = np.linalg.norm(vec)
+
+    if normal.ndim > 1:
+        d = np.linalg.norm(normal, axis=1)
+    else:
+        d = np.linalg.norm(normal)
+    
+    l = 2 * (1 - np.inner(source, normal) / (d**2))
+    r1_sq = r0**2 + 2*l*np.inner(vec, normal) + (l*d)**2
+    delta = np.sqrt(r1_sq) - r0
+    return delta
+
+
+# only two dimensions
+def get_source_distance(mic, source, delta, yaw_deg): 
+    vec = source - mic
+    r0 = np.linalg.norm(vec)
+    theta0 = np.arctan2(vec[1], vec[0])
+    r1 = delta + r0
+
+    theta = yaw_deg / 180 * np.pi
+
+    cos = np.cos(theta - theta0)
+    distance = 0.5 * (-r0*cos + np.sqrt(
+            r1**2 - r0**2 * (1 - cos**2)
+    ))
+    return distance
+
+
+def get_total_distance(source, source_distance, yaw_deg): 
+    """ 
+    source_distance is the distance measured from the source to the wall.
+    To get the full distance we need to add the projection
+    of the source to the wall normal. 
+    """
+    normal = get_normal(source_distance, yaw_deg)
+    normal = normal[..., :2]
+    return source_distance + np.inner(source, normal) / source_distance
+    
+
+def get_angles(mic, source, delta, source_distance): 
+    vec = source - mic
+    r0 = np.linalg.norm(vec)
+    theta0 = np.arctan2(vec[1], vec[0])
+    r1 = delta + r0
+
+    cos = (r1**2 - r0**2 - 4*source_distance**2) / (4 * source_distance * r0)
+
+    EPS = 1e-10
+    if np.abs(cos) > 1 + EPS: 
+        raise ValueError(cos)
+    elif np.abs(cos) > 1: # round cos to 1 or -1.
+        cos = np.sign(cos)
+
+
+    beta = np.arccos(cos) # between 0 and pi
+    theta1 = theta0 - beta
+    theta2 = theta0 + beta
+    thetas = [convert_angle(theta) for theta in [theta1, theta2]]
+    return thetas
+
+
+class Context(object):
+    def __init__(self, dim=DIM, mics=None, source=None):
+        self.dim = dim
+        if mics is not None:
+            assert mics.shape[1] == dim
+        if source is not None:
+            assert source.shape[0] == dim
+        self.mics = mics
+        self.source = source
+
+    @staticmethod
+    def get_crazyflie_setup(dim=DIM, yaw_offset=0):
+        from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
+        mics = np.array(MIC_POSITIONS)[:, :dim]
+
+        mics = rotate_mics(mics, yaw_offset)
+        source = np.array(BUZZER_POSITION)[0, :dim]
+        return Context(dim, mics, source)
+
+    @staticmethod
+    def get_random_setup(n_mics=4, dim=DIM):
+        mics = np.random.uniform(low=-1.0, high=1.0, size=(n_mics, dim))
+        source = np.random.uniform(low=-1.0, high=1.0, size=(dim,))
+        return Context(dim, mics, source)
+
+    @staticmethod
+    def get_standard_setup(dim=DIM):
+        Z = 1.0
+        X = 1/np.sqrt(2)
+        if dim == 2:
+            mics = np.array([[X, X], [-X, X], [-X, -X], [X, -X]])
+            source = np.array([2*X, 2*X])
+        elif dim == 3:
+            mics = np.array([[X, X, Z], [-X, X, Z], [-X, -X, Z], [X, -X, Z]])
+            source = np.array([2*X, 2*X, Z])
+        return Context(dim, mics, source)
+
+    def get_source_image(self, normal):
+        d = np.linalg.norm(normal)
+        l = 2 * (1 - self.source.dot(normal) / (d**2))
+        return self.source + l*normal
+
+    def get_delta_from_normal(self, normal, mic_idx):
+        mic = self.mics[mic_idx, :]
+        return get_delta_from_normal(mic, self.source, normal)
+
+    def get_delta(self, yaw_deg, distance, mic_idx=0):
+        mic = self.mics[mic_idx]
+        normal = get_normal(distance, yaw_deg)[:, :2]
+        return get_delta_from_normal(mic, self.source, normal)
+
+    def get_source_distance(self, delta, yaw_deg, mic_idx):
+        if self.dim == 3:
+            raise NotImplementedError("distance retrieval only implemented for 2D setups")
+        mic = self.mics[mic_idx, :]
+        return get_source_distance(mic, self.source, delta, yaw_deg)
+
+    def get_total_distance(self, delta, yaw_deg, mic_idx):
+        if self.dim == 3:
+            raise NotImplementedError("distance retrieval only implemented for 2D setups")
+        source_distance = self.get_source_distance(delta, yaw_deg, mic_idx)
+        return get_total_distance(self.source, source_distance, yaw_deg)
+
+    def get_angles(self, delta, source_distance, mic_idx): 
+        if self.dim == 3:
+            raise NotImplementedError("angle retrieval only implemented for 2D setups")
+        mic = self.mics[mic_idx, :]
+        return get_angles(mic, self.source, delta, source_distance)
+
+    def get_direct_path(self, mic_idx):
+        return np.linalg.norm(self.source - self.mics[mic_idx])

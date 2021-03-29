@@ -21,7 +21,7 @@ def get_abs_fft(f_slice, n_max=1000, norm=True):
 
 def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_max=1000):
     from constants import SPEED_OF_SOUND
-    from simulation import get_orthogonal_distance_from_global
+    from geometry import get_orthogonal_distance_from_global
 
     n = max(len(frequencies), n_max)
     df = np.mean(frequencies[1:] - frequencies[:-1])
