@@ -34,7 +34,9 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 
 # Windowing method, available:
 # - "" (no window)
-# - "tukey" (flat + cosine on borders)
+# - "tukey"
+# - "hann"
+# - "flattop"
 METHOD_WINDOW = "tukey"
 
 

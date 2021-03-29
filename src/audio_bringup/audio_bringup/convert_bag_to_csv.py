@@ -13,19 +13,24 @@ import subprocess
 
 import rclpy
 
-from audio_bringup.helpers import set_param, EXP_DIRNAME, CSV_DIRNAME
+from audio_bringup.helpers import get_active_nodes, set_param, EXP_DIRNAME, CSV_DIRNAME
 
-EXPERIMENT = "2020_12_18_stepper"
+#EXPERIMENT = "2020_12_18_stepper"
+EXPERIMENT = "2021_02_09_wall"
 
-FILENAME = None # set to None to loop through all. 
-#FILENAME = "nomotors_nosnr_props_mono3875_-51"
-#FILENAME = "test_bag_file"
+#FILENAMES = None # set to None to loop through all. 
+FILENAMES = ["motors_nosnr_noprops_sweep_16_newbattery", 
+             "motors_nosnr_noprops_sweep_16",
+             "nomotors_nosnr_noprops_sweep_16_newbattery",
+             "nomotors_nosnr_noprops_sweep_16",
+             "motors_nosnr_noprops_sweep_15",
+             "nomotors_nosnr_noprops_sweep_15"]
 
 def main(args=None):
     rclpy.init(args=args)
 
-    if FILENAME is not None:
-        filenames = [FILENAME]
+    if FILENAMES is not None:
+        filenames = FILENAMES
     else:
         filenames = []
         for (dirpath, dirnames, contents) in os.walk(os.path.join(EXP_DIRNAME, EXPERIMENT)):
@@ -38,18 +43,14 @@ def main(args=None):
                 filenames.append(filename)
                 print('found bag folder:', filename)
 
-    # TODO(FD) this would be cleaner with lifecycle nodes
-    # (or with the feature ros2 node kill, which doesn't 
-    # exist yet).
-    subprocess.run(['sudo', 'pkill', 'csv_writer'])
-    subprocess.run(['sudo', 'pkill', 'ros2'])
-
-    subprocess.Popen(['ros2', 'run', 'topic_writer', 'csv_writer'])
+    active_nodes = get_active_nodes()
+    assert '/csv_writer' in active_nodes
 
     for filename in filenames: 
         print(f'treating {filename}...')
         bag_filename = os.path.join(EXP_DIRNAME, EXPERIMENT, filename) 
         csv_filename = os.path.join(EXP_DIRNAME, EXPERIMENT, CSV_DIRNAME, filename + ".csv")
+    
 
         success = False
         while not success:

@@ -7,10 +7,6 @@ helpers.py: general launching functions.
 import os
 import subprocess
 
-import launch
-import launch.actions
-import launch.substitutions
-import launch_ros.actions
 
 LOG_LEVEL = "info"
 TOPICS_TO_RECORD =  ['/audio/signals_f', '/geometry/pose_raw', '/crazyflie/status', '/crazyflie/motors']
@@ -26,7 +22,7 @@ def get_filename(**params):
     motors = params.get("motors")
     motors_flag = "" if ((type(motors) == str) or (motors > 0)) else "no"
     ending = "" if params.get("degree", 0) == 0 else f"_{params.get('degree')}"
-    ending_distance = "" if params.get("distance", 0) == 0 else f"_{params.get('distance')}"
+    ending_distance = "" if params.get("distance", None) in [0, None] else f"_{params.get('distance')}"
     ending_distance += params.get("appendix", "")
     fname = f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}{ending_distance}"
     return fname
@@ -45,7 +41,12 @@ def set_param(node_name, param_name, param_value):
         print("set_param error:", out_string)
         return False
 
+
 def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
+    import launch.Launchdescription
+    import launch.actions
+    import launch.substitutions
+    import launch_ros.actions
     logger = launch.substitutions.LaunchConfiguration("log_level")
     launch_arguments = [
         launch.actions.DeclareLaunchArgument(
@@ -73,3 +74,12 @@ def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
         for executable, dict_ in node_config.items()
     ]
     return launch.LaunchDescription(launch_arguments)
+
+
+def get_active_nodes():
+    param_pid = subprocess.Popen(['ros2', 'node', 'list'], stdout=subprocess.PIPE)
+    out_bytes, err = param_pid.communicate()
+    out_string = out_bytes.decode("utf-8").strip()
+    return out_string
+
+
