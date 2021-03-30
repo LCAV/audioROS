@@ -19,36 +19,45 @@ def get_abs_fft(f_slice, n_max=1000, norm=True):
     return np.abs(np.fft.rfft(f_slice_norm, n=n))
 
 
-def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_max=1000):
+def get_differences(frequencies, n_max=1000):
     from constants import SPEED_OF_SOUND
-    from geometry import get_orthogonal_distance_from_global
 
     n = max(len(frequencies), n_max)
     df = np.mean(frequencies[1:] - frequencies[:-1])
     deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
+    return deltas_cm
+
+
+def convert_differences_to_distances(differences_cm, mic_idx, distance_range):
+    from geometry import get_orthogonal_distance_from_global
+
     distances = get_orthogonal_distance_from_global(
-        yaw_deg=YAW_DEG, deltas_cm=deltas_cm, mic_idx=mic_idx
+        yaw_deg=YAW_DEG, deltas_cm=differences_cm, mic_idx=mic_idx
     )
+    mask = None
     if distance_range is not None:
         mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
         distances = distances[mask]
-    else:
-        mask = None
     return distances, mask
 
 
 def get_probability_fft(
     f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000
 ):
+    print("Deprecation warning: do not use this function anymore")
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max)
-    distances, mask = get_interference_distances(
-        frequencies, mic_idx, distance_range, n_max=n_max
+    differences = get_differences(frequencies, n_max=n_max)
+
+    distances, mask = convert_differences_to_distances(
+        differences, mic_idx, distance_range
     )
     if mask is not None:
         abs_fft = abs_fft[mask]
+        differences = differences[mask]
+
     prob = abs_fft / np.sum(abs_fft)
-    return distances, prob
+    return distances, prob, differences
 
 
 def get_posterior(abs_fft, sigma=None, data=None):
@@ -64,14 +73,21 @@ def get_posterior(abs_fft, sigma=None, data=None):
             # this really as no effect on the result.
             periodogram -= np.max(periodogram)
             posterior = np.exp(periodogram)
-        else:  # this is the limit of exp for sigma > 0
+        else:  # this is the limit of exp for sigma to 0
             posterior = np.zeros(len(periodogram))
             posterior[np.argmax(periodogram)] = 1.0
     else:
         d_bar = 1 / len(data) * np.sum((data - np.mean(data)) ** 2)
-        posterior = (1 - 2 * periodogram / (N * d_bar)) ** ((2 - N) / 2)
+        arg = 1 - 2 * periodogram / (N * d_bar)
+
+        # arg may not be negative.
+        if np.any(arg <= 0):
+            valid = np.where(arg > 0)[0]
+            print("Warning, arg is non-positive at", arg[arg <= 0])
+            arg[arg <= 0] = np.min(arg[arg > 0])
+
+        posterior = (arg) ** ((2 - N) / 2)
         # posterior = np.exp(periodogram)
-    posterior /= np.sum(posterior)
     return posterior
 
 
@@ -80,14 +96,16 @@ def get_probability_bayes(
 ):
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
-    distances, mask = get_interference_distances(
-        frequencies, mic_idx, distance_range, n_max=n_max
+    differences = get_differences(frequencies, n_max=n_max)
+    posterior = get_posterior(abs_fft, sigma, data=f_slice)
+    distances, mask = convert_differences_to_distances(
+        differences, mic_idx, distance_range
     )
     if mask is not None:
-        abs_fft = abs_fft[mask]
-
-    posterior = get_posterior(abs_fft, sigma, data=f_slice)
-    return distances, posterior
+        posterior = posterior[mask]
+        differences = differences[mask]
+    posterior /= np.sum(posterior)
+    return distances, posterior, differences
 
 
 def get_probability_cost(
@@ -128,40 +146,28 @@ def get_probability_cost(
     return probs
 
 
-def get_approach_angle_fft(
+def get_periods_fft(
     d_slice,
     frequency,
     relative_distances_cm,
-    mic_idx=1,
     n_max=1000,
     bayes=False,
     sigma=None,
 ):
-    from simulation import factor_distance_to_delta
-    from constants import SPEED_OF_SOUND
 
+    # the distribution over measured period.
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
-
     n = max(len(d_slice), n_max)
-
-    period_90 = 2 * frequency / SPEED_OF_SOUND  # 1/m in terms of orthogonal distance
-    periods_k = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of delta
-    sines_gamma = periods_k / period_90
-    if np.any(sines_gamma > 1):
-        print(f"Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}")
+    periods_m = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of orthogonal
 
     abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
-    # abs_fft = abs_fft[sines_gamma <= 1]
-    # sines_gamma= sines_gamma[sines_gamma <= 1]
-    # sines_gamma[sines_gamma>1] = 1
-    gammas = np.full(len(sines_gamma), 90)
-    gammas[sines_gamma <= 1] = np.arcsin(sines_gamma[sines_gamma <= 1]) * 180 / np.pi
-
     if bayes:
         prob = get_posterior(abs_fft, sigma, d_slice)
+        prob /= np.sum(prob)
     else:
+        print("Deprecation warning: do not use this function anymore")
         prob = abs_fft / np.sum(abs_fft)
-    return gammas, prob, periods_k
+    return periods_m, prob
 
 
 def get_approach_angle_cost(

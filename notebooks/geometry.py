@@ -15,24 +15,17 @@ D_OFFSET = 0.08  # actual distance at zero-distance, in meters
 YAW_OFFSET = -42  # in degrees
 
 # old functions, kept for compatibility.
-def get_deltas_from_global(yaw_deg, distances_cm, mic_idx, ax=None, yaw_offset=YAW_OFFSET):
-    context = Context.get_crazyflie_setup(yaw_offset=YAW_OFFSET)
-
-    distances_here = np.array(distances_cm)*1e-2 + D_OFFSET 
-    normal = get_normal(distances_here, yaw_deg)
-    if np.ndim(normal) > 1:
-        normal = normal[:, :2]
-    else:
-        normal = normal[:2]
-    delta = context.get_delta_from_normal(normal, mic_idx)
+def get_deltas_from_global(yaw_deg, distances_cm, mic_idx, ax=None):
+    context = Context.get_crazyflie_setup()
+    delta = context.get_delta(yaw_deg=yaw_deg, distances_cm=distances_cm, mic_idx=mic_idx)
     d0 = context.get_direct_path(mic_idx)
     return delta, d0
 
 
 def get_orthogonal_distance_from_global(yaw_deg, deltas_cm, mic_idx, ax=None):
-    context = Context.get_crazyflie_setup(yaw_offset=YAW_OFFSET)
+    context = Context.get_crazyflie_setup()
     distances_m = context.get_total_distance(deltas_cm * 1e-2, yaw_deg, mic_idx)
-    distances_cm = (distances_m - D_OFFSET) * 1e2
+    distances_cm = distances_m * 1e2
     return distances_cm
 
 
@@ -127,33 +120,41 @@ def get_total_distance(source, source_distance, yaw_deg):
     """
     normal = get_normal(source_distance, yaw_deg)
     normal = normal[..., :2]
-    return source_distance + np.inner(source, normal) / source_distance
+    if np.ndim(source_distance) > 0:
+        total_distance = source_distance
+        valid = source_distance > 0
+        total_distance[valid] += np.inner(source, normal[valid]) / source_distance[valid]
+    else:
+        total_distance = source_distance + np.inner(source, normal) / source_distance
+    return total_distance
     
 
 def get_angles(mic, source, delta, source_distance): 
     vec = source - mic
-    r0 = np.linalg.norm(vec)
     theta0 = np.arctan2(vec[1], vec[0])
+    r0 = np.linalg.norm(vec)
     r1 = delta + r0
 
     cos = (r1**2 - r0**2 - 4*source_distance**2) / (4 * source_distance * r0)
 
     EPS = 1e-10
     if np.abs(cos) > 1 + EPS: 
-        raise ValueError(cos)
+        #print(f"Warning: cos way to big ({cos}) for distance {source_distance}")
+        #print(r0, r1, source_distance)
+        return None
     elif np.abs(cos) > 1: # round cos to 1 or -1.
         cos = np.sign(cos)
-
 
     beta = np.arccos(cos) # between 0 and pi
     theta1 = theta0 - beta
     theta2 = theta0 + beta
-    thetas = [convert_angle(theta) for theta in [theta1, theta2]]
-    return thetas
+    thetas_deg = [convert_angle(theta) for theta in [theta1, theta2]]
+    return thetas_deg
 
 
 class Context(object):
-    def __init__(self, dim=DIM, mics=None, source=None):
+    def __init__(self, dim=DIM, mics=None, source=None, d_offset=0):
+        assert dim in (2, 3), dim
         self.dim = dim
         if mics is not None:
             assert mics.shape[1] == dim
@@ -161,15 +162,17 @@ class Context(object):
             assert source.shape[0] == dim
         self.mics = mics
         self.source = source
+        self.d_offset = d_offset
 
     @staticmethod
-    def get_crazyflie_setup(dim=DIM, yaw_offset=0):
+    def get_crazyflie_setup(dim=DIM, yaw_offset=None):
         from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
         mics = np.array(MIC_POSITIONS)[:, :dim]
-
+        if yaw_offset is None:
+            yaw_offset = YAW_OFFSET
         mics = rotate_mics(mics, yaw_offset)
         source = np.array(BUZZER_POSITION)[0, :dim]
-        return Context(dim, mics, source)
+        return Context(dim, mics, source, d_offset=D_OFFSET)
 
     @staticmethod
     def get_random_setup(n_mics=4, dim=DIM):
@@ -198,9 +201,14 @@ class Context(object):
         mic = self.mics[mic_idx, :]
         return get_delta_from_normal(mic, self.source, normal)
 
-    def get_delta(self, yaw_deg, distance, mic_idx=0):
+    def get_delta(self, yaw_deg, distances_cm, mic_idx=0):
+        distances_here = np.array(distances_cm)*1e-2 + self.d_offset
         mic = self.mics[mic_idx]
-        normal = get_normal(distance, yaw_deg)[:, :2]
+        normal = get_normal(distances_here, yaw_deg)
+        if np.ndim(normal) > 1:
+            normal = normal[:, :2]
+        else:
+            normal = normal[:2]
         return get_delta_from_normal(mic, self.source, normal)
 
     def get_source_distance(self, delta, yaw_deg, mic_idx):
@@ -213,7 +221,8 @@ class Context(object):
         if self.dim == 3:
             raise NotImplementedError("distance retrieval only implemented for 2D setups")
         source_distance = self.get_source_distance(delta, yaw_deg, mic_idx)
-        return get_total_distance(self.source, source_distance, yaw_deg)
+        total_distance = get_total_distance(self.source, source_distance, yaw_deg)
+        return total_distance - self.d_offset
 
     def get_angles(self, delta, source_distance, mic_idx): 
         if self.dim == 3:
@@ -223,3 +232,34 @@ class Context(object):
 
     def get_direct_path(self, mic_idx):
         return np.linalg.norm(self.source - self.mics[mic_idx])
+
+    def get_theta0(self, mic_idx):
+        mic = self.mics[mic_idx, :]
+        vec = self.source - mic
+        return np.arctan2(vec[1], vec[0])
+
+    def plot(self, normal=None, yaw_deg=None, distance=None, ax=None):
+        import matplotlib.pylab as plt
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        ax.scatter(0, 0, color='black', marker='x')
+        [ax.scatter(*mic[:2], label=f'mic{i}') for i, mic in enumerate(self.mics)]
+        ax.scatter(*self.source[:2], label='source')
+
+        if normal is not None:
+            s = self.get_source_image(normal)
+            ax.plot([0, normal[0]], [0, normal[1]])
+            ax.scatter(*s[:2], label='image source')
+
+        if yaw_deg is not None and distance is not None:
+            distance += self.d_offset
+            normal = get_normal(distance, yaw_deg)[:2]
+            s = self.get_source_image(normal)
+            ax.plot([0, normal[0]], [0, normal[1]])
+            ax.scatter(*s[:2], label='image source')
+
+        ax.axis('equal')
+        ax.legend()
+        return ax
+        

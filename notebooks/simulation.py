@@ -240,5 +240,4 @@ def get_dist_slice_theory(
 
 def factor_distance_to_delta(distance, mic):
     delta_m, d0 = get_deltas_from_global(0, distance, mic)
-    delta_cm = delta_m[0] * 1e2
-    return delta_cm / distance
+    return delta_m * 1e2 / distance

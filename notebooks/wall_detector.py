@@ -191,6 +191,7 @@ def normalized_std(values, method=METHOD):
         return 0
 
 
+# TODO(FD) rewrite this to "DataCollector" or similar. 
 class WallDetector(object):
     def __init__(self, exp_name=None, mic_type="audio_deck", interpolation=""):
         self.df = pd.DataFrame(
@@ -211,6 +212,7 @@ class WallDetector(object):
         if exp_name is not None:
             self.params.update(kwargs_datasets[exp_name][mic_type])
 
+    @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
         wall_detector = WallDetector(
             exp_name=exp_name, mic_type=row.mic_type, interpolation=interpolation
