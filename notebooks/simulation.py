@@ -4,7 +4,7 @@ import numpy as np
 import pyroomacoustics as pra
 
 from audio_stack.beam_former import rotate_mics
-from crazyflie_description_py.parameters import FS, N_BUFFER
+from crazyflie_description_py.parameters import N_BUFFER, FS
 
 from constants import SPEED_OF_SOUND
 from frequency_analysis import get_bin
@@ -13,18 +13,41 @@ from geometry import *
 sys.path.append("../crazyflie-audio/python")
 from signals import generate_signal
 
-DURATION_SEC = 38
-N_TIMES = DURATION_SEC * FS // (N_BUFFER * 2)
-
 # default wall absorption (percentage of amplitude that is lost in reflection):
 WALL_ABSORPTION = 0.2
 GAIN = 1.0
 YAW_DEG = 0
-D0=None
 ROOM_DIM = [10, 8] # in meters
+WIDEBAND_FILE = "results/wideband.npy"
+
+# default
+N_TIMES = 10 # number of buffers to use for average (pyroomacoutics)
+
+def create_wideband_signal(frequencies, duration_sec=1.0):
+    phase = np.random.uniform(0, 2 * np.pi)
+    kwargs = dict( 
+        signal_type="mono",
+        duration_sec=duration_sec,
+        Fs=FS,
+    )
+    signal = generate_signal(
+        frequency_hz=frequencies[1],
+        phase_offset=phase,
+        **kwargs
+    )
+    for f in frequencies[2:]:
+        phase = np.random.uniform(0, 2 * np.pi)
+        signal += generate_signal(
+            frequency_hz=f, phase_offset=phase, **kwargs
+        )
+    return signal
+
 
 def generate_room(distance_cm=0, yaw_deg=YAW_DEG, ax=None, fs_here=FS):
-    source, mic_positions = get_setup(distance_cm, yaw_deg, ax)
+
+    # TODO(FD) -yaw_deg  because the wall moves relative to the yaw of the drone.
+    # need to figure out a better notation.
+    source, mic_positions = get_setup(distance_cm, -yaw_deg, ax)
 
     m = pra.Material(energy_absorption="glass_3mm")
     room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM, max_order=1, materials=m)
@@ -36,7 +59,7 @@ def generate_room(distance_cm=0, yaw_deg=YAW_DEG, ax=None, fs_here=FS):
 
 
 def get_setup(distance_cm=0, yaw_deg=YAW_DEG, ax=None):
-    context = Context.get_crazyflie_setup(yaw_offset=YAW_OFFSET)
+    context = Context.get_crazyflie_setup()
 
     d_wall_m = D_OFFSET + distance_cm * 1e-2
     offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1]/2]
@@ -77,12 +100,13 @@ def get_amplitude_function(
 def get_df_theory_simple(
     deltas_m,
     frequencies_hz,
+    d0,
     flat=False,
-    d0=D0,
     wall_absorption=WALL_ABSORPTION,
     gain=GAIN,
     c=SPEED_OF_SOUND,
 ):
+
     alpha0 = 1 / (4 * np.pi * d0)  #
     alpha1 = (1 - wall_absorption) / (4 * np.pi * (deltas_m + d0))
 
@@ -102,6 +126,11 @@ def get_df_theory_simple(
 
 
 def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
+    """ 
+    :param signal: signal to use for simulation, array
+    :param n_buffer: buffer size for "STFT"
+    :param n_times: number of buffers to average. Will start fromsecond buffer.
+    """
     assert len(room.sources) == 1
 
     room.sources[0].add_signal(signal)
@@ -112,49 +141,29 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     ], f"{n_times}*{n_buffer}={n_times * n_buffer}, {room.mic_array.signals.shape}"
 
     h_f_list = []
-    idx = 0
-    for _ in range(n_times):
-        input_f = np.fft.rfft(signal[idx : idx + n_buffer])
+    idx = n_buffer  # skip first buffer to avoid boundary effects
+    for _ in range(n_times-1):
         output_f = np.fft.rfft(
             room.mic_array.signals[:, idx : idx + n_buffer], axis=1
-        )  # n_mics x n_frequencies
-        ratio_f = output_f[None, ...] / input_f[None, None, :]
-
-        # TODO(FD) this ratio is not between 0 and 1. Find out if this is normal.
-        # print('ratio:', np.min(np.abs(ratio_f)), np.max(np.abs(ratio_f)))
-        h_f_list.append(ratio_f)
+        ) # n_mics x n_frequencies
+        h_f_list.append(output_f[None, :, :] / n_buffer)
         idx += n_buffer
     h_f = np.concatenate(h_f_list, axis=0)  # n_times x n_mics x n_frequencies
-
-    start_idx = n_times // 5  # ignore first few buffers because of border effects.
-    return np.mean(np.abs(h_f[start_idx:]), axis=0)
+    return np.mean(np.abs(h_f), axis=0)
 
 
-def get_df_theory(frequencies, distances, chosen_mics=range(4)):
+def get_df_theory(frequencies, distances, yaw_deg=YAW_DEG, chosen_mics=range(4)):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
-        deltas, d0 = get_deltas_from_global(
-            yaw_deg=YAW_DEG, distances_cm=distances, mic_idx=mic
-        )
-        H[i, :, :] = get_df_theory_simple(deltas, frequencies, d0=d0).T
+        deltas_m, d0 = get_deltas_from_global(yaw_deg=yaw_deg, distances_cm=distances, mic_idx=mic)
+        H[i, :, :] = get_df_theory_simple(deltas, frequencies, d0).T
     return H
 
 
-def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=YAW_DEG, signal=None):
+def get_freq_slice_pyroom(frequencies, distance_cm, signal, yaw_deg=YAW_DEG):
     import pandas as pd
 
-    room = generate_room(distance_cm=distance_cm)
-
-    # TODO(fd) ideally we would always generate a signal at the given frequencies only,
-    # as shown below.
-    # however, this takes long for many frequencies, so we don't do that and use
-    # a precomputed version, which as all frequencies present (but potentially not
-    # exactly the ones given to the function...)
-    if signal is None:
-        try:
-            signal = pd.read_pickle("results/multi.pk")
-        except FileNotFoundError:
-            print("Run WallStudy notebook to save results/multi.pk")
+    room = generate_room(distance_cm=distance_cm, yaw_deg=yaw_deg)
 
     n_times = len(signal) // N_BUFFER
     mag = get_average_magnitude(
@@ -171,15 +180,11 @@ def get_freq_slice_pyroom(frequencies, distance_cm, yaw_deg=YAW_DEG, signal=None
 def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=YAW_DEG, n_times=100):
     from frequency_analysis import get_bin
 
-    if frequency > 0:
-        duration_sec = N_BUFFER * n_times / FS
-        signal = generate_signal(
-            FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency
-        )
-    else:
-        signal = np.zeros(n_times * N_BUFFER)
+    duration_sec = N_BUFFER * n_times / FS
+    signal = generate_signal(
+        FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency,
+    )
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
-
     bin_ = get_bin(freqs_all, frequency)
 
     Hs = []
@@ -199,8 +204,8 @@ def get_freq_slice_theory(
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m, d0 = get_deltas_from_global(yaw_deg, distance_cm, mic)
-        pattern = get_df_theory_simple(deltas_m, frequencies, flat=True, d0=d0)
+        deltas_m, d0 = get_deltas_from_global(yaw_deg=yaw_deg, distances_cm=distance_cm, mic_idx=mic)
+        pattern = get_df_theory_simple(deltas_m, frequencies, d0, flat=True)
         Hs[:, i] = pattern
     return Hs
 
@@ -228,8 +233,8 @@ def get_dist_slice_theory(
         pattern = get_df_theory_simple(
             deltas_m,
             [frequency],
+            d0,
             flat=True,
-            d0=d0,
             wall_absorption=wall_absorption,
             gain=gains[i],
             c=SPEED_OF_SOUND,

@@ -26,9 +26,9 @@ def extract_pdf(distribution):
     return values[sorted_idx], probabilities[sorted_idx]
 
 class DistanceEstimator(object): 
-    def __init__(self, yaw_offset=None):
+    def __init__(self):
         self.data = {} # structure: mic: (path_differences, probabilities)
-        self.context = Context.get_crazyflie_setup(yaw_offset=yaw_offset)
+        self.context = Context.get_crazyflie_setup()
 
         self.resolution_m = 1e-2 # resolution of distances, in meters.
         self.resolution_deg = 1 # resolution of angles, in degrees
