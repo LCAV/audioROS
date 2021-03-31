@@ -7,7 +7,7 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-YAW_DEG = 0
+AZIMUTH_DEG = 0
 
 
 def get_abs_fft(f_slice, n_max=1000, norm=True):
@@ -32,7 +32,7 @@ def convert_differences_to_distances(differences_cm, mic_idx, distance_range):
     from geometry import get_orthogonal_distance_from_global
 
     distances = get_orthogonal_distance_from_global(
-        yaw_deg=YAW_DEG, deltas_cm=differences_cm, mic_idx=mic_idx
+        azimuth_deg=AZIMUTH_DEG, deltas_cm=differences_cm, mic_idx=mic_idx
     )
     mask = None
     if distance_range is not None:
@@ -120,9 +120,9 @@ def get_probability_cost(
     from simulation import get_freq_slice_theory
 
     if absolute_yaws is not None:
-        yaw_deg = absolute_yaws
+        azimuth_deg = -absolute_yaws
     else:
-        yaw_deg = YAW_DEG
+        azimuth_deg = AZIMUTH_DEG
 
     f_slice_norm = f_slice - np.mean(f_slice)
     f_slice_norm /= np.std(f_slice_norm)
@@ -131,7 +131,7 @@ def get_probability_cost(
     for d in distances:
         if relative_ds is not None:
             d += relative_ds
-        f_slice_theory = get_freq_slice_theory(frequencies, d, yaw_deg)[:, mic_idx]
+        f_slice_theory = get_freq_slice_theory(frequencies, d, azimuth_deg)[:, mic_idx]
         f_slice_theory -= np.mean(f_slice_theory)
         f_slice_theory /= np.std(f_slice_theory)
         probs.append(np.exp(-np.linalg.norm(f_slice_theory - f_slice_norm)))
@@ -154,7 +154,6 @@ def get_periods_fft(
     bayes=False,
     sigma=None,
 ):
-
     # the distribution over measured period.
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
     n = max(len(d_slice), n_max)
@@ -165,10 +164,30 @@ def get_periods_fft(
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
     else:
-        print("Deprecation warning: do not use this function anymore")
+        #print("Deprecation warning: do not use this function anymore")
         prob = abs_fft / np.sum(abs_fft)
     return periods_m, prob
 
+def get_approach_angle_fft(
+        d_slice,
+        frequency,
+        relative_distances_cm,
+        n_max=1000,
+        bayes=False,
+        sigma=None,
+    ):
+    from constants import SPEED_OF_SOUND
+    period_theoretical = frequency / SPEED_OF_SOUND # 1/m in terms of delta
+    periods_m, prob = get_periods_fft(
+        d_slice,
+        frequency,
+        relative_distances_cm,
+        n_max,
+        bayes,
+        sigma
+    )
+    ratio = periods_m / period_theoretical
+    return ratio, prob
 
 def get_approach_angle_cost(
     d_slice,
@@ -181,7 +200,7 @@ def get_approach_angle_cost(
 ):
     from simulation import get_dist_slice_theory
 
-    yaw_deg = YAW_DEG
+    azimuth_deg = AZIMUTH_DEG
 
     d_slice_norm = d_slice - np.mean(d_slice)
     d_slice_norm /= np.std(d_slice_norm)
@@ -193,7 +212,7 @@ def get_approach_angle_cost(
                 gamma_deg / 180 * np.pi
             )
             assert np.all(distances_cm >= 0)
-            d_slice_theory = get_dist_slice_theory(frequency, distances_cm, yaw_deg)[
+            d_slice_theory = get_dist_slice_theory(frequency, distances_cm, azimuth_deg)[
                 :, mic_idx
             ]
             d_slice_theory -= np.nanmean(d_slice_theory)

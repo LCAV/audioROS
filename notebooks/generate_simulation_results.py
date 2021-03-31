@@ -207,7 +207,7 @@ def simulate_distance_slice(
 def compare_timing(n_instances):
     import time
 
-    yaw_deg = 0
+    azimuth_deg = 0
     distance_cm = 10
     mic_idx = 0
     delta_m, d0 = get_deltas_from_global(YAW_DEG, distance_cm, MIC_IDX)

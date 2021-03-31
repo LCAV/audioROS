@@ -14,9 +14,9 @@ sys.path.append("../crazyflie-audio/python")
 from signals import generate_signal
 
 # default wall absorption (percentage of amplitude that is lost in reflection):
-WALL_ABSORPTION = 0.2
-GAIN = 1.0
-YAW_DEG = 0
+WALL_ABSORPTION = 0.2 
+GAIN = 1.0 # default amplitude for input signals
+AZIMUTH_DEG = 0 # default angle of wall in degrees
 ROOM_DIM = [10, 8] # in meters
 WIDEBAND_FILE = "results/wideband.npy"
 
@@ -43,11 +43,8 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
     return signal
 
 
-def generate_room(distance_cm=0, yaw_deg=YAW_DEG, ax=None, fs_here=FS):
-
-    # TODO(FD) -yaw_deg  because the wall moves relative to the yaw of the drone.
-    # need to figure out a better notation.
-    source, mic_positions = get_setup(distance_cm, -yaw_deg, ax)
+def generate_room(distance_cm=0, azimuth_deg=AZIMUTH_DEG, ax=None, fs_here=FS):
+    source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
     m = pra.Material(energy_absorption="glass_3mm")
     room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM, max_order=1, materials=m)
@@ -58,29 +55,37 @@ def generate_room(distance_cm=0, yaw_deg=YAW_DEG, ax=None, fs_here=FS):
     return room
 
 
-def get_setup(distance_cm=0, yaw_deg=YAW_DEG, ax=None):
+def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
+    """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg""" 
     context = Context.get_crazyflie_setup()
 
-    d_wall_m = D_OFFSET + distance_cm * 1e-2
-    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1]/2]
+    d_wall_m = context.d_offset + distance_cm * 1e-2 # distance of wall
+    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1]/2] # location of drone
     mic_positions = context.mics
     source = context.source + offset
-    mic_positions = offset + rotate_mics(mic_positions, yaw_deg)
+
+    # note that we need to take the negative azimuth, because the drone has to 
+    # be moved in the opposite direction.
+    mic_positions = offset + rotate_mics(mic_positions, -azimuth_deg)
 
     if ax is not None:
         source_image = [source[0] + d_wall_m * 2, source[1]]
         for i, mic in enumerate(mic_positions):
             d = (ROOM_DIM[0] - mic[0]) * 100
             ax.scatter(*mic, label=f"mic{i}, d={d:.1f}cm", color=f"C{i}")
-        ax.plot([ROOM_DIM[0], ROOM_DIM[0]], [0, ROOM_DIM[1]], label="wall", color="k")
+        ax.axvline(x=ROOM_DIM[0], label="wall", color="k")
         ax.scatter(*source, label="buzzer", color="C4")
         ax.scatter(*source_image, label="buzzer image", color="C4", marker="x")
-        ymin = source[1] - 0.2
-        ymax = source[1] + 0.2
-        delta = (ymax - ymin) / 2
-        ax.set_ylim(ymin, ymax)
-        ax.set_xlim(source[0] - delta, source[0] + delta)
-        #ax.axis('equal')
+        if not zoom:
+            ax.axhline(y=ROOM_DIM[1], color="k")
+            ax.axvline(x=0, color="k")
+            ax.axhline(y=0, color="k")
+        else:
+            xmin = min([min(mic_positions[:, 0]), source[0], source_image[0]])
+            xmax = max([max(mic_positions[:, 0]), source[0], source_image[0]])
+            delta = (xmax-xmin)/4
+            ax.set_xlim(xmin-delta, xmax+delta)
+            ax.axis('equal')
     return source, mic_positions
 
 
@@ -88,9 +93,9 @@ def get_setup(distance_cm=0, yaw_deg=YAW_DEG, ax=None):
 
 
 def get_amplitude_function(
-    distances_cm, gain, wall_absorption, mic_idx, yaw_deg=YAW_DEG
+    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=AZIMUTH_DEG
 ):
-    deltas_m, d0 = get_deltas_from_global(yaw_deg, distances_cm, mic_idx)
+    deltas_m, d0 = get_deltas_from_global(azimuth_deg, distances_cm, mic_idx)
     alpha0 = 1 / (4 * np.pi * d0)  #
     alpha1 = (1 - wall_absorption) / (4 * np.pi * (deltas_m + d0))
     amplitudes = gain * 2 * alpha0 * alpha1
@@ -152,18 +157,18 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     return np.mean(np.abs(h_f), axis=0)
 
 
-def get_df_theory(frequencies, distances, yaw_deg=YAW_DEG, chosen_mics=range(4)):
+def get_df_theory(frequencies, distances, azimuth_deg=AZIMUTH_DEG, chosen_mics=range(4)):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m, d0 = get_deltas_from_global(yaw_deg=yaw_deg, distances_cm=distances, mic_idx=mic)
-        H[i, :, :] = get_df_theory_simple(deltas, frequencies, d0).T
+        deltas_m, d0 = get_deltas_from_global(azimuth_deg=azimuth_deg, distances_cm=distances, mic_idx=mic)
+        H[i, :, :] = get_df_theory_simple(deltas_m, frequencies, d0).T
     return H
 
 
-def get_freq_slice_pyroom(frequencies, distance_cm, signal, yaw_deg=YAW_DEG):
+def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=AZIMUTH_DEG):
     import pandas as pd
 
-    room = generate_room(distance_cm=distance_cm, yaw_deg=yaw_deg)
+    room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
 
     n_times = len(signal) // N_BUFFER
     mag = get_average_magnitude(
@@ -177,7 +182,7 @@ def get_freq_slice_pyroom(frequencies, distance_cm, signal, yaw_deg=YAW_DEG):
     return mag[:, bins_] ** 2
 
 
-def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=YAW_DEG, n_times=100):
+def get_dist_slice_pyroom(frequency, distances_cm, azimuth_deg=AZIMUTH_DEG, n_times=100):
     from frequency_analysis import get_bin
 
     duration_sec = N_BUFFER * n_times / FS
@@ -189,22 +194,22 @@ def get_dist_slice_pyroom(frequency, distances_cm, yaw_deg=YAW_DEG, n_times=100)
 
     Hs = []
     for d in distances_cm:
-        room = generate_room(distance_cm=d, yaw_deg=yaw_deg)
+        room = generate_room(distance_cm=d, azimuth_deg=azimuth_deg)
         mag = get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=n_times)
         Hs.append(mag[:, bin_] ** 2)
     return np.array(Hs)
 
 
 def get_freq_slice_theory(
-    frequencies, distance_cm, yaw_deg=YAW_DEG, chosen_mics=range(4)
+    frequencies, distance_cm, azimuth_deg=AZIMUTH_DEG, chosen_mics=range(4)
 ):
     """ 
     We can incorporate relative movement by providing
-    distance_cm and yaw_deg of same length as frequencies. 
+    distance_cm and azimuth_deg of same length as frequencies. 
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m, d0 = get_deltas_from_global(yaw_deg=yaw_deg, distances_cm=distance_cm, mic_idx=mic)
+        deltas_m, d0 = get_deltas_from_global(azimuth_deg=azimuth_deg, distances_cm=distance_cm, mic_idx=mic)
         pattern = get_df_theory_simple(deltas_m, frequencies, d0, flat=True)
         Hs[:, i] = pattern
     return Hs
@@ -213,14 +218,14 @@ def get_freq_slice_theory(
 def get_dist_slice_theory(
     frequency,
     distances_cm,
-    yaw_deg=YAW_DEG,
+    azimuth_deg=AZIMUTH_DEG,
     chosen_mics=range(4),
     wall_absorption=WALL_ABSORPTION,
     gains=[GAIN] * 4,
 ):
     """ 
     We can incorporate relative movement by providing
-    distance_cm and yaw_deg of same length as frequencies. 
+    distance_cm and azimuth_deg of same length as frequencies. 
     """
     if np.ndim(gains) == 0:
         gains = [gains] * len(chosen_mics)
@@ -229,7 +234,7 @@ def get_dist_slice_theory(
 
     Hs = np.zeros((len(distances_cm), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m, d0 = get_deltas_from_global(yaw_deg, distances_cm, mic)
+        deltas_m, d0 = get_deltas_from_global(azimuth_deg, distances_cm, mic)
         pattern = get_df_theory_simple(
             deltas_m,
             [frequency],

@@ -45,8 +45,8 @@ class DistanceEstimator(object):
             if (chosen_mics is not None) and (mic_idx not in chosen_mics): 
                 continue
 
-            for yaw_deg in yaws_deg:
-                ds = self.context.get_total_distance(deltas_m, yaw_deg, mic_idx)
+            for azimuth_deg in yaws_deg:
+                ds = self.context.get_total_distance(deltas_m, azimuth_deg, mic_idx)
 
                 for d, prob in zip(ds, delta_probs): 
                     d_rounded = round(d / self.resolution_m) * self.resolution_m
@@ -60,19 +60,18 @@ class DistanceEstimator(object):
                         raise ValueError(METHOD)
         return extract_pdf(distribution)
 
-    # TODO(FD) not working yet! 
-    def get_angle_distribution(self, distance_estimate, chosen_mics=None):
-        """ 
-        note: works only for source at origin. 
-        """
+    def get_angle_distribution(self, distance_estimate_m, chosen_mics=None):
+        assert np.linalg.norm(self.context.source) == 0, 'function only works for source at origin!'
         #yaws_deg = np.arange(-180, 180, step=self.resolution_deg) 
-        distribution = {} #{yaw_deg: 0 for yaw_deg in yaws_deg}
+        distribution = {} #{azimuth_deg: 0 for azimuth_deg in yaws_deg}
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics): 
                 continue
             # for each angle, get the theoretical delta and the two angle possibilities.
+            #deltas_m = [deltas_m[np.argmax(delta_probs)]]
+            #delta_probs = [1.0]
             for delta_m, prob in zip(deltas_m, delta_probs):
-                thetas_deg = self.context.get_angles(delta=delta_m, source_distance=distance_estimate, mic_idx=mic_idx)
+                thetas_deg = self.context.get_angles(delta=delta_m, source_distance=distance_estimate_m, mic_idx=mic_idx)
                 if thetas_deg is None:
                     continue
 
@@ -85,6 +84,15 @@ class DistanceEstimator(object):
                     else:
                         raise ValueError(METHOD)
         return extract_pdf(distribution)
+
+    def get_distance_estimate(self, chosen_mics=None):
+        ds, probs = self.get_distance_distribution(chosen_mics)
+        return get_estimate(ds, probs)
+
+    def get_angle_estimate(self, chosen_mics=None):
+        ts, probs = self.get_angle_distribution(chosen_mics)
+        return get_estimate(ts, probs)
+
 
 # TODO(FD) below is not tested yet
 class AngleEstimator(object): 
@@ -109,8 +117,8 @@ class AngleEstimator(object):
 
             period_theoretical = SPEED_OF_SOUND / frequency  # m in terms of delta
 
-            for yaw_deg in yaws_deg:
-                periods_m_ortho = context.get_delta(yaw_deg=yaw_deg, distance=starting_distance + periods_m, mic_idx=mic_idx)
+            for azimuth_deg in yaws_deg:
+                periods_m_ortho = context.get_delta(azimuth_deg=azimuth_deg, distance=starting_distance + periods_m, mic_idx=mic_idx)
                 sines_gamma = periods_m_ortho / period_theoretical
                 for s, prob in zip(sines_gamma, period_probs):
                     s_rounded = round(s / self.resolution) * self.resolution
