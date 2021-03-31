@@ -31,7 +31,7 @@ class DistanceEstimator(object):
         self.context = Context.get_crazyflie_setup()
 
         self.resolution_m = 1e-2 # resolution of distances, in meters.
-        self.resolution_deg = 1 # resolution of angles, in degrees
+        self.resolution_deg = 2 # resolution of angles, in degrees
 
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
@@ -39,7 +39,7 @@ class DistanceEstimator(object):
         self.data[mic_idx] = (path_differences_m, probabilities)
 
     def get_distance_distribution(self, chosen_mics=None):
-        yaws_deg = np.arange(-180, 180, step=self.resolution_deg) 
+        yaws_deg = np.arange(-180, 180, step=1) 
         distribution = {}
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics): 
@@ -67,7 +67,6 @@ class DistanceEstimator(object):
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics): 
                 continue
-            # for each angle, get the theoretical delta and the two angle possibilities.
             #deltas_m = [deltas_m[np.argmax(delta_probs)]]
             #delta_probs = [1.0]
             for delta_m, prob in zip(deltas_m, delta_probs):

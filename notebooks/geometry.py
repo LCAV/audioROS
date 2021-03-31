@@ -17,6 +17,7 @@ YAW_OFFSET = -42  # in degrees
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
+    #distance_cm += D_OFFSET * 100
     context = Context.get_crazyflie_setup()
     delta = context.get_delta(azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx)
     d0 = context.get_direct_path(mic_idx)
@@ -27,6 +28,7 @@ def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None
     context = Context.get_crazyflie_setup()
     distances_m = context.get_total_distance(deltas_cm * 1e-2, azimuth_deg, mic_idx)
     distances_cm = distances_m * 1e2
+    #distances_cm -= D_OFFSET * 100
     return distances_cm
 
 
@@ -81,7 +83,7 @@ def get_source_image(normal, source):
 
 def get_delta_from_normal(mic, source, normal): 
     """ 
-    :param normal: kcan be of shape (n_distances x dim)
+    :param normal: can be of shape (n_distances x dim)
     """
     vec = source - mic
     r0 = np.linalg.norm(vec)
@@ -155,7 +157,7 @@ def get_angles(mic, source, delta, source_distance):
 
 
 class Context(object):
-    def __init__(self, dim=DIM, mics=None, source=None, d_offset=0):
+    def __init__(self, dim=DIM, mics=None, source=None):
         assert dim in (2, 3), dim
         self.dim = dim
         if mics is not None:
@@ -164,7 +166,6 @@ class Context(object):
             assert source.shape[0] == dim
         self.mics = mics
         self.source = source
-        self.d_offset = d_offset
 
     @staticmethod
     def get_crazyflie_setup(dim=DIM, yaw_offset=YAW_OFFSET):
@@ -172,7 +173,7 @@ class Context(object):
         mics = np.array(MIC_POSITIONS)[:, :dim]
         mics = rotate_mics(mics, yaw_offset)
         source = np.array(BUZZER_POSITION)[0, :dim]
-        return Context(dim, mics, source, d_offset=D_OFFSET)
+        return Context(dim, mics, source) 
 
     @staticmethod
     def get_random_setup(n_mics=4, dim=DIM):
@@ -197,12 +198,8 @@ class Context(object):
         l = 2 * (1 - self.source.dot(normal) / (d**2))
         return self.source + l*normal
 
-    def get_delta_from_normal(self, normal, mic_idx):
-        mic = self.mics[mic_idx, :]
-        return get_delta_from_normal(mic, self.source, normal)
-
     def get_delta(self, azimuth_deg, distances_cm, mic_idx=0):
-        distances_here = np.array(distances_cm)*1e-2 + self.d_offset
+        distances_here = np.array(distances_cm) * 1e-2 
         mic = self.mics[mic_idx]
         normal = get_normal(distances_here, azimuth_deg)
         if np.ndim(normal) > 1:
@@ -211,25 +208,24 @@ class Context(object):
             normal = normal[:2]
         return get_delta_from_normal(mic, self.source, normal)
 
-    def get_source_distance(self, delta, azimuth_deg, mic_idx):
+    def get_source_distance(self, delta_m, azimuth_deg, mic_idx):
         if self.dim == 3:
             raise NotImplementedError("distance retrieval only implemented for 2D setups")
         mic = self.mics[mic_idx, :]
-        return get_source_distance(mic, self.source, delta, azimuth_deg)
+        return get_source_distance(mic, self.source, delta_m, azimuth_deg)
 
-    def get_total_distance(self, delta, azimuth_deg, mic_idx):
+    def get_total_distance(self, delta_m, azimuth_deg, mic_idx):
         if self.dim == 3:
             raise NotImplementedError("distance retrieval only implemented for 2D setups")
-        source_distance = self.get_source_distance(delta, azimuth_deg, mic_idx)
+        source_distance = self.get_source_distance(delta_m, azimuth_deg, mic_idx)
         total_distance = get_total_distance(self.source, source_distance, azimuth_deg)
-        return total_distance - self.d_offset
+        return total_distance 
 
-    def get_angles(self, delta, source_distance, mic_idx): 
-        source_distance += self.d_offset
+    def get_angles(self, delta_m, source_distance_m, mic_idx): 
         if self.dim == 3:
             raise NotImplementedError("angle retrieval only implemented for 2D setups")
         mic = self.mics[mic_idx, :]
-        return get_angles(mic, self.source, delta, source_distance)
+        return get_angles(mic, self.source, delta_m, source_distance_m)
 
     def get_direct_path(self, mic_idx):
         return np.linalg.norm(self.source - self.mics[mic_idx])
@@ -251,7 +247,6 @@ class Context(object):
         if azimuth_deg is not None and distance is not None:
             if normal is not None:
                 print('Warning: overwriting normal!')
-            distance += self.d_offset
             normal = get_normal(distance, azimuth_deg)[:2]
 
         if normal is not None:
@@ -264,3 +259,11 @@ class Context(object):
         ax.set_ylabel('y [m]')
         ax.legend()
         return ax
+
+    def get_possible_distances(self, range_m=0.5, step_m=0.01):
+        # minimum distance for the wall not touching the mics or source:
+        min_distance = max([
+            *np.linalg.norm(self.mics, axis=1),
+            np.linalg.norm(self.source)
+        ])
+        return np.arange(min_distance, min_distance+range_m, step=step_m)

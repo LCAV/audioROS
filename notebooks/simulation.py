@@ -59,7 +59,7 @@ def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
     """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg""" 
     context = Context.get_crazyflie_setup()
 
-    d_wall_m = context.d_offset + distance_cm * 1e-2 # distance of wall
+    d_wall_m = distance_cm * 1e-2 # distance of wall
     offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1]/2] # location of drone
     mic_positions = context.mics
     source = context.source + offset
