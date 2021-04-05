@@ -10,9 +10,9 @@ Depending on the use case, additional requirements are needed:
 - For DOA, the microphone measurements should be accompanied by an exact (ideally micro-second resolution) timestamp. 
 - For Wall detection, a small speaker or buzzer that can produce single-frequency sounds should be included.
 
-The full processing pipeline for the Crazyflie drone, for the example of wall detection, is shown in the figure below.  The ROS components that need to be reimplemented for each new platform are marked in red. The top row shows the hardware pipeline specific to the Crazyflie platform, which is to be replaced with the desired robotic platform. The situation is identical for the DOA usecase. 
+A simplified version of the processing pipeline for the Crazyflie drone is shown in the figure below. The ROS components that need to be reimplemented for each new platform are marked in red. The top row shows the hardware pipeline specific to the Crazyflie platform, which is to be replaced with the desired robotic platform.
 
-![Overview of the full audioROS pipeline](overview.jpg)
+![Overview of the full audioROS pipeline](overview.png)
 
 ## ROS programming
 
