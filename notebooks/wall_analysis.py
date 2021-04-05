@@ -198,11 +198,8 @@ def parse_experiments(
     else:
         mic_type_list = ["audio_deck"]
 
-    from crazyflie_description_py.parameters import (
-        N_BUFFER,
-        WINDOW_TYPES,
-        WINDOW_CORRECTION,
-    )
+    from crazyflie_description_py.parameters import N_BUFFER
+    from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
 
     params_file = load_params(exp_name)
 
