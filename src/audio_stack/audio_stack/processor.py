@@ -23,7 +23,7 @@ from bin_selection import select_frequencies as embedded_select_frequencies
 from audio_interfaces.msg import Signals, SignalsFreq
 from audio_interfaces_py.messages import create_signals_freq_message, read_signals_message
 from audio_interfaces_py.node_with_params import NodeWithParams
-from crazyflie_description_py.parameters import TUKEY_ALPHA
+from audio_stack.parameters import TUKEY_ALPHA
 
 # Denoising method, available: 
 # - "" (no denoising)
