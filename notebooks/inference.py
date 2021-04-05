@@ -117,6 +117,7 @@ def get_probability_cost(
     relative_ds=None,
     absolute_yaws=None,
 ):
+    raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_freq_slice_theory
 
     if absolute_yaws is not None:
@@ -198,6 +199,7 @@ def get_approach_angle_cost(
     mic_idx=1,
     ax=None,
 ):
+    raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_dist_slice_theory
 
     azimuth_deg = AZIMUTH_DEG

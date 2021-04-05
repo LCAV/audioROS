@@ -23,6 +23,35 @@ WIDEBAND_FILE = "results/wideband.npy"
 # default
 N_TIMES = 10 # number of buffers to use for average (pyroomacoutics)
 
+
+def simulate_distance_estimator(
+    chosen_mics=range(4), distance_cm=10, azimuth_deg=0, ax=None
+):
+    from inference import get_probability_bayes
+    from estimators import DistanceEstimator
+    n_max = 1000
+    frequencies = np.linspace(1000, 5000, 32)
+    slices_f = get_freq_slice_theory(
+        frequencies, distance_cm, chosen_mics=chosen_mics, azimuth_deg=azimuth_deg
+    )
+
+    distance_estimator = DistanceEstimator()
+    for i, mic_idx in enumerate(chosen_mics):
+        slice_f = slices_f[:, i]
+        d_bayes, p_bayes, diff_cm = get_probability_bayes(
+            slice_f, frequencies, n_max=n_max
+        )
+        distance_estimator.add_distribution(diff_cm * 1e-2, p_bayes, mic_idx)
+        if ax is not None:
+            ax.scatter(diff_cm, p_bayes, color=f"C{mic_idx}", label=f"mic{mic_idx}")
+            
+    if ax is not None:
+        ax.set_xlabel("path difference [cm]")
+        ax.set_ylabel("probability [-]")
+        ax.legend()
+    return distance_estimator
+
+
 def create_wideband_signal(frequencies, duration_sec=1.0):
     phase = np.random.uniform(0, 2 * np.pi)
     kwargs = dict( 
