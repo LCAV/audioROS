@@ -12,12 +12,10 @@ from audio_stack.beam_former import rotate_mics
 DIM = 2
 
 # this corresponds to the setup in BC325 with stepper motor:
-D_OFFSET = 0.08  # actual distance at zero-distance, in meters
 YAW_OFFSET = -42  # in degrees
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
-    #distance_cm += D_OFFSET * 100
     context = Context.get_crazyflie_setup()
     delta = context.get_delta(azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx)
     d0 = context.get_direct_path(mic_idx)
@@ -28,7 +26,6 @@ def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None
     context = Context.get_crazyflie_setup()
     distances_m = context.get_total_distance(deltas_cm * 1e-2, azimuth_deg, mic_idx)
     distances_cm = distances_m * 1e2
-    #distances_cm -= D_OFFSET * 100
     return distances_cm
 
 

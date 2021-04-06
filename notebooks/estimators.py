@@ -70,7 +70,7 @@ class DistanceEstimator(object):
             #deltas_m = [deltas_m[np.argmax(delta_probs)]]
             #delta_probs = [1.0]
             for delta_m, prob in zip(deltas_m, delta_probs):
-                thetas_deg = self.context.get_angles(delta=delta_m, source_distance=distance_estimate_m, mic_idx=mic_idx)
+                thetas_deg = self.context.get_angles(delta_m=delta_m, source_distance_m=distance_estimate_m, mic_idx=mic_idx)
                 if thetas_deg is None:
                     continue
 

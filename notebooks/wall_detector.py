@@ -232,10 +232,11 @@ class WallDetector(object):
             if len(values) > 1:
                 print(f"Warning: taking slice over multiple values: {values}")
         elif column_value not in values:
-            print(f"Warning: did not find {column_name} {column_value}Hz")
+            print(f"Warning: did not find {column_name} {column_value}")
             bin_ = np.argmin(np.abs(values - column_value))
+            print(bin_)
             column_value = values[bin_]
-            print(f"Closest match: {column_value}Hz")
+            print(f"Closest match: {column_value}")
         df = self.df.loc[self.df[column_name] == column_value]
         return df
 

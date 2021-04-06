@@ -7,8 +7,10 @@ import progressbar
 from pandas_utils import filter_by_dict
 from wall_detector import WallDetector
 
-OVERWRITE_RAW = False  # regenerate raw results instead of reading from backup
+OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
+# this corresponds to the setup in BC325 with stepper motor:
+D_OFFSET = 0.08  # actual distance at zero-distance, in meters
 
 def wall_detector_from_df(df_all, exp_name, mic_type, motors):
     wall_detector = WallDetector(exp_name, mic_type)
@@ -29,6 +31,7 @@ def wall_detector_from_df(df_all, exp_name, mic_type, motors):
         max_index = df_filtered.iloc[-1].name
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
+                row.distance += D_OFFSET * 100
                 wall_detector.fill_from_row(row)
                 p.update(i_row)
         wall_detector.backup(exp_name, mic_type, motors, appendix="_raw")

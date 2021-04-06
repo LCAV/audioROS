@@ -117,7 +117,8 @@ def get_probability_cost(
     relative_ds=None,
     absolute_yaws=None,
 ):
-    raise ValueError("Reminder to change the distance input to include offset!")
+    if np.any(distances < 1):
+        raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_freq_slice_theory
 
     if absolute_yaws is not None:
@@ -176,10 +177,11 @@ def get_approach_angle_fft(
         n_max=1000,
         bayes=False,
         sigma=None,
+        reduced=False
     ):
     from constants import SPEED_OF_SOUND
     period_theoretical = frequency / SPEED_OF_SOUND # 1/m in terms of delta
-    periods_m, prob = get_periods_fft(
+    periods_m, probs = get_periods_fft(
         d_slice,
         frequency,
         relative_distances_cm,
@@ -187,8 +189,12 @@ def get_approach_angle_fft(
         bayes,
         sigma
     )
-    ratio = periods_m / period_theoretical
-    return ratio, prob
+    ratios = periods_m / period_theoretical
+    if not reduced:
+        return ratios, probs
+    else:
+        return get_gamma_distribution(ratios, probs) 
+
 
 def get_approach_angle_cost(
     d_slice,
@@ -199,9 +205,7 @@ def get_approach_angle_cost(
     mic_idx=1,
     ax=None,
 ):
-    raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_dist_slice_theory
-
     azimuth_deg = AZIMUTH_DEG
 
     d_slice_norm = d_slice - np.mean(d_slice)
@@ -234,3 +238,11 @@ def get_approach_angle_cost(
     probs_angle = np.nanmax(probs, axis=0)  # take maximum across distances
     probs_angle /= np.nansum(probs_angle)
     return probs_angle
+
+
+def get_gamma_distribution(ratios, probs, factor=2, eps=1e-1):
+    ratios /= factor
+    valid = ratios <= 1 + eps
+    ratios[valid & (ratios > 1)] = 1.0
+    probs[~valid] = 0
+    return np.arcsin(ratios[valid]) * 180 / np.pi, probs[valid]
