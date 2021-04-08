@@ -159,6 +159,8 @@ def get_periods_fft(
     # the distribution over measured period.
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
     n = max(len(d_slice), n_max)
+
+    #periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
     periods_m = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of orthogonal
 
     abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)

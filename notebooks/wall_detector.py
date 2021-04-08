@@ -547,7 +547,6 @@ class WallDetector(object):
         self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)
 
-    # TODO(FD) remove if not used anymore
     def remove_bad_freqs(self, verbose=False, dryrun=False):
         """ Remove the frequencies with too low medians or too high standard deviation. """
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
@@ -564,7 +563,7 @@ class WallDetector(object):
                 if verbose:
                     print(f"removing {freq} with std {normalized_std(vals)}")
                 remove_rows += list(df.index.values)
-            else:
+            elif verbose:
                 print(
                     f"keeping {freq}: {np.nanmedian(vals):.2e}, {normalized_std(vals):.2e}"
                 )
@@ -577,14 +576,12 @@ class WallDetector(object):
             print("Warning: remove_bad_freqs removed all rows.")
         return len(remove_rows)
 
-    # TODO(FD) remove if not used anymore
-    def remove_bad_measurements(self, mag_thresh=MAG_THRESH, verbose=False):
+    def remove_bad_measurements(self, verbose=False):
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
-        mask = self.df.magnitude < mag_thresh
+        mask_remove = self.df.magnitude < mag_thresh
         if verbose:
-            print(f"removing {np.sum(mask)} rows")
-        self.df = self.df.loc[~mask]
-        mask = self.df.magnitude > mag_thresh
+            print(f"removing {np.sum(mask_remove)} rows")
+        self.df = self.df.loc[~mask_remove]
 
     def remove_outliers(self, factor=3, normalize=True, verbose=False):
         index_remove = []
@@ -608,9 +605,8 @@ class WallDetector(object):
 
     def cleanup(self, verbose=False):
         self.remove_nan_rows()
-        # TODO(FD) make sure these don't really help
-        # self.remove_bad_measurements()
-        # self.remove_bad_freqs(verbose=verbose)
+        self.remove_bad_measurements()
+        self.remove_bad_freqs(verbose=verbose)
         self.merge_close_freqs(verbose=verbose)
         self.remove_outliers()
         self.remove_spurious_freqs(verbose=verbose)

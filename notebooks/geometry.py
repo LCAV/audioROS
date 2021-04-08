@@ -106,27 +106,29 @@ def get_source_distance(mic, source, delta, azimuth_deg):
     theta = azimuth_deg / 180 * np.pi
 
     cos = np.cos(theta - theta0)
-    distance = 0.5 * (-r0*cos + np.sqrt(
+    distance_m = 0.5 * (-r0*cos + np.sqrt(
             r1**2 - r0**2 * (1 - cos**2)
     ))
-    return distance
+    return distance_m
 
 
-def get_total_distance(source, source_distance, azimuth_deg): 
+def get_total_distance(source, source_distance_m, azimuth_deg): 
     """ 
-    source_distance is the distance measured from the source to the wall.
+    source_distance_m is the distance measured from the source to the wall.
     To get the full distance we need to add the projection
     of the source to the wall normal. 
     """
-    normal = get_normal(source_distance, azimuth_deg)
+    normal = get_normal(source_distance_m, azimuth_deg)
     normal = normal[..., :2]
-    if np.ndim(source_distance) > 0:
-        total_distance = source_distance
-        valid = source_distance > 0
-        total_distance[valid] += np.inner(source, normal[valid]) / source_distance[valid]
+    if np.linalg.norm(source) == 0:
+        return source_distance_m
+    if np.ndim(source_distance_m) > 0:
+        total_distance_m = source_distance_m
+        valid = source_distance_m > 0
+        total_distance_m[valid] += np.inner(source, normal[valid]) / source_distance_m[valid]
     else:
-        total_distance = source_distance + np.inner(source, normal) / source_distance
-    return total_distance
+        total_distance_m = source_distance_m + np.inner(source, normal) / source_distance_m
+    return total_distance_m
     
 
 def get_angles(mic, source, delta, source_distance): 
@@ -214,9 +216,9 @@ class Context(object):
     def get_total_distance(self, delta_m, azimuth_deg, mic_idx):
         if self.dim == 3:
             raise NotImplementedError("distance retrieval only implemented for 2D setups")
-        source_distance = self.get_source_distance(delta_m, azimuth_deg, mic_idx)
-        total_distance = get_total_distance(self.source, source_distance, azimuth_deg)
-        return total_distance 
+        source_distance_m = self.get_source_distance(delta_m, azimuth_deg, mic_idx)
+        total_distance_m = get_total_distance(self.source, source_distance_m, azimuth_deg)
+        return total_distance_m
 
     def get_angles(self, delta_m, source_distance_m, mic_idx): 
         if self.dim == 3:
