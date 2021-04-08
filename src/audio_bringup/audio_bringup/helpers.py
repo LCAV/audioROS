@@ -43,9 +43,7 @@ def set_param(node_name, param_name, param_value):
 
 
 def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
-    import launch.Launchdescription
-    import launch.actions
-    import launch.substitutions
+    import launch
     import launch_ros.actions
     logger = launch.substitutions.LaunchConfiguration("log_level")
     launch_arguments = [
