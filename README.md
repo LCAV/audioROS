@@ -6,12 +6,17 @@ This repository contains the ROS2-powered stack to do audio processing for sound
 
 The repository was built for Ubuntu 18.04.4 with ROS2 Eloquent and Python3.6.9. If you are testing with newer versions and run into problems please do not hesitate to get in touch.
 We assume that you have a working python installation with `pip` ready to use.
+If you do not wish to install ubuntu as a dual boot, you can use the EPFL guide on VM's to install ubuntu 20.04(windows/mac) : 
+https://enacit.epfl.ch/virtualisation/virtualbox.shtml
 
 Make sure to clone this repo including submodules by running
 ```
 git clone --recurse-submodules https://github.com/LCAV/audioROS
 ```
-
+If previous function does not run because there are private submodules that do not need to be installed, you can use 
+```
+git -c submodule."<submodule_name>".update=none clone --recurse-submodules https://github.com/LCAV/audioROS
+```
 After installing ROS, and in each new terminal, run
 ```
 source /opt/ros/<distro>/setup.bash
@@ -24,7 +29,7 @@ sudo apt-get install python3-rosdep python3-colcon-common-extensions
 sudo rosdep init
 cp 19-custom.list /etc/ros/rosdep/sources.list.d/ #might need sudo here
 rosdep update 
-rosdep install --from-path src/ --rosdistro $ROS_DISTRO
+rosdep install --from-path src/ --rosdistro $ROS_DISTRO 
 colcon build --symlink-install
 . install/local_setup.bash
 ```
