@@ -277,7 +277,7 @@ def get_dist_slice_theory(
     return Hs
 
 
-def factor_distance_to_delta(d1_cm, rel_movement_cm, mic):
-    delta_d1, d0 = get_deltas_from_global(0, d1_cm, mic)
-    delta_d2, d0 = get_deltas_from_global(0, d1_cm+rel_movement_cm, mic)
-    return (delta_d2 - delta_d1) * 1e2 / rel_movement_cm 
+def factor_distance_to_delta(d1_cm, rel_movement_cm, mic, azimuth_deg=0):
+    delta_d1, d0 = get_deltas_from_global(azimuth_deg, d1_cm, mic)
+    delta_d2, d0 = get_deltas_from_global(azimuth_deg, d1_cm-rel_movement_cm, mic)
+    return (delta_d1 - delta_d2) * 1e2 / rel_movement_cm 
