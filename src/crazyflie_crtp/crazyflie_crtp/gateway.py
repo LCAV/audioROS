@@ -13,10 +13,7 @@ from geometry_msgs.msg import Pose
 from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
 from audio_interfaces_py.messages import create_pose_raw_message, create_signals_freq_message
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
-from reader_crtp import ReaderCRTP
-
+from crazyflie_crtp.reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
