@@ -60,14 +60,18 @@ SOURCE_DIRECTION_DEG = 90.0
 
 class Gateway(Node):
     def __init__(self, reader_crtp):
+
         super().__init__("gateway", 
                 automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
 
         self.start_time = time.time()
 
+        #I only need this publisher for now :
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
+
+        #for now skip these publishers
         self.publisher_motion_pose = self.create_publisher(Pose, "geometry/pose", 10)
         self.publisher_motion_pose_raw = self.create_publisher(
             PoseRaw, "geometry/pose_raw", 10
@@ -98,6 +102,7 @@ class Gateway(Node):
         self.create_timer(1/self.desired_rate, self.publish_current_data)
 
     def publish_current_data(self):
+        #only the first one is for my publisher
         if not self.reader_crtp.audio_dict["published"]:
             self.publish_audio_dict()
             self.reader_crtp.audio_dict["published"] = True
@@ -137,6 +142,7 @@ class Gateway(Node):
         self.publisher_motors.publish(msg)
 
     def publish_audio_dict(self):
+        #reader_crtp is the bluetooth reader for the crazyflie
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
