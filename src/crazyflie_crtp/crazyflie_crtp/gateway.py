@@ -47,8 +47,9 @@ PARAMS_DICT = {
     "turn_angle": (rclpy.Parameter.Type.INTEGER, 0),
     "land_velocity": (rclpy.Parameter.Type.DOUBLE, 0.0),
     "move_distance": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "buzzer_effect": (rclpy.Parameter.Type.INTEGER, -1),
-    "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
+    "buzzer_idx": (rclpy.Parameter.Type.INTEGER, 0),
+    #"buzzer_effect": (rclpy.Parameter.Type.INTEGER, -1),
+    #"buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
 }
 
 # TODO(FD) figure out from where we can read this. Make it a parameter? 
@@ -228,6 +229,10 @@ class Gateway(Node):
                     self.reader_crtp.send_forward_command(param.value)
 
             # send buzzer commands
+            elif param.name == 'buzzer_idx':
+                if param.value >= 0:
+                    self.get_logger().info(f"set {param.name} to {param.value}")
+                    self.reader_crtp.send_buzzer_idx(param.value)
             elif param.name == 'buzzer_effect':
                 if param.value >= 0:
                     self.reader_crtp.send_buzzer_effect(param.value)

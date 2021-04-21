@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-crazyflie.launch.py:  Launch the processing pipeline from the Crazyflie CRTP stream.
+doa_real.launch.py:  Launch the processing pipeline from the Crazyflie CRTP stream.
 """
 
 import sys
@@ -10,6 +10,9 @@ import sys
 import launch
 
 from audio_bringup.helpers import get_launch_description
+
+LOG_LEVEL = "warn"
+BAG_FILE = ""
 
 node_config = {
     "gateway": {"params": [{"filter_snr_enable": 1}], "pkg": "crazyflie_crtp"},

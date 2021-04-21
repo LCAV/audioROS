@@ -397,6 +397,9 @@ class ReaderCRTP(object):
         # wait one more second after landing
         return True
 
+    def send_buzzer_idx(self, idx):
+        self.cf.param.set_value("audio.buzzer_idx", idx)
+
     def send_buzzer_effect(self, effect):
         self.cf.param.set_value("sound.effect", effect)
 
