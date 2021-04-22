@@ -17,11 +17,11 @@ from crazyflie_crtp.reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
 
 logging.basicConfig(level=logging.ERROR)
-#cf_id = "E7E7E7E7E8"
-#id = f"radio://0/80/2M/{cf_id}"
+cf_id = "E7E7E7E7E8"
+id = f"radio://0/80/2M/{cf_id}"
 
-cf_id = "E7E7E7E7E7"
-id = f"radio://0/70/2M/{cf_id}"
+#cf_id = "E7E7E7E7E7"
+#id = f"radio://0/70/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
@@ -170,9 +170,10 @@ class Gateway(Node):
 
         abs_signals_f = np.abs(signals_f)
         if np.any(abs_signals_f > N_BUFFER):
-            self.get_logger().warn("Possibly in valid audio:")
-            self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
-            self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
+            self.get_logger().warn("Possibly invalid audio:")
+            xx, yy = np.where(abs_signals_f > n_BUFFER)
+            self.get_logger().warn(f"at indices: {xx}, {yy}")
+            self.get_logger().warn(f"values: {abs_signals_f[xx, yy]}")
 
         mic_positions_arr = np.array(MIC_POSITIONS)
         msg = create_signals_freq_message(signals_f.T, frequencies, mic_positions_arr, 
