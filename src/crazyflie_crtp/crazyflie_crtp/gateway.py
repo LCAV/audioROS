@@ -171,7 +171,7 @@ class Gateway(Node):
         abs_signals_f = np.abs(signals_f)
         if np.any(abs_signals_f > N_BUFFER):
             self.get_logger().warn("Possibly invalid audio:")
-            xx, yy = np.where(abs_signals_f > n_BUFFER)
+            xx, yy = np.where(abs_signals_f > N_BUFFER)
             self.get_logger().warn(f"at indices: {xx}, {yy}")
             self.get_logger().warn(f"values: {abs_signals_f[xx, yy]}")
 
