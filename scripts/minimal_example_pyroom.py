@@ -1,27 +1,14 @@
-from math import ceil
+import time
+
 import matplotlib.pylab as plt
 import numpy as np
 
 import pyroomacoustics as pra
-
-
-def get_max_delay(room):
-    # TODO(FD) see if we can replace below with a suitable upper bound such as
-    # int(ceil(fs * (pyroom.max_order + 1) * np.linalg.norm(room_dim) / pyroom.c))
-
-    # compute image sources
-    if not room.simulator_state["ism_done"]:
-        room.image_source_model()
-
-    t_max = 0  # maximum delay in seconds
-    for mic in room.mic_array.R.T:
-        for src in room.sources:
-            dist = np.sqrt(np.sum((src.images - mic[:, None]) ** 2, axis=0))
-            t_max = max(max(dist) / room.c, t_max)
-    return t_max
-
+from audio_simulation.pyroom_helpers import simulate_truncated
 
 if __name__ == "__main__":
+    verbose = True
+
     fs = 32000  # sampling frequency [Hz]
     duration_sec = 5  # duration of simulated audio signal [s]
     mic_locs = np.c_[[1, 4, 1], [6, 4, 1]].T  # mics positions [m]
@@ -61,24 +48,21 @@ if __name__ == "__main__":
     for i, position in enumerate(source_pos):
         # full
         pyroom = pra.ShoeBox(room_dim, fs=fs)
+
         pyroom.add_source(position, signal=source_signal[: start_idx + n_buffer])
+        pyroom.add_source([0, 0, 0], signal=np.zeros(start_idx+n_buffer)) # add zero source to make sure it works with multiple sources too.
         pyroom.add_microphone_array(mic_locs.T)
+        t1 = time.time()
         pyroom.simulate()
+        if verbose:
+            print(f"length {start_idx + n_buffer}: took {(time.time() - t1) * 1000:.0f}ms")
+
         simulated_signal_full = pyroom.mic_array.signals[
             :, start_idx : start_idx + n_buffer
         ]
 
         # truncated
-        max_delay = int(ceil(get_max_delay(pyroom) * fs)) + n_extra_samples
-        assert max_delay <= start_idx, (max_delay, start_idx)
-        print(
-            f"simulate with signal of length {max_delay + n_buffer} instead of {start_idx + n_buffer}"
-        )
-        pyroom.sources[0].signal = source_signal[
-            start_idx - max_delay : start_idx + n_buffer
-        ]
-        pyroom.simulate()
-        simulated_signal = pyroom.mic_array.signals[:, max_delay : max_delay + n_buffer]
+        simulated_signal = simulate_truncated(pyroom, start_idx, n_buffer, verbose=verbose)
 
         start_idx += n_buffer
 

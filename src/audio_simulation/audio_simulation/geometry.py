@@ -13,13 +13,13 @@ from geometry_msgs.msg import Pose, Point
 from audio_interfaces_py.messages import get_quaternion
 
 ROOM_DIM = np.array([10., 7., 5.])  # room dimensions [m].
-SOURCE_POS = np.array([5., 6., 1.])  # source position [m], None for no external source.
+SPEAKER_POSITION = np.array([5., 6., 1.])  # source position [m], None for no external source.
 STARTING_POS = np.array([5., 0.2, 1.]) # drone starting position [m]
-YAW_DEG = 30 # starting absoltue yaw angle in degrees
+STARTING_YAW_DEG = 30 # starting absoltue yaw angle in degrees
 
 def get_starting_pose():
     msg = Pose()
-    msg.orientation = get_quaternion(YAW_DEG)
+    msg.orientation = get_quaternion(STARTING_YAW_DEG)
     msg.position = Point(
         x=STARTING_POS[0],
         y=STARTING_POS[1],
@@ -28,7 +28,7 @@ def get_starting_pose():
     return msg
 
 
-def global_positions(local_positions_2D, msg_pose, z=0):
+def global_positions_from_2d(local_positions_2D, msg_pose, z=0):
     """
     Calculate global postions (e.g. of mics) based on the current pose (rotation and translation). 
 
@@ -38,21 +38,34 @@ def global_positions(local_positions_2D, msg_pose, z=0):
 
     :return: global positions (n_mics x 3)
     """
+    assert local_positions_2D.shape[1] == 2
+    n_pos = local_positions_2D.shape[0]
+    local_positions_3D = np.c_[local_positions_2D, np.full((n_pos, 1), z)]
+    return global_positions_from_3d(local_positions_3D, msg_pose)
+
+
+def global_positions_from_3d(local_positions_3D, msg_pose, z=0):
+    """
+    Calculate global postions (e.g. of mics) based on the current pose (rotation and translation).
+
+    :param local_positions_3D: coordinates (e.g. of mics) in local coordinates (n_mics x 3)
+    :param msg_pose: Pose message
+    :return: global positions (n_mics x 3)
+    """
+    assert local_positions_3D.shape[1] == 3
     rotation = np.array([
-        msg_pose.orientation.x, 
-        msg_pose.orientation.y, 
-        msg_pose.orientation.z, 
+        msg_pose.orientation.x,
+        msg_pose.orientation.y,
+        msg_pose.orientation.z,
         msg_pose.orientation.w
     ])
     translation = np.array([
-        msg_pose.position.x, 
-        msg_pose.position.y, 
+        msg_pose.position.x,
+        msg_pose.position.y,
         msg_pose.position.z
     ])
-    n_pos = local_positions_2D.shape[0]
-
+    n_pos = local_positions_3D.shape[0]
     rot = R.from_quat(rotation)
-    local_positions_3D = np.c_[local_positions_2D, np.full((n_pos, 1), z)]
     global_positions = rot.apply(local_positions_3D) + translation
     return global_positions
 

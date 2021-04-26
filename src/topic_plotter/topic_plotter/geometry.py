@@ -14,7 +14,7 @@ import numpy as np
 from audio_interfaces.msg import PoseRaw, DoaEstimates
 from audio_interfaces_py.messages import read_pose_raw_message, read_pose_message
 from audio_stack.topic_synchronizer import TopicSynchronizer
-from audio_simulation.geometry import SOURCE_POS, ROOM_DIM, STARTING_POS
+from audio_simulation.geometry import SPEAKER_POSITION, ROOM_DIM, STARTING_POS
 
 from .live_plotter import LivePlotter
 
@@ -32,7 +32,7 @@ def plot_room(ax):
 
 
 def plot_source(ax):
-    ax.scatter(SOURCE_POS[0], SOURCE_POS[1], color='black')
+    ax.scatter(SPEAKER_POSITION[0], SPEAKER_POSITION[1], color='black')
 
 
 class GeometryPlotter(Node):
