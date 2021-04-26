@@ -9,6 +9,7 @@ from geometry_msgs.msg import Pose
 
 from audio_simulation.geometry import get_starting_pose
 
+
 class ConstantPosePublisher(Node):
     def __init__(self):
         super().__init__("constant_pose_publisher")

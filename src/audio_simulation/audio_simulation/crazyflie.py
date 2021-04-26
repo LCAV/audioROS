@@ -66,6 +66,7 @@ LOOP = True  # flag for looping the signal after reaching the end
 NOISE = (
     1e-2  # white noise to add on signals (variance squared), set to None for no effect
 )
+STARTING_INDEX = 1000  # start reading the signal at this index instead of zero (to avoid boundary effects)
 
 
 def get_source_signal(source_type, source_freq):
@@ -80,28 +81,6 @@ def get_source_signal(source_type, source_freq):
     return source_signal
 
 
-def get_starting_idx(pyroom, mic_array):
-    """
-    Calculate the index of the sample from which on all mics register
-    audio from all sources.
-    """
-    # n_sources x dim:
-    from audio_simulation.pyroom_helpers import get_max_delay
-    return 1000
-
-    p_sources = np.array([s.position for s in pyroom.sources if s.signal is not None])
-    if len(p_sources) == 0:
-        return 0
-    assert p_sources.shape[1] == mic_array.shape[1]
-    # n_sources x n_mics:
-    distances = np.linalg.norm(p_sources[:, None, :] - mic_array[None, :, :], axis=2)
-    max_delay = np.max(distances) / pyroom.physics.get_sound_speed()
-    #max_delay = get_max_delay(pyroom)
-    max_index = int(np.ceil(max_delay * FS))
-    return 1000
-    #return max_index
-
-
 def create_room(speaker_position, buzzer_position, mic_array):
     """
     Create a shoe box room with two sources:
@@ -113,7 +92,7 @@ def create_room(speaker_position, buzzer_position, mic_array):
         ROOM_DIM[:DIM], fs=FS, max_order=NUM_REFLECTIONS, sigma2_awgn=NOISE
     )
     pyroom.add_source(speaker_position[:DIM])
-    pyroom.add_source(buzzer_position[0, :DIM]) # 1 x 3
+    pyroom.add_source(buzzer_position[0, :DIM])  # 1 x 3
     pyroom.add_microphone_array(mic_array.T[:DIM, :])  # dim x n_mics
     return pyroom
 
@@ -141,10 +120,9 @@ class CrazyflieSimulation(Node):
 
         self.create_timer(N_BUFFER / FS, self.timer_callback)
 
-        self.mic_positions = np.array(MIC_POSITIONS) # 4 x 2
-        self.buzzer_position = np.array(BUZZER_POSITION) # 1 x 2
-        self.speaker_position_global = np.array(SPEAKER_POSITION) # 3,
-        self.get_logger().warn(f"{self.mic_positions}")
+        self.mic_positions = np.array(MIC_POSITIONS)  # 4 x 2
+        self.buzzer_position = np.array(BUZZER_POSITION)  # 1 x 2
+        self.speaker_position_global = np.array(SPEAKER_POSITION)  # 3,
 
         self.signals = None
         self.mic_positions_global = None
@@ -185,22 +163,6 @@ class CrazyflieSimulation(Node):
                 self.state = State.CHANGE_SIGNAL
         return SetParametersResult(successful=True)
 
-    def create_room(self):
-        return create_room(
-            self.speaker_position_global,
-            self.buzzer_position_global,
-            self.mic_positions_global,
-        )
-
-    def update_signals(self):
-        self.speaker_signal = get_source_signal(
-            self.audio_params["speaker_type"], self.audio_params["speaker_freq"]
-        )
-        self.buzzer_signal = get_source_signal(
-            self.audio_params["buzzer_type"], self.audio_params["buzzer_freq"]
-        )
-        self.end_idx = min(len(self.buzzer_signal), len(self.speaker_signal))
-
     def timer_callback(self):
         """
         Publish signal chunks at a rate defined by the timer.
@@ -219,25 +181,17 @@ class CrazyflieSimulation(Node):
                 return
             self.room = self.create_room()
             self.state = State.SIMULATE
-            self.get_logger().warn(f"Updated geometry in {time.time() - t1:.2f}s")
+            self.get_logger().info(f"Updated geometry in {time.time() - t1:.2f}s")
             return
 
         elif self.state == State.SIMULATE:
             t1 = time.time()
 
-            if self.global_idx == 0:
-                self.global_idx = get_starting_idx(self.room, self.mic_positions_global)
-                # alternative:
-                # nonzero_indices = np.where(np.all(self.signals > 0, axis=0))[0]
-                # self.global_idx = nonzero_indices[0]
-                # self.end_idx = nonzero_indices[-1]
-                self.get_logger().info(f"Starting at {self.global_idx}")
-
             self.simulate()
             self.global_idx += self.time_idx
             self.time_idx = 0
 
-            self.get_logger().warn(f"Updated signals in {time.time() - t1:.2f}s")
+            self.get_logger().info(f"Updated signals in {time.time() - t1:.2f}s")
             self.state = State.PUBLISH
             return
 
@@ -254,10 +208,10 @@ class CrazyflieSimulation(Node):
             self.time_idx += N_BUFFER
 
             if self.global_idx >= MAX_TIMESTAMP:
-                self.get_logger().warn("timestamp overflow")
+                self.get_logger().warn("Timestamp overflow.")
 
             elif (self.global_idx + N_BUFFER) >= self.end_idx:
-                self.get_logger().warn("end of signal array")
+                self.get_logger().warn("End of signal array.")
 
             elif (self.time_idx + N_BUFFER) > self.n_simulation:
                 self.state = State.SIMULATE
@@ -269,12 +223,12 @@ class CrazyflieSimulation(Node):
 
             # treat the cases where global_idx has reached limit
             if LOOP:
-                self.get_logger().warn("looping")
-                self.global_idx = 0  # will be filled next time we enter this function
+                self.get_logger().warn("Loop back to beginning.")
+                self.global_idx = STARTING_INDEX
                 self.time_idx = 0
                 self.state = State.SIMULATE
             else:
-                self.get_logger().warn("exiting the node")
+                self.get_logger().warn("Exiting node.")
                 self.destroy_node()
                 rclpy.shutdown()  # exit the console command
             return
@@ -282,19 +236,17 @@ class CrazyflieSimulation(Node):
         if self.state == State.IDLE:
             return
 
-    def get_time_ms(self):
-        return int(round(self.global_idx / FS * 1000))
-
     def pose_listener_callback(self, msg_pose):
         """
         Run a simulation and update the signal content when a new pose is received.
         """
         delta = get_relative_movement(self.current_pose, msg_pose)
-        # update the signals if this is the first measurement or if we have moved.
-        if any(delta) or (self.current_pose is None):
+
+        # update the room geometry if we have moved.
+        if any(delta):
             self.state = State.UPDATE_GEOMETRY
         else:
-            self.get_logger().info("Did not move, not updating signals.")
+            self.get_logger().info("Did not move, not updating geometry.")
 
         # create a new pose_raw message.
         pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
@@ -314,7 +266,7 @@ class CrazyflieSimulation(Node):
 
     def simulate(self):
         """
-        Run a pyroomacoustics simulation on a copy of the pyroom attribute 
+        Run a pyroomacoustics simulation on a copy of the pyroom attribute
         of an CrazyflieSimulation object.
         """
         from audio_simulation.pyroom_helpers import simulate_truncated
@@ -327,13 +279,31 @@ class CrazyflieSimulation(Node):
         self.room.sources[1].signal = self.buzzer_signal
         self.signals = simulate_truncated(self.room, self.global_idx, self.n_simulation)
 
+    def create_room(self):
+        return create_room(
+            self.speaker_position_global,
+            self.buzzer_position_global,
+            self.mic_positions_global,
+        )
+
+    def update_signals(self):
+        self.speaker_signal = get_source_signal(
+            self.audio_params["speaker_type"], self.audio_params["speaker_freq"]
+        )
+        self.buzzer_signal = get_source_signal(
+            self.audio_params["buzzer_type"], self.audio_params["buzzer_freq"]
+        )
+        self.end_idx = min(len(self.buzzer_signal), len(self.speaker_signal))
+
     def update_positions(self):
         mic_positions_global = global_positions_from_2d(
             self.mic_positions, self.current_pose, z=HEIGHT_MIC_ARRAY
         )[:, :DIM]
+
         buzzer_position_global = global_positions_from_2d(
             self.buzzer_position, self.current_pose, z=HEIGHT_BUZZER
         )[:, :DIM]
+
         for pos in mic_positions_global:
             if (self.room is not None) and not self.room.is_inside(pos):
                 self.get_logger().warn(f"mic outside room: {pos}")
@@ -344,6 +314,9 @@ class CrazyflieSimulation(Node):
         self.mic_positions_global = mic_positions_global
         self.buzzer_position_global = buzzer_position_global
         return True
+
+    def get_time_ms(self):
+        return int(round(self.global_idx / FS * 1000))
 
 
 def main(args=None):

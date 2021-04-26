@@ -12,19 +12,18 @@ from geometry_msgs.msg import Pose, Point
 
 from audio_interfaces_py.messages import get_quaternion
 
-ROOM_DIM = np.array([10., 7., 5.])  # room dimensions [m].
-SPEAKER_POSITION = np.array([5., 6., 1.])  # source position [m], None for no external source.
-STARTING_POS = np.array([5., 0.2, 1.]) # drone starting position [m]
-STARTING_YAW_DEG = 30 # starting absoltue yaw angle in degrees
+ROOM_DIM = np.array([10.0, 7.0, 5.0])  # room dimensions [m].
+SPEAKER_POSITION = np.array(
+    [5.0, 6.0, 1.0]
+)  # source position [m], None for no external source.
+STARTING_POS = np.array([5.0, 0.2, 1.0])  # drone starting position [m]
+STARTING_YAW_DEG = 30  # starting absoltue yaw angle in degrees
+
 
 def get_starting_pose():
     msg = Pose()
     msg.orientation = get_quaternion(STARTING_YAW_DEG)
-    msg.position = Point(
-        x=STARTING_POS[0],
-        y=STARTING_POS[1],
-        z=STARTING_POS[2]
-    )
+    msg.position = Point(x=STARTING_POS[0], y=STARTING_POS[1], z=STARTING_POS[2])
     return msg
 
 
@@ -53,17 +52,17 @@ def global_positions_from_3d(local_positions_3D, msg_pose, z=0):
     :return: global positions (n_mics x 3)
     """
     assert local_positions_3D.shape[1] == 3
-    rotation = np.array([
-        msg_pose.orientation.x,
-        msg_pose.orientation.y,
-        msg_pose.orientation.z,
-        msg_pose.orientation.w
-    ])
-    translation = np.array([
-        msg_pose.position.x,
-        msg_pose.position.y,
-        msg_pose.position.z
-    ])
+    rotation = np.array(
+        [
+            msg_pose.orientation.x,
+            msg_pose.orientation.y,
+            msg_pose.orientation.z,
+            msg_pose.orientation.w,
+        ]
+    )
+    translation = np.array(
+        [msg_pose.position.x, msg_pose.position.y, msg_pose.position.z]
+    )
     n_pos = local_positions_3D.shape[0]
     rot = R.from_quat(rotation)
     global_positions = rot.apply(local_positions_3D) + translation
@@ -75,15 +74,19 @@ def get_relative_movement(pose1, pose2):
     between pose1 and pose2.
 
     """
-    step_length = np.linalg.norm([
-        pose2.position.x - pose1.position.x,
-        pose2.position.y - pose1.position.y,
-        pose2.position.z - pose1.position.z
-    ])
-    r1, r2 = [R.from_quat([p.orientation.x,
-                           p.orientation.y,
-                           p.orientation.z,
-                           p.orientation.w]) for p in [pose1, pose2]]
-    r = r2 * r1.inv() # "get angle2 - angle1"
-    rotation = r.magnitude() # magnitude of rotation, in radiants
+    step_length = np.linalg.norm(
+        [
+            pose2.position.x - pose1.position.x,
+            pose2.position.y - pose1.position.y,
+            pose2.position.z - pose1.position.z,
+        ]
+    )
+    r1, r2 = [
+        R.from_quat(
+            [p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w]
+        )
+        for p in [pose1, pose2]
+    ]
+    r = r2 * r1.inv()  # "get angle2 - angle1"
+    rotation = r.magnitude()  # magnitude of rotation, in radiants
     return [step_length, rotation]

@@ -37,7 +37,7 @@ def simulate_truncated(pyroom, start_idx, n_buffer, verbose=False):
 
     max_delay = get_max_delay(pyroom)
 
-    #assert max_delay <= start_idx, (max_delay, start_idx)
+    # assert max_delay <= start_idx, (max_delay, start_idx)
 
     min_idx = max(start_idx - max_delay, 0)
     for i in range(len(pyroom.sources)):

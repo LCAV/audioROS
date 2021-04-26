@@ -8,9 +8,10 @@ import rclpy
 from .linear_pose_publisher import LinearPosePublisher, EPS
 from .geometry import ROOM_DIM
 
-VELOCITY = np.array([0., 0.02, 0.]) # m/s, in drone coordinates
-POSITION = np.array([ROOM_DIM[0]/2.0, EPS, ROOM_DIM[2]/2.0])
-MAX_Y = 0.5 # in m
+VELOCITY = np.array([0.0, 0.02, 0.0])  # m/s, in drone coordinates
+POSITION = np.array([ROOM_DIM[0] / 2.0, EPS, ROOM_DIM[2] / 2.0])
+MAX_Y = 0.5  # in m
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -19,7 +20,7 @@ def main(args=None):
         constant_velocity=VELOCITY,
         starting_position=POSITION,
         starting_yaw_deg=0,
-        max_y=MAX_Y
+        max_y=MAX_Y,
     )
 
     rclpy.spin(linear_pub)
