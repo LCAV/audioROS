@@ -148,7 +148,7 @@ class CrazyflieSimulation(Node):
         self.update_positions()
         self.update_geometry()
         self.update_source_signals()
-        self.state = State.UPDATE_SIGNALS
+        self.state = State.SIMULATE
 
     def set_params(self, params):
         for param in params:
