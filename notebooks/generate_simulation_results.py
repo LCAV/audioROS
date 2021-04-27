@@ -13,8 +13,9 @@ import pandas as pd
 
 import progressbar
 
-from simulation import get_df_theory_simple, get_deltas_from_global
-from wall_detector import get_probability_cost, get_probability_fft
+from inference import get_probability_cost, get_probability_fft
+from simulation import get_df_theory_simple
+from geometry import get_deltas_from_global
 
 MIC_IDX = 1
 YAW_DEG = 0
@@ -206,7 +207,7 @@ def simulate_distance_slice(
 def compare_timing(n_instances):
     import time
 
-    yaw_deg = 0
+    azimuth_deg = 0
     distance_cm = 10
     mic_idx = 0
     delta_m, d0 = get_deltas_from_global(YAW_DEG, distance_cm, MIC_IDX)
@@ -238,10 +239,8 @@ def compare_timing(n_instances):
     return times
 
 
-if __name__ == "__main__":
-
+if 0: #__name__ == "__main__":
     ######### distance slice study
-
     ## noisless
     np.random.seed(1)
     start_distance_cm = 50
@@ -325,32 +324,32 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
-
-elif 0:
+elif __name__ == "__main__":
     ######### frequency slice study
     ### amplitude noise study
     np.random.seed(1)
     frequencies = np.linspace(1000, 5000, 100)
-    distances_cm = np.arange(1, 50)
+    distances_cm = np.arange(1, 50, dtype=np.float)
     distances_cm += np.random.uniform(low=-1, high=1, size=len(distances_cm))
 
     fname = "results/simulation/amplitude_noise.pkl"
-    sigmas_delta_cm = [0]  # np.arange(20, step=2) # in meters!
-    sigmas_f = [0]  # np.arange(100, step=20)
+    sigmas_delta_cm = [0]  
+    sigmas_f = [0]
     sigmas_y = np.linspace(0, 2, 100)
     n_instances = 10
-    # print('generating', fname)
-    # results_df = simulate_frequency_slice(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    print('generating', fname)
+    results_df = simulate_frequency_slice(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
+    pd.to_pickle(results_df, fname)
+    print('saved as', fname)
+
+    n_instances = 100
 
     ### delta noise study
-    # fname = "results/simulation/delta_noise.pkl"
-    # sigmas_delta_cm = np.arange(30, step=2)
-    # n_instances = 100
-    fname = "results/simulation/delta_noise_high.pkl"
-    sigmas_delta_cm = np.arange(100, step=5)
-    n_instances = 10
+    fname = "results/simulation/delta_noise.pkl"
+    sigmas_delta_cm = np.arange(30, step=2)
+    #fname = "results/simulation/delta_noise_high.pkl"
+    #sigmas_delta_cm = np.arange(100, step=5)
+    #n_instances = 10
     sigmas_f = [0]  # np.arange(100, step=20)
     sigmas_y = [0]  # np.arange(10)
     print("generating", fname)
@@ -365,22 +364,19 @@ elif 0:
     sigmas_delta_cm = [0]  # np.arange(20)
     sigmas_f = np.arange(200, step=10)
     sigmas_y = [0]  # np.arange(10)
-    n_instances = 10
-    # results_df = simulate_frequency_slice(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    results_df = simulate_frequency_slice(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
+    pd.to_pickle(results_df, fname)
+    print('saved as', fname)
 
     fname = "results/simulation/joint_noise.pkl"
     sigmas_f = [0]
     sigmas_delta_cm = np.arange(30, step=2)
     sigmas_y = [0.1, 0.3, 0.5]
-    n_instances = 100
-    # print('generating', fname)
-    # results_df = simulate_frequency_slice(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
-    # pd.to_pickle(results_df, fname)
-    # print('saved as', fname)
+    print('generating', fname)
+    results_df = simulate_frequency_slice(distances_cm, frequencies, sigmas_delta_cm, sigmas_f, sigmas_y, n_instances)
+    pd.to_pickle(results_df, fname)
+    print('saved as', fname)
 
-    n_instances = 100
     times = compare_timing(n_instances)
     for method, time_list in times.items():
         print(f"average time for {method}: {np.mean(time_list)/n_instances:.3e}s")
