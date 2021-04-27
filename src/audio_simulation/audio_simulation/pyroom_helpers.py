@@ -56,4 +56,5 @@ def simulate_truncated(pyroom, start_idx, n_buffer, verbose=False):
     simulated_signal = deepcopy(
         pyroom.mic_array.signals[:, max_delay : max_delay + n_buffer]
     )
+    assert simulated_signal.shape[1] == n_buffer, f"{simulated_signal.shape}, {n_buffer}, {max_delay}, {min_idx}"
     return simulated_signal

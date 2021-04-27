@@ -21,7 +21,17 @@ MIN_XLIM = -math.inf  # set to -inf for no effect.
 
 
 class LivePlotter(object):
-    def __init__(self, max_ylim=MAX_YLIM, min_ylim=MIN_YLIM, log=True, label='', max_xlim=MAX_XLIM, min_xlim=MIN_XLIM, ax=None, fig=None):
+    def __init__(
+        self,
+        max_ylim=MAX_YLIM,
+        min_ylim=MIN_YLIM,
+        log=True,
+        label="",
+        max_xlim=MAX_XLIM,
+        min_xlim=MIN_XLIM,
+        ax=None,
+        fig=None,
+    ):
         self.max_ylim = max_ylim
         self.min_ylim = min_ylim
         self.max_xlim = max_xlim
@@ -50,11 +60,9 @@ class LivePlotter(object):
         # plotting the figure.
         plt.show(block=False)
 
-
     def handle_close(self, evt):
         plt.close("all")
         print("closed all figures")
-
 
     def handle_resize(self, evt):
         # TODO(FD) this is not called when we resize
@@ -62,13 +70,11 @@ class LivePlotter(object):
         self.fig.canvas.draw()
         print("resize")
 
-
     def clear(self):
         for i in range(len(self.ax.lines)):
             self.ax.lines.pop()
         self.lines = {}
         self.axvlines = {}
-
 
     def update_arrow(self, origin, angle_deg, label="orientation"):
         """ Update arrow coordinates. 
@@ -80,21 +86,24 @@ class LivePlotter(object):
         dx = arrow_length * math.cos(angle_deg * math.pi / 180)
         dy = arrow_length * math.sin(angle_deg * math.pi / 180)
 
-        if label in self.arrows.keys(): # 
-            self.arrows[label]['pointer'].set_data(origin_x + dx, origin_y + dy)
-            self.arrows[label]['line'].set_data([origin_x, origin_x + dx], [origin_y, origin_y + dy])
+        if label in self.arrows.keys():  #
+            self.arrows[label]["pointer"].set_data(origin_x + dx, origin_y + dy)
+            self.arrows[label]["line"].set_data(
+                [origin_x, origin_x + dx], [origin_y, origin_y + dy]
+            )
         else:
             self.arrows[label] = {}
             (line,) = self.ax.plot(
-                    origin_x+dx, origin_y+dy, marker=">", color=f"C{len(self.arrows)}"
+                origin_x + dx, origin_y + dy, marker=">", color=f"C{len(self.arrows)}"
             )
-            self.arrows[label]['pointer'] = line
+            self.arrows[label]["pointer"] = line
             (line,) = self.ax.plot(
-                    [origin_x, origin_x + dx], [origin_y, origin_y + dy], label=label, 
-                    color=f"C{len(self.arrows)}"
+                [origin_x, origin_x + dx],
+                [origin_y, origin_y + dy],
+                label=label,
+                color=f"C{len(self.arrows)}",
             )
-            self.arrows[label]['line'] = line
-
+            self.arrows[label]["line"] = line
 
     def update_lines(self, data_matrix, x_data=None, labels=None, **kwargs):
         """ Plot each row of data_matrix as one line.
@@ -114,25 +123,33 @@ class LivePlotter(object):
                 label = labels[i] if labels is not None else None
                 if self.log:
                     (line,) = self.ax.semilogy(
-                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, **kwargs)
+                        x_data,
+                        data_matrix[i, :],
+                        color=f"C{i % 10}",
+                        label=label,
+                        **kwargs,
+                    )
                 else:
                     (line,) = self.ax.plot(
-                        x_data, data_matrix[i, :], color=f"C{i % 10}", label=label, **kwargs 
+                        x_data,
+                        data_matrix[i, :],
+                        color=f"C{i % 10}",
+                        label=label,
+                        **kwargs,
                     )
                 self.lines[i] = line
 
         self.reset_xlim()
         self.reset_ylim()
 
-
     def update_mesh(self, data_matrix, y_labels=None, name="standard", log=False):
         """ Plot each row of data_matrix in an image. """
         if name in self.meshes.keys():
             if log:
-            	self.meshes[name].set_array(np.log10(data_matrix.flatten()))
+                self.meshes[name].set_array(np.log10(data_matrix.flatten()))
             else:
                 self.meshes[name].set_array(data_matrix.flatten())
-            
+
         else:
             if log:
                 mesh = self.ax.pcolormesh(np.log10(data_matrix))
@@ -152,7 +169,6 @@ class LivePlotter(object):
             new_yticks = np.array(y_labels)[yticks[:-1].astype(int)]
             self.ax.set_yticklabels(new_yticks)
 
-
     def update_axvlines(self, data_vector, **kwargs):
         for i, xcoord in enumerate(data_vector):
             if i in self.axvlines.keys():
@@ -164,7 +180,6 @@ class LivePlotter(object):
                 axvline = self.ax.axvline(xcoord, ls=":", **kwargs)
                 self.axvlines[i] = axvline
 
-
     def update_scatter(self, x_data, y_data, label="position", **kwargs):
         """ Plot x_data and y_data as scattered points.
         """
@@ -173,13 +188,12 @@ class LivePlotter(object):
 
         else:
             (line,) = self.ax.plot(
-                x_data, y_data, label=label, linestyle='-', marker='o', **kwargs
+                x_data, y_data, label=label, linestyle="-", marker="o", **kwargs
             )
             self.scatter[label] = line
 
         self.reset_xlim()
         self.reset_ylim()
-
 
     def reset_ylim(self):
         # recompute the ax.dataLim
@@ -192,7 +206,6 @@ class LivePlotter(object):
 
         # update ax.viewLim using new ax.dataLim
         self.ax.set_ylim(ymin_new, ymax_new)
-
 
     def reset_xlim(self):
         # recompute the ax.dataLim
