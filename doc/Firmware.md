@@ -5,7 +5,7 @@
 
 The state machine running on the audio deck firmware is shown below. 
 
-![State machine of audio deck](state-machine.png)
+![State machine of audio deck](state-machine-audiodeck.png)
 
 ## Crazyflie audio deck driver
 

@@ -97,7 +97,7 @@ def create_signals_message(signals, mic_positions, timestamp, fs):
     msg.n_buffer = signals.shape[1]
     # this is very unlikely to happen and is
     # probably due to signals having the wrong shape.
-    assert msg.n_mics < msg.n_buffer 
+    assert msg.n_mics < msg.n_buffer, f"invalid signals shape {signals.shape}"
     msg.signals_vect = list(signals.flatten().astype(float))
     if mic_positions is not None:
         msg.mic_positions = list(mic_positions.flatten().astype(float))
