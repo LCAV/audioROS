@@ -10,5 +10,7 @@ extend-exclude = '''
   | test_pep257
   | test_copyright
   | setup.py
+  | crazyflie-audio
+  | experiments
 )/
 '''
