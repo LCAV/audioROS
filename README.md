@@ -84,12 +84,10 @@ A diagram of the interactions of the different packages is shown below.
 
 ## Requirements (WIP)
 
-List of requirements to run all nodes in this repo, continuously updated and will (hopefully) eventually be added to installation instructions.
-- pyserial (for turntable handling)
-
 Need to grant access to /dev/ttyACM0:
 
 ```sudo chmod 666 /dev/ttyACM0 ```
+
 
 ## Credits
 
