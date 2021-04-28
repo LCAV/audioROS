@@ -12,7 +12,7 @@ import launch
 
 from audio_bringup.helpers import get_launch_description
 
-params_file = os.path.join('params', 'buzzer_test.yaml')
+params_file = os.path.join("params", "buzzer_test.yaml")
 
 node_config = {
     "gateway": {"params": [params_file], "pkg": "crazyflie_crtp"},
