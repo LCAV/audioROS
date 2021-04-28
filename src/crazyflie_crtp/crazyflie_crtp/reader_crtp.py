@@ -28,44 +28,18 @@ CRTP_PORT_AUDIO = 0x09
 # Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
 
-# TODO(FD): figure out if below changes when the Crazyflie actually flies.
-#
-# Tests have shown that when the flowdeck is attached to the Crazyflie and
-# it is moved around (without flying), then
-# yaw:
-# - stabilizer.yaw, controller.yaw and stateEstimate.yaw are all the same.
-#   They are in degrees and clipped to -180, 180.
-# - mag.x sometimes gives values similar to above 3,
-#   but sometimes it is constantly zero (should it only be used outside?
-# - gyro.z gives the raw yaw rate (or acceleration?).
-# dx/dy:
-# - motion.deltaX and motion.deltaY are in milimeters can be very noisy, especially when
-#   the ground is not textured. motion.deltaY points in "wrong" direction.
-# - stateEstimateZ.vx and stateEstimateZ.vy are in mm/s and more stable
-#  but of course would need to be integrated for a position estimate.
-# - stateEstimate.vx and stateEstimate.vy are in m/s and more stable
-#  but of course would need to be integrated for a position estimate. Note that they use a different
-#  reference frame than motion.deltaX, so they are inverted in the logger.
-# - kalman.PX is in m/s and almost the same as stateEstimate.vx
-# - kalman.X is in m and quite a smooth position estimate
-# z:
-# - range.zrange gives the raw data in milimeters (uint16), which is quite accurate.
-# - stateEstimateZ.z in milimeters (uint16), is more smooth but also overshoots a little bit, and even
-#   goes negative sometimes which is impossible.
-# - stateEstimate.z in meters (float), from barometer. Surprisingly accurate.
-#
+
 # Format:
 # <name-for-ROS>: (<log name from Crazyflie>, <type>, <scaling>)
+#
+# see the notes in docs/Motion.md for explanation of parameters.
 #
 # Note that all parameters are scaled so that they are given in degrees or meters.
 # Also note that we change the coordinate systems so that the "front" on Crazyflie
 # points in positive y direction, and the x points to the right.
 CHOSEN_LOGGERS = {
     "motion": {
-        "yaw": ("stabilizer.yaw", "float"),
-        #'yaw_rate': ('gyro.z', 'float'), # one too many to respect size
-        "dx": ("motion.deltaX", "int16_t", 1000),
-        "dy": ("motion.deltaY", "int16_t", -1000),
+        "yaw_deg": ("stabilizer.yaw", "float"),
         "vx": ("stateEstimate.vy", "float", -1),
         "vy": ("stateEstimate.vx", "float"),
         "x": ("kalman.stateY", "float", -1),
@@ -119,7 +93,9 @@ def test_logging_size(max_size=26):
         for key, vals in log_dict.items():
             size += sizes[vals[1]]
         if size > max_size:
-            raise RuntimeError(f"logging config {logger} too big: {size}>{max_size}")
+            raise RuntimeError(
+                f"logging config {logger} too big: {size}>{max_size}"
+            )
 
 
 class ArrayCRTP(object):
@@ -133,7 +109,9 @@ class ArrayCRTP(object):
         self.name = name
         self.n_frames = n_frames
         self.n_bytes = n_frames * np.dtype(dtype).itemsize + extra_bytes
-        self.n_packets_full, self.n_bytes_last = divmod(self.n_bytes, CRTP_PAYLOAD)
+        self.n_packets_full, self.n_bytes_last = divmod(
+            self.n_bytes, CRTP_PAYLOAD
+        )
         print(f"{name}: waiting for {self.n_bytes} bytes.")
         self.packet_counter = 0
         self.dtype = dtype
@@ -161,7 +139,9 @@ class ArrayCRTP(object):
         # received all full packets, read remaining bytes
         if self.packet_counter == self.n_packets_full:
             self.bytes_array[
-                self.packet_counter * CRTP_PAYLOAD : self.packet_counter * CRTP_PAYLOAD
+                self.packet_counter
+                * CRTP_PAYLOAD : self.packet_counter
+                * CRTP_PAYLOAD
                 + self.n_bytes_last
             ] = packet.datal[: self.n_bytes_last]
 
@@ -187,7 +167,9 @@ class ArrayCRTP(object):
             self.packet_counter += 1
             return False
         else:
-            print(f"unexpected packet: {self.packet_counter} > {self.n_packets_full}")
+            print(
+                f"unexpected packet: {self.packet_counter} > {self.n_packets_full}"
+            )
 
     def reset_array(self):
         if (self.packet_counter != 0) and (
@@ -305,8 +287,12 @@ class ReaderCRTP(object):
         ):  # channel is either 0 or 1: read audio data
             self.audio_array.fill_array_from_crtp(packet, verbose=False)
 
-        elif self.frame_started and packet.channel == 2:  # channel is 2: read fbins
-            filled = self.fbins_array.fill_array_from_crtp(packet, verbose=False)
+        elif (
+            self.frame_started and packet.channel == 2
+        ):  # channel is 2: read fbins
+            filled = self.fbins_array.fill_array_from_crtp(
+                packet, verbose=False
+            )
 
             if filled:
                 # read the timestamp from the last packet
@@ -325,7 +311,8 @@ class ReaderCRTP(object):
 
                 # reject faulty packages
                 if self.audio_timestamp and (
-                    new_audio_timestamp > self.audio_timestamp + ALLOWED_DELTA_US
+                    new_audio_timestamp
+                    > self.audio_timestamp + ALLOWED_DELTA_US
                 ):
                     return
                 self.audio_timestamp = new_audio_timestamp
@@ -376,7 +363,10 @@ class ReaderCRTP(object):
             return False
 
         if motor == "all":
-            [self.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
+            [
+                self.cf.param.set_value(f"motorPowerSet.m{i}", value)
+                for i in range(1, 5)
+            ]
         else:
             self.cf.param.set_value(f"motorPowerSet.{motor}", value)
 
@@ -445,7 +435,9 @@ if __name__ == "__main__":
     log_status = True
     cflib.crtp.init_drivers(enable_debug_driver=False)
 
-    parser = argparse.ArgumentParser(description="Read CRTP data from Crazyflie.")
+    parser = argparse.ArgumentParser(
+        description="Read CRTP data from Crazyflie."
+    )
     parser.add_argument(
         "id",
         metavar="ID",

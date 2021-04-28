@@ -4,8 +4,13 @@ from rclpy.node import Node
 import numpy as np
 import matplotlib.pylab as plt
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw
-from audio_interfaces_py.messages import read_signals_freq_message
+from audio_interfaces.msg import SignalsFreq
+from geometry_msgs.msg import PoseStamped
+
+from audio_interfaces_py.messages import (
+    read_signals_freq_message,
+    convert_sec_nanosec_to_ms,
+)
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
 from .live_plotter import LivePlotter
@@ -24,11 +29,14 @@ class WallApproachPlotter(Node):
 
         self.signals_f_synch = TopicSynchronizer(10)
         self.subscription_signals_f = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.signals_f_synch.listener_callback, 10
+            SignalsFreq,
+            "audio/signals_f",
+            self.signals_f_synch.listener_callback,
+            10,
         )
 
-        self.subscription_pose_raw = self.create_subscription(
-            PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
+        self.subscription_pose = self.create_subscription(
+            PoseStamped, "geometry/pose", self.listener_callback_pose, 10
         )
 
         self.plotter_dict = {}
@@ -48,12 +56,16 @@ class WallApproachPlotter(Node):
             self.plotter_dict[i].ax.set_title(f"mic{i}")
         self.plotter_dict[0].ax.set_ylabel("loudness")
 
-    def listener_callback_pose_raw(self, msg_pose):
+    def listener_callback_pose(self, msg_pose):
+        timestamp = convert_sec_nanosec_to_ms(
+            msg_pose.header.stamp.sec, msg_pose.header.stamp.nanosec
+        )
+
         msg_signals_f = self.signals_f_synch.get_latest_message(
-            msg_pose.timestamp, self.get_logger()
+            timestamp, self.get_logger()
         )
         if msg_signals_f is not None:
-            self.get_logger().info(f"Processing pose {msg_pose.timestamp}")
+            self.get_logger().info(f"Processing pose {timestamp}")
             __, signals_f, freqs = read_signals_freq_message(msg_signals_f)
             # remove zero frequencies
             signals_f = signals_f[freqs > 0, :]  # n_freqs x n_mics
@@ -64,7 +76,7 @@ class WallApproachPlotter(Node):
             else:
                 f_idx = np.argmin(np.abs(freqs - FREQ_HZ))
 
-            xdata = msg_pose.y * 100  # cm
+            xdata = msg_pose.pose.position.y * 100  # cm
             ydata = np.abs(signals_f[f_idx, :])
             self.get_logger().info(
                 f"y coordinate [cm]: {xdata:.0f}, frequency [Hz]: {freqs[f_idx]}"
@@ -88,7 +100,7 @@ class WallApproachPlotter(Node):
             self.plotter_dict[0].ax.legend(loc="upper left")
         else:
             self.get_logger().warn(
-                f"No valid signals message for pose {msg_pose.timestamp}"
+                f"No valid signals message for pose {timestamp}"
             )
 
         self.fig.canvas.draw()
@@ -97,7 +109,7 @@ class WallApproachPlotter(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    plotter = WallPlotter()
+    plotter = WallApproachPlotter()
 
     rclpy.spin(plotter)
 

@@ -4,7 +4,7 @@ crazyflie.py: Publish simulated audio signals for the Crazyflie drone in a room.
 """
 
 from enum import Enum
-from math import atan2, ceil
+from math import ceil
 import os
 import sys
 import time
@@ -16,18 +16,14 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
 
-from audio_interfaces.msg import Signals, PoseRaw
-from audio_interfaces_py.messages import (
-    create_signals_message,
-    create_pose_raw_message_from_poses,
-)
+from audio_interfaces.msg import Signals
+from audio_interfaces_py.messages import create_signals_message
 from audio_simulation.geometry import (
     global_positions_from_2d,
-    global_positions_from_3d,
     get_relative_movement,
-    get_starting_pose,
+    get_starting_pose_msg,
 )
 from audio_simulation.geometry import ROOM_DIM, SPEAKER_POSITION
 from crazyflie_description_py.parameters import (
@@ -62,9 +58,7 @@ NUM_REFLECTIONS = 1  # number of reflections to consider in pyroomacoustis.
 DIM = 2  # dimension of simulation
 DURATION_SEC = 20  # duration of simulated audio signals
 LOOP = True  # flag for looping the signal after reaching the end
-NOISE = (
-    1e-2  # white noise to add on signals (variance squared), set to None for no effect
-)
+NOISE = 1e-2  # white noise to add on signals (variance squared), set to None for no effect
 STARTING_INDEX = 3000  # start reading the signal at this index instead of zero (to avoid boundary effects)
 
 
@@ -72,7 +66,9 @@ def get_source_signal(source_type, source_freq):
     if source_type == "random":
         source_signal = generate_signal_random(FS, DURATION_SEC)
     elif source_type == "mono":
-        source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=source_freq)
+        source_signal = generate_signal_mono(
+            FS, DURATION_SEC, frequency_hz=source_freq
+        )
     elif source_type in [None, "none"]:
         source_signal = np.zeros(int(ceil(FS * DURATION_SEC)))
     else:
@@ -101,7 +97,6 @@ def create_room(speaker_position, buzzer_position, mic_array):
 
 
 class CrazyflieSimulation(Node):
-
     # constants
     mic_positions = np.array(MIC_POSITIONS)  # 4 x 2
     buzzer_position = np.array(BUZZER_POSITION)  # 1 x 2
@@ -113,17 +108,18 @@ class CrazyflieSimulation(Node):
             automatically_declare_parameters_from_overrides=True,
             allow_undeclared_parameters=True,
         )
-        self.publisher_pose_raw = self.create_publisher(
-            PoseRaw, "geometry/pose_raw", 10
+        self.publisher_signals = self.create_publisher(
+            Signals, "audio/signals", 10
         )
-        self.publisher_signals = self.create_publisher(Signals, "audio/signals", 10)
         self.subscription_position = self.create_subscription(
-            Pose, "geometry/pose", self.pose_listener_callback, 10
+            PoseStamped, "geometry/pose", self.pose_listener_callback, 10
         )
         self.create_timer(N_BUFFER / FS, self.timer_callback)
 
         # parameters
-        self.simulation_idx = STARTING_INDEX  # where we are currently in the signal
+        self.simulation_idx = (
+            STARTING_INDEX  # where we are currently in the signal
+        )
         self.buffer_idx = 0  # index current buffer
         self.end_idx = None  # length of signal
 
@@ -136,7 +132,7 @@ class CrazyflieSimulation(Node):
         self.speaker_signal = None
 
         self.room = None
-        self.current_pose = get_starting_pose()
+        self.current_pose = get_starting_pose_msg().pose
 
         # parameter stuff
         self.audio_params = {key: val[1] for key, val in PARAMS_DICT.items()}
@@ -155,7 +151,9 @@ class CrazyflieSimulation(Node):
             # we need this in case this parameter
             # was not set at startup; then we use the default values.
             if param.type_ == param.Type.NOT_SET:
-                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
+                param = rclpy.parameter.Parameter(
+                    param.name, *PARAMS_DICT[param.name]
+                )
 
             self.audio_params[param.name] = param.value
 
@@ -192,7 +190,9 @@ class CrazyflieSimulation(Node):
             self.update_mic_signals()
 
             self.state = State.PUBLISH
-            self.get_logger().info(f"Updated geometry in {time.time() - t1:.2f}s")
+            self.get_logger().info(
+                f"Updated geometry in {time.time() - t1:.2f}s"
+            )
             return
 
         elif self.state == State.SIMULATE:
@@ -200,7 +200,9 @@ class CrazyflieSimulation(Node):
 
             self.update_mic_signals()
 
-            self.get_logger().info(f"Updated signals in {time.time() - t1:.2f}s")
+            self.get_logger().info(
+                f"Updated signals in {time.time() - t1:.2f}s"
+            )
             self.state = State.PUBLISH
             return
 
@@ -228,7 +230,9 @@ class CrazyflieSimulation(Node):
                 if self.get_time_ms() >= MAX_TIMESTAMP:
                     self.get_logger().warn("Timestamp overflow.")
 
-                elif (self.simulation_idx + N_BUFFER * self.n_buffers) >= self.end_idx:
+                elif (
+                    self.simulation_idx + N_BUFFER * self.n_buffers
+                ) >= self.end_idx:
                     self.get_logger().warn("End of signal array.")
 
                 else:
@@ -254,30 +258,14 @@ class CrazyflieSimulation(Node):
         """
         Run a simulation and update the signal content when a new pose is received.
         """
-        delta = get_relative_movement(self.current_pose, msg_pose)
+        delta = get_relative_movement(self.current_pose, msg_pose.pose)
 
         # update the room geometry if we have moved.
         if any(delta):
             self.state = State.UPDATE_GEOMETRY
         else:
             self.get_logger().info("Did not move, not updating geometry.")
-
-        # publish pose
-        pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
-        if SPEAKER_POSITION is not None:
-            source_direction_deg = (
-                atan2(
-                    SPEAKER_POSITION[1] - msg_pose.position.y,
-                    SPEAKER_POSITION[0] - msg_pose.position.x,
-                )
-                * 180
-                / np.pi
-            )
-            pose_raw_msg.source_direction_deg = source_direction_deg
-        pose_raw_msg.timestamp = self.get_time_ms()
-        self.publisher_pose_raw.publish(pose_raw_msg)
-
-        self.current_pose = msg_pose
+        self.current_pose = msg_pose.pose
         return
 
     def update_geometry(self):
@@ -298,7 +286,8 @@ class CrazyflieSimulation(Node):
         self.room.sources[1].signal = self.buzzer_signal
 
         assert (
-            len(self.speaker_signal) >= self.simulation_idx + self.n_buffers * N_BUFFER
+            len(self.speaker_signal)
+            >= self.simulation_idx + self.n_buffers * N_BUFFER
         )
         self.mic_signals = simulate_truncated(
             self.room, self.simulation_idx, self.n_buffers * N_BUFFER
@@ -316,14 +305,20 @@ class CrazyflieSimulation(Node):
 
     def update_positions(self):
         mic_positions_global = global_positions_from_2d(
-            CrazyflieSimulation.mic_positions, self.current_pose, z=HEIGHT_MIC_ARRAY
+            CrazyflieSimulation.mic_positions,
+            self.current_pose,
+            z=HEIGHT_MIC_ARRAY,
         )[:, :DIM]
 
         buzzer_position_global = global_positions_from_2d(
-            CrazyflieSimulation.buzzer_position, self.current_pose, z=HEIGHT_BUZZER
+            CrazyflieSimulation.buzzer_position,
+            self.current_pose,
+            z=HEIGHT_BUZZER,
         )[:, :DIM]
 
-        for pos in [pos for pos in mic_positions_global] + [buzzer_position_global]:
+        for pos in [pos for pos in mic_positions_global] + [
+            buzzer_position_global
+        ]:
             if (self.room is not None) and not self.room.is_inside(pos):
                 self.get_logger().warn(f"Position outside room: {pos}")
                 return False
@@ -333,8 +328,14 @@ class CrazyflieSimulation(Node):
         return True
 
     def get_time_ms(self):
+        # use one of below?
+        # self.get_clock().now()
+        # self.get_clock().now().seconds_nanoseconds()
+        # time.time()
         return int(
-            round((self.simulation_idx + self.buffer_idx * N_BUFFER) / FS * 1000)
+            round(
+                (self.simulation_idx + self.buffer_idx * N_BUFFER) / FS * 1000
+            )
         )
 
 

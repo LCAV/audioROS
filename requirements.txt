@@ -1,3 +1,4 @@
+cflib
 pre-commit
 numpy
 scipy

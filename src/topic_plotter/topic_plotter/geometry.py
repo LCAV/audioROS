@@ -7,12 +7,15 @@ geometry.py:
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
 
 import numpy as np
 
-from audio_interfaces.msg import PoseRaw, DoaEstimates
-from audio_interfaces_py.messages import read_pose_raw_message, read_pose_message
+from audio_interfaces.msg import PoseRaw, DoaEstimates, GroundTruth
+from audio_interfaces_py.messages import (
+    read_pose_raw_message,
+    read_pose_message,
+)
 from audio_stack.topic_synchronizer import TopicSynchronizer
 from audio_simulation.geometry import SPEAKER_POSITION, ROOM_DIM, STARTING_POS
 
@@ -45,19 +48,26 @@ class GeometryPlotter(Node):
         )
 
         self.subscription_pose = self.create_subscription(
-            Pose, "geometry/pose", self.listener_callback_pose, 10
+            PoseStamped, "geometry/pose", self.listener_callback_pose, 10
         )
 
         self.subscription_doa = self.create_subscription(
-            DoaEstimates, "geometry/doa_estimates", self.listener_callback_doa, 10
+            DoaEstimates,
+            "geometry/doa_estimates",
+            self.listener_callback_doa,
+            10,
+        )
+
+        self.subscription_doa = self.create_subscription(
+            DoaEstimates,
+            "geometry/ground_truth",
+            self.listener_callback_doa,
+            10,
         )
 
         self.plotter_dict = {}
         # initialize a starting position for pose_raw, as it only contains delta positions
-        self.pose_motion_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
         self.pose_imu_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
-        self.pose_kalman_list = np.array([STARTING_POS[:2]]).reshape((2, 1))
-        self.kalman_start_pos = None
         self.previous_time = None
 
         # need no starting position for pose as it has absolute positions
@@ -65,9 +75,12 @@ class GeometryPlotter(Node):
 
         # for error calculations
         self.error_list = []
-        self.raw_pose_synch = TopicSynchronizer(20)
+        self.ground_truth_synch = TopicSynchronizer(20)
         self.subscription = self.create_subscription(
-            PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 10
+            GroundTruth,
+            "geometry/ground_truth",
+            self.ground_truth_synch.listener_callback,
+            10,
         )
 
     def init_plotter(self, name, xlabel="x", ylabel="y"):
@@ -96,20 +109,20 @@ class GeometryPlotter(Node):
 
         if yaw_deg is not None:
             self.plotter_dict[name].update_arrow(
-                pose_list[:, -1], yaw_deg, label="yaw_deg"
+                pose_list[:, -1], yaw_deg, label="yaw"
             )
 
         if source_direction_deg is not None:
             self.plotter_dict[name].update_arrow(
-                pose_list[:, -1], source_direction_deg, label="source_direction_deg"
+                pose_list[:, -1], source_direction_deg, label="source direction"
             )
 
         self.plotter_dict[name].ax.legend(loc="upper right")
 
     def listener_callback_pose_raw(self, msg_pose_raw):
+        """ Plot the latest poses, calculated from the velocity estimates. """
         self.init_plotter("pose raw", xlabel=XLABEL, ylabel=YLABEL)
-
-        r_world, d_motion, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
+        r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
 
         if self.previous_time is None:
             self.previous_time = msg_pose_raw.timestamp
@@ -118,44 +131,23 @@ class GeometryPlotter(Node):
         d_imu = v_world * delta_sec
         self.previous_time = msg_pose_raw.timestamp
 
-        self.get_logger().info(
-            f"yaw [deg]: {yaw:3.0f}, global dx [mm]: {d_motion[0]*1000:4.0f}, global dy [mm]:{d_motion[1]*1000:4.0f}"
-        )
-
-        pose_motion = self.pose_motion_list[:, -1] + d_motion
-        self.pose_motion_list = np.c_[self.pose_motion_list, pose_motion]
-
         pose_imu = self.pose_imu_list[:, -1] + d_imu
         self.pose_imu_list = np.c_[self.pose_imu_list, pose_imu]
 
-        # make sure we always start plotting at STARTING_POS, even though
-        # the Kalman estiamte might be non-zero in the beginning.
-        if self.kalman_start_pos is None:
-            self.kalman_start_pos = r_world[:2] - STARTING_POS[:2]
-
-        pose_kalman = r_world[:2] - self.kalman_start_pos
-        self.pose_kalman_list = np.c_[self.pose_kalman_list, pose_kalman]
-
-        if self.pose_motion_list.shape[1] > MAX_LENGTH:
-            self.pose_motion_list = self.pose_motion_list[:, -MAX_LENGTH:]
         if self.pose_imu_list.shape[1] > MAX_LENGTH:
             self.pose_imu_list = self.pose_imu_list[:, -MAX_LENGTH:]
-        if self.pose_kalman_list.shape[1] > MAX_LENGTH:
-            self.pose_kalman_list = self.pose_kalman_list[:, -MAX_LENGTH:]
 
-        # self.update_plotter("pose raw", self.pose_motion_list, yaw, msg_pose_raw.source_direction_deg, pose_label="motion")
-        # self.update_plotter("pose raw", self.pose_imu_list, pose_label="imu")
-        self.update_plotter("pose raw", self.pose_kalman_list, pose_label="kalman")
-        # self.plotter_dict["pose raw"].ax.set_xlim(4.9, 5.3)
-        # self.plotter_dict["pose raw"].ax.set_ylim(0.1, 0.5)
+        self.update_plotter("pose raw", self.pose_imu_list, pose_label="imu")
         self.plotter_dict["pose raw"].fig.canvas.draw()
 
     def listener_callback_pose(self, msg_pose):
+        """ Plot the latest poses. """
         self.init_plotter("pose", xlabel=XLABEL, ylabel=YLABEL)
 
         new_position, yaw, pitch, roll = read_pose_message(msg_pose)
         assert pitch == 0, pitch
         assert roll == 0, roll
+
         self.pose_list = np.c_[self.pose_list, new_position]
 
         if self.pose_list.shape[1] > MAX_LENGTH:
@@ -165,20 +157,22 @@ class GeometryPlotter(Node):
         self.plotter_dict["pose"].fig.canvas.draw()
 
     def listener_callback_doa(self, msg_doa):
-        self.init_plotter("pose raw", xlabel=XLABEL, ylabel=YLABEL)
+        """ Plot the estimated DOA directions on the most recent pose. """
+        self.init_plotter("pose", xlabel=XLABEL, ylabel=YLABEL)
 
         doa_estimates = list(msg_doa.doa_estimates_deg)
 
         for i, doa_estimate in enumerate(doa_estimates):
-            self.plotter_dict["pose raw"].update_arrow(
-                self.pose_motion_list[:, -1], doa_estimate, label=f"doa {i}"
+            self.plotter_dict["pose"].update_arrow(
+                self.pose_list[:, -1], doa_estimate, label=f"doa {i}"
             )
-        self.plotter_dict["pose raw"].fig.canvas.draw()
+        self.plotter_dict["pose"].fig.canvas.draw()
 
         # calculate the current error
-        message = self.raw_pose_synch.get_latest_message(
+        message = self.ground_truth_synch.get_latest_message(
             msg_doa.timestamp, self.get_logger()
         )
+
         if message is not None:
             orientation = message.source_direction_deg
             error = abs(orientation - doa_estimates[0])

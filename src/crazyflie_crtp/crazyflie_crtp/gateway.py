@@ -10,14 +10,25 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose
 
-from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, CrazyflieMotors
+from audio_interfaces.msg import (
+    SignalsFreq,
+    PoseRaw,
+    CrazyflieStatus,
+    CrazyflieMotors,
+)
 from audio_interfaces_py.messages import (
+    create_pose_message,
     create_pose_raw_message,
     create_signals_freq_message,
 )
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
-from crazyflie_description_py.parameters import MIC_POSITIONS, N_MICS, FS, N_BUFFER
+from crazyflie_description_py.parameters import (
+    MIC_POSITIONS,
+    N_MICS,
+    FS,
+    N_BUFFER,
+)
 
 logging.basicConfig(level=logging.ERROR)
 cf_id = "E7E7E7E7E8"
@@ -55,9 +66,6 @@ PARAMS_DICT = {
     # "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
 }
 
-# TODO(FD) figure out from where we can read this. Make it a parameter?
-SOURCE_DIRECTION_DEG = 90.0
-
 
 class Gateway(Node):
     def __init__(self, reader_crtp):
@@ -72,7 +80,9 @@ class Gateway(Node):
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
-        self.publisher_motion_pose = self.create_publisher(Pose, "geometry/pose", 10)
+        self.publisher_motion_pose = self.create_publisher(
+            Pose, "geometry/pose", 10
+        )
         self.publisher_motion_pose_raw = self.create_publisher(
             PoseRaw, "geometry/pose_raw", 10
         )
@@ -83,9 +93,8 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
-        # TODO(FD) for pose message, not used anymore. Remove?
-        # self.prev_position_x = 0.0
-        # self.prev_position_y = 0.0
+        self.prev_position_x = 0.0
+        self.prev_position_y = 0.0
 
         self.reader_crtp = reader_crtp
 
@@ -133,7 +142,9 @@ class Gateway(Node):
         data = self.reader_crtp.logging_dicts["motors"]["data"]
         if data is not None:
             msg.motors_pwm = [float(data[f"m{i}_pwm"]) for i in range(1, 5)]
-            msg.motors_thrust = [float(data[f"m{i}_thrust"]) for i in range(1, 5)]
+            msg.motors_thrust = [
+                float(data[f"m{i}_thrust"]) for i in range(1, 5)
+            ]
         else:
             msg.motors_pwm = []
             msg.motors_thrust = []
@@ -202,17 +213,16 @@ class Gateway(Node):
         motion_dict = self.reader_crtp.logging_dicts["motion"]["data"]
         timestamp = self.reader_crtp.logging_dicts["motion"]["timestamp"]
 
-        msg_pose_raw = create_pose_raw_message(motion_dict, timestamp)
-        msg_pose_raw.source_direction_deg = SOURCE_DIRECTION_DEG
+        msg_pose_raw = create_pose_raw_message(
+            **motion_dict, timestamp=timestamp
+        )
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
-        # TODO(FD) pose is not currently used. Remove this or move it somewhere else?
-        # msg_pose = create_pose_message(motion_dict,
-        #        self.prev_position_x, self.prev_position_y, timestamp)
-        # self.publisher_motion_pose.publish(msg_pose)
-        # self.prev_position_x = msg_pose.position.x
-        # self.prev_position_y = msg_pose.position.y
-        self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
+        msg_pose = create_pose_message(**motion_dict, timestamp=timestamp)
+        self.publisher_motion_pose.publish(msg_pose)
+        self.get_logger().debug(
+            f"{msg_pose_raw.timestamp}: Published motion data."
+        )
 
     def set_params(self, params):
         """ Overwrite the function set_params by NodeWithParams. 
@@ -226,7 +236,9 @@ class Gateway(Node):
             # was not set yet at startup.
             # then we use the default values.
             if param.type_ == param.Type.NOT_SET:
-                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
+                param = rclpy.parameter.Parameter(
+                    param.name, *PARAMS_DICT[param.name]
+                )
 
             # send motor commands
             if param.name == "hover_height":
@@ -262,7 +274,9 @@ class Gateway(Node):
                 success = self.reader_crtp.send_thrust_command(param.value)
             elif param.name in [f"m{i}" for i in range(1, 5)]:
                 self.get_logger().info(f"set {param.name} to {param.value}")
-                success = self.reader_crtp.send_thrust_command(param.value, param.name)
+                success = self.reader_crtp.send_thrust_command(
+                    param.value, param.name
+                )
             elif param.name == "send_audio_enable":
                 self.reader_crtp.send_audio_enable(param.value)
             else:
@@ -276,7 +290,9 @@ class Gateway(Node):
     def set_audio_param(self, param):
         old_value = self.get_parameter(param.name).value
         try:
-            self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
+            self.reader_crtp.cf.param.set_value(
+                f"audio.{param.name}", param.value
+            )
             self.get_logger().info(
                 f"changed {param.name} from {old_value} to {param.value}"
             )
