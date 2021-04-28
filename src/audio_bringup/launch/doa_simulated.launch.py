@@ -15,18 +15,18 @@ LOG_LEVEL = "warn"
 
 node_config = {
     "crazyflie": {
-        "pkg": "audio_simulation", 
-        "params": [{"buzzer_freq":0, "source_type":"random"}]
+        "pkg": "audio_simulation",
+        "params": [{"buzzer_freq": 0, "source_type": "random"}],
     },
     "linear_pose_publisher": {"pkg": "audio_simulation"},
     "processor": {
         "pkg": "audio_stack",
-        "params": [{"min_freq":1000, "max_freq":5000}]
+        "params": [{"min_freq": 1000, "max_freq": 5000}],
     },
     "spectrum_estimator": {"pkg": "audio_stack"},
     "doa_estimator": {"pkg": "audio_stack"},
-    #"audio": {"pkg": "topic_plotter"},
-    #"doa": {"pkg": "topic_plotter"}, is very slow
+    # "audio": {"pkg": "topic_plotter"},
+    # "doa": {"pkg": "topic_plotter"}, is very slow
     "geometry": {"pkg": "topic_plotter"},
 }
 

@@ -30,97 +30,96 @@ logging.basicConfig(level=logging.ERROR)
 
 # TODO(FD): figure out if below changes when the Crazyflie actually flies.
 #
-# Tests have shown that when the flowdeck is attached to the Crazyflie and 
-# it is moved around (without flying), then 
+# Tests have shown that when the flowdeck is attached to the Crazyflie and
+# it is moved around (without flying), then
 # yaw:
-# - stabilizer.yaw, controller.yaw and stateEstimate.yaw are all the same. 
+# - stabilizer.yaw, controller.yaw and stateEstimate.yaw are all the same.
 #   They are in degrees and clipped to -180, 180.
-# - mag.x sometimes gives values similar to above 3, 
-#   but sometimes it is constantly zero (should it only be used outside? 
+# - mag.x sometimes gives values similar to above 3,
+#   but sometimes it is constantly zero (should it only be used outside?
 # - gyro.z gives the raw yaw rate (or acceleration?).
-# dx/dy: 
-# - motion.deltaX and motion.deltaY are in milimeters can be very noisy, especially when 
-#   the ground is not textured. motion.deltaY points in "wrong" direction. 
-# - stateEstimateZ.vx and stateEstimateZ.vy are in mm/s and more stable 
+# dx/dy:
+# - motion.deltaX and motion.deltaY are in milimeters can be very noisy, especially when
+#   the ground is not textured. motion.deltaY points in "wrong" direction.
+# - stateEstimateZ.vx and stateEstimateZ.vy are in mm/s and more stable
 #  but of course would need to be integrated for a position estimate.
-# - stateEstimate.vx and stateEstimate.vy are in m/s and more stable 
-#  but of course would need to be integrated for a position estimate. Note that they use a different 
+# - stateEstimate.vx and stateEstimate.vy are in m/s and more stable
+#  but of course would need to be integrated for a position estimate. Note that they use a different
 #  reference frame than motion.deltaX, so they are inverted in the logger.
-# - kalman.PX is in m/s and almost the same as stateEstimate.vx 
-# - kalman.X is in m and quite a smooth position estimate 
+# - kalman.PX is in m/s and almost the same as stateEstimate.vx
+# - kalman.X is in m and quite a smooth position estimate
 # z:
 # - range.zrange gives the raw data in milimeters (uint16), which is quite accurate.
-# - stateEstimateZ.z in milimeters (uint16), is more smooth but also overshoots a little bit, and even 
-#   goes negative sometimes which is impossible. 
-# - stateEstimate.z in meters (float), from barometer. Surprisingly accurate. 
-# 
-# Format: 
+# - stateEstimateZ.z in milimeters (uint16), is more smooth but also overshoots a little bit, and even
+#   goes negative sometimes which is impossible.
+# - stateEstimate.z in meters (float), from barometer. Surprisingly accurate.
+#
+# Format:
 # <name-for-ROS>: (<log name from Crazyflie>, <type>, <scaling>)
-# 
-# Note that all parameters are scaled so that they are given in degrees or meters. 
-# Also note that we change the coordinate systems so that the "front" on Crazyflie 
-# points in positive y direction, and the x points to the right. 
+#
+# Note that all parameters are scaled so that they are given in degrees or meters.
+# Also note that we change the coordinate systems so that the "front" on Crazyflie
+# points in positive y direction, and the x points to the right.
 CHOSEN_LOGGERS = {
-    'motion': {
-        'yaw': ('stabilizer.yaw', 'float'),
+    "motion": {
+        "yaw": ("stabilizer.yaw", "float"),
         #'yaw_rate': ('gyro.z', 'float'), # one too many to respect size
-        'dx': ('motion.deltaX', 'int16_t', 1000),
-        'dy': ('motion.deltaY', 'int16_t', -1000),
-        'vx': ('stateEstimate.vy', 'float', -1),
-        'vy': ('stateEstimate.vx', 'float'),
-        'x': ('kalman.stateY', 'float', -1),
-        'y': ('kalman.stateX', 'float'),
-        'z': ('range.zrange', 'uint16_t', 1000),
+        "dx": ("motion.deltaX", "int16_t", 1000),
+        "dy": ("motion.deltaY", "int16_t", -1000),
+        "vx": ("stateEstimate.vy", "float", -1),
+        "vy": ("stateEstimate.vx", "float"),
+        "x": ("kalman.stateY", "float", -1),
+        "y": ("kalman.stateX", "float"),
+        "z": ("range.zrange", "uint16_t", 1000),
     },
-    'status': {
-        'vbat': ('pm.vbat', 'float'),
+    "status": {"vbat": ("pm.vbat", "float"),},
+    "motors": {
+        "m1_pwm": ("pwm.m1_pwm", "uint32_t"),
+        "m2_pwm": ("pwm.m2_pwm", "uint32_t"),
+        "m3_pwm": ("pwm.m3_pwm", "uint32_t"),
+        "m4_pwm": ("pwm.m4_pwm", "uint32_t"),
+        "m1_thrust": ("audio.m1_thrust", "uint16_t"),
+        "m2_thrust": ("audio.m2_thrust", "uint16_t"),
+        "m3_thrust": ("audio.m3_thrust", "uint16_t"),
+        "m4_thrust": ("audio.m4_thrust", "uint16_t"),
     },
-    'motors': {
-        'm1_pwm': ('pwm.m1_pwm', 'uint32_t'),
-        'm2_pwm': ('pwm.m2_pwm', 'uint32_t'),
-        'm3_pwm': ('pwm.m3_pwm', 'uint32_t'),
-        'm4_pwm': ('pwm.m4_pwm', 'uint32_t'),
-        'm1_thrust': ('audio.m1_thrust', 'uint16_t'), 
-        'm2_thrust': ('audio.m2_thrust', 'uint16_t'),
-        'm3_thrust': ('audio.m3_thrust', 'uint16_t'),
-        'm4_thrust': ('audio.m4_thrust', 'uint16_t'),
-    }
 }
 
 LOGGING_PERIODS_MS = {
-    'motion': 10,
-    'status': 1000,
-    'motors': 100,
+    "motion": 10,
+    "status": 1000,
+    "motors": 100,
 }
 
-CRTP_PAYLOAD = 29 # number of bytes per package
+CRTP_PAYLOAD = 29  # number of bytes per package
 
 # audio signals data
 N_FRAMES_AUDIO = FFTSIZE * N_MICS * 2  # *2 for complex numbers
 AUDIO_DTYPE = np.float32
-N_FRAMES_FBINS = FFTSIZE 
+N_FRAMES_FBINS = FFTSIZE
 FBINS_DTYPE = np.uint16
 
-# the timestamp is sent in the end of the fbins messages, as an uint32. 
+# the timestamp is sent in the end of the fbins messages, as an uint32.
 N_BYTES_TIMESTAMP = 4
 ALLOWED_DELTA_US = 1e6
 
-def test_logging_size(max_size=26): 
+
+def test_logging_size(max_size=26):
     sizes = {
-        'float': 4,
-        'uint32_t': 4,
-        'uint16_t': 2,
-        'uint8_t': 1,
-        'int32_t': 4,
-        'int16_t': 2,
-        'int8_t': 1,
+        "float": 4,
+        "uint32_t": 4,
+        "uint16_t": 2,
+        "uint8_t": 1,
+        "int32_t": 4,
+        "int16_t": 2,
+        "int8_t": 1,
     }
     for logger, log_dict in CHOSEN_LOGGERS.items():
         size = 0
         for key, vals in log_dict.items():
             size += sizes[vals[1]]
         if size > max_size:
-            raise RuntimeError(f'logging config {logger} too big: {size}>{max_size}')
+            raise RuntimeError(f"logging config {logger} too big: {size}>{max_size}")
 
 
 class ArrayCRTP(object):
@@ -131,7 +130,7 @@ class ArrayCRTP(object):
         :param dtype: the type of data to be read (np.float32/np.uint16/etc.)
         :param name: name of this array (used for printing only)
         """
-        self.name = name 
+        self.name = name
         self.n_frames = n_frames
         self.n_bytes = n_frames * np.dtype(dtype).itemsize + extra_bytes
         self.n_packets_full, self.n_bytes_last = divmod(self.n_bytes, CRTP_PAYLOAD)
@@ -151,16 +150,20 @@ class ArrayCRTP(object):
         :returns: True if the array was filled, False if it is not full yet.
         """
         if verbose and (self.name == "fbins"):
-            print(f"ReaderCRTP: filling fbins {self.packet_counter} (every second should be zero or one): {packet.datal}")
+            print(
+                f"ReaderCRTP: filling fbins {self.packet_counter} (every second should be zero or one): {packet.datal}"
+            )
         elif verbose and (self.name == "audio"):
-            print(f"ReaderCRTP: filling audio {self.packet_counter} (first 6 floats): {packet.datal[:6*4]}")
+            print(
+                f"ReaderCRTP: filling audio {self.packet_counter} (first 6 floats): {packet.datal[:6*4]}"
+            )
 
         # received all full packets, read remaining bytes
         if self.packet_counter == self.n_packets_full:
             self.bytes_array[
-                self.packet_counter * CRTP_PAYLOAD:
-                self.packet_counter * CRTP_PAYLOAD + self.n_bytes_last
-            ] = packet.datal[:self.n_bytes_last] 
+                self.packet_counter * CRTP_PAYLOAD : self.packet_counter * CRTP_PAYLOAD
+                + self.n_bytes_last
+            ] = packet.datal[: self.n_bytes_last]
 
             self.array = np.frombuffer(self.bytes_array, dtype=self.dtype)
 
@@ -168,15 +171,17 @@ class ArrayCRTP(object):
             self.packet_counter += 1
             return True
         elif self.packet_counter < self.n_packets_full:
-            if (self.packet_counter == 0):
+            if self.packet_counter == 0:
                 self.packet_start_time = time.time()
 
-            assert (self.packet_counter + 1)*CRTP_PAYLOAD < len(self.bytes_array), \
-            f"{self.name}: index {self.packet_counter * CRTP_PAYLOAD} exceeds length {len(self.array)}"
+            assert (self.packet_counter + 1) * CRTP_PAYLOAD < len(
+                self.bytes_array
+            ), f"{self.name}: index {self.packet_counter * CRTP_PAYLOAD} exceeds length {len(self.array)}"
 
             self.bytes_array[
-                self.packet_counter * CRTP_PAYLOAD: 
-                (self.packet_counter + 1) * CRTP_PAYLOAD
+                self.packet_counter
+                * CRTP_PAYLOAD : (self.packet_counter + 1)
+                * CRTP_PAYLOAD
             ] = packet.datal
 
             self.packet_counter += 1
@@ -185,10 +190,14 @@ class ArrayCRTP(object):
             print(f"unexpected packet: {self.packet_counter} > {self.n_packets_full}")
 
     def reset_array(self):
-        if (self.packet_counter != 0) and (self.packet_counter != self.n_packets_full + 1):
-            print(f"{self.name}: packet loss, received only {self.packet_counter}/{self.n_packets_full+1}.")
+        if (self.packet_counter != 0) and (
+            self.packet_counter != self.n_packets_full + 1
+        ):
+            print(
+                f"{self.name}: packet loss, received only {self.packet_counter}/{self.n_packets_full+1}."
+            )
             success = False
-        else: 
+        else:
             success = True
 
         self.packet_counter = 0
@@ -213,10 +222,17 @@ class ReaderCRTP(object):
     """
 
     # TODO(FD) potentially replace with constant read in ROS
-    VELOCITY = 0.05 # 3 seconds for 15cm
-    BATTERY_OK = 3 #4.1 #3.83
+    VELOCITY = 0.05  # 3 seconds for 15cm
+    BATTERY_OK = 3  # 4.1 #3.83
 
-    def __init__(self, crazyflie, verbose=False, log_motion=False, log_status=True, log_motors=False):
+    def __init__(
+        self,
+        crazyflie,
+        verbose=False,
+        log_motion=False,
+        log_status=True,
+        log_motors=False,
+    ):
 
         test_logging_size()
         self.start_time = time.time()
@@ -229,29 +245,26 @@ class ReaderCRTP(object):
         self.mc = MotionCommander(self.cf)
 
         self.logging_dicts = {
-                key: {
-                   'timestamp': None, 
-                   'data': None, 
-                   'published': True
-                } for key in ['motion', 'status', 'motors']
+            key: {"timestamp": None, "data": None, "published": True}
+            for key in ["motion", "status", "motors"]
         }
         if log_motion:
-            self.init_log_config('motion')
+            self.init_log_config("motion")
         if log_status:
-            self.init_log_config('status')
-        if log_motors: 
-            self.init_log_config('motors')
+            self.init_log_config("status")
+        if log_motors:
+            self.init_log_config("motors")
 
         self.cf.add_port_callback(CRTP_PORT_AUDIO, self.callback_audio)
         self.cf.add_port_callback(CRTPPort.CONSOLE, self.callback_console)
 
         # this data can be read and published by ROS nodes
         self.audio_dict = {
-                'timestamp': None, 
-                'audio_timestamp': None, 
-                'signals_f_vect': None, 
-                'fbins': None,
-                'published': True
+            "timestamp": None,
+            "audio_timestamp": None,
+            "signals_f_vect": None,
+            "fbins": None,
+            "published": True,
         }
 
         self.audio_array = ArrayCRTP(AUDIO_DTYPE, N_FRAMES_AUDIO, "audio")
@@ -287,71 +300,82 @@ class ReaderCRTP(object):
             self.audio_array.reset_array()
             self.fbins_array.reset_array()
 
-        if self.frame_started and (packet.channel in [0, 1]): # channel is either 0 or 1: read audio data
+        if self.frame_started and (
+            packet.channel in [0, 1]
+        ):  # channel is either 0 or 1: read audio data
             self.audio_array.fill_array_from_crtp(packet, verbose=False)
 
-        elif self.frame_started and packet.channel == 2: # channel is 2: read fbins
+        elif self.frame_started and packet.channel == 2:  # channel is 2: read fbins
             filled = self.fbins_array.fill_array_from_crtp(packet, verbose=False)
 
-            if filled: 
+            if filled:
                 # read the timestamp from the last packet
                 timestamp_bytes = np.array(
-                        packet.datal[self.fbins_array.n_bytes_last:
-                        self.fbins_array.n_bytes_last + N_BYTES_TIMESTAMP], 
-                        dtype=np.uint8)
+                    packet.datal[
+                        self.fbins_array.n_bytes_last : self.fbins_array.n_bytes_last
+                        + N_BYTES_TIMESTAMP
+                    ],
+                    dtype=np.uint8,
+                )
 
                 # frombuffer returns array of length 1
-                new_audio_timestamp = int(np.frombuffer(timestamp_bytes, dtype=np.uint32)[0])
+                new_audio_timestamp = int(
+                    np.frombuffer(timestamp_bytes, dtype=np.uint32)[0]
+                )
 
                 # reject faulty packages
-                if self.audio_timestamp and (new_audio_timestamp > self.audio_timestamp + ALLOWED_DELTA_US):
-                    return 
+                if self.audio_timestamp and (
+                    new_audio_timestamp > self.audio_timestamp + ALLOWED_DELTA_US
+                ):
+                    return
                 self.audio_timestamp = new_audio_timestamp
 
-                self.audio_dict['published'] = False
-                self.audio_dict['signals_f_vect'] = self.audio_array.array
-                self.audio_dict['fbins'] = self.fbins_array.array
-                self.audio_dict['audio_timestamp'] = self.audio_timestamp
-                self.audio_dict['timestamp'] = self.get_time_ms()
-                    
+                self.audio_dict["published"] = False
+                self.audio_dict["signals_f_vect"] = self.audio_array.array
+                self.audio_dict["fbins"] = self.fbins_array.array
+                self.audio_dict["audio_timestamp"] = self.audio_timestamp
+                self.audio_dict["timestamp"] = self.get_time_ms()
+
                 if self.verbose:
-                    packet_time = time.time() - self.audio_dict['timestamp']
-                    print(f"ReaderCRTP callback: time for all packets: {packet_time}s, current timestamp: {new_audio_timestamp}, update rate: {self.update_rate:.2f}")
-                    self.update_rate = 1/(time.time() - self.last_packet_time)
+                    packet_time = time.time() - self.audio_dict["timestamp"]
+                    print(
+                        f"ReaderCRTP callback: time for all packets: {packet_time}s, current timestamp: {new_audio_timestamp}, update rate: {self.update_rate:.2f}"
+                    )
+                    self.update_rate = 1 / (time.time() - self.last_packet_time)
                     self.last_packet_time = time.time()
 
     def callback_console(self, packet):
-        message = ''.join(chr(n) for n in packet.datal)
-        print(message, end='')
+        message = "".join(chr(n) for n in packet.datal)
+        print(message, end="")
 
     def callback_logging(self, timestamp, data, logconf):
         dict_to_fill = self.logging_dicts[logconf.name]
-        dict_to_fill['timestamp'] = self.get_time_ms()
-        dict_to_fill['published'] = False
-        dict_to_fill['data'] = {}
+        dict_to_fill["timestamp"] = self.get_time_ms()
+        dict_to_fill["published"] = False
+        dict_to_fill["data"] = {}
         for key, vals in CHOSEN_LOGGERS[logconf.name].items():
             value = data[vals[0]]
             if len(vals) == 3:
                 value /= vals[2]
-            dict_to_fill['data'][key] = value
-        #if self.verbose:
+            dict_to_fill["data"][key] = value
+        # if self.verbose:
         #    print(f'ReaderCRTP {logconf.name} callback: {dict_to_fill["data"]}')
 
     def battery_ok(self):
-        battery = self.logging_dicts['status']['data']['vbat']
+        battery = self.logging_dicts["status"]["data"]["vbat"]
         if battery is None:
             return True
-        elif battery <= self.BATTERY_OK: 
+        elif battery <= self.BATTERY_OK:
             print(f"Warning: battery only at {battery}, not executing command")
             return False
         return True
 
-    def send_thrust_command(self, value, motor='all'):
+    def send_thrust_command(self, value, motor="all"):
         # current_value = np.mean([self.cf.param.values['motorPowerSet.m{i}'] for i in range(1, 5)])
         if (value > 0) and not self.battery_ok():
             return False
 
-        if motor == 'all':
+        if motor == "all":
             [self.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
         else:
             self.cf.param.set_value(f"motorPowerSet.{motor}", value)
@@ -414,15 +438,21 @@ class ReaderCRTP(object):
 
 if __name__ == "__main__":
     import argparse
+
     verbose = True
     log_motors = True
     log_motion = True
     log_status = True
     cflib.crtp.init_drivers(enable_debug_driver=False)
 
-    parser = argparse.ArgumentParser(description='Read CRTP data from Crazyflie.')
-    parser.add_argument('id', metavar='ID', type=int, help='number of Crazyflie ("radio://0/[ID]0/2M")',
-                        default=8)
+    parser = argparse.ArgumentParser(description="Read CRTP data from Crazyflie.")
+    parser.add_argument(
+        "id",
+        metavar="ID",
+        type=int,
+        help='number of Crazyflie ("radio://0/[ID]0/2M")',
+        default=8,
+    )
     args = parser.parse_args()
 
     id = f"radio://0/{args.id}0/2M/E7E7E7E7E{args.id}"
@@ -430,7 +460,13 @@ if __name__ == "__main__":
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
 
-        reader_crtp = ReaderCRTP(cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors, log_status=log_status)
+        reader_crtp = ReaderCRTP(
+            cf,
+            verbose=verbose,
+            log_motion=log_motion,
+            log_motors=log_motors,
+            log_status=log_status,
+        )
 
         try:
             while True:

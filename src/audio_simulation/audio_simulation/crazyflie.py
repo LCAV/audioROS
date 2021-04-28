@@ -67,6 +67,7 @@ NOISE = (
 )
 STARTING_INDEX = 3000  # start reading the signal at this index instead of zero (to avoid boundary effects)
 
+
 def get_source_signal(source_type, source_freq):
     if source_type == "random":
         source_signal = generate_signal_random(FS, DURATION_SEC)
@@ -137,7 +138,6 @@ class CrazyflieSimulation(Node):
         self.room = None
         self.current_pose = get_starting_pose()
 
-
         # parameter stuff
         self.audio_params = {key: val[1] for key, val in PARAMS_DICT.items()}
         self.set_parameters_callback(self.set_params)
@@ -207,9 +207,12 @@ class CrazyflieSimulation(Node):
         elif self.state == State.PUBLISH:
             timestamp = self.get_time_ms()
 
-            assert (self.buffer_idx + 1) * N_BUFFER <= self.mic_signals.shape[1], f"not enough values {self.mic_signals.shape} for buffer idx {self.buffer_idx} {N_BUFFER}"
-            signal_to_send = self.mic_signals[:, self.buffer_idx * N_BUFFER:
-                                             (self.buffer_idx + 1) * N_BUFFER]
+            assert (self.buffer_idx + 1) * N_BUFFER <= self.mic_signals.shape[
+                1
+            ], f"not enough values {self.mic_signals.shape} for buffer idx {self.buffer_idx} {N_BUFFER}"
+            signal_to_send = self.mic_signals[
+                :, self.buffer_idx * N_BUFFER : (self.buffer_idx + 1) * N_BUFFER
+            ]
             msg = create_signals_message(
                 signal_to_send, CrazyflieSimulation.mic_positions, timestamp, FS
             )
@@ -262,10 +265,14 @@ class CrazyflieSimulation(Node):
         # publish pose
         pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
         if SPEAKER_POSITION is not None:
-            source_direction_deg = atan2(
-                SPEAKER_POSITION[1] - msg_pose.position.y,
-                SPEAKER_POSITION[0] - msg_pose.position.x,
-            ) * 180 / np.pi
+            source_direction_deg = (
+                atan2(
+                    SPEAKER_POSITION[1] - msg_pose.position.y,
+                    SPEAKER_POSITION[0] - msg_pose.position.x,
+                )
+                * 180
+                / np.pi
+            )
             pose_raw_msg.source_direction_deg = source_direction_deg
         pose_raw_msg.timestamp = self.get_time_ms()
         self.publisher_pose_raw.publish(pose_raw_msg)
@@ -290,8 +297,12 @@ class CrazyflieSimulation(Node):
         self.room.sources[0].signal = self.speaker_signal
         self.room.sources[1].signal = self.buzzer_signal
 
-        assert len(self.speaker_signal) >= self.simulation_idx + self.n_buffers * N_BUFFER
-        self.mic_signals = simulate_truncated(self.room, self.simulation_idx, self.n_buffers * N_BUFFER)
+        assert (
+            len(self.speaker_signal) >= self.simulation_idx + self.n_buffers * N_BUFFER
+        )
+        self.mic_signals = simulate_truncated(
+            self.room, self.simulation_idx, self.n_buffers * N_BUFFER
+        )
         self.get_logger().info(f"updated signals: {self.mic_signals.shape}")
 
     def update_source_signals(self):
@@ -322,7 +333,9 @@ class CrazyflieSimulation(Node):
         return True
 
     def get_time_ms(self):
-        return int(round((self.simulation_idx + self.buffer_idx * N_BUFFER) / FS * 1000))
+        return int(
+            round((self.simulation_idx + self.buffer_idx * N_BUFFER) / FS * 1000)
+        )
 
 
 def main(args=None):

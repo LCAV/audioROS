@@ -6,7 +6,6 @@ stream_publisher.py:
 """
 
 
-
 import rclpy
 
 import sounddevice as sd
@@ -19,9 +18,7 @@ N_BUFFER = 2048
 
 
 class StreamPublisher(AudioPublisher):
-    def __init__(
-        self, Fs, publish_rate=None, blocking=False, mic_positions=None
-    ):
+    def __init__(self, Fs, publish_rate=None, blocking=False, mic_positions=None):
         super().__init__(
             "stream_publisher",
             mic_positions=mic_positions,
@@ -48,7 +45,9 @@ class StreamPublisher(AudioPublisher):
         # non-blocking stream, less ROS-like, problematic for plotting. But we do not lose samples.
         else:
             with sd.InputStream(
-                channels=self.n_mics, callback=self.publish_signals_callback, blocksize=n_buffer
+                channels=self.n_mics,
+                callback=self.publish_signals_callback,
+                blocksize=n_buffer,
             ) as stream:
                 sd.sleep(self.duration_ms)
                 # need below return or we will stay in this context forever
@@ -83,9 +82,6 @@ def main(args=None):
     Fs = 44100
     blocking = False
 
-    publisher = StreamPublisher(
-        Fs=Fs,
-        blocking=blocking,
-    )
+    publisher = StreamPublisher(Fs=Fs, blocking=blocking,)
 
     rclpy.shutdown()

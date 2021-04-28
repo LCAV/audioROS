@@ -21,9 +21,10 @@ from audio_interfaces.msg import Spectrum, DoaEstimates
 from audio_interfaces_py.messages import read_spectrum_message, create_doa_message
 from audio_stack.beam_former import combine_rows, normalize_rows
 
-N_ESTIMATES = 3 # number of peaks to detect
-COMBINATION_METHOD = "sum" # way to combine across frequencies
+N_ESTIMATES = 3  # number of peaks to detect
+COMBINATION_METHOD = "sum"  # way to combine across frequencies
 NORMALIZE = "zero_to_one"
+
 
 class DoaEstimator(Node):
     def __init__(self):
@@ -45,7 +46,9 @@ class DoaEstimator(Node):
         final_spectrum = normalize_rows(final_spectrum, NORMALIZE)
 
         angles = np.linspace(0, 360, msg_spec.n_angles)
-        sorted_indices = np.argsort(final_spectrum.flatten()) # sorts in ascending order
+        sorted_indices = np.argsort(
+            final_spectrum.flatten()
+        )  # sorts in ascending order
         doa_estimates = angles[sorted_indices[-N_ESTIMATES:][::-1]]
 
         msg_doa = create_doa_message(doa_estimates, msg_spec.timestamp)
