@@ -4,21 +4,25 @@
 """
 parameters.py: Parameters specific to the Crazyflie drone.
 """
-
-MIC_D = 0.108  # distance between mics (meters)
+MIC_D = 0.0607  # distance of mics from centre
 MIC_POSITIONS_UNIT = [
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-    [1, 1],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 0],
 ]  # relative mic positions, normalized.
 MIC_POSITIONS = [
-    [MIC_D / 2 * m for m in mics] for mics in MIC_POSITIONS_UNIT
+    [MIC_D * m for m in mics] for mics in MIC_POSITIONS_UNIT
 ]  # relative mic positions (meters)
-HEIGHT_MIC_ARRAY = 0.0  # height of mic array with respect to drone center (in meters)
+
+HEIGHT_MIC_ARRAY = (
+    0.0  # height of mic array with respect to drone center (in meters)
+)
 
 BUZZER_POSITION = [[0.0, 0.0]]  # relative buzzer position (in meters)
-HEIGHT_BUZZER = 0.01  # height of buzzer with resepect to drone center (in meters)
+HEIGHT_BUZZER = (
+    0.01  # height of buzzer with resepect to drone center (in meters)
+)
 
 N_MICS = 4  # number of mics
 FS = 32000  # sampling frequency [Hz]
