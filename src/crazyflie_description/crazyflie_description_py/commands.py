@@ -9,15 +9,16 @@ from .parameters import SOUND_EFFECTS
 # for distances: distance_m * 5 (/0.2)
 motor_command_lists = {
      'hover': [
-        ('/gateway', 'hover_height', 0.5, 0),
+        ('/gateway', 'hover_height', 0.2, 0),
         ('/gateway', 'move_forward', 0, 20), # stay in place, but wait for 20 seconds.
         ('/gateway', 'land_velocity', 0.2, 3),
      ],
      'hover_sweep_short': [
-        ('/gateway', 'hover_height', 0.2, 0),
+        ('/gateway', 'hover_height', 0.4, 0),
+        #('/gateway', 'move_distance', 0.01, 0), # 10 cm
         ('/gateway', 'buzzer_effect', 17, 0),
         ('', '', '', 20), # time delay only
-        ('/gateway', 'land_velocity', 0.2),
+        ('/gateway', 'land_velocity', 0.2, 0),
      ],
      'linear':[
         ('/gateway', 'hover_height', 0.5, 0),
