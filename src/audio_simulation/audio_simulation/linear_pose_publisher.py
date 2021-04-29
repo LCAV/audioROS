@@ -12,8 +12,12 @@ from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import PoseStamped
 
 from audio_interfaces_py.messages import create_pose_message_from_arrays
-from audio_simulation.geometry import get_starting_pose_msg
-from audio_simulation.geometry import ROOM_DIM, STARTING_POS, STARTING_YAW_DEG
+from crazyflie_description_py.experiments import (
+    get_starting_pose_msg,
+    ROOM_DIM,
+    STARTING_POS,
+    STARTING_YAW_DEG,
+)
 
 VELOCITY = np.array([0.0, 0.5, 0.0])  # m/s, in drone coordinates
 EPS = 0.2  # m, safety margin from walls

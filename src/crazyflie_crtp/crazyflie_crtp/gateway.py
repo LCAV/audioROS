@@ -8,18 +8,20 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
 
 from audio_interfaces.msg import (
-    SignalsFreq,
-    PoseRaw,
-    CrazyflieStatus,
     CrazyflieMotors,
+    CrazyflieStatus,
+    GroundTruth,
+    PoseRaw,
+    SignalsFreq,
 )
 from audio_interfaces_py.messages import (
     create_pose_message,
     create_pose_raw_message,
     create_signals_freq_message,
+    create_ground_truth_message,
 )
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
@@ -28,6 +30,12 @@ from crazyflie_description_py.parameters import (
     N_MICS,
     FS,
     N_BUFFER,
+)
+from crazyflie_description_py.experiments import (
+    WALL_DISTANCE_M,
+    WALL_ANGLE_DEG,
+    STARTING_POS,
+    STARTING_YAW_DEG,
 )
 
 logging.basicConfig(level=logging.ERROR)
@@ -39,6 +47,7 @@ id = f"radio://0/80/2M/{cf_id}"
 
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
+
 
 # parameter default values, will be overwritten by
 # parameter yaml file, given by:
@@ -81,10 +90,13 @@ class Gateway(Node):
             SignalsFreq, "audio/signals_f", 10
         )
         self.publisher_motion_pose = self.create_publisher(
-            Pose, "geometry/pose", 10
+            PoseStamped, "geometry/pose", 10
         )
         self.publisher_motion_pose_raw = self.create_publisher(
             PoseRaw, "geometry/pose_raw", 10
+        )
+        self.publisher_ground_truth = self.create_publisher(
+            GroundTruth, "geometry/ground_truth", 10
         )
         self.publisher_status = self.create_publisher(
             CrazyflieStatus, "crazyflie/status", 10
@@ -93,8 +105,8 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
-        self.prev_position_x = 0.0
-        self.prev_position_y = 0.0
+        self.ground_truth_published = False
+        self.starting_pose = None
 
         self.reader_crtp = reader_crtp
 
@@ -127,6 +139,10 @@ class Gateway(Node):
             self.publish_battery()
             self.reader_crtp.logging_dicts["status"]["published"] = True
 
+        if not self.ground_truth_published:
+            self.publish_ground_truth()
+            # self.ground_truth_published = True
+
     def publish_battery(self):
         msg = CrazyflieStatus()
         data = self.reader_crtp.logging_dicts["status"]["data"]
@@ -136,6 +152,12 @@ class Gateway(Node):
             msg.vbat = 0.0
         msg.timestamp = self.reader_crtp.logging_dicts["status"]["timestamp"]
         self.publisher_status.publish(msg)
+
+    def publish_ground_truth(self):
+        msg = create_ground_truth_message(
+            wall_distance_m=WALL_DISTANCE_M, wall_angle_deg=WALL_ANGLE_DEG
+        )
+        self.publisher_ground_truth.publish(msg)
 
     def publish_motors_dict(self):
         msg = CrazyflieMotors()
@@ -218,7 +240,23 @@ class Gateway(Node):
         )
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
-        msg_pose = create_pose_message(**motion_dict, timestamp=timestamp)
+        # TODO(FD) generalize below to 3D
+        # make sure we start at starting_pose, compensating for random offset
+        # coming from the Crazyflie drone
+        if self.starting_pose is None:
+            self.starting_pose = [
+                STARTING_POS[0] - motion_dict["x"],
+                STARTING_POS[1] - motion_dict["y"],
+                STARTING_POS[2] - motion_dict["z"],
+                STARTING_YAW_DEG - motion_dict["yaw_deg"],
+            ]
+        msg_pose = create_pose_message(
+            x=motion_dict["x"] + self.starting_pose[0],
+            y=motion_dict["y"] + self.starting_pose[1],
+            z=motion_dict["z"] + self.starting_pose[2],
+            yaw_deg=motion_dict["yaw_deg"] + self.starting_pose[3],
+            timestamp=timestamp,
+        )
         self.publisher_motion_pose.publish(msg_pose)
         self.get_logger().debug(
             f"{msg_pose_raw.timestamp}: Published motion data."

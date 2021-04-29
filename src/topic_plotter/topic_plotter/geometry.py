@@ -17,7 +17,13 @@ from audio_interfaces_py.messages import (
     read_pose_message,
 )
 from audio_stack.topic_synchronizer import TopicSynchronizer
-from audio_simulation.geometry import SPEAKER_POSITION, ROOM_DIM, STARTING_POS
+
+# consider publishing these to a topic instead of this bad dependency.
+from crazyflie_description_py.experiments import (
+    SPEAKER_POSITION,
+    ROOM_DIM,
+    STARTING_POS,
+)
 
 from .live_plotter import LivePlotter
 
@@ -174,8 +180,10 @@ class GeometryPlotter(Node):
         )
 
         if message is not None:
-            orientation = message.source_direction_deg
-            error = abs(orientation - doa_estimates[0])
+            self.source_direction_deg = message.source_direction_deg
+
+        if self.source_direction_deg is not None:
+            error = abs(self.source_direction_deg - doa_estimates[0])
             self.error_list.append(error)
             avg_error = np.mean(self.error_list)
             self.get_logger().info(

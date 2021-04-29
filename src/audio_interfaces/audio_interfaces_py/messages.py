@@ -178,19 +178,26 @@ def create_doa_message(doa_estimates, timestamp):
 
 
 def create_ground_truth_message(
-    source_direction_deg=0,
-    approach_angle_deg=0,
-    wall_distance_m=0,
-    wall_angle_deg=0,
+    source_direction_deg=None,
+    approach_angle_deg=None,
+    wall_distance_m=None,
+    wall_angle_deg=None,
+    timestamp=None,
     **dump,
 ):
     """ Create ground truth message. """
-    msg = GroundTruth(
-        source_direction_deg,
-        approach_angle_deg,
-        wall_angle_deg,
-        wall_distance_m,
-    )
+    kwargs = {
+        k: val
+        for k, val in dict(
+            timestamp=timestamp,
+            source_direction_deg=source_direction_deg,
+            approach_angle_deg=approach_angle_deg,
+            wall_distance_m=wall_distance_m,
+            wall_angle_deg=wall_angle_deg,
+        ).items()
+        if val is not None
+    }
+    msg = GroundTruth(**kwargs)
     return msg
 
 

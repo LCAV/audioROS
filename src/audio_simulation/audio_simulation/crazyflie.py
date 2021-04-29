@@ -23,9 +23,7 @@ from audio_interfaces_py.messages import create_signals_message
 from audio_simulation.geometry import (
     global_positions_from_2d,
     get_relative_movement,
-    get_starting_pose_msg,
 )
-from audio_simulation.geometry import ROOM_DIM, SPEAKER_POSITION
 from crazyflie_description_py.parameters import (
     MIC_POSITIONS,
     BUZZER_POSITION,
@@ -33,6 +31,11 @@ from crazyflie_description_py.parameters import (
     N_BUFFER,
     HEIGHT_MIC_ARRAY,
     HEIGHT_BUZZER,
+)
+from crazyflie_description_py.experiments import (
+    get_starting_pose_msg,
+    SPEAKER_POSITION,
+    ROOM_DIM,
 )
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
