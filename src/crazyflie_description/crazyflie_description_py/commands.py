@@ -27,8 +27,8 @@ motor_command_lists = {
     "hover_sweep": [
         ("/gateway", "hover_height", 0.2, 0),
         ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 20),  # time delay only
-        ("/gateway", "land_velocity", 0.2),
+        ("", "", "", 5),  # time delay only
+        ("/gateway", "land_velocity", 0.2, 0),
     ],
     "linear": [
         ("/gateway", "hover_height", 0.5, 0),
@@ -55,12 +55,8 @@ buzzer_command_lists = {
     for key, value in SOUND_EFFECTS.items()
 }
 buzzer_command_lists["stop_buzzer"] = [
-    (
-        "/gateway",
-        "buzzer_freq",
-        0,
-        0,
-    ),  # set frequency to 0 (for effect 12 only)
+    ("/gateway", "buzzer_idx", 0, 0),  
+    ("/gateway", "buzzer_freq", 0, 0),  
     ("/gateway", "buzzer_effect", 0, 0),  # turn effect off
 ]
 
