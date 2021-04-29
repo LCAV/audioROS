@@ -134,18 +134,18 @@ def read_df(
 
     if "source_direction-deg" in df.columns:
         df.rename(
-            columns={"source_direction-deg": "source_direction_deg"}, inplace=True
+            columns={"source_direction-deg": "source_direction_deg"},
+            inplace=True,
         )
     pose_columns = set(
         [
-            "dx",
-            "dy",
+            "vx",
+            "vy",
             "x",
             "y",
             "z",
             "yaw_deg",
             "yaw_rate_deg",
-            "source_direction_deg",
             "timestamp",
             "index",
             "topic",
@@ -235,7 +235,9 @@ def read_df_from_wav(fname, n_buffer=N_BUFFER, method_window="hann", fs_ref=FS):
     for i in range(n_frames):
         # n_mics x n_frequencies
         this_buffer = np.copy(
-            source_data[i * n_buffer_corr : (i + 1) * n_buffer_corr].reshape((1, -1))
+            source_data[i * n_buffer_corr : (i + 1) * n_buffer_corr].reshape(
+                (1, -1)
+            )
         )
         signals_f, source_freq = get_stft(
             this_buffer, fs, method_window=method_window, method_noise=""
@@ -270,7 +272,9 @@ def read_signal_from_wav(fname, n_buffer=N_BUFFER, fs_ref=FS):
     for i in range(n_frames):
         # n_mics x n_frequencies
         this_buffer = np.copy(
-            source_data[i * n_buffer_corr : (i + 1) * n_buffer_corr].reshape((1, -1))
+            source_data[i * n_buffer_corr : (i + 1) * n_buffer_corr].reshape(
+                (1, -1)
+            )
         )
         signals[i, :, :] = this_buffer
     return signals
@@ -281,7 +285,9 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
     from frequency_analysis import get_spectrogram
 
     spectrogram = get_spectrogram(df)  # n_freqs x n_times
-    sound_level = np.mean(spectrogram ** 2, axis=0)  # average over n_frequencies
+    sound_level = np.mean(
+        spectrogram ** 2, axis=0
+    )  # average over n_frequencies
     df.loc[:, "sound_level"] = sound_level
 
     # detect the end time and cut fixed time before it
@@ -313,7 +319,9 @@ def get_positions(df_pos):
     for i, (yaw_deg, dx, dy, z) in enumerate(zip(yaw_degs, dxs, dys, zs)):
         yaw_rad = yaw_deg / 180 * np.pi
         length = np.sqrt(dx ** 2 + dy ** 2)
-        new_pos = start_pos + length * np.array([np.cos(yaw_rad), np.sin(yaw_rad)])
+        new_pos = start_pos + length * np.array(
+            [np.cos(yaw_rad), np.sin(yaw_rad)]
+        )
         positions[i, :2] = new_pos
         positions[i, 2] = z
     return positions
@@ -352,7 +360,9 @@ def evaluate_data(fname=""):
     sys.path.append(f"../experiments/{EXP_NAME}/")
     from params import SOURCE_LIST, DEGREE_LIST, global_params
 
-    DURATION_SEC = global_params.get("duration", 30)  # duration before end to be kept
+    DURATION_SEC = global_params.get(
+        "duration", 30
+    )  # duration before end to be kept
 
     duration = DURATION_SEC * 1e3  # miliseconds
 
@@ -386,7 +396,11 @@ def evaluate_data(fname=""):
     ):
         try:
             df, df_pos = read_df(
-                degree=degree, props=props, snr=snr, motors=motors, source=source
+                degree=degree,
+                props=props,
+                snr=snr,
+                motors=motors,
+                source=source,
             )
         except FileNotFoundError:
             print("skipping:", degree, props, snr, motors, source)
@@ -423,7 +437,9 @@ def evaluate_data(fname=""):
                     raise ValueError(method)
 
                 for normalize in normalize_list:
-                    spectrum_norm = normalize_rows(spectrum_raw, method=normalize)
+                    spectrum_norm = normalize_rows(
+                        spectrum_raw, method=normalize
+                    )
 
                     for combine in combine_list:
                         spectrum = combine_rows(spectrum_norm, method=combine)

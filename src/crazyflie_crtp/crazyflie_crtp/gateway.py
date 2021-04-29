@@ -232,7 +232,9 @@ class Gateway(Node):
         )
 
     def publish_motion_dict(self):
-        motion_dict = self.reader_crtp.logging_dicts["motion"]["data"]
+        from copy import deepcopy
+
+        motion_dict = deepcopy(self.reader_crtp.logging_dicts["motion"]["data"])
         timestamp = self.reader_crtp.logging_dicts["motion"]["timestamp"]
 
         msg_pose_raw = create_pose_raw_message(

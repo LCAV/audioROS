@@ -11,6 +11,7 @@ from dynamic_analysis import add_pose_to_df
 
 FILTERS = ["mic_type", "snr", "motors"]
 
+
 def load_params(exp_name):
     """ load parameters module at the experiment of interest """
     import importlib.util
@@ -79,7 +80,13 @@ def parse_experiments(
         wav = True
         method_window = ""
     elif exp_name == "2021_02_09_wall_tukey":
-        appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]
+        appendix_list = [
+            "",
+            "_afterbug",
+            "_afterbug2",
+            "_with_3cm",
+            "_second shot",
+        ]
         snr_list = [3]
         props_list = [0]
         wav = True
@@ -115,6 +122,12 @@ def parse_experiments(
             "_30cm-newbuzzer",
             "_50cm-newbuzzer",
         ]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_04_30_hover":
+        appendix_list = [f"_test1_{i}" for i in range(6)]
         snr_list = [3]
         props_list = [0]
         wav = False
@@ -173,7 +186,9 @@ def parse_experiments(
                 add_pose_to_df(
                     df, df_pos
                 )  # synchronize position and audio measurements
-                positions = get_positions_absolute(df)  # get positions as matrix
+                positions = get_positions_absolute(
+                    df
+                )  # get positions as matrix
             elif params["mic_type"] == "measurement":
                 fname = get_filename(**params)
                 wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"

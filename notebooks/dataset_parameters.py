@@ -62,7 +62,7 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 5,
             "max_time": 22,
-            "mag_thresh": 1e-3, # important
+            "mag_thresh": 1e-3,  # important
         },
         "measurement": {
             **kwargs_standard,
@@ -81,7 +81,7 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 5,
             "max_time": 22,
-            "mag_thresh": 1, # important
+            "mag_thresh": 1,  # important
         },
         "measurement": {
             **kwargs_standard,
@@ -100,6 +100,16 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 10,
             "max_time": 27,
+        },
+    },
+    "2021_04_30_hover": {
+        "audio_deck": {
+            "offset": None,
+            "slope": None,
+            "min_freq": 2900,
+            "max_freq": 5000,
+            "min_time": 0,
+            "max_time": 7.5,
         },
     },
 }
