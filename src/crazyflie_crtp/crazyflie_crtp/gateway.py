@@ -368,6 +368,7 @@ def main(args=None):
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
             reader_crtp.send_buzzer_freq(0)
+            reader_crtp.send_buzzer_idx(0)
             print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
         except Exception:
@@ -375,6 +376,7 @@ def main(args=None):
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
             reader_crtp.send_buzzer_freq(0)
+            reader_crtp.send_buzzer_idx(0)
             print("stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
             raise

@@ -71,11 +71,9 @@ def execute_commands(command_name):
 
 
 def get_total_time(command_name):
-    print(command_name)
     command_list = all_commands_lists[command_name]
     time = 0
     for command in command_list:
-        print(command)
         time += command[3]
     # time += 25 # extra 10 seconds for unexpected waiting times
     return time
@@ -179,7 +177,7 @@ def save_bag_recording(csv_filename):
     set_param("/csv_writer", "filename", csv_filename)
 
 
-def main(args=None):	
+def main(args=None):
     def save_wav_recording(recording, wav_filename):
         recording_float32 = recording.astype(np.float32)
         wavfile.write(
