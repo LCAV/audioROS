@@ -70,7 +70,8 @@ def execute_commands(command_name):
         time.sleep(sleep)
 
 
-def get_total_time(command_list):
+def get_total_time(command_name):
+    command_list = all_commands_lists[command_name]
     time = 0
     for command in command_list:
         time += command[3]
@@ -114,7 +115,7 @@ def adjust_duration(duration, params):
             )
             duration = DURATION_360
 
-    duration_motors = get_total_time(all_commands_lists[params["motors"]])
+    duration_motors = get_total_time(params["motors"])
     if duration_motors > duration:
         print(
             f"ignoring global duration {duration} and using motor command duration {duration_motors}"
@@ -176,15 +177,14 @@ def save_bag_recording(csv_filename):
     set_param("/csv_writer", "filename", csv_filename)
 
 
-def save_wav_recording(recording, wav_filename):
-    recording_float32 = recording.astype(np.float32)
-    wavfile.write(
-        wav_filename, global_params["fs_soundcard"], recording_float32
-    )
-    print("wrote wav file as", wav_filename)
-
-
 def main(args=None):
+	def save_wav_recording(recording, wav_filename):
+	    recording_float32 = recording.astype(np.float32)
+	    wavfile.write(
+		wav_filename, global_params["fs_soundcard"], recording_float32
+	    )
+	    print("wrote wav file as", wav_filename)
+
     def perform_experiment(out_signal=None):
         recording = None
         start_time = time.time()
