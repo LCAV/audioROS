@@ -41,7 +41,8 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = '2021_02_09_wall'
 # EXTRA_DIRNAME = '2021_02_19_windows'
 # EXTRA_DIRNAME = '2021_02_23_wall'
-EXTRA_DIRNAME = "2021_03_01_flying"
+# EXTRA_DIRNAME = "2021_03_01_flying"
+EXTRA_DIRNAME = "2021_04_30_hover"
 
 bag_pid = None
 
@@ -84,11 +85,15 @@ def adjust_freq_lims(params):
     if params["source"] is not None:
         __, (min_freq_buzz, max_freq_buzz), __ = SOUND_EFFECTS[params["source"]]
         if min_freq is not None:
-            print(f"Overwriting min_freq {min_freq} with buzzer {min_freq_buzz}.")
+            print(
+                f"Overwriting min_freq {min_freq} with buzzer {min_freq_buzz}."
+            )
         params["min_freq"] = min_freq_buzz
 
         if max_freq is not None:
-            print(f"Overwriting max_freq {max_freq} with buzzer {max_freq_buzz}.")
+            print(
+                f"Overwriting max_freq {max_freq} with buzzer {max_freq_buzz}."
+            )
         params["max_freq"] = max_freq_buzz
 
 
@@ -134,7 +139,9 @@ def set_all_parameters(params):
     filter_props = params.get("props", 0)
 
     if (filter_snr > 0) and ((min_freq is None) or (max_freq is None)):
-        raise Warning("Need to set min_freq and max_freq when using snr filtering!")
+        raise Warning(
+            "Need to set min_freq and max_freq when using snr filtering!"
+        )
 
     set_param("/gateway", "filter_snr_enable", str(filter_snr))
     set_param("/gateway", "filter_prop_enable", str(filter_props))
@@ -171,7 +178,9 @@ def save_bag_recording(csv_filename):
 
 def save_wav_recording(recording, wav_filename):
     recording_float32 = recording.astype(np.float32)
-    wavfile.write(wav_filename, global_params["fs_soundcard"], recording_float32)
+    wavfile.write(
+        wav_filename, global_params["fs_soundcard"], recording_float32
+    )
     print("wrote wav file as", wav_filename)
 
 
@@ -276,7 +285,9 @@ def main(args=None):
             set_param("/gateway", "buzzer_freq", freq)
             set_param("/gateway", "buzzer_effect", 0)
 
-        input(f'make sure external buzzer plays {params["source"]}! Enter to continue')
+        input(
+            f'make sure external buzzer plays {params["source"]}! Enter to continue'
+        )
 
         start_bag_recording(bag_filename)
         return perform_experiment()
@@ -342,7 +353,9 @@ def main(args=None):
         [p.get("angle", None) is not None for p in params_list]
     ):
         SerialIn = SerialMotors(
-            verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE
+            verbose=False,
+            current_distance=START_DISTANCE,
+            current_angle=START_ANGLE,
         )
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
