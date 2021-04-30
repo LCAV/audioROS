@@ -201,6 +201,7 @@ def main(args=None):
         elif source_type == "soundcard":
             sd.play(out_signal, blocking=False)
         elif global_params["n_meas_mics"] > 0:
+            print('recording measurement mic for {duration} seconds')
             n_frames = int(duration * global_params["fs_soundcard"])
             recording = sd.rec(n_frames, blocking=False)
 
