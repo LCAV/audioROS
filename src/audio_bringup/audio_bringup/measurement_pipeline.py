@@ -378,7 +378,7 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = ""  #'y'
+        answer = 'y'
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":
