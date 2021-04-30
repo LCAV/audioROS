@@ -26,9 +26,8 @@ motor_command_lists = {
     ],
     "hover_sweep": [
         ("/gateway", "hover_height", 0.4, 0),
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 5),  # time delay only
-        ("/gateway", "buzzer_idx", 0, 0),
+        ("/gateway", "buzzer_idx", 3, 0),
+        ("", "", "", 10),  # time delay only
         ("/gateway", "land_velocity", 0.2, 0),
     ],
     "linear": [
