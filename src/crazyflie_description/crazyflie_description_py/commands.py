@@ -18,12 +18,6 @@ motor_command_lists = {
         ),  # stay in place, but wait for 20 seconds.
         ("/gateway", "land_velocity", 0.2, 3),
     ],
-    "hover_sweep_short": [
-        ("/gateway", "hover_height", 0.2, 0),
-        ("/gateway", "buzzer_effect", 17, 0),
-        ("", "", "", 30),  # time delay only
-        ("/gateway", "land_velocity", 0.2),
-    ],
     "hover_sweep": [
         ("/gateway", "hover_height", 0.4, 0),
         ("/gateway", "buzzer_idx", 3, 0),
@@ -35,15 +29,9 @@ motor_command_lists = {
         ("/gateway", "move_forward", 0.05, 8),  # 50 cm
         ("/gateway", "land_velocity", 0.2, 3),
     ],
-    "linear_sweep_slow": [
+    "linear_sweep": [
         ("/gateway", "hover_height", 0.5, 0),
-        ("/gateway", "buzzer_effect", 21, 0),
-        ("/gateway", "move_forward", 0.05, 8),  # 50 cm
-        ("/gateway", "land_velocity", 0.2, 3),
-    ],
-    "linear_sweep_fast": [
-        ("/gateway", "hover_height", 0.5, 0),
-        ("/gateway", "buzzer_effect", 22, 0),
+        ("/gateway", "buzzer_idx", 3000, 0),
         ("/gateway", "move_forward", 0.05, 8),  # 50 cm
         ("/gateway", "land_velocity", 0.2, 3),
     ],
@@ -51,13 +39,11 @@ motor_command_lists = {
 }
 
 buzzer_command_lists = {
-    key: [("/gateway", "buzzer_effect", value[0], 0)]
+    key: [("/gateway", "buzzer_idx", value[0], 0)]
     for key, value in SOUND_EFFECTS.items()
 }
 buzzer_command_lists["stop_buzzer"] = [
     ("/gateway", "buzzer_idx", 0, 0),  
-    ("/gateway", "buzzer_freq", 0, 0),  
-    ("/gateway", "buzzer_effect", 0, 0),  # turn effect off
 ]
 
 assert (
