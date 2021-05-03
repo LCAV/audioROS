@@ -1,6 +1,7 @@
 import itertools
 import os
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ import pandas as pd
 from audio_bringup.helpers import get_filename
 from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
 from crazyflie_description_py.parameters import FS, N_BUFFER
+
 
 # EXP_NAME = "2020_09_17_white-noise-static"
 # EXP_NAME = "2020_10_14_static"
@@ -322,11 +324,23 @@ def get_positions_absolute(df_pos):
     """ Get absolute positions
     """
     if isinstance(df_pos, pd.DataFrame):
+        if not len(
+            {"x", "y", "z", "yaw_deg"}.intersection(df_pos.columns.values)
+        ):
+            warnings.warn("no position information found")
+            n_times = len(df_pos)
+            return np.zeros((n_times, 4))
         xs = df_pos.x.values
         ys = df_pos.y.values
         zs = df_pos.z.values
         yaws = df_pos.yaw_deg.values
     elif isinstance(df_pos, pd.Series):
+        if not len(
+            {"x", "y", "z", "yaw_deg"}.intersection(df_pos.index.values)
+        ):
+            warnings.warn("no position information found")
+            n_times = len(df_pos)
+            return np.zeros((n_times, 4))
         xs = df_pos.x
         ys = df_pos.y
         zs = df_pos.z

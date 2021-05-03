@@ -106,10 +106,11 @@ kwargs_datasets = {
         "audio_deck": {
             "offset": None,
             "slope": None,
-            "min_freq": 2900,
-            "max_freq": 5000,
+            "min_freq": 2000,
+            "max_freq": 6000,
             "min_time": 0,
-            "max_time": 7.5,
+            "max_time": 12,  # not active
+            "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
     "2021_04_30_stepper": {
@@ -119,7 +120,7 @@ kwargs_datasets = {
             "min_freq": 2000,
             "max_freq": 6000,
             "min_time": 0,
-            "max_time": 30,
+            "max_time": 30,  # not active
             "mag_thresh": 1,
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },

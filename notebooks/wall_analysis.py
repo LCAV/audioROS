@@ -127,7 +127,7 @@ def parse_experiments(
         wav = False
         method_window = "flattop"
     elif exp_name == "2021_04_30_hover":
-        appendix_list = [f"_test1_{i}" for i in range(6)]
+        appendix_list = [f"_test1_{i}" for i in range(6, 9)]
         snr_list = [3]
         props_list = [0]
         wav = False
@@ -303,7 +303,8 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_04_30_stepper",
+        "2021_04_30_hover",
+        # "2021_04_30_stepper",
         # "2021_03_01_flying",
         # "2021_02_25_wall",
         # "2021_02_23_wall",

@@ -6,7 +6,7 @@ import pandas as pd
 import progressbar
 
 from pandas_utils import filter_by_dict
-from wall_detector import WallDetector
+from data_collector import DataCollector
 
 OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
@@ -14,10 +14,10 @@ OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 D_OFFSET = 0.08  # actual distance at zero-distance, in meters
 
 
-def wall_detector_from_df(df_all, exp_name, mic_type, motors):
-    wall_detector = WallDetector(exp_name, mic_type)
+def data_collector_from_df(df_all, exp_name, mic_type, motors):
+    data_collector = DataCollector(exp_name, mic_type)
     if not OVERWRITE_RAW:
-        backup_found = wall_detector.fill_from_backup(
+        backup_found = data_collector.fill_from_backup(
             exp_name, mic_type, motors, appendix="_raw"
         )
     elif OVERWRITE_RAW or not backup_found:
@@ -34,10 +34,10 @@ def wall_detector_from_df(df_all, exp_name, mic_type, motors):
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
                 row.distance += D_OFFSET * 100
-                wall_detector.fill_from_row(row)
+                data_collector.fill_from_row(row)
                 p.update(i_row)
-        wall_detector.backup(exp_name, mic_type, motors, appendix="_raw")
-    return wall_detector
+        data_collector.backup(exp_name, mic_type, motors, appendix="_raw")
+    return data_collector
 
 
 if __name__ == "__main__":
@@ -65,9 +65,9 @@ if __name__ == "__main__":
             sys.exit()
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
-            wall_detector = wall_detector_from_df(
+            data_collector = data_collector_from_df(
                 df_all, exp_name, mic_type, motors
             )
-            # wall_detector.cleanup(verbose=False)
-            wall_detector.cleanup_conservative(verbose=False)
-            wall_detector.backup(exp_name, mic_type, motors)
+            # data_collector.cleanup(verbose=False)
+            data_collector.cleanup_conservative(verbose=False)
+            data_collector.backup(exp_name, mic_type, motors)
