@@ -149,18 +149,13 @@ def get_probability_cost(
 
 
 def get_periods_fft(
-    d_slice,
-    frequency,
-    relative_distances_cm,
-    n_max=1000,
-    bayes=False,
-    sigma=None,
+    d_slice, frequency, relative_distances_cm, n_max=1000, bayes=False, sigma=None,
 ):
     # the distribution over measured period.
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
     n = max(len(d_slice), n_max)
 
-    #periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
+    # periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
     periods_m = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of orthogonal
 
     abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
@@ -168,34 +163,31 @@ def get_periods_fft(
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
     else:
-        #print("Deprecation warning: do not use this function anymore")
+        # print("Deprecation warning: do not use this function anymore")
         prob = abs_fft / np.sum(abs_fft)
     return periods_m, prob
 
+
 def get_approach_angle_fft(
-        d_slice,
-        frequency,
-        relative_distances_cm,
-        n_max=1000,
-        bayes=False,
-        sigma=None,
-        reduced=False
-    ):
+    d_slice,
+    frequency,
+    relative_distances_cm,
+    n_max=1000,
+    bayes=False,
+    sigma=None,
+    reduced=False,
+):
     from constants import SPEED_OF_SOUND
-    period_theoretical = frequency / SPEED_OF_SOUND # 1/m in terms of delta
+
+    period_theoretical = frequency / SPEED_OF_SOUND  # 1/m in terms of delta
     periods_m, probs = get_periods_fft(
-        d_slice,
-        frequency,
-        relative_distances_cm,
-        n_max,
-        bayes,
-        sigma
+        d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
     )
     ratios = periods_m / period_theoretical
     if not reduced:
         return ratios, probs
     else:
-        return get_gamma_distribution(ratios, probs) 
+        return get_gamma_distribution(ratios, probs)
 
 
 def get_approach_angle_cost(
@@ -208,6 +200,7 @@ def get_approach_angle_cost(
     ax=None,
 ):
     from simulation import get_dist_slice_theory
+
     azimuth_deg = AZIMUTH_DEG
 
     d_slice_norm = d_slice - np.mean(d_slice)
@@ -220,9 +213,9 @@ def get_approach_angle_cost(
                 gamma_deg / 180 * np.pi
             )
             assert np.all(distances_cm >= 0)
-            d_slice_theory = get_dist_slice_theory(frequency, distances_cm, azimuth_deg)[
-                :, mic_idx
-            ]
+            d_slice_theory = get_dist_slice_theory(
+                frequency, distances_cm, azimuth_deg
+            )[:, mic_idx]
             d_slice_theory -= np.nanmean(d_slice_theory)
             std = np.nanstd(d_slice_theory)
             if std > 0:

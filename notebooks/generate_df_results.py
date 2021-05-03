@@ -1,12 +1,10 @@
 import itertools
 import sys
 
-import numpy as np
 import pandas as pd
 import progressbar
-
-from pandas_utils import filter_by_dict
 from data_collector import DataCollector
+from pandas_utils import filter_by_dict
 
 OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
@@ -65,9 +63,7 @@ if __name__ == "__main__":
             sys.exit()
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
-            data_collector = data_collector_from_df(
-                df_all, exp_name, mic_type, motors
-            )
+            data_collector = data_collector_from_df(df_all, exp_name, mic_type, motors)
             # data_collector.cleanup(verbose=False)
             data_collector.cleanup_conservative(verbose=False)
             data_collector.backup(exp_name, mic_type, motors)

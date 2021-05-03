@@ -2,12 +2,11 @@ import itertools
 
 import numpy as np
 import pandas as pd
-
 from audio_bringup.helpers import get_filename
 from crazyflie_description_py.parameters import N_BUFFER
-from evaluate_data import read_df, read_df_from_wav
-from evaluate_data import get_positions_absolute
 from dynamic_analysis import add_pose_to_df
+from evaluate_data import get_positions_absolute
+from evaluate_data import read_df, read_df_from_wav
 
 FILTERS = ["mic_type", "snr", "motors"]
 
@@ -192,9 +191,7 @@ def parse_experiments(
                 add_pose_to_df(
                     df, df_pos
                 )  # synchronize position and audio measurements
-                positions = get_positions_absolute(
-                    df
-                )  # get positions as matrix
+                positions = get_positions_absolute(df)  # get positions as matrix
             elif params["mic_type"] == "measurement":
                 fname = get_filename(**params)
                 wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"

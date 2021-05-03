@@ -104,9 +104,7 @@ def plot_spectrograms(df_freq):
                 continue
             row = df_this.iloc[0]
 
-            spec_all, freqs = get_spectrogram_raw(
-                row.frequencies_matrix, row.stft
-            )
+            spec_all, freqs = get_spectrogram_raw(row.frequencies_matrix, row.stft)
             spec = np.mean(spec_all, axis=1)  # n_times x n_mics x n_freqs
 
             axs[0, j].pcolorfast(row.seconds, freqs, np.log10(spec[:-1, :-1]))
@@ -167,9 +165,7 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
 
     from matplotlib.lines import Line2D
 
-    markers = [
-        m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]
-    ]
+    markers = [m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]]
 
     i = 0
     fig, axs = plt.subplots(1, 2, squeeze=False)
@@ -258,9 +254,7 @@ def plot_error_distance(
     if vmax is None and len(nonzero_values):
         vmax = np.max(nonzero_values)
 
-    fig, axs = plt.subplots(
-        1, len(sub_df.method.unique()), sharey=True, squeeze=False
-    )
+    fig, axs = plt.subplots(1, len(sub_df.method.unique()), sharey=True, squeeze=False)
     fig.set_size_inches(5 * len(sub_df.method.unique()), 5)
     for i, (method, df) in enumerate(table.groupby("method")):
         index = df.index.get_level_values(column).values
@@ -330,9 +324,7 @@ def plot_error_gamma(
             vmax=np.log10(vmax),
         )
     else:
-        im = pcolorfast_custom(
-            ax, gammas, ys, table.values, vmin=vmin, vmax=vmax
-        )
+        im = pcolorfast_custom(ax, gammas, ys, table.values, vmin=vmin, vmax=vmax)
     ax.set_xlabel("approach angle $\\gamma$ [deg]")
     if colorbar:
         from plotting_tools import add_colorbar
