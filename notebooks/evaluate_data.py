@@ -77,9 +77,6 @@ def read_df(
     appendix="",
     **kwargs,
 ):
-    # for key, val in kwargs.items():
-    #    print(f'unused {key}:{val}')
-
     def convert_audio(row):
         arrays = [
             "signals_real_vect",
@@ -131,12 +128,6 @@ def read_df(
         inplace=True,
         errors="ignore",
     )
-
-    if "source_direction-deg" in df.columns:
-        df.rename(
-            columns={"source_direction-deg": "source_direction_deg"},
-            inplace=True,
-        )
     pose_columns = set(
         [
             "vx",

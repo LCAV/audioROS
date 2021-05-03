@@ -349,16 +349,26 @@ class WallDetector(object):
                     spec, freqs, times=times, **box_kwargs
                 )
 
-        self.fill_from_spec(spec, freqs, distance, angle, verbose)
+        self.fill_from_spec(spec, freqs, distance, angle, verbose, times=times)
         self.current_spectrogram = spec
         self.current_freqs = freqs
         return spec, freqs
 
     def fill_from_spec(
-        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False
+        self,
+        spec,
+        freqs,
+        distance=DISTANCE,
+        angle=ANGLE,
+        verbose=False,
+        times=None,
     ):
         df = psd_df_from_spec(
-            spec, freqs, interpolation=self.interpolation, verbose=verbose
+            spec,
+            freqs,
+            interpolation=self.interpolation,
+            verbose=verbose,
+            times=times,
         )
         assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         df.loc[:, "distance"] = distance
@@ -533,7 +543,11 @@ class WallDetector(object):
             print(
                 f"dropping {len(self.df.loc[self.df.magnitude.isnull()])} rows"
             )
+        len_before = len(self.df)
         self.df.dropna(axis=0, subset=["magnitude"], inplace=True)
+        len_after = len(self.df)
+        if verbose:
+            print("dropped", len_before - len_after)
 
     def merge_close_freqs(
         self, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False, dryrun=False
@@ -562,10 +576,9 @@ class WallDetector(object):
             self.df.loc[index, "frequency"] = average_f
         assert len(self.df.frequency.unique()) == len(merge_dict)
 
-    def remove_spurious_freqs(
-        self, n_spurious=N_SPURIOUS, verbose=False, dryrun=False
-    ):
+    def remove_spurious_freqs(self, verbose=False, dryrun=False):
         """ Remove the frequencies for which we only have less than n_min measurements. """
+        n_spurious = self.params.get("n_spurious", N_SPURIOUS)
         remove_rows = []
 
         # average number of measurements per frequency and distance.

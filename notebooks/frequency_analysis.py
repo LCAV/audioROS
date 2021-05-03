@@ -21,7 +21,9 @@ def interpolate_peak(spec_slice, freqs, pad_factor=PAD_FACTOR, ax=None):
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
     f_indices = np.argmin(np.abs(freqs[:, None] - freqs_all[None, :]), axis=1)
     max_freq_error = np.max(freqs_all[f_indices] - freqs)
-    assert max_freq_error < 1.0, f"max frequency error too high: {max_freq_error}"
+    assert (
+        max_freq_error < 1.0
+    ), f"max frequency error too high: {max_freq_error}"
     spec_all = np.zeros(len(freqs_all), dtype=np.complex)
     spec_all[f_indices] = spec_slice
 
@@ -182,7 +184,9 @@ def get_index_matrix(spec):
     return np.argsort(spec_avg, axis=0)[::-1]
 
 
-def apply_linear_mask(spec, frequencies, slope, offset, delta=50, ax=None, times=None):
+def apply_linear_mask(
+    spec, frequencies, slope, offset, delta=50, ax=None, times=None
+):
     times_window = (frequencies - offset) / slope
 
     psd = np.zeros((spec.shape[1], spec.shape[0]))  # 4 x 32
@@ -245,12 +249,20 @@ def apply_box_mask(
     return spec, frequencies
 
 
-def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose=False):
+def psd_df_from_spec(
+    spec,
+    freqs,
+    min_t=0,
+    max_t=None,
+    interpolation="",
+    verbose=False,
+    times=None,
+):
     """
-    Extract distance-frequency information from spectrogram and index_matrix.
+    Extract distance-frequency information from spectrogram.
 
     :param spec: spectrogram (n_freqs x n_mics x n_times)
-    :param freqs: frequencies (n_freqs)
+    :param freqs: frequencies (n_freqs,)
 
     structure of output: 
     | mic | frequency | distance | time | magnitude
@@ -286,7 +298,9 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose
             max_amp = np.abs(spec_slice[i_f])
             max_f = freqs[i_f]
             if interpolation == "lagrange":
-                magnitude_estimate, frequency = interpolate_peak(spec_slice, freqs)
+                magnitude_estimate, frequency = interpolate_peak(
+                    spec_slice, freqs
+                )
                 if verbose and (frequency != 0):
                     print(
                         f"peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}"
@@ -300,9 +314,14 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose
                 magnitude_estimate = max_amp
                 frequency = max_f
 
+            if times is not None:
+                time = times[i_t]
+            else:
+                time = i_t
+
             update_dict = {
                 "mic": i_mic,
-                "time": i_t,
+                "time": time,
                 "counter": counter_dict[i_f],
                 "frequency": frequency,
                 "magnitude": magnitude_estimate,
@@ -311,5 +330,7 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose
                 update_dict.values()
             )
     psd_df.dropna(axis=1, inplace=True, how="all")
-    psd_df = psd_df.apply(pd.to_numeric, axis=0, downcast="integer", errors="ignore")
+    psd_df = psd_df.apply(
+        pd.to_numeric, axis=0, downcast="integer", errors="ignore"
+    )
     return psd_df

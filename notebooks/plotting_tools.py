@@ -104,7 +104,9 @@ def plot_spectrograms(df_freq):
                 continue
             row = df_this.iloc[0]
 
-            spec_all, freqs = get_spectrogram_raw(row.frequencies_matrix, row.stft)
+            spec_all, freqs = get_spectrogram_raw(
+                row.frequencies_matrix, row.stft
+            )
             spec = np.mean(spec_all, axis=1)  # n_times x n_mics x n_freqs
 
             axs[0, j].pcolorfast(row.seconds, freqs, np.log10(spec[:-1, :-1]))
@@ -165,7 +167,9 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
 
     from matplotlib.lines import Line2D
 
-    markers = [m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]]
+    markers = [
+        m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]
+    ]
 
     i = 0
     fig, axs = plt.subplots(1, 2, squeeze=False)
@@ -186,7 +190,12 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
         xvals = sorted(np.abs(err_list))
         yvals = np.linspace(0, 1, len(xvals))
         axs[0, 1].plot(
-            xvals, yvals, label=method, marker=markers[i], ls=":", markersize=markersize
+            xvals,
+            yvals,
+            label=method,
+            marker=markers[i],
+            ls=":",
+            markersize=markersize,
         )
         i += 1
 
@@ -226,8 +235,10 @@ def pcolorfast_custom(ax, xs, ys, values, verbose=False, **kwargs):
         extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
         im.set_extent(extent)
     except:
-        print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
-        im = ax.pcolorfast(list(xs)+[xs[-1]+dx], list(ys)+[ys[-1]+dy], values, **kwargs)
+        # print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
+        im = ax.pcolorfast(
+            list(xs) + [xs[-1] + dx], list(ys) + [ys[-1] + dy], values, **kwargs
+        )
     return im
 
 
@@ -247,7 +258,9 @@ def plot_error_distance(
     if vmax is None and len(nonzero_values):
         vmax = np.max(nonzero_values)
 
-    fig, axs = plt.subplots(1, len(sub_df.method.unique()), sharey=True, squeeze=False)
+    fig, axs = plt.subplots(
+        1, len(sub_df.method.unique()), sharey=True, squeeze=False
+    )
     fig.set_size_inches(5 * len(sub_df.method.unique()), 5)
     for i, (method, df) in enumerate(table.groupby("method")):
         index = df.index.get_level_values(column).values
@@ -271,9 +284,19 @@ def plot_error_distance(
     axs[0, 0].set_ylabel(name.replace("_", " "))
     return fig, axs
 
+
 def plot_error_gamma(
-    sub_df, column, name, log=False, aggfunc=np.nanmedian, vmin=None, vmax=None, logy=False,
-    ax=None, fig=None, colorbar=True
+    sub_df,
+    column,
+    name,
+    log=False,
+    aggfunc=np.nanmedian,
+    vmin=None,
+    vmax=None,
+    logy=False,
+    ax=None,
+    fig=None,
+    colorbar=True,
 ):
     table = pd.pivot_table(
         sub_df,
@@ -293,8 +316,8 @@ def plot_error_gamma(
         fig.set_size_inches(5, 5)
 
     ys = table.index.get_level_values(column).values
-    #print(column, ys)
-    if logy: 
+    # print(column, ys)
+    if logy:
         ys = np.log10(ys)
     gammas = table.columns.values
     if log:
@@ -307,10 +330,13 @@ def plot_error_gamma(
             vmax=np.log10(vmax),
         )
     else:
-        im = pcolorfast_custom(ax, gammas, ys, table.values, vmin=vmin, vmax=vmax)
+        im = pcolorfast_custom(
+            ax, gammas, ys, table.values, vmin=vmin, vmax=vmax
+        )
     ax.set_xlabel("approach angle $\\gamma$ [deg]")
     if colorbar:
         from plotting_tools import add_colorbar
+
         add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
     ax.set_ylabel(name.replace("_", " "))
     return fig, ax

@@ -1,4 +1,5 @@
 import itertools
+import sys
 
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
 # this corresponds to the setup in BC325 with stepper motor:
 D_OFFSET = 0.08  # actual distance at zero-distance, in meters
+
 
 def wall_detector_from_df(df_all, exp_name, mic_type, motors):
     wall_detector = WallDetector(exp_name, mic_type)
@@ -41,13 +43,11 @@ def wall_detector_from_df(df_all, exp_name, mic_type, motors):
 if __name__ == "__main__":
     DEGREE = 0
     mic_types = ["audio_deck"]
-    motors_types = [
-        0, 
-        "all45000"
-    ]
+    motors_types = [0, "all45000"]
     exp_names = [
-            "2021_02_23_wall", 
-            "2021_02_25_wall"
+        # "2021_02_23_wall",
+        # "2021_02_25_wall"
+        "2021_04_30_stepper"
     ]
 
     # exp_name = '2021_02_09_wall_tukey';
@@ -62,8 +62,12 @@ if __name__ == "__main__":
             print("read", fname)
         except Exception as e:
             print("Error: run wall_analysis.py to parse experiments.")
+            sys.exit()
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
-            wall_detector = wall_detector_from_df(df_all, exp_name, mic_type, motors)
-            wall_detector.cleanup(verbose=False)
+            wall_detector = wall_detector_from_df(
+                df_all, exp_name, mic_type, motors
+            )
+            # wall_detector.cleanup(verbose=False)
+            wall_detector.cleanup_conservative(verbose=False)
             wall_detector.backup(exp_name, mic_type, motors)
