@@ -1,3 +1,4 @@
+pandas
 cflib
 pre-commit
 numpy

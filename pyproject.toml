@@ -1,7 +1,7 @@
 # configuration for black
 # copied from https://github.com/psf/black/blob/master/pyproject.toml
 [tool.black]
-line-length = 80
+line-length = 88
 target-version = ['py36', 'py37', 'py38']
 include = '\.pyi?$'
 extend-exclude = '''
