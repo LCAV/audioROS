@@ -12,7 +12,8 @@ from audio_interfaces.msg import SignalsFreq, PoseRaw, CrazyflieStatus, Crazyfli
 
 # Time after which we are sure to have read the full bagfile. Set to something very high for no effect.
 # Used to automate the process of bag file conversion (CTRL+C does not work for some reason)
-TIMEOUT_S = np.inf # seconds
+TIMEOUT_S = np.inf  # seconds
+
 
 class CsvWriter(Node):
     def __init__(self):
@@ -36,9 +37,11 @@ class CsvWriter(Node):
 
         self.declare_parameter("filename")
         self.set_parameters_callback(self.set_params)
-        
+
         self.reset()
-        self.get_logger().info('Subscribed to audio/signals_f and crazyflie/status and crazyflie/motors and geometry/pose_raw.')
+        self.get_logger().info(
+            "Subscribed to audio/signals_f and crazyflie/status and crazyflie/motors and geometry/pose_raw."
+        )
 
     def reset(self):
         self.header = {"index", "topic"}
@@ -58,14 +61,14 @@ class CsvWriter(Node):
 
     def callback_message(self, msg, topic):
         # fill the dictionary with all fields of this message.
-        # if the field is an array, we convert it to a numpy array. 
+        # if the field is an array, we convert it to a numpy array.
         row_dict = {}
         for key, type_ in msg.get_fields_and_field_types().items():
-            if 'sequence' in type_: 
+            if "sequence" in type_:
                 row_dict[key] = np.array(msg.__getattribute__(key))
             else:
                 row_dict[key] = msg.__getattribute__(key)
-        #row_dict = {key: msg.__getattribute__(key) for key in keys}
+        # row_dict = {key: msg.__getattribute__(key) for key in keys}
         row_dict["index"] = len(self.rows)
         row_dict["topic"] = topic
 
@@ -74,16 +77,16 @@ class CsvWriter(Node):
 
     def set_params(self, params):
         """ Set the parameter. If filename is set, we save the current rows and reset. """
-        param = params[0] # only one parameter possible.
+        param = params[0]  # only one parameter possible.
         filename = param.get_parameter_value().string_value
 
-        if filename == '':
-            self.get_logger().info('resetting csv_writer')
+        if filename == "":
+            self.get_logger().info("resetting csv_writer")
             self.reset()
             return SetParametersResult(successful=True)
 
-        if filename[-4:] != '.csv':
-            filename = filename + '.csv'
+        if filename[-4:] != ".csv":
+            filename = filename + ".csv"
 
         self.write_file(filename)
         return SetParametersResult(successful=True)
@@ -110,7 +113,8 @@ class CsvWriter(Node):
 
 
 def main(args=None):
-    import time 
+    import time
+
     rclpy.init(args=args)
 
     writer = CsvWriter()
@@ -124,6 +128,7 @@ def main(args=None):
 
     writer.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()

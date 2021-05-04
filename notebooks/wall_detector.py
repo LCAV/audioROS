@@ -10,11 +10,8 @@ import time
 import pandas as pd
 import scipy.interpolate
 
-
-from calibration import fit_distance_slice
 from dataset_parameters import kwargs_datasets
 from frequency_analysis import *
-from pandas_utils import fill_nans
 
 ANGLE = 0
 DISTANCE = 0
@@ -191,6 +188,7 @@ def normalized_std(values, method=METHOD):
         return 0
 
 
+# TODO(FD) rewrite this to "DataCollector" or similar. 
 class WallDetector(object):
     def __init__(self, exp_name=None, mic_type="audio_deck", interpolation=""):
         self.df = pd.DataFrame(
@@ -211,6 +209,7 @@ class WallDetector(object):
         if exp_name is not None:
             self.params.update(kwargs_datasets[exp_name][mic_type])
 
+    @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
         wall_detector = WallDetector(
             exp_name=exp_name, mic_type=row.mic_type, interpolation=interpolation
@@ -230,10 +229,11 @@ class WallDetector(object):
             if len(values) > 1:
                 print(f"Warning: taking slice over multiple values: {values}")
         elif column_value not in values:
-            print(f"Warning: did not find {column_name} {column_value}Hz")
+            print(f"Warning: did not find {column_name} {column_value}")
             bin_ = np.argmin(np.abs(values - column_value))
+            print(bin_)
             column_value = values[bin_]
-            print(f"Closest match: {column_value}Hz")
+            print(f"Closest match: {column_value}")
         df = self.df.loc[self.df[column_name] == column_value]
         return df
 
@@ -544,7 +544,6 @@ class WallDetector(object):
         self.df = self.df.apply(pd.to_numeric, axis=0, downcast="integer")
         return len(remove_rows)
 
-    # TODO(FD) remove if not used anymore
     def remove_bad_freqs(self, verbose=False, dryrun=False):
         """ Remove the frequencies with too low medians or too high standard deviation. """
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
@@ -561,7 +560,7 @@ class WallDetector(object):
                 if verbose:
                     print(f"removing {freq} with std {normalized_std(vals)}")
                 remove_rows += list(df.index.values)
-            else:
+            elif verbose:
                 print(
                     f"keeping {freq}: {np.nanmedian(vals):.2e}, {normalized_std(vals):.2e}"
                 )
@@ -574,14 +573,12 @@ class WallDetector(object):
             print("Warning: remove_bad_freqs removed all rows.")
         return len(remove_rows)
 
-    # TODO(FD) remove if not used anymore
-    def remove_bad_measurements(self, mag_thresh=MAG_THRESH, verbose=False):
+    def remove_bad_measurements(self, verbose=False):
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
-        mask = self.df.magnitude < mag_thresh
+        mask_remove = self.df.magnitude < mag_thresh
         if verbose:
-            print(f"removing {np.sum(mask)} rows")
-        self.df = self.df.loc[~mask]
-        mask = self.df.magnitude > mag_thresh
+            print(f"removing {np.sum(mask_remove)} rows")
+        self.df = self.df.loc[~mask_remove]
 
     def remove_outliers(self, factor=3, normalize=True, verbose=False):
         index_remove = []
@@ -605,9 +602,8 @@ class WallDetector(object):
 
     def cleanup(self, verbose=False):
         self.remove_nan_rows()
-        # TODO(FD) make sure these don't really help
-        # self.remove_bad_measurements()
-        # self.remove_bad_freqs(verbose=verbose)
+        self.remove_bad_measurements()
+        self.remove_bad_freqs(verbose=verbose)
         self.merge_close_freqs(verbose=verbose)
         self.remove_outliers()
         self.remove_spurious_freqs(verbose=verbose)
@@ -717,7 +713,7 @@ class WallDetector(object):
             raw_values,
             distances_raw,
             method="minimize",
-            yaw_deg=YAW_DEG,
+            azimuth_deg=YAW_DEG,
             frequency=frequency_here,
             chosen_mics=chosen_mics,
             optimize_absorption=True,
@@ -738,7 +734,7 @@ class WallDetector(object):
             distance_slices.T,
             distances_median,
             method="minimize",
-            yaw_deg=YAW_DEG,
+            azimuth_deg=YAW_DEG,
             frequency=frequency_here,
             chosen_mics=mics_here,
             optimize_absorption=True,

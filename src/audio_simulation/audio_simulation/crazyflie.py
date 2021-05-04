@@ -3,7 +3,8 @@ crazyflie.py: Publish simulated audio signals for the Crazyflie drone in a room.
 
 """
 
-from math import atan2, ceil, degrees
+from enum import Enum
+from math import atan2, ceil
 import os
 import sys
 import time
@@ -18,227 +19,323 @@ from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import Pose
 
 from audio_interfaces.msg import Signals, PoseRaw
-from audio_interfaces_py.messages import create_signals_message, create_pose_raw_message_from_poses
-from audio_simulation.geometry import global_positions, get_relative_movement, get_starting_pose
-from audio_simulation.geometry import ROOM_DIM, SOURCE_POS
-from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION, FS, N_BUFFER, HEIGHT_MIC_ARRAY, HEIGHT_BUZZER
+from audio_interfaces_py.messages import (
+    create_signals_message,
+    create_pose_raw_message_from_poses,
+)
+from audio_simulation.geometry import (
+    global_positions_from_2d,
+    global_positions_from_3d,
+    get_relative_movement,
+    get_starting_pose,
+)
+from audio_simulation.geometry import ROOM_DIM, SPEAKER_POSITION
+from crazyflie_description_py.parameters import (
+    MIC_POSITIONS,
+    BUZZER_POSITION,
+    FS,
+    N_BUFFER,
+    HEIGHT_MIC_ARRAY,
+    HEIGHT_BUZZER,
+)
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from signals import generate_signal_random, generate_signal_mono
 
 PARAMS_DICT = {
-    "source_type": (rclpy.Parameter.Type.STRING, "mono"),
-    "source_freq": (rclpy.Parameter.Type.INTEGER, 3500),
-    "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 4000)
+    "speaker_type": (rclpy.Parameter.Type.STRING, "mono"),
+    "speaker_freq": (rclpy.Parameter.Type.INTEGER, 3500),
+    "buzzer_type": (rclpy.Parameter.Type.STRING, "mono"),
+    "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 4000),
 }
 
-MAX_TIMESTAMP = 2**32 - 1  # max value of uint32
-NUM_REFLECTIONS = 1 # number of reflections to consider in pyroomacoustis.
-DIM = 2 # dimension of simulation
-DURATION_SEC = 5 # duration of simulated audio signal 
-LOOP = True # flag for looping the signal after reaching the end
-NOISE = 1e-2 # white noise to add on signals (variance squared), set to None for no effect
+
+class State(Enum):
+    SIMULATE = 1
+    PUBLISH = 2
+    UPDATE_SIGNALS = 3
+    UPDATE_GEOMETRY = 4
+
+
+MAX_TIMESTAMP = 2 ** 32 - 1  # max value of uint32
+NUM_REFLECTIONS = 1  # number of reflections to consider in pyroomacoustis.
+DIM = 2  # dimension of simulation
+DURATION_SEC = 20  # duration of simulated audio signals
+LOOP = True  # flag for looping the signal after reaching the end
+NOISE = (
+    1e-2  # white noise to add on signals (variance squared), set to None for no effect
+)
+STARTING_INDEX = 3000  # start reading the signal at this index instead of zero (to avoid boundary effects)
+
+
+def get_source_signal(source_type, source_freq):
+    if source_type == "random":
+        source_signal = generate_signal_random(FS, DURATION_SEC)
+    elif source_type == "mono":
+        source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=source_freq)
+    elif source_type in [None, "none"]:
+        source_signal = np.zeros(int(ceil(FS * DURATION_SEC)))
+    else:
+        raise ValueError(source_type)
+    return source_signal
+
+
+def create_room(speaker_position, buzzer_position, mic_array):
+    """
+    Create a shoe box room with two sources:
+    - source 0: external sound source
+    - source 1: buzzer sound source
+    """
+    assert speaker_position.ndim == 1
+    assert buzzer_position.ndim == 2
+    assert mic_array.ndim == 2
+    assert mic_array.shape[1] in (2, 3), f"{mic_array.shape}"
+
+    pyroom = pra.ShoeBox(
+        ROOM_DIM[:DIM], fs=FS, max_order=NUM_REFLECTIONS, sigma2_awgn=NOISE
+    )
+    pyroom.add_source(speaker_position[:DIM])  #
+    pyroom.add_source(buzzer_position[0, :DIM])  # 1 x 2
+    pyroom.add_microphone_array(mic_array.T[:DIM, :])  # dim x n_mics
+    return pyroom
 
 
 class CrazyflieSimulation(Node):
+
+    # constants
+    mic_positions = np.array(MIC_POSITIONS)  # 4 x 2
+    buzzer_position = np.array(BUZZER_POSITION)  # 1 x 2
+    speaker_position_global = np.array(SPEAKER_POSITION)  # 3,
+
     def __init__(self):
-        super().__init__("audio_simulation",
-            automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
-
-        self.time_idx = 0
-
-        self.publisher_pose_raw = self.create_publisher(PoseRaw, "geometry/pose_raw", 10)
+        super().__init__(
+            "audio_simulation",
+            automatically_declare_parameters_from_overrides=True,
+            allow_undeclared_parameters=True,
+        )
+        self.publisher_pose_raw = self.create_publisher(
+            PoseRaw, "geometry/pose_raw", 10
+        )
         self.publisher_signals = self.create_publisher(Signals, "audio/signals", 10)
         self.subscription_position = self.create_subscription(
             Pose, "geometry/pose", self.pose_listener_callback, 10
         )
+        self.create_timer(N_BUFFER / FS, self.timer_callback)
 
-        self.create_timer(N_BUFFER/FS, self.signals_publisher)
+        # parameters
+        self.simulation_idx = STARTING_INDEX  # where we are currently in the signal
+        self.buffer_idx = 0  # index current buffer
+        self.end_idx = None  # length of signal
 
-        self.signals = []
-        self.mic_positions_global = []
+        self.n_buffers = 3  # number of buffers to simulated at once
+
+        self.mic_positions_global = None
+        self.buzzer_position_global = None
+        self.mic_signals = None
+        self.buzzer_signal = None
+        self.speaker_signal = None
+
+        self.room = None
         self.current_pose = get_starting_pose()
-        self.mic_positions = np.array(MIC_POSITIONS)
-        self.buzzer_position = np.array(BUZZER_POSITION)
-        self.pose_raw_msg = None
 
-        self.source_params = {key: val[1] for key, val in PARAMS_DICT.items()}
+        # parameter stuff
+        self.audio_params = {key: val[1] for key, val in PARAMS_DICT.items()}
         self.set_parameters_callback(self.set_params)
         parameters = self.get_parameters(PARAMS_DICT.keys())
         self.set_parameters(parameters)
 
-        self.room = create_room(self.source_params)
-
+        # start
+        self.update_positions()
+        self.update_geometry()
+        self.update_source_signals()
+        self.state = State.SIMULATE
 
     def set_params(self, params):
         for param in params:
             # we need this in case this parameter
-            # was not set at startup. 
-            # then we use the default values.
+            # was not set at startup; then we use the default values.
             if param.type_ == param.Type.NOT_SET:
                 param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
 
-            self.source_params[param.name] = param.value
-        return SetParametersResult(successful=True)
-   
+            self.audio_params[param.name] = param.value
 
-    def signals_publisher(self):
+            if param.name in [
+                "speaker_type",
+                "speaker_freq",
+                "buzzer_type",
+                "buzzer_freq",
+            ]:
+                self.state = State.UPDATE_SIGNALS
+        return SetParametersResult(successful=True)
+
+    def timer_callback(self):
         """
         Publish signal chunks at a rate defined by the timer.
         """
-        if len(self.signals) == 0:
-            return 
-        
-        if self.time_idx == 0:
-            self.time_idx = starting_sample_nr(self.room, self.mic_positions_global)
-            self.end_idx = self.room.fs * DURATION_SEC # this should be less than signals.shape[1]
-            # alternative: 
-            # nonzero_indices = np.where(np.all(self.signals > 0, axis=0))[0] 
-            # self.time_idx = nonzero_indices[0]
-            # self.end_idx = nonzero_indices[-1]
+        self.get_logger().info(f"state: {self.state}")
+        if self.state == State.UPDATE_SIGNALS:
 
-            self.get_logger().info(f"Starting again at {self.time_idx}")
-            assert self.signals.shape[1] >= self.end_idx
-            if not np.any(self.signals[:, self.time_idx]):
-                self.get_logger().warn(f"all zero in beginning: {self.signals[0, self.time_idx:self.end_idx]}")
-            if not np.any(self.signals[:, self.end_idx]):
-                self.get_logger().warn(f"all zero in end: {self.signals[0, self.time_idx:self.end_idx]}")
+            self.update_source_signals()
+            self.update_mic_signals()
 
-        timestamp = self.get_time_ms() 
-        signal_to_send = self.signals[:, self.time_idx:self.time_idx+N_BUFFER]
+            self.state = State.PUBLISH
+            return
 
-        msg = create_signals_message(signal_to_send, self.mic_positions, timestamp, self.room.fs)
-        self.publisher_signals.publish(msg)
+        elif self.state == State.UPDATE_GEOMETRY:
+            t1 = time.time()
+            valid_positions = self.update_positions()
+            # if drone is outside room, do nothing.
+            if not valid_positions:
+                return
 
-        if self.pose_raw_msg is not None:
-            self.pose_raw_msg.timestamp = timestamp
-            self.publisher_pose_raw.publish(self.pose_raw_msg)
-            self.pose_raw_msg = None # makes sure not to publish this twice. 
-        self.get_logger().info(f"{timestamp}: Published audio and pose signal")
+            self.update_geometry()
+            self.update_mic_signals()
 
-        self.time_idx += N_BUFFER
-       
-        if self.time_idx >= MAX_TIMESTAMP:
-            self.get_logger().warn("timestamp overflow")
-        elif (self.time_idx + N_BUFFER) >= self.end_idx:
-            self.get_logger().warn("end of signal array")
-        else: # continue normally
-            return 
+            self.state = State.PUBLISH
+            self.get_logger().info(f"Updated geometry in {time.time() - t1:.2f}s")
+            return
 
-        # treat the cases where time_idx has reached limit
-        if LOOP:
-            self.time_idx = 0 # will be filled next time we enter this function
-        else:
-            self.get_logger().warn("exiting the node")
-            self.destroy_node()
-            rclpy.shutdown() # exit the console command
+        elif self.state == State.SIMULATE:
+            t1 = time.time()
 
+            self.update_mic_signals()
 
-    def get_time_ms(self):
-        return int(round(self.time_idx / FS * 1000))
+            self.get_logger().info(f"Updated signals in {time.time() - t1:.2f}s")
+            self.state = State.PUBLISH
+            return
 
+        elif self.state == State.PUBLISH:
+            timestamp = self.get_time_ms()
+
+            assert (self.buffer_idx + 1) * N_BUFFER <= self.mic_signals.shape[
+                1
+            ], f"not enough values {self.mic_signals.shape} for buffer idx {self.buffer_idx} {N_BUFFER}"
+            signal_to_send = self.mic_signals[
+                :, self.buffer_idx * N_BUFFER : (self.buffer_idx + 1) * N_BUFFER
+            ]
+            msg = create_signals_message(
+                signal_to_send, CrazyflieSimulation.mic_positions, timestamp, FS
+            )
+            self.publisher_signals.publish(msg)
+            self.get_logger().info(f"{timestamp}: Published audio signal")
+
+            self.buffer_idx += 1
+
+            if self.buffer_idx >= self.n_buffers:
+                self.simulation_idx += self.buffer_idx * N_BUFFER
+                self.buffer_idx = 0
+
+                if self.get_time_ms() >= MAX_TIMESTAMP:
+                    self.get_logger().warn("Timestamp overflow.")
+
+                elif (self.simulation_idx + N_BUFFER * self.n_buffers) >= self.end_idx:
+                    self.get_logger().warn("End of signal array.")
+
+                else:
+                    self.state = State.SIMULATE
+                    return
+            else:  # continue normally
+                self.state = State.PUBLISH
+                return
+
+            # treat the cases where simulation_idx has reached limit
+            if LOOP:
+                self.get_logger().warn("Loop back to beginning.")
+                self.simulation_idx = STARTING_INDEX
+                self.buffer_idx = 0
+                self.state = State.SIMULATE
+            else:
+                self.get_logger().warn("Exiting node.")
+                self.destroy_node()
+                rclpy.shutdown()  # exit the console command
+            return
 
     def pose_listener_callback(self, msg_pose):
         """
-        Run a simulation, update the signal content and publish a PoseRaw
-        message  when a new pose is received.
+        Run a simulation and update the signal content when a new pose is received.
         """
-        from copy import deepcopy
-        t1 = time.time()
-
-        # create a new pose_raw message. 
-        if SOURCE_POS is not None:
-            source_direction_deg = degrees(atan2(SOURCE_POS[1] - msg_pose.position.y, 
-                                                 SOURCE_POS[0] - msg_pose.position.x))
-        else:
-            source_direction_deg = 0
-        self.pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
-        self.pose_raw_msg.source_direction_deg = source_direction_deg 
-
-        self.mic_positions_global = global_positions(self.mic_positions, msg_pose, z=HEIGHT_MIC_ARRAY)[:, :DIM]
-        for m in range(self.mic_positions_global.shape[0]):
-            pos = self.mic_positions_global[m]
-            if not self.room.is_inside(pos):
-                self.get_logger().warn(f"mic{m} position outside room: {pos}")
-                return
-
-        # update the signals if this is the first measurement or if we have moved.
         delta = get_relative_movement(self.current_pose, msg_pose)
-        if any(delta):
-            buzzer = None
-            if self.source_params["buzzer_freq"] > 0: 
-                buzzer = global_positions(self.buzzer_position, msg_pose, z=HEIGHT_BUZZER)
 
-            self.room = self.simulation(self.mic_positions_global, buzzer=buzzer)
-             # make a copy to make sure we don't send data while it is being changed.
-            self.signals = deepcopy(self.room.mic_array.signals)
+        # update the room geometry if we have moved.
+        if any(delta):
+            self.state = State.UPDATE_GEOMETRY
         else:
-            self.get_logger().info("Did not move, not updating signals.")
+            self.get_logger().info("Did not move, not updating geometry.")
+
+        # publish pose
+        pose_raw_msg = create_pose_raw_message_from_poses(self.current_pose, msg_pose)
+        if SPEAKER_POSITION is not None:
+            source_direction_deg = (
+                atan2(
+                    SPEAKER_POSITION[1] - msg_pose.position.y,
+                    SPEAKER_POSITION[0] - msg_pose.position.x,
+                )
+                * 180
+                / np.pi
+            )
+            pose_raw_msg.source_direction_deg = source_direction_deg
+        pose_raw_msg.timestamp = self.get_time_ms()
+        self.publisher_pose_raw.publish(pose_raw_msg)
 
         self.current_pose = msg_pose
-        self.get_logger().warn(f"Updated signals after {time.time() - t1:.2f}s")
         return
 
+    def update_geometry(self):
+        self.room = create_room(
+            CrazyflieSimulation.speaker_position_global,
+            self.buzzer_position_global,
+            self.mic_positions_global,
+        )
 
-    def simulation(self, mic_array, buzzer=None):
+    def update_mic_signals(self):
         """
-        Run a pyroomacoustics simulation on a copy of the pyroom attribute 
+        Run a pyroomacoustics simulation on a copy of the pyroom attribute
         of an CrazyflieSimulation object.
         """
-        t1 = time.time()
-        pyroom_copy = create_room(self.source_params)
-        #self.get_logger().warn(f"1: {time.time() - t1:.2f}s")
-        pyroom_copy.add_microphone_array(mic_array[:, :DIM].T) # dim x n_mics
-        #self.get_logger().warn(f"2: {time.time() - t1:.2f}s")
-        if buzzer is not None: 
-            pyroom_copy.sources[-1].position = buzzer.flatten()[:DIM]
-        pyroom_copy.simulate()
-        #self.get_logger().warn(f"3: {time.time() - t1:.2f}s")
-        return pyroom_copy
+        from audio_simulation.pyroom_helpers import simulate_truncated
 
+        self.room.sources[0].signal = self.speaker_signal
+        self.room.sources[1].signal = self.buzzer_signal
 
-def starting_sample_nr(pyroom, mic_array):
-    """
-    Calculate the index of the sample from which on all mics register 
-    audio from all sources.
-    """
-    # n_sources x dim:
-    p_sources = np.array([s.position for s in pyroom.sources]) 
-    assert p_sources.shape[1] == mic_array.shape[1]
-    # n_sources x n_mics:
-    distances = np.linalg.norm(p_sources[:, None, :] - mic_array[None, :, :], axis=2)
-    max_distance = np.max(distances)
-    max_index = int(np.ceil((max_distance / pyroom.physics.get_sound_speed()) * pyroom.fs) + 1)
-    return max_index
+        assert (
+            len(self.speaker_signal) >= self.simulation_idx + self.n_buffers * N_BUFFER
+        )
+        self.mic_signals = simulate_truncated(
+            self.room, self.simulation_idx, self.n_buffers * N_BUFFER
+        )
+        self.get_logger().info(f"updated signals: {self.mic_signals.shape}")
 
+    def update_source_signals(self):
+        self.speaker_signal = get_source_signal(
+            self.audio_params["speaker_type"], self.audio_params["speaker_freq"]
+        )
+        self.buzzer_signal = get_source_signal(
+            self.audio_params["buzzer_type"], self.audio_params["buzzer_freq"]
+        )
+        self.end_idx = min(len(self.buzzer_signal), len(self.speaker_signal))
 
-def create_room(source_params):
-    """
-    Set the shoe box room with specified dimensions, 
-    sampling frequency and sources.
-    """
-    pyroom = pra.ShoeBox(ROOM_DIM[:DIM], fs=FS, max_order=NUM_REFLECTIONS, sigma2_awgn=NOISE)
+    def update_positions(self):
+        mic_positions_global = global_positions_from_2d(
+            CrazyflieSimulation.mic_positions, self.current_pose, z=HEIGHT_MIC_ARRAY
+        )[:, :DIM]
 
-    # The max possible delay comes from the main diagonal of cuboid. 
-    max_delay_sec = np.linalg.norm(np.array(ROOM_DIM[:DIM])) / pyroom.physics.get_sound_speed()
-    assert DURATION_SEC > max_delay_sec
+        buzzer_position_global = global_positions_from_2d(
+            CrazyflieSimulation.buzzer_position, self.current_pose, z=HEIGHT_BUZZER
+        )[:, :DIM]
 
-    if SOURCE_POS is not None:
-        if source_params["source_type"] == "random": 
-            source_signal = generate_signal_random(FS, DURATION_SEC)
-        elif source_params["source_type"] == "mono":
-            source_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=source_params["source_freq"])
-        elif source_params["source_type"] in [None, "none"]:
-            source_signal = np.zeros(int(ceil(FS * DURATION_SEC)))
-        else:
-            raise ValueError(source_params["source_type"])
-        pyroom.add_source(SOURCE_POS[:DIM], signal=source_signal)
+        for pos in [pos for pos in mic_positions_global] + [buzzer_position_global]:
+            if (self.room is not None) and not self.room.is_inside(pos):
+                self.get_logger().warn(f"Position outside room: {pos}")
+                return False
 
-    if source_params["buzzer_freq"] > 0: 
-        buzzer = [0, 0, 0] # will be overwritten
-        buzzer_signal = generate_signal_mono(FS, DURATION_SEC, frequency_hz=source_params["buzzer_freq"])
-        pyroom.add_source(buzzer[:DIM], signal=buzzer_signal)
-    return pyroom
+        self.mic_positions_global = mic_positions_global
+        self.buzzer_position_global = buzzer_position_global
+        return True
+
+    def get_time_ms(self):
+        return int(
+            round((self.simulation_idx + self.buffer_idx * N_BUFFER) / FS * 1000)
+        )
 
 
 def main(args=None):

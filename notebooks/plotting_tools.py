@@ -1,5 +1,18 @@
+import matplotlib
 import matplotlib.pylab as plt
 import numpy as np
+import pandas as pd
+
+labels = {
+    "fft": "FFT method",
+    "cost": "optimization method",
+    "sigmadelta": "delta noise $\sigma_\\Delta$ [cm]",
+    "sigmay": "amplitude noise $\sigma_y$ [-]",
+    "distance": "distance $d$ [cm]",
+    np.nanstd: "error std",
+    np.nanmedian: "median error",
+    np.nanmean: "mean error",
+}
 
 
 def make_dirs(fname):
@@ -190,3 +203,114 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     axs[0, 1].grid(which="both")
     axs[0, 1].legend(loc="lower right")
     return fig, axs
+
+
+def pcolorfast_custom(ax, xs, ys, values, verbose=False, **kwargs):
+    """ pcolorfast with gray for nan and centered xticks and yticks. 
+    """
+    current_cmap = matplotlib.cm.get_cmap()
+    current_cmap.set_bad(color="gray")
+
+    assert values.shape == (len(ys), len(xs))
+
+    dx = xs[1] - xs[0]  # assumes uniform samples
+    dy = ys[1] - ys[0]
+    try:
+        im = ax.pcolorfast(xs, ys, values, **kwargs)
+        yticks = ys + dy / 2
+        xticks = xs + dx / 2
+        ax.set_xticks(xticks)
+        ax.set_xticklabels(xs)
+        ax.set_yticks(yticks)
+        ax.set_yticklabels(ys)
+        extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
+        im.set_extent(extent)
+    except:
+        print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
+        im = ax.pcolorfast(list(xs)+[xs[-1]+dx], list(ys)+[ys[-1]+dy], values, **kwargs)
+    return im
+
+
+def plot_error_distance(
+    sub_df, column, name, log=False, aggfunc=np.nanmedian, vmin=None, vmax=None
+):
+    table = pd.pivot_table(
+        sub_df,
+        values="error",
+        index=["method", column],
+        columns="distance",
+        aggfunc=aggfunc,
+    )
+    nonzero_values = table.values[table.values > 0]
+    if vmin is None and len(nonzero_values):
+        vmin = np.min(nonzero_values)
+    if vmax is None and len(nonzero_values):
+        vmax = np.max(nonzero_values)
+
+    fig, axs = plt.subplots(1, len(sub_df.method.unique()), sharey=True, squeeze=False)
+    fig.set_size_inches(5 * len(sub_df.method.unique()), 5)
+    for i, (method, df) in enumerate(table.groupby("method")):
+        index = df.index.get_level_values(column).values
+        distances = df.columns.values
+        if log:
+            im = pcolorfast_custom(
+                axs[0, i],
+                distances,
+                index,
+                np.log10(df.values),
+                vmin=np.log10(vmin),
+                vmax=np.log10(vmax),
+            )
+        else:
+            im = pcolorfast_custom(
+                axs[0, i], distances, index, df.values, vmin=vmin, vmax=vmax
+            )
+        axs[0, i].set_xlabel("distance $d$ [cm]")
+        axs[0, i].set_title(labels[method])
+    add_colorbar(fig, axs[0, -1], im, title=f"{labels[aggfunc]} [cm]")
+    axs[0, 0].set_ylabel(name.replace("_", " "))
+    return fig, axs
+
+def plot_error_gamma(
+    sub_df, column, name, log=False, aggfunc=np.nanmedian, vmin=None, vmax=None, logy=False,
+    ax=None, fig=None, colorbar=True
+):
+    table = pd.pivot_table(
+        sub_df,
+        values="error",
+        index=["method", column],
+        columns="gamma",
+        aggfunc=aggfunc,
+    )
+    nonzero_values = table.values[table.values > 0]
+    if vmin is None and len(nonzero_values):
+        vmin = np.min(nonzero_values)
+    if vmax is None and len(nonzero_values):
+        vmax = np.max(nonzero_values)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+        fig.set_size_inches(5, 5)
+
+    ys = table.index.get_level_values(column).values
+    #print(column, ys)
+    if logy: 
+        ys = np.log10(ys)
+    gammas = table.columns.values
+    if log:
+        im = pcolorfast_custom(
+            ax,
+            gammas,
+            ys,
+            np.log10(table.values),
+            vmin=np.log10(vmin),
+            vmax=np.log10(vmax),
+        )
+    else:
+        im = pcolorfast_custom(ax, gammas, ys, table.values, vmin=vmin, vmax=vmax)
+    ax.set_xlabel("approach angle $\\gamma$ [deg]")
+    if colorbar:
+        from plotting_tools import add_colorbar
+        add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
+    ax.set_ylabel(name.replace("_", " "))
+    return fig, ax

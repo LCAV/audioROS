@@ -45,18 +45,17 @@ EXTRA_DIRNAME = "2021_03_01_flying"
 
 bag_pid = None
 
+
 def execute_commands(command_name):
     if "mono" in command_name:
         freq = int(command_name.replace("mono", ""))
         command_list = [
-            ('/gateway', 'buzzer_effect', 12, 0),  
-            ('/gateway', 'buzzer_freq', freq, 0)
-        ] 
+            ("/gateway", "buzzer_effect", 12, 0),
+            ("/gateway", "buzzer_freq", freq, 0),
+        ]
     elif "all" in command_name:
         thrust = int(command_name.replace("all", ""))
-        command_list = [
-            ('/gateway', 'all', thrust, 0)
-        ],
+        command_list = ([("/gateway", "all", thrust, 0)],)
     else:
         command_list = all_commands_lists[command_name]
 
@@ -339,11 +338,11 @@ def main(args=None):
 
     # motors check
     SerialIn = None
-    if any([p.get('distance', None) is not None for p in params_list]) or any([p.get('angle', None) is not None for p in params_list]):
+    if any([p.get("distance", None) is not None for p in params_list]) or any(
+        [p.get("angle", None) is not None for p in params_list]
+    ):
         SerialIn = SerialMotors(
-                verbose=False, 
-                current_distance=START_DISTANCE, 
-                current_angle=START_ANGLE
+            verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE
         )
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
@@ -351,7 +350,6 @@ def main(args=None):
             os.makedirs(dirname)
 
     timestamp = int(time.time())
-
 
     param_i = 0
     while param_i < len(params_list):

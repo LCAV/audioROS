@@ -1,0 +1,16 @@
+# configuration for black
+# copied from https://github.com/psf/black/blob/master/pyproject.toml
+[tool.black]
+line-length = 80
+target-version = ['py36', 'py37', 'py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  | test_flake8
+  | test_pep257
+  | test_copyright
+  | setup.py
+  | crazyflie-audio
+  | experiments
+)/
+'''

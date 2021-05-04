@@ -15,14 +15,16 @@ LOG_LEVEL = "warn"
 
 node_config = {
     "gateway": {
-        "pkg": "crazyflie_crtp", 
-        "params": [{
-            "buzzer_effect": 12, 
-            "buzzer_freq": 2000, 
-            "filter_snr_enable": 2,
-            "min_freq": 1000,
-            "max_freq": 5000
-        }]
+        "pkg": "crazyflie_crtp",
+        "params": [
+            {
+                "buzzer_effect": 12,
+                "buzzer_freq": 2000,
+                "filter_snr_enable": 2,
+                "min_freq": 1000,
+                "max_freq": 5000,
+            }
+        ],
     },
     "audio": {"pkg": "topic_plotter"},
     "geometry": {"pkg": "topic_plotter"},

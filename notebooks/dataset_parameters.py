@@ -62,6 +62,7 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 5,
             "max_time": 22,
+            "mag_thresh": 1e-3, # important
         },
         "measurement": {
             **kwargs_standard,
@@ -80,6 +81,7 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 5,
             "max_time": 22,
+            "mag_thresh": 1, # important
         },
         "measurement": {
             **kwargs_standard,

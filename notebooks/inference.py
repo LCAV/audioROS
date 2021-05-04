@@ -7,7 +7,7 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-YAW_DEG = 0
+AZIMUTH_DEG = 0
 
 
 def get_abs_fft(f_slice, n_max=1000, norm=True):
@@ -19,36 +19,45 @@ def get_abs_fft(f_slice, n_max=1000, norm=True):
     return np.abs(np.fft.rfft(f_slice_norm, n=n))
 
 
-def get_interference_distances(frequencies, mic_idx=1, distance_range=None, n_max=1000):
+def get_differences(frequencies, n_max=1000):
     from constants import SPEED_OF_SOUND
-    from simulation import get_orthogonal_distance_from_global
 
     n = max(len(frequencies), n_max)
     df = np.mean(frequencies[1:] - frequencies[:-1])
     deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
+    return deltas_cm
+
+
+def convert_differences_to_distances(differences_cm, mic_idx, distance_range):
+    from geometry import get_orthogonal_distance_from_global
+
     distances = get_orthogonal_distance_from_global(
-        yaw_deg=YAW_DEG, deltas_cm=deltas_cm, mic_idx=mic_idx
+        azimuth_deg=AZIMUTH_DEG, deltas_cm=differences_cm, mic_idx=mic_idx
     )
+    mask = None
     if distance_range is not None:
         mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
         distances = distances[mask]
-    else:
-        mask = None
     return distances, mask
 
 
 def get_probability_fft(
     f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000
 ):
+    print("Deprecation warning: do not use this function anymore")
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max)
-    distances, mask = get_interference_distances(
-        frequencies, mic_idx, distance_range, n_max=n_max
+    differences = get_differences(frequencies, n_max=n_max)
+
+    distances, mask = convert_differences_to_distances(
+        differences, mic_idx, distance_range
     )
     if mask is not None:
         abs_fft = abs_fft[mask]
+        differences = differences[mask]
+
     prob = abs_fft / np.sum(abs_fft)
-    return distances, prob
+    return distances, prob, differences
 
 
 def get_posterior(abs_fft, sigma=None, data=None):
@@ -64,14 +73,21 @@ def get_posterior(abs_fft, sigma=None, data=None):
             # this really as no effect on the result.
             periodogram -= np.max(periodogram)
             posterior = np.exp(periodogram)
-        else:  # this is the limit of exp for sigma > 0
+        else:  # this is the limit of exp for sigma to 0
             posterior = np.zeros(len(periodogram))
             posterior[np.argmax(periodogram)] = 1.0
     else:
         d_bar = 1 / len(data) * np.sum((data - np.mean(data)) ** 2)
-        posterior = (1 - 2 * periodogram / (N * d_bar)) ** ((2 - N) / 2)
+        arg = 1 - 2 * periodogram / (N * d_bar)
+
+        # arg may not be negative.
+        if np.any(arg <= 0):
+            valid = np.where(arg > 0)[0]
+            print("Warning, arg is non-positive at", arg[arg <= 0])
+            arg[arg <= 0] = np.min(arg[arg > 0])
+
+        posterior = (arg) ** ((2 - N) / 2)
         # posterior = np.exp(periodogram)
-    posterior /= np.sum(posterior)
     return posterior
 
 
@@ -80,14 +96,16 @@ def get_probability_bayes(
 ):
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
-    distances, mask = get_interference_distances(
-        frequencies, mic_idx, distance_range, n_max=n_max
+    differences = get_differences(frequencies, n_max=n_max)
+    posterior = get_posterior(abs_fft, sigma, data=f_slice)
+    distances, mask = convert_differences_to_distances(
+        differences, mic_idx, distance_range
     )
     if mask is not None:
-        abs_fft = abs_fft[mask]
-
-    posterior = get_posterior(abs_fft, sigma, data=f_slice)
-    return distances, posterior
+        posterior = posterior[mask]
+        differences = differences[mask]
+    posterior /= np.sum(posterior)
+    return distances, posterior, differences
 
 
 def get_probability_cost(
@@ -99,12 +117,14 @@ def get_probability_cost(
     relative_ds=None,
     absolute_yaws=None,
 ):
+    if np.any(distances < 1):
+        raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_freq_slice_theory
 
     if absolute_yaws is not None:
-        yaw_deg = absolute_yaws
+        azimuth_deg = -absolute_yaws
     else:
-        yaw_deg = YAW_DEG
+        azimuth_deg = AZIMUTH_DEG
 
     f_slice_norm = f_slice - np.mean(f_slice)
     f_slice_norm /= np.std(f_slice_norm)
@@ -113,7 +133,7 @@ def get_probability_cost(
     for d in distances:
         if relative_ds is not None:
             d += relative_ds
-        f_slice_theory = get_freq_slice_theory(frequencies, d, yaw_deg)[:, mic_idx]
+        f_slice_theory = get_freq_slice_theory(frequencies, d, azimuth_deg)[:, mic_idx]
         f_slice_theory -= np.mean(f_slice_theory)
         f_slice_theory /= np.std(f_slice_theory)
         probs.append(np.exp(-np.linalg.norm(f_slice_theory - f_slice_norm)))
@@ -128,40 +148,54 @@ def get_probability_cost(
     return probs
 
 
-def get_approach_angle_fft(
+def get_periods_fft(
     d_slice,
     frequency,
     relative_distances_cm,
-    mic_idx=1,
     n_max=1000,
     bayes=False,
     sigma=None,
 ):
-    from simulation import factor_distance_to_delta
-    from constants import SPEED_OF_SOUND
-
+    # the distribution over measured period.
     d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
-
     n = max(len(d_slice), n_max)
 
-    period_90 = 2 * frequency / SPEED_OF_SOUND  # 1/m in terms of orthogonal distance
-    periods_k = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of delta
-    sines_gamma = periods_k / period_90
-    if np.any(sines_gamma > 1):
-        print(f"Values bigger than 1: {np.sum(sines_gamma>1)}/{len(sines_gamma)}")
+    #periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
+    periods_m = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of orthogonal
 
     abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
-    # abs_fft = abs_fft[sines_gamma <= 1]
-    # sines_gamma= sines_gamma[sines_gamma <= 1]
-    # sines_gamma[sines_gamma>1] = 1
-    gammas = np.full(len(sines_gamma), 90)
-    gammas[sines_gamma <= 1] = np.arcsin(sines_gamma[sines_gamma <= 1]) * 180 / np.pi
-
     if bayes:
         prob = get_posterior(abs_fft, sigma, d_slice)
+        prob /= np.sum(prob)
     else:
+        #print("Deprecation warning: do not use this function anymore")
         prob = abs_fft / np.sum(abs_fft)
-    return gammas, prob, periods_k
+    return periods_m, prob
+
+def get_approach_angle_fft(
+        d_slice,
+        frequency,
+        relative_distances_cm,
+        n_max=1000,
+        bayes=False,
+        sigma=None,
+        reduced=False
+    ):
+    from constants import SPEED_OF_SOUND
+    period_theoretical = frequency / SPEED_OF_SOUND # 1/m in terms of delta
+    periods_m, probs = get_periods_fft(
+        d_slice,
+        frequency,
+        relative_distances_cm,
+        n_max,
+        bayes,
+        sigma
+    )
+    ratios = periods_m / period_theoretical
+    if not reduced:
+        return ratios, probs
+    else:
+        return get_gamma_distribution(ratios, probs) 
 
 
 def get_approach_angle_cost(
@@ -174,8 +208,7 @@ def get_approach_angle_cost(
     ax=None,
 ):
     from simulation import get_dist_slice_theory
-
-    yaw_deg = YAW_DEG
+    azimuth_deg = AZIMUTH_DEG
 
     d_slice_norm = d_slice - np.mean(d_slice)
     d_slice_norm /= np.std(d_slice_norm)
@@ -187,7 +220,7 @@ def get_approach_angle_cost(
                 gamma_deg / 180 * np.pi
             )
             assert np.all(distances_cm >= 0)
-            d_slice_theory = get_dist_slice_theory(frequency, distances_cm, yaw_deg)[
+            d_slice_theory = get_dist_slice_theory(frequency, distances_cm, azimuth_deg)[
                 :, mic_idx
             ]
             d_slice_theory -= np.nanmean(d_slice_theory)
@@ -207,3 +240,11 @@ def get_approach_angle_cost(
     probs_angle = np.nanmax(probs, axis=0)  # take maximum across distances
     probs_angle /= np.nansum(probs_angle)
     return probs_angle
+
+
+def get_gamma_distribution(ratios, probs, factor=2, eps=1e-1):
+    ratios /= factor
+    valid = ratios <= 1 + eps
+    ratios[valid & (ratios > 1)] = 1.0
+    probs[~valid] = 0
+    return np.arcsin(ratios[valid]) * 180 / np.pi, probs[valid]

@@ -18,28 +18,21 @@ MAX_FREQ = 10000
 APPENDIX = "_7"
 
 node_config = {
-    "file": {
-        "pkg": "audio_publisher", 
-        "params": [{
-            "appendix": APPENDIX
-        }]
-    },
+    "file": {"pkg": "audio_publisher", "params": [{"appendix": APPENDIX}]},
     "processor": {
-        "pkg": "audio_stack", 
-        "params": [{
-            "filter_snr": 0,
-            "min_freq": MIN_FREQ,
-            "max_freq": MAX_FREQ,
-            "n_freqs": 1025 
-        }]
+        "pkg": "audio_stack",
+        "params": [
+            {
+                "filter_snr": 0,
+                "min_freq": MIN_FREQ,
+                "max_freq": MAX_FREQ,
+                "n_freqs": 1025,
+            }
+        ],
     },
     "audio": {
         "pkg": "topic_plotter",
-        "params": [{
-            "min_freq": MIN_FREQ,
-            "max_freq": MAX_FREQ,
-        }]
-
+        "params": [{"min_freq": MIN_FREQ, "max_freq": MAX_FREQ,}],
     },
 }
 

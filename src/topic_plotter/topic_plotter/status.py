@@ -6,8 +6,10 @@ import matplotlib.pylab as plt
 from audio_interfaces.msg import CrazyflieStatus
 
 import sys
-sys.path.append('crazyflie-audio/python')
+
+sys.path.append("crazyflie-audio/python")
 from reader_crtp import ReaderCRTP
+
 
 class StatusPlotter(Node):
     def __init__(self):
@@ -22,21 +24,25 @@ class StatusPlotter(Node):
         self.ax.set_xlabel("time [s]")
         self.ax.set_ylabel("battery level [V]")
         self.ax.set_ylim(2.5, 4.2)
-        self.hline = self.ax.axhline(ReaderCRTP.BATTERY_OK, label='OK level', color="C0")
-        self.hline_initial = None 
-        self.ax.scatter([], [], color="C2", label='current level')
+        self.hline = self.ax.axhline(
+            ReaderCRTP.BATTERY_OK, label="OK level", color="C0"
+        )
+        self.hline_initial = None
+        self.ax.scatter([], [], color="C2", label="current level")
         self.ax.legend()
-        #self.fig.set_size_inches(14, 10)
+        # self.fig.set_size_inches(14, 10)
         self.fig.set_size_inches(5, 5)
         self.start_time = None
         plt.show(block=False)
 
     def listener_callback_status(self, msg):
         if self.hline_initial is None:
-            self.hline_initial = self.ax.axhline(msg.vbat, label='initial level', color="C1")
+            self.hline_initial = self.ax.axhline(
+                msg.vbat, label="initial level", color="C1"
+            )
             self.ax.legend()
 
-        time_s = msg.timestamp/1000
+        time_s = msg.timestamp / 1000
         if self.start_time is None:
             self.start_time = time_s
         self.ax.scatter(time_s, msg.vbat, color="C2")
@@ -58,5 +64,5 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

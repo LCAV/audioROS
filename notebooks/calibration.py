@@ -12,7 +12,7 @@ import pandas as pd
 OFFSET_BOUNDS = [-1, 1]
 GAIN_BOUNDS = [0.1, 10]
 # wall absorption bounds: 1 would mean all energy lost and no interference.
-ABS_BOUNDS = [0.2, 0.8]
+ABS_BOUNDS = [0.0, 0.8]
 YAW_DEG = 0
 
 
@@ -107,7 +107,7 @@ def get_calibration_function_fit(
             slices_raw.T,
             distances,
             method="minimize",
-            yaw_deg=YAW_DEG,
+            azimuth_deg=YAW_DEG,
             frequency=f,
             chosen_mics=mics,
             optimize_absorption=True,
@@ -153,7 +153,7 @@ def get_calibration_function_median(
 def fit_distance_slice(
     d_slice_exp,
     distances_cm,
-    yaw_deg,
+    azimuth_deg,
     frequency,
     chosen_mics,
     method="brute",
@@ -175,7 +175,7 @@ def fit_distance_slice(
         d_slice = get_dist_slice_theory(
             frequency,
             distances_cm=distances_cm + coeffs[1],
-            yaw_deg=yaw_deg,
+            azimuth_deg=azimuth_deg,
             wall_absorption=coeffs[0],
             gains=coeffs[2:],
             chosen_mics=chosen_mics,
@@ -222,7 +222,7 @@ def fit_distance_slice(
     d_slice = get_dist_slice_theory(
         frequency,
         distances_cm=distances_cm + coeffs[1],
-        yaw_deg=yaw_deg,
+        azimuth_deg=azimuth_deg,
         wall_absorption=coeffs[0],
         gains=coeffs[2:],
         chosen_mics=chosen_mics,
