@@ -405,7 +405,7 @@ def evaluate_data(fname=""):
                 from crazyflie_description_py.parameters import MIC_POSITIONS
 
                 beam_fomer = BeamFormer(mic_positions=np.array(MIC_POSITIONS))
-                print("Created beamformer from crazyflie_description_py.")
+                print("Created beamformer from epuck_description_py.")
 
             arg_idx = np.argsort(freqs)
             freqs = freqs[arg_idx]
