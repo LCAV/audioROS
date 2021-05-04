@@ -45,7 +45,8 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_03_01_flying"
 # EXTRA_DIRNAME = "2021_04_30_hover"
 # EXTRA_DIRNAME = "2021_04_30_stepper"
-EXTRA_DIRNAME = "2021_05_04_flying"
+#EXTRA_DIRNAME = "2021_05_04_flying"
+EXTRA_DIRNAME = "2021_05_04_linear"
 
 bag_pid = None
 
@@ -366,7 +367,7 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = "y"
+        answer = "" #"y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":
