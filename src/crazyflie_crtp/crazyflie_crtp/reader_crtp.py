@@ -36,15 +36,15 @@ logging.basicConfig(level=logging.ERROR)
 #
 # Note that all parameters are scaled so that they are given in degrees or meters.
 # Also note that we change the coordinate systems so that the "front" on Crazyflie
-# points in positive y direction, and the x points to the right.
+# points in positive y direction, and the x points to the right, looking from aboe.
 CHOSEN_LOGGERS = {
     "motion": {
         "yaw_deg": ("stabilizer.yaw", "float"),
-        "vx": ("stateEstimate.vy", "float", -1),
-        "vy": ("stateEstimate.vx", "float"),
+        "vx": ("kalman.statePY", "float", -1),
+        "vy": ("kalman.statePX", "float"),
         "x": ("kalman.stateY", "float", -1),
         "y": ("kalman.stateX", "float"),
-        "z": ("range.zrange", "uint16_t", 1000),
+        "z": ("kalman.stateZ", "float"),
     },
     "status": {"vbat": ("pm.vbat", "float"),},
     "motors": {
@@ -93,9 +93,7 @@ def test_logging_size(max_size=26):
         for key, vals in log_dict.items():
             size += sizes[vals[1]]
         if size > max_size:
-            raise RuntimeError(
-                f"logging config {logger} too big: {size}>{max_size}"
-            )
+            raise RuntimeError(f"logging config {logger} too big: {size}>{max_size}")
 
 
 class ArrayCRTP(object):
@@ -109,9 +107,7 @@ class ArrayCRTP(object):
         self.name = name
         self.n_frames = n_frames
         self.n_bytes = n_frames * np.dtype(dtype).itemsize + extra_bytes
-        self.n_packets_full, self.n_bytes_last = divmod(
-            self.n_bytes, CRTP_PAYLOAD
-        )
+        self.n_packets_full, self.n_bytes_last = divmod(self.n_bytes, CRTP_PAYLOAD)
         print(f"{name}: waiting for {self.n_bytes} bytes.")
         self.packet_counter = 0
         self.dtype = dtype
@@ -139,9 +135,7 @@ class ArrayCRTP(object):
         # received all full packets, read remaining bytes
         if self.packet_counter == self.n_packets_full:
             self.bytes_array[
-                self.packet_counter
-                * CRTP_PAYLOAD : self.packet_counter
-                * CRTP_PAYLOAD
+                self.packet_counter * CRTP_PAYLOAD : self.packet_counter * CRTP_PAYLOAD
                 + self.n_bytes_last
             ] = packet.datal[: self.n_bytes_last]
 
@@ -167,9 +161,7 @@ class ArrayCRTP(object):
             self.packet_counter += 1
             return False
         else:
-            print(
-                f"unexpected packet: {self.packet_counter} > {self.n_packets_full}"
-            )
+            print(f"unexpected packet: {self.packet_counter} > {self.n_packets_full}")
 
     def reset_array(self):
         if (self.packet_counter != 0) and (
@@ -287,12 +279,8 @@ class ReaderCRTP(object):
         ):  # channel is either 0 or 1: read audio data
             self.audio_array.fill_array_from_crtp(packet, verbose=False)
 
-        elif (
-            self.frame_started and packet.channel == 2
-        ):  # channel is 2: read fbins
-            filled = self.fbins_array.fill_array_from_crtp(
-                packet, verbose=False
-            )
+        elif self.frame_started and packet.channel == 2:  # channel is 2: read fbins
+            filled = self.fbins_array.fill_array_from_crtp(packet, verbose=False)
 
             if filled:
                 # read the timestamp from the last packet
@@ -311,8 +299,7 @@ class ReaderCRTP(object):
 
                 # reject faulty packages
                 if self.audio_timestamp and (
-                    new_audio_timestamp
-                    > self.audio_timestamp + ALLOWED_DELTA_US
+                    new_audio_timestamp > self.audio_timestamp + ALLOWED_DELTA_US
                 ):
                     return
                 self.audio_timestamp = new_audio_timestamp
@@ -363,10 +350,7 @@ class ReaderCRTP(object):
             return False
 
         if motor == "all":
-            [
-                self.cf.param.set_value(f"motorPowerSet.m{i}", value)
-                for i in range(1, 5)
-            ]
+            [self.cf.param.set_value(f"motorPowerSet.m{i}", value) for i in range(1, 5)]
         else:
             self.cf.param.set_value(f"motorPowerSet.{motor}", value)
 
@@ -435,9 +419,7 @@ if __name__ == "__main__":
     log_status = True
     cflib.crtp.init_drivers(enable_debug_driver=False)
 
-    parser = argparse.ArgumentParser(
-        description="Read CRTP data from Crazyflie."
-    )
+    parser = argparse.ArgumentParser(description="Read CRTP data from Crazyflie.")
     parser.add_argument(
         "id",
         metavar="ID",

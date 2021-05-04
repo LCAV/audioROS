@@ -46,6 +46,10 @@ def convert_sec_nanosec_to_ms(sec, nanosec):
     return int(round(sec * 1e-3 + nanosec * 1e-6))
 
 
+def convert_stamp_to_ms(stamp):
+    return convert_sec_nanosec_to_ms(stamp.sec, stamp.nanosec)
+
+
 def create_pose_message(x, y, z, yaw_deg, timestamp=None, **dump):
     """ Create PoseStamped message. """
     msg = PoseStamped()
@@ -66,9 +70,7 @@ def create_pose_message_from_arrays(quat, position, timestamp=None):
         fill_header(msg, timestamp)
 
     msg.pose.position = Point(x=position[0], y=position[1], z=position[2])
-    msg.pose.orientation = Quaternion(
-        x=quat[0], y=quat[1], z=quat[2], w=quat[3]
-    )
+    msg.pose.orientation = Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3])
     return msg
 
 
@@ -205,7 +207,9 @@ def read_pose_message(msg):
     """ Read Pose message.  """
     from scipy.spatial.transform import Rotation
 
-    new_position = np.array((msg.pose.position.x, msg.pose.position.y))
+    new_position = np.array(
+        (msg.pose.position.x, msg.pose.position.y, msg.pose.position.z)
+    )
     quat = [
         msg.pose.orientation.x,
         msg.pose.orientation.y,
@@ -241,9 +245,7 @@ def read_signals_message(msg):
 def read_signals_freq_message(msg):
     """ Read SignalsFreq message.  """
     mic_positions = np.array(msg.mic_positions).reshape((msg.n_mics, -1))
-    signals_f = np.array(msg.signals_real_vect) + 1j * np.array(
-        msg.signals_imag_vect
-    )
+    signals_f = np.array(msg.signals_real_vect) + 1j * np.array(msg.signals_imag_vect)
     signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
     freqs = np.array(msg.frequencies)
     return mic_positions, signals_f, freqs
@@ -263,9 +265,7 @@ def read_correlations_message(msg):
 
 def read_spectrum_message(msg):
     """ Read Spectrum message. """
-    spectrum = np.array(msg.spectrum_vect).reshape(
-        (msg.n_frequencies, msg.n_angles)
-    )
+    spectrum = np.array(msg.spectrum_vect).reshape((msg.n_frequencies, msg.n_angles))
     frequencies = np.array(msg.frequencies)
     theta_scan = np.linspace(0, 360, msg.n_angles)
     return spectrum, frequencies, theta_scan

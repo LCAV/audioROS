@@ -6,8 +6,8 @@ data_collector.py: Collect distance-frequency measurements in one class.
 
 import scipy.interpolate
 
-from .dataset_parameters import kwargs_datasets
-from .frequency_analysis import *
+from dataset_parameters import kwargs_datasets
+from frequency_analysis import *
 
 ANGLE = 0
 DISTANCE = 0
@@ -68,7 +68,7 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
             df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
 
     elif method == "calibration-offline":
-        from .calibration import get_calibration_function
+        from calibration import get_calibration_function
 
         calib_function = get_calibration_function()
         calib_values = calib_function(list(freqs))[:, :, None]
@@ -653,7 +653,7 @@ class DataCollector(object):
     # TODO(FD): below are potentially deprecated.
     def get_calib_function(self, method="median", ax=None):
         from scipy.interpolate import interp1d
-        from .calibration import plot_calibration
+        from calibration import plot_calibration
 
         """ 
         Return calibration function of form
@@ -702,7 +702,7 @@ class DataCollector(object):
         return calib_function
 
     def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
-        from .calibration import fit_distance_slice
+        from calibration import fit_distance_slice
 
         df_here = self.filter_by_column(frequency, "frequency")
         frequency_here = df_here.frequency.unique()[0]
@@ -745,7 +745,7 @@ class DataCollector(object):
         return coeffs_raw, distances_raw, d_slice_raw, cost_raw
 
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
-        from .calibration import fit_distance_slice
+        from calibration import fit_distance_slice
 
         df_here = self.filter_by_column(frequency, "frequency")
         frequency_here = df_here.frequency.unique()[0]
