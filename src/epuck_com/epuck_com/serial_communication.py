@@ -29,7 +29,7 @@ class Gateway(Node):
 
         # need the reader from the epuck initalized here
 
-        self.port = 'COM3'
+        self.port = "/dev/ttyACM1"
 
         print("initiating connection to port", self.port)
         try:
@@ -171,7 +171,7 @@ class Gateway(Node):
             return None
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
-    def data_rearrange(data):
+    def data_rearrange(self, data):
         mics = 4
         bins = 32
         # check that there is the right number of bins :
@@ -179,22 +179,27 @@ class Gateway(Node):
         if data is []:
             print("there is nothing in the data")
             return data
-        if (len(data) != bins):
+        smaller_data = []
+        # filtering the bins for now centered around a fixed value
+        for i in range(32):
+            smaller_data.append(data[i])
+        if (len(smaller_data) != bins):
             print("the size of the data is", len(data), "while it should be", bins, "stopping program")
             sys.exit(0)
 
         signals_f = np.zeros((mics, bins), dtype=np.complex128)
-        real_data = []
-        complex_data = []
-        micSpace = data.size / mics
 
+        for i in range(len(data)):
+            print("Access element is: ", data[i])
         for i in range(bins):
             for j in range(mics):
                 pos = (j * bins + i) * 2
                 signals_f.real[j, i] = data[pos]
                 signals_f.imag[j, i] = data[pos + 1]
 
-        return real_data, complex_data
+        return signals_f
+
+
 
 
 def main(args=None):
