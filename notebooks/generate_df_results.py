@@ -64,6 +64,5 @@ if __name__ == "__main__":
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
             data_collector = data_collector_from_df(df_all, exp_name, mic_type, motors)
-            # data_collector.cleanup(verbose=False)
-            data_collector.cleanup_conservative(verbose=False)
+            data_collector.cleanup(verbose=False)
             data_collector.backup(exp_name, mic_type, motors)

@@ -5,6 +5,7 @@ import pyroomacoustics as pra
 from audio_stack.beam_former import rotate_mics
 from constants import SPEED_OF_SOUND
 from crazyflie_description_py.parameters import N_BUFFER, FS
+from crazyflie_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
 from frequency_analysis import get_bin
 from geometry import *
 
@@ -14,16 +15,12 @@ from signals import generate_signal
 # default wall absorption (percentage of amplitude that is lost in reflection):
 WALL_ABSORPTION = 0.2
 GAIN = 1.0  # default amplitude for input signals
-AZIMUTH_DEG = 0  # default angle of wall in degrees
-ROOM_DIM = [10, 8]  # in meters
 WIDEBAND_FILE = "results/wideband.npy"
-
-# default
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
 
 
 def simulate_distance_estimator(
-    chosen_mics=range(4), distance_cm=10, azimuth_deg=0, ax=None
+    chosen_mics=range(4), distance_cm=10, azimuth_deg=WALL_ANGLE_DEG, ax=None
 ):
     from inference import get_probability_bayes
     from estimators import DistanceEstimator
@@ -61,7 +58,7 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
     return signal
 
 
-def generate_room(distance_cm=0, azimuth_deg=AZIMUTH_DEG, ax=None, fs_here=FS):
+def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS):
     source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
     m = pra.Material(energy_absorption="glass_3mm")
@@ -73,7 +70,7 @@ def generate_room(distance_cm=0, azimuth_deg=AZIMUTH_DEG, ax=None, fs_here=FS):
     return room
 
 
-def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
+def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True):
     """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
     context = Context.get_crazyflie_setup()
 
@@ -111,7 +108,7 @@ def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
 
 
 def get_amplitude_function(
-    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=AZIMUTH_DEG
+    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=WALL_ANGLE_DEG
 ):
     deltas_m, d0 = get_deltas_from_global(azimuth_deg, distances_cm, mic_idx)
     alpha0 = 1 / (4 * np.pi * d0)  #
@@ -176,7 +173,7 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
 
 
 def get_df_theory(
-    frequencies, distances, azimuth_deg=AZIMUTH_DEG, chosen_mics=range(4)
+    frequencies, distances, azimuth_deg=WALL_ANGLE_DEG, chosen_mics=range(4)
 ):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
@@ -187,7 +184,7 @@ def get_df_theory(
     return H
 
 
-def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=AZIMUTH_DEG):
+def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG):
     room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
 
     n_times = len(signal) // N_BUFFER
@@ -203,7 +200,7 @@ def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=AZIMUTH_
 
 
 def get_dist_slice_pyroom(
-    frequency, distances_cm, azimuth_deg=AZIMUTH_DEG, n_times=100
+    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG, n_times=100
 ):
     from frequency_analysis import get_bin
 
@@ -223,7 +220,7 @@ def get_dist_slice_pyroom(
 
 
 def get_freq_slice_theory(
-    frequencies, distance_cm, azimuth_deg=AZIMUTH_DEG, chosen_mics=range(4)
+    frequencies, distance_cm, azimuth_deg=WALL_ANGLE_DEG, chosen_mics=range(4)
 ):
     """ 
     We can incorporate relative movement by providing
@@ -242,7 +239,7 @@ def get_freq_slice_theory(
 def get_dist_slice_theory(
     frequency,
     distances_cm,
-    azimuth_deg=AZIMUTH_DEG,
+    azimuth_deg=WALL_ANGLE_DEG,
     chosen_mics=range(4),
     wall_absorption=WALL_ABSORPTION,
     gains=[GAIN] * 4,

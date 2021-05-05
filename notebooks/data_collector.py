@@ -23,6 +23,8 @@ DELTA_MERGE_FREQ = 50  # frequencies spaced by less are merged. sweep spacing: c
 RATIO_MISSING_ALLOWED = 0.2
 OUTLIER_FACTOR = 3
 
+SWEEP_DELTA = 1000  # jumps by more than this downwards are detected as end of sweep.
+
 
 def get_frequency_slice(df, mics=None):
     if mics is not None:
@@ -411,11 +413,32 @@ class DataCollector(object):
     def get_frequencies(self):
         return sorted_and_unique(self.df, "frequency")
 
+    def detect_sweep(self, signals_f, frequencies):
+        """ find big frequency jump, meaning end of sweep. """
+        sweep_complete = False
+        avg_magnitude = np.nanmedian(np.abs(signals_f), axis=0)
+        idx = np.argmax(avg_magnitude)
+        magnitude = avg_magnitude[idx]
+        f = frequencies[idx]
+
+        if len(self.df) == 0:
+            return False
+
+        latest_frequency = self.df.loc[len(self.df) - 1, "frequency"]
+
+        if (magnitude > self.params.get("mag_thresh", MAG_THRESH)) and (
+            f < latest_frequency - SWEEP_DELTA
+        ):
+            return True
+        return False
+
     def fill_from_signal(self, signals_f, frequencies, distance=0, angle=0, time=0):
         """
         :param signals_f: shape (n_mics, n_freqs), complex
         :param frequencies: shape (n_freqs,)
+
         """
+        sweep_complete = False
         for i_mic in range(signals_f.shape[0]):
             idx = np.argmax(np.abs(signals_f[i_mic, :]))
             f = frequencies[idx]
@@ -428,6 +451,7 @@ class DataCollector(object):
                 ]
             )
             magnitude = np.abs(signals_f[i_mic, idx])
+
             self.df.loc[len(self.df), :] = {
                 "time": time,
                 "counter": counter,
@@ -481,7 +505,7 @@ class DataCollector(object):
         return spec, freqs
 
     def fill_from_spec(
-        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False, times=None,
+        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False, times=None
     ):
         df = psd_df_from_spec(
             spec, freqs, interpolation=self.interpolation, verbose=verbose, times=times,
@@ -497,11 +521,16 @@ class DataCollector(object):
         :return: slice along one distance, of shape (mic x frequencies), frequencies, stds
         """
         df = self.filter_by_column(distance, "distance")
-
         return get_frequency_slice(df, mics)[:2]
 
     def get_frequency_slice_fixed(
-        self, frequencies, distance=None, mics=None, verbose=False, allowed_delta=50,
+        self,
+        frequencies,
+        distance=None,
+        normalize_method="",
+        mics=None,
+        verbose=False,
+        allowed_delta=50,
     ):
         """ Give frequency slice for fixed frequencies.
 
@@ -512,6 +541,8 @@ class DataCollector(object):
         :return: slice along one distance, of shape (mic x frequencies), used frequencies, stds.
         """
         df = self.filter_by_column(distance, "distance")
+
+        # return get_frequency_slice(df, mics, frequencies=frequencies, normalize_method)
 
         if mics is not None:
             df = df.loc[df.mic.isin(mics)]
@@ -535,27 +566,31 @@ class DataCollector(object):
         slice_f = slice_f[:, f_indices]
         freqs = freqs_here[f_indices]
 
-        stds = df.groupby("mic").magnitude.std().values
-        return slice_f, freqs, stds
+        if normalize_method != "":
+            all_mics = self.get_mics()
+            mics_here = pt.index.values
+            m_indices = find_indices(mics_here, all_mics)
 
-    def get_current_frequency_slice(self, n_required=None, verbose=False):
+            gains_f = normalize_method(freqs)
+
+            valid = np.all(gains_f > 0, axis=0)
+            gains_f = gains_f[m_indices, valid]
+            slice_f[:, valid] /= gains_f  # n_mics x n_freqs
+
+            stds = np.nanstd(slice_f, axis=1)
+            return slice_f, freqs, stds
+        else:
+            stds = df.groupby("mic").magnitude.std().values
+            return slice_f, freqs, stds
+
+    def get_current_frequency_slice(self, verbose=False):
         if self.latest_time is None:
             self.latest_time = self.df.iloc[0].time
             if verbose:
                 print("set latest time to", self.latest_time)
 
         latest_df = self.df[self.df.time > self.latest_time]
-
-        if n_required is not None and len(latest_df.frequency.unique()) < n_required:
-            return [None] * 4
-
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
-
-        if (
-            n_required is not None
-            and len(latest_df_clean.frequency.unique()) < n_required
-        ):
-            return [None] * 4
 
         f_slice, freqs, stds, d_slice = get_frequency_slice(latest_df_clean)
 

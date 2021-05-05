@@ -15,7 +15,7 @@ ABS_BOUNDS = [0.0, 0.8]
 YAW_DEG = 0
 
 # interpolation parameters
-FILL_VALUE = 0.0  # below and above
+FILL_VALUE = "extrapolate"  # 0.0  # below and above
 KIND = "linear"
 BOUNDS_ERROR = False
 

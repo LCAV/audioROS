@@ -125,4 +125,22 @@ kwargs_datasets = {
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
+    "2021_05_04_flying": {
+        "audio_deck": {
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 60,  # not active
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
+    "2021_05_04_linear": {
+        "audio_deck": {
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 60,  # not active
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
 }

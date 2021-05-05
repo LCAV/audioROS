@@ -10,8 +10,8 @@ import numpy as np
 from geometry import Context
 
 # method to combine probability distributions
-# METHOD = 'product' # TODO(FD) not working yet
-METHOD = "sum"
+METHOD = "product"  # TODO(FD) not working yet
+# METHOD = "sum"
 EPS = 1e-30  # smallest value for probability distribution
 
 
@@ -29,13 +29,13 @@ def extract_pdf(distribution, method=METHOD):
     for i, p_list in enumerate(distribution.values()):
         if method == "product":
             # TODO(FD) fix this.
-            p = np.sum(np.log10(p_list)) + (max_count - len(p_list)) * np.log10(EPS)
+            p = np.sum(np.log10(p_list))
         elif method == "sum":
             p = np.mean(p_list)
         probabilities[i] = p
 
     if method == "product":
-        probabilities -= np.max(probabilities)  # from 0 to 1
+        # probabilities -= np.max(probabilities)  # from 0 to 1
         probabilites = 10 ** probabilities
 
     probabilities /= np.sum(probabilities)
@@ -55,8 +55,14 @@ class DistanceEstimator(object):
             print("Warning: make sure path_differences_m is in meters!")
         self.data[mic_idx] = (path_differences_m, probabilities)
 
-    def get_distance_distribution(self, chosen_mics=None, verbose=False):
-        azimuths_deg = np.arange(0, 180, step=1)
+    def get_distance_distribution(
+        self, chosen_mics=None, verbose=False, method=METHOD, azimuth_deg=None
+    ):
+        if azimuth_deg is None:
+            azimuths_deg = np.arange(-180, 180, step=2)
+        else:
+            azimuths_deg = [azimuth_deg]
+
         distribution = {}
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
@@ -78,9 +84,11 @@ class DistanceEstimator(object):
 
                     # TODO(FD) add derivative here
                     distribution[d_rounded_m].append(prob)
-        return extract_pdf(distribution, METHOD)
+        return extract_pdf(distribution, method)
 
-    def get_angle_distribution(self, distance_estimate_m, chosen_mics=None):
+    def get_angle_distribution(
+        self, distance_estimate_m, chosen_mics=None, method=METHOD
+    ):
         assert (
             np.linalg.norm(self.context.source) == 0
         ), "function only works for source at origin!"
@@ -106,7 +114,7 @@ class DistanceEstimator(object):
                         distribution[t_rounded] = []
 
                     distribution[t_rounded].append(prob)
-        return extract_pdf(distribution, METHOD)
+        return extract_pdf(distribution, method)
 
     def get_distance_estimate(self, chosen_mics=None):
         ds, probs = self.get_distance_distribution(chosen_mics)
@@ -121,7 +129,7 @@ class DistanceEstimator(object):
 class AngleEstimator(object):
     def __init__(self):
         self.data = {}  # structure: mic: (path_differences, probabilities)
-        self.context = Context.get_crazyflie_setup()
+        self.context = Context.get_crazyflie_setup(yaw_offset=0)
 
         # resolution in sin(gamma)
         self.resolution = 1e-2

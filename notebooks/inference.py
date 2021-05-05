@@ -7,7 +7,7 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-AZIMUTH_DEG = 0
+from crazyflie_description_py.experiments import WALL_ANGLE_DEG
 
 
 def get_abs_fft(f_slice, n_max=1000, norm=True):
@@ -28,11 +28,13 @@ def get_differences(frequencies, n_max=1000):
     return deltas_cm
 
 
-def convert_differences_to_distances(differences_cm, mic_idx, distance_range):
+def convert_differences_to_distances(
+    differences_cm, mic_idx, distance_range, azimuth_deg
+):
     from geometry import get_orthogonal_distance_from_global
 
     distances = get_orthogonal_distance_from_global(
-        azimuth_deg=AZIMUTH_DEG, deltas_cm=differences_cm, mic_idx=mic_idx
+        azimuth_deg=azimuth_deg, deltas_cm=differences_cm, mic_idx=mic_idx
     )
     mask = None
     if distance_range is not None:
@@ -42,7 +44,12 @@ def convert_differences_to_distances(differences_cm, mic_idx, distance_range):
 
 
 def get_probability_fft(
-    f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000
+    f_slice,
+    frequencies,
+    mic_idx=1,
+    distance_range=None,
+    n_max=1000,
+    azimuth_deg=WALL_ANGLE_DEG,
 ):
     print("Deprecation warning: do not use this function anymore")
     assert f_slice.ndim == 1
@@ -50,7 +57,7 @@ def get_probability_fft(
     differences = get_differences(frequencies, n_max=n_max)
 
     distances, mask = convert_differences_to_distances(
-        differences, mic_idx, distance_range
+        differences, mic_idx, distance_range, azimuth_deg=azimuth_deg
     )
     if mask is not None:
         abs_fft = abs_fft[mask]
@@ -92,14 +99,20 @@ def get_posterior(abs_fft, sigma=None, data=None):
 
 
 def get_probability_bayes(
-    f_slice, frequencies, mic_idx=1, distance_range=None, n_max=1000, sigma=None
+    f_slice,
+    frequencies,
+    mic_idx=1,
+    distance_range=None,
+    n_max=1000,
+    sigma=None,
+    azimuth_deg=WALL_ANGLE_DEG,
 ):
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
     differences = get_differences(frequencies, n_max=n_max)
     posterior = get_posterior(abs_fft, sigma, data=f_slice)
     distances, mask = convert_differences_to_distances(
-        differences, mic_idx, distance_range
+        differences, mic_idx, distance_range, azimuth_deg=azimuth_deg
     )
     if mask is not None:
         posterior = posterior[mask]
@@ -116,15 +129,14 @@ def get_probability_cost(
     mic_idx=1,
     relative_ds=None,
     absolute_yaws=None,
+    azimuth_deg=WALL_ANGLE_DEG,
 ):
     if np.any(distances < 1):
         raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_freq_slice_theory
 
     if absolute_yaws is not None:
-        azimuth_deg = -absolute_yaws
-    else:
-        azimuth_deg = AZIMUTH_DEG
+        azimuth_deg = azimuth_deg - absolute_yaws
 
     f_slice_norm = f_slice - np.mean(f_slice)
     f_slice_norm /= np.std(f_slice_norm)
@@ -198,10 +210,9 @@ def get_approach_angle_cost(
     gammas_grid_deg,
     mic_idx=1,
     ax=None,
+    azimuth_deg=WALL_ANGLE_DEG,
 ):
     from simulation import get_dist_slice_theory
-
-    azimuth_deg = AZIMUTH_DEG
 
     d_slice_norm = d_slice - np.mean(d_slice)
     d_slice_norm /= np.std(d_slice_norm)

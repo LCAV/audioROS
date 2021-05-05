@@ -11,8 +11,6 @@ from audio_stack.beam_former import rotate_mics
 
 DIM = 2
 
-# this corresponds to the setup in BC325 with stepper motor:
-YAW_OFFSET = -42  # in degrees
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
@@ -173,11 +171,10 @@ class Context(object):
         self.source = source
 
     @staticmethod
-    def get_crazyflie_setup(dim=DIM, yaw_offset=YAW_OFFSET):
+    def get_crazyflie_setup(dim=DIM):
         from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
-        mics = rotate_mics(mics, yaw_offset)
         source = np.array(BUZZER_POSITION)[0, :dim]
         return Context(dim, mics, source)
 
