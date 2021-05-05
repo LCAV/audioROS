@@ -291,8 +291,10 @@ class Gateway(Node):
                 if param.value > 0:
                     success = self.reader_crtp.send_land_command()
             elif param.name == "move_distance":
+                # move by given distance, blocking
                 if param.value != 0:
                     self.reader_crtp.send_move_command(param.value)
+                # move by given velocity, non-blocking
             elif param.name == "move_forward":
                 if param.value != 0:
                     self.reader_crtp.send_forward_command(param.value)

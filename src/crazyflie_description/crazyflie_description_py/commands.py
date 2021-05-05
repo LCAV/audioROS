@@ -20,26 +20,17 @@ motor_command_lists = {
         ("/gateway", "land_velocity", 0.2, 0),
     ],
     "multi_sweep": [
-        ("/gateway", "hover_height", 0.4, 0),  # start at 42
+        ("/gateway", "hover_height", 0.4, 0),  # start at 50
         ("/gateway", "buzzer_idx", 1, 0),
+        ("", "", "", 4),  # time delay only
         ("/gateway", "buzzer_idx", 0, 0),
-        ("", "", "", 2),  # time delay only
-        ("/gateway", "move_forward", 0.005, 1),  # 37 cm
+        ("/gateway", "move_distance", 0.2, 0),  # 30
         ("/gateway", "buzzer_idx", 1, 0),
+        ("", "", "", 4),  # time delay only
         ("/gateway", "buzzer_idx", 0, 0),
-        ("", "", "", 2),  # time delay only
-        ("/gateway", "move_forward", 0.005, 1),  # 32 cm
+        ("/gateway", "move_distance", 0.2, 0),  # 10 cm
         ("/gateway", "buzzer_idx", 1, 0),
-        ("/gateway", "buzzer_idx", 0, 0),
-        ("", "", "", 2),  # time delay only
-        ("/gateway", "move_forward", 0.005, 1),  # 27 cm
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("/gateway", "buzzer_idx", 0, 0),
-        ("", "", "", 2),  # time delay only
-        ("/gateway", "move_forward", 0.005, 1),  # 22 cm
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("/gateway", "buzzer_idx", 0, 0),
-        ("", "", "", 2),  # time delay only
+        ("", "", "", 4),  # time delay only
         ("/gateway", "land_velocity", 0.2, 0),
     ],
     "linear_sweep": [
@@ -47,6 +38,20 @@ motor_command_lists = {
         ("/gateway", "buzzer_idx", 3000, 0),
         ("/gateway", "move_forward", 0.05, 8),  # 50 cm
         ("/gateway", "land_velocity", 0.2, 3),
+    ],
+    "linear_3000": [
+        ("/gateway", "hover_height", 0.4, 0),
+        ("/gateway", "buzzer_idx", 3000, 0),
+        ("/gateway", "move_forward", 0.05, 10),  # 50 cm
+        ("/gateway", "buzzer_idx", 0, 0),
+        ("/gateway", "land_velocity", 0.2, 0),
+    ],
+    "linear_3000_fast": [
+        ("/gateway", "hover_height", 0.4, 0),
+        ("/gateway", "buzzer_idx", 3000, 0),
+        ("/gateway", "move_forward", 0.10, 5),  # 50 cm
+        ("/gateway", "buzzer_idx", 0, 0),
+        ("/gateway", "land_velocity", 0.2, 0),
     ],
     "stop_motors": [("/gateway", "all", 0, 0)],
 }
