@@ -597,7 +597,7 @@ class DataCollector(object):
         self.latest_time = latest_df.iloc[-1].time
         return f_slice, freqs, stds, d_slice
 
-    def get_distance_slice(self, frequency, mic=None):
+    def get_distance_slice(self, frequency=None, mic=None):
         """ 
         :return: slice along one frequency, of shape (mic x distances), distances
         """
