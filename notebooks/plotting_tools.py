@@ -225,20 +225,21 @@ def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs
     dy = ys[-1] - ys[-2]
     try:
         im = ax.pcolorfast(xs, ys, values, **kwargs)
-        yticks = ys + dy / 2
-        xticks = xs + dx / 2
-        ax.set_xticks(xticks)
-        ax.set_yticks(yticks)
-        ax.set_xticklabels(xs)
-        ax.set_yticklabels(ys)
-
-        extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
-        im.set_extent(extent)
-    except:
+    except ValueError:
         # print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
         im = ax.pcolorfast(
             list(xs) + [xs[-1] + dx], list(ys) + [ys[-1] + dy], values, **kwargs
         )
+    yticks = ys + dy / 2
+    xticks = xs + dx / 2
+    ax.set_xticks(xticks)
+    ax.set_yticks(yticks)
+    ax.set_xticklabels(xs)
+    ax.set_yticklabels(ys)
+
+    extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
+    im.set_extent(extent)
+
     xticks = ax.get_xticks()
     yticks = ax.get_yticks()
     if n_xticks is None:
