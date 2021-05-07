@@ -9,8 +9,10 @@ import numpy as np
 
 from crazyflie_description_py.experiments import WALL_ANGLE_DEG
 
+EPS = 1e-30
 
-class InferenceMachine(object):
+
+class Inference(object):
     def __init__(self):
         self.slices = None  # mics x n_data
         self.values = None  # n_data
@@ -47,21 +49,40 @@ class InferenceMachine(object):
         valid_idx = (freq_range[1] <= self.values) | (self.values <= freq_range[0])
         self.valid_idx &= valid_idx
 
-    def do_inference(self, algo_name="", mic_idx=0, calibrate=True):
+    def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
 
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
         valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
-        if algo_name == "bayes":
+
+        sigma = self.stds[mic_idx] if self.stds is not None else None
+
+        if algorithm == "bayes":
             dists, proba, diffs = get_probability_bayes(
                 self.slices[mic_idx, valid],
                 self.values[valid],
                 mic_idx=mic_idx,
                 distance_range=self.distance_range,
-                sigma=self.stds[mic_idx],
+                sigma=sigma,
                 azimuth_deg=self.azimuth_deg,
             )
+        else:
+            raise ValueError(algo_name)
+
+        if normalize:
+            proba = (proba - np.min(proba) + EPS) / (
+                np.max(proba) - np.min(proba) + EPS
+            )
+        return dists, proba, diffs
+
+    def plot(self, i_mic, ax, label=None, **kwargs):
+        ax.plot(
+            self.values[self.valid_idx],
+            self.slices[i_mic, self.valid_idx],
+            label=label,
+            **kwargs,
+        )
 
 
 def get_abs_fft(f_slice, n_max=1000, norm=True):
