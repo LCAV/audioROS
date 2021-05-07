@@ -8,6 +8,7 @@ inference.py: Get probability distributions and estimates of angle or distance f
 import numpy as np
 
 from crazyflie_description_py.experiments import WALL_ANGLE_DEG
+from simulation import get_deltas_from_global
 
 EPS = 1e-30
 
@@ -56,15 +57,28 @@ class Inference(object):
 
         valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
 
-        sigma = self.stds[mic_idx] if self.stds is not None else None
-
         if algorithm == "bayes":
+            sigma = self.stds[mic_idx] if self.stds is not None else None
             dists, proba, diffs = get_probability_bayes(
                 self.slices[mic_idx, valid],
                 self.values[valid],
                 mic_idx=mic_idx,
                 distance_range=self.distance_range,
                 sigma=sigma,
+                azimuth_deg=self.azimuth_deg,
+            )
+        elif algorithm == "cost":
+            distances = self.distances[valid] if self.distances is not None else None
+            dists = np.arange(self.distance_range[0] + 7, self.distance_range[-1])
+            diffs_m, d0 = get_deltas_from_global(self.azimuth_deg, dists, mic_idx)
+            diffs = diffs_m * 1e2
+            proba = get_probability_cost(
+                self.slices[mic_idx, valid],
+                self.values[valid],
+                dists,
+                mic_idx=mic_idx,
+                relative_ds=distances,
+                absolute_yaws=None,
                 azimuth_deg=self.azimuth_deg,
             )
         else:
