@@ -10,6 +10,60 @@ import numpy as np
 from crazyflie_description_py.experiments import WALL_ANGLE_DEG
 
 
+class InferenceMachine(object):
+    def __init__(self):
+        self.slices = None  # mics x n_data
+        self.values = None  # n_data
+        self.stds = None  # n_data
+        self.distance_range = None
+        self.is_calibrated = False
+
+    def add_data(self, slices, values, stds=None, distances=None):
+        self.slices = slices
+        self.values = values
+        self.stds = stds
+        self.distances = distances
+        self.valid_idx = np.ones(len(values), dtype=bool)
+        self.is_calibrated = False
+
+    def add_geometry(self, distance_range, azimuth_deg):
+        self.distance_range = distance_range
+        self.azimuth_deg = azimuth_deg
+
+    def add_calibration_function(self, calibration_function):
+        self.calibration_function = calibration_function
+
+    def calibrate(self):
+        valid_idx = (self.values >= min(self.calibration_function.x)) & (
+            self.values <= max(self.calibration_function.x)
+        )
+        self.valid_idx &= valid_idx
+
+        f_calib = self.calibration_function(self.values[self.valid_idx])
+        self.slices[:, self.valid_idx] /= f_calib
+        self.is_calibrated = True
+
+    def filter_out_freqs(self, freq_range):
+        valid_idx = (freq_range[1] <= self.values) | (self.values <= freq_range[0])
+        self.valid_idx &= valid_idx
+
+    def do_inference(self, algo_name="", mic_idx=0, calibrate=True):
+
+        if calibrate and not self.is_calibrated:
+            self.calibrate()
+
+        valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
+        if algo_name == "bayes":
+            dists, proba, diffs = get_probability_bayes(
+                self.slices[mic_idx, valid],
+                self.values[valid],
+                mic_idx=mic_idx,
+                distance_range=self.distance_range,
+                sigma=self.stds[mic_idx],
+                azimuth_deg=self.azimuth_deg,
+            )
+
+
 def get_abs_fft(f_slice, n_max=1000, norm=True):
     if norm:
         f_slice_norm = f_slice - np.nanmean(f_slice)
@@ -125,11 +179,11 @@ def get_probability_cost(
     f_slice,
     frequencies,
     distances,
-    ax=None,
     mic_idx=1,
+    azimuth_deg=WALL_ANGLE_DEG,
     relative_ds=None,
     absolute_yaws=None,
-    azimuth_deg=WALL_ANGLE_DEG,
+    ax=None,
 ):
     if np.any(distances < 1):
         raise ValueError("Reminder to change the distance input to include offset!")
