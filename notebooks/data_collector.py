@@ -24,6 +24,18 @@ RATIO_MISSING_ALLOWED = 0.2
 OUTLIER_FACTOR = 3
 
 SWEEP_DELTA = 1000  # jumps by more than this downwards are detected as end of sweep.
+F_DELTA = 100  # jumps by more than this in frequency mark end of mono
+D_DELTA_MAX = 3  # jumps by more than this in cm mark endf mono
+D_DELTA_MIN = 1  # need at least movement by this to register meas.
+MONO_FREQ = 3000  # mono frequency.
+
+
+def get_peak_freq(signals_f, frequencies):
+    avg_magnitude = np.nanmedian(np.abs(signals_f), axis=0)
+    idx = np.argmax(avg_magnitude)
+    magnitude = avg_magnitude[idx]
+    f = frequencies[idx]
+    return f, magnitude
 
 
 def get_frequency_slice(df, mics=None):
@@ -38,13 +50,30 @@ def get_frequency_slice(df, mics=None):
     pt_distance = df.pivot_table(
         index="mic", columns="frequency", values="distance", aggfunc=METHOD
     )
+    distances = pt_distance.values[0, :]
 
     slice_f = pt.values
     freqs = pt.columns.values
     stds = df.groupby("mic").magnitude.std().values
+    return slice_f, freqs, stds, distances
 
-    slice_d = pt_distance.values[0, :]
-    return slice_f, freqs, stds, slice_d
+
+def get_distance_slice(df, mics=None):
+    if mics is not None:
+        df = df.loc[df.mic.isin(mics)]
+
+    pt = df.pivot_table(
+        index="mic", columns="distance", values="magnitude", aggfunc=METHOD
+    )
+    pt_frequency = df.pivot_table(
+        index="mic", columns="distance", values="frequency", aggfunc=METHOD
+    )
+    freqs = pt_frequency.values[0, :]
+
+    distances = pt.columns.values
+    slice_d = pt.values
+    stds = df.groupby("mic").magnitude.std().values
+    return slice_d, distances, stds, freqs
 
 
 def sorted_and_unique(df, name):
@@ -336,7 +365,8 @@ def normalized_std(values, method=METHOD):
 
 class DataCollector(object):
     def __init__(self, exp_name=None, mic_type="audio_deck", interpolation=""):
-        self.latest_time = None
+        self.latest_fslice_time = None
+        self.latest_dslice_time = None
         self.df = pd.DataFrame(
             columns=[
                 "time",
@@ -413,13 +443,11 @@ class DataCollector(object):
     def get_frequencies(self):
         return sorted_and_unique(self.df, "frequency")
 
-    def detect_sweep(self, signals_f, frequencies):
+    def next_fslice_ready(self, signals_f, frequencies):
         """ find big frequency jump, meaning end of sweep. """
-        sweep_complete = False
-        avg_magnitude = np.nanmedian(np.abs(signals_f), axis=0)
-        idx = np.argmax(avg_magnitude)
-        magnitude = avg_magnitude[idx]
-        f = frequencies[idx]
+        fslice_ready = False
+
+        f, magnitude = get_peak_freq(signals_f, frequencies)
 
         if len(self.df) == 0:
             return False
@@ -432,7 +460,71 @@ class DataCollector(object):
             return True
         return False
 
-    def fill_from_signal(self, signals_f, frequencies, distance=0, angle=0, time=0):
+    def valid_dslice_measurement(self, position_cm, signals_f, frequencies):
+        if position_cm[2] < 35:
+            return False
+
+        if MONO_FREQ is not None:
+            f, magnitude = get_peak_freq(signals_f, frequencies)
+            if abs(MONO_FREQ - f) > F_DELTA:
+                return False
+
+        if len(self.df) == 0:
+            return True
+
+        # detect too small distance change
+        new_d = position_cm[1]
+        latest_d = self.df.iloc[-1].distance
+        if new_d - latest_d < D_DELTA_MIN:
+            return False
+
+        return True
+
+    def next_dslice_ready(self, signals_f, frequencies, position_cm, n_max=100):
+        """ find if we have a new dslice ready, if either:
+            - we have more than n_slice values, or
+            - we have a jump in relative_distance measurements.
+            - if we changed frequency significantly since last time.
+        """
+        dslice_ready = False
+
+        if self.latest_dslice_time is not None:
+            df_current = self.df[self.df.time > self.latest_dslice_time]
+        else:
+            df_current = self.df
+
+        if len(df_current) == 0:
+            return False
+
+        # detect more than n_max values
+        if len(df_current) >= n_max:
+            print(f"more than {n_max} values since last")
+            return True
+
+        # detect distance change
+        df_mic = df_current.loc[df_current.mic == 0]
+        average_delta_d = df_mic.distance.diff().mean()
+        new_d = position_cm[1]
+        latest_d = df_current.iloc[-1].distance
+        predicted_d = latest_d + average_delta_d
+        if np.abs(new_d - predicted_d) > D_DELTA_MAX:
+            print(
+                f"new position different from predicted: {latest_d} + {average_delta_d} + {D_DELTA}, {new_d}"
+            )
+            return True
+
+        # detect frequency change
+        f, magnitude = get_peak_freq(signals_f, frequencies)
+        latest_frequency = df_current.iloc[-1].frequency
+        if (magnitude > self.params.get("mag_thresh", MAG_THRESH)) and (
+            np.abs(f - latest_frequency) > F_DELTA
+        ):
+
+            print(f"big frequency change: {f}, {latest_frequency}")
+            return False  # True
+        return False
+
+    def fill_from_signal(self, signals_f, frequencies, distance_cm=0, angle=0, time=0):
         """
         :param signals_f: shape (n_mics, n_freqs), complex
         :param frequencies: shape (n_freqs,)
@@ -445,7 +537,7 @@ class DataCollector(object):
             counter = len(
                 self.df.loc[
                     (self.df.mic == i_mic)
-                    & (self.df.distance == distance)
+                    & (self.df.distance == distance_cm)
                     & (self.df.angle == angle)
                     & (self.df.frequency == f)
                 ]
@@ -457,7 +549,7 @@ class DataCollector(object):
                 "counter": counter,
                 "mic": i_mic,
                 "frequency": f,
-                "distance": distance,
+                "distance": distance_cm,
                 "angle": angle,
                 "magnitude": magnitude,
             }
@@ -584,37 +676,39 @@ class DataCollector(object):
             return slice_f, freqs, stds
 
     def get_current_frequency_slice(self, verbose=False):
-        if self.latest_time is None:
-            self.latest_time = self.df.iloc[0].time
+        if self.latest_fslice_time is None:
+            self.latest_fslice_time = self.df.iloc[0].time
             if verbose:
-                print("set latest time to", self.latest_time)
+                print("set latest time to", self.latest_fslice_time)
 
-        latest_df = self.df[self.df.time > self.latest_time]
+        latest_df = self.df[self.df.time > self.latest_fslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
 
         f_slice, freqs, stds, d_slice = get_frequency_slice(latest_df_clean)
 
-        self.latest_time = latest_df.iloc[-1].time
+        self.latest_fslice_time = latest_df.iloc[-1].time
         return f_slice, freqs, stds, d_slice
 
-    def get_distance_slice(self, frequency=None, mic=None):
+    def get_distance_slice(self, frequency=None, mics=None):
         """ 
         :return: slice along one frequency, of shape (mic x distances), distances
         """
         df = self.filter_by_column(frequency, "frequency")
+        return get_distance_slice(df, mics=mics)
 
-        if mic is not None:
-            df = df.loc[df.mic == mic]
+    def get_current_distance_slice(self, verbose=False):
+        if self.latest_dslice_time is None:
+            self.latest_dslice_time = self.df.iloc[0].time
+            if verbose:
+                print("set latest time to", self.latest_dslice_time)
 
-        pt = df.pivot_table(
-            index="mic", columns="distance", values="magnitude", aggfunc=METHOD
-        )
-        distances = pt.columns.values
-        mics = pt.index.values
-        slice_d = pt.values
+        latest_df = self.df[self.df.time > self.latest_dslice_time]
+        latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
 
-        stds = df.groupby("mic").magnitude.std()
-        return slice_d, distances, mics, stds
+        d_slice, distances, stds, freqs = get_distance_slice(latest_df_clean)
+
+        self.latest_dslice_time = latest_df.iloc[-1].time
+        return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):
         mics = sorted_and_unique(self.df, "mic").astype(np.int)
@@ -624,9 +718,9 @@ class DataCollector(object):
 
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
         for i_f, frequency in enumerate(frequencies):
-            (distance_slice, distances_here, mics_here, std,) = self.get_distance_slice(
-                frequency
-            )
+            df = self.filter_by_column(frequency, "frequency")
+            distance_slice, distances_here, freqs, stds = get_distance_slice(df)
+            mics_here = df.mic.unique()
             d_indices = find_indices(distances_here, distances)
             mic_indices = find_indices(mics_here, mics)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
@@ -786,7 +880,7 @@ class DataCollector(object):
         frequency_here = df_here.frequency.unique()[0]
 
         (distance_slices, distances_median, mics_here, *_,) = self.get_distance_slice(
-            frequency, mic=mic_idx
+            frequency, mics=[mic_idx]
         )
         coeffs_median, d_slice_median, cost_median = fit_distance_slice(
             distance_slices.T,

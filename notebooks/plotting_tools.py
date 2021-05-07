@@ -210,24 +210,28 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     return fig, axs
 
 
-def pcolorfast_custom(ax, xs, ys, values, verbose=False, **kwargs):
+def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs):
     """ pcolorfast with gray for nan and centered xticks and yticks. 
+
+    :param n_xticks: number of ticks along x. 
     """
+
     current_cmap = matplotlib.cm.get_cmap()
     current_cmap.set_bad(color="gray")
 
     assert values.shape == (len(ys), len(xs))
 
-    dx = xs[1] - xs[0]  # assumes uniform samples
-    dy = ys[1] - ys[0]
+    dx = xs[-1] - xs[-2]  # assumes uniform samples
+    dy = ys[-1] - ys[-2]
     try:
         im = ax.pcolorfast(xs, ys, values, **kwargs)
         yticks = ys + dy / 2
         xticks = xs + dx / 2
         ax.set_xticks(xticks)
-        ax.set_xticklabels(xs)
         ax.set_yticks(yticks)
+        ax.set_xticklabels(xs)
         ax.set_yticklabels(ys)
+
         extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
         im.set_extent(extent)
     except:
@@ -235,6 +239,16 @@ def pcolorfast_custom(ax, xs, ys, values, verbose=False, **kwargs):
         im = ax.pcolorfast(
             list(xs) + [xs[-1] + dx], list(ys) + [ys[-1] + dy], values, **kwargs
         )
+    xticks = ax.get_xticks()
+    yticks = ax.get_yticks()
+    if n_xticks is None:
+        n_xticks = len(xticks)
+    width, height = ax.get_figure().get_size_inches()
+    n_yticks = int(n_xticks * height / width)
+    ax.set_xticks(xticks[:: len(xticks) // n_xticks])
+    ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
+    ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+    ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
     return im
 
 
