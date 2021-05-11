@@ -13,7 +13,7 @@ from .live_plotter import LivePlotter
 XMIN_FREQ = 0  # min plotting frequency in Hz
 XMAX_FREQ = 1000  # max plotting frequency in Hz
 YMIN_FREQ = 1e-10  # min plotting frequency in Hz
-YMAX_FREQ = 1e5  # max plotting frequency in Hz
+YMAX_FREQ = 1e10  # max plotting frequency in Hz
 YMIN_TIME = -1.1  # min plotting frequency in Hz
 YMAX_TIME = 1.1  # max plotting frequency in HTruez
 FIG_SIZE = (15, 10)

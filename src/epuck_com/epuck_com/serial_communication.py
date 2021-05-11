@@ -48,36 +48,45 @@ class Gateway(Node):
         self.publish_audio_dict()
 
         # ASK do I still update this because her code is looking for this to launch calcs?
-        self.reader_crtp.audio_dict["published"] = True
+        #self.reader_crtp.audio_dict["published"] = True
 
     def publish_audio_dict(self):
         # reader_crtp is the bluetooth reader for the crazyflie
         # read audio
 
-        # TODO : figure out how to read the audio data from my protocol, and then that data should go in there
         # the format is all the interleaved real values of all four microphones and then all the complex values of all the microphones
-        # needs to replace self.reader_crtp
-        data_signals, size = self.read_float_serial()
-
-        # signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
-
-        if data_signals is None:
+        data, size = self.read_float_serial()
+        if data is None:
             self.get_logger().warn("Empty audio. Not publishing")
             return
-        fbins = np.arange(32)
+
+        #extracting all our values from the epuck serial package
+        position = 0
+        timestamp, position = self.extract_timestamp(data, position)
+        print("position after timestamp is", position)
+        bin_number, position = self.extract_bin_number(data, position)
+        print("position after bin number is", position)
+        # undo the interleaving and create separate matrixes for each microphone
+        signals_f, position = self.data_rearrange(data, position, bin_number)
+        print("position after extracting fft is", position)
+        fbins,*_ = self.extract_bins(data, position, bin_number)
+        print("position after extracting the bins is", position)
+
+
         # read frequencies
 
         if fbins is None:
             self.get_logger().warn("No data yet. Not publishing")
             return
 
-        all_frequencies = np.fft.rfftfreq(n=N_BUFFER, d=1 / FS)
+        all_frequencies = np.fft.fftfreq(n=N_BUFFER, d=1 / FS)
         n_frequencies = len(fbins)
 
         # the only allowed duplicates are 0
         # if len(set(fbins[fbins>0])) < len(fbins[fbins>0]):
         # self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
         # return
+
         if not np.any(fbins > 0):
             self.get_logger().warn(f"Empty fbins!")
             return
@@ -87,8 +96,7 @@ class Gateway(Node):
 
         frequencies = all_frequencies[fbins]
 
-        # undo the interleaving and create separate matrixes for each microphone
-        signals_f = self.data_rearrange(data_signals)
+
 
         abs_signals_f = np.abs(signals_f)
         if np.any(abs_signals_f > N_BUFFER):
@@ -98,8 +106,8 @@ class Gateway(Node):
 
         mic_positions_arr = np.array(MIC_POSITIONS)
         msg = create_signals_freq_message(signals_f.T, frequencies, mic_positions_arr,
-                                          self.reader_crtp.audio_dict["timestamp"],
-                                          self.reader_crtp.audio_dict["audio_timestamp"], FS)
+                                          int(time.time()),
+                                          int(timestamp), FS)
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(
@@ -156,49 +164,62 @@ class Gateway(Node):
         size = struct.unpack('<h', self.port.read(2))
 
         size = size[0]
+
+        print("size is", size)
         # reads the data
         rcv_buffer = self.port.read(size * 4)
         data = []
         # if we receive the good amount of data, we convert them in float32
         # send the data in uint16 for the rest
         if (len(rcv_buffer) == 4 * size):
+            print("received the right amount of data")
             i = 0
             while (i < size):
-                data.append(struct.unpack_from('<f', rcv_buffer, i * 4))
+                data.append(struct.unpack_from('<f', rcv_buffer, i * 4)[0])
                 i = i + 1
+            #print(data)
             return data, size
         else:
             return None
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
-    def data_rearrange(self, data):
+    def data_rearrange(self, data, position, bin_number):
+        print("rearanging interleaving")
+        print("the true data size is ", len(data))
         mics = 4
-        bins = 32
         # check that there is the right number of bins :
+
 
         if data is []:
             print("there is nothing in the data")
             return data
-        smaller_data = []
-        # filtering the bins for now centered around a fixed value
-        for i in range(32):
-            smaller_data.append(data[i])
-        if (len(smaller_data) != bins):
-            print("the size of the data is", len(data), "while it should be", bins, "stopping program")
-            sys.exit(0)
 
-        signals_f = np.zeros((mics, bins), dtype=np.complex128)
 
-        for i in range(len(data)):
-            print("Access element is: ", data[i])
-        for i in range(bins):
+        signals_f = np.zeros((mics, bin_number), dtype=np.complex128)
+
+        pos = 0
+        for i in range(bin_number):
             for j in range(mics):
-                pos = (j * bins + i) * 2
-                signals_f.real[j, i] = data[pos]
-                signals_f.imag[j, i] = data[pos + 1]
+                pos = (j * bin_number + i) * 2 + position
+                signals_f.real[j, i] = data[pos ]
+                signals_f.imag[j, i] = data[pos + 1 ]
 
-        return signals_f
 
+        return signals_f, pos + 2
+
+    def extract_bins(self, data, bin_pos, num_bins):
+        print('value of bin pos and num bins in extract bins is ', bin_pos, num_bins)
+        bins = np.zeros(num_bins, np.int)
+        for i in range(0, num_bins):
+            bins[i] = int(data[i + bin_pos])
+        print("the bins are", bins)
+        return bins, bin_pos + num_bins
+
+    def extract_timestamp(self, data, position):
+        return data[position], position + 1
+
+    def extract_bin_number(self, data, position):
+        return int(data[position]), position + 1
 
 
 
