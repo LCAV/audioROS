@@ -55,15 +55,16 @@ class Gateway(Node):
         # read audio
 
         # the format is all the interleaved real values of all four microphones and then all the complex values of all the microphones
-        data, size = self.read_float_serial()
+        timestamp = 4 #putting 4 to see if I get this value back
+        data, size, timestamp = self.read_float_serial()
+
+        print("timestamp is", timestamp)
         if data is None:
             self.get_logger().warn("Empty audio. Not publishing")
             return
 
         #extracting all our values from the epuck serial package
         position = 0
-        timestamp, position = self.extract_timestamp(data, position)
-        print("position after timestamp is", position)
         bin_number, position = self.extract_bin_number(data, position)
         print("position after bin number is", position)
         # undo the interleaving and create separate matrixes for each microphone
@@ -159,10 +160,15 @@ class Gateway(Node):
                 else:
                     state = 0
 
+        #normally this should unpack as an unsigned in of size 32 bits
+
+
+
         # reads the size
         # converts as short int in little endian the two bytes read
         size = struct.unpack('<h', self.port.read(2))
-
+        timestamp = struct.unpack('<I', self.port.read(4))
+        timestamp = timestamp[0]
         size = size[0]
 
         print("size is", size)
@@ -178,7 +184,7 @@ class Gateway(Node):
                 data.append(struct.unpack_from('<f', rcv_buffer, i * 4)[0])
                 i = i + 1
             #print(data)
-            return data, size
+            return data, size, timestamp
         else:
             return None
 
