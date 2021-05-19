@@ -169,7 +169,11 @@ def find_indices(values_here, values):
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
         d_indices = np.where((values[:, None] == values_here[None, :]))[0]
-        np.testing.assert_allclose(values[d_indices], values_here)
+        try:
+            np.testing.assert_allclose(values[d_indices], values_here)
+        except:
+            print("error in find_indices.")
+            return np.arange(len(values))
     else:
         d_indices = np.arange(len(values))
     return d_indices
@@ -247,11 +251,11 @@ def remove_spurious_freqs(df, n_spurious, verbose=False, dryrun=False):
         print(f"min, max, median: {np.min(values), np.max(values), np.median(values)}")
 
     remove_names = []
-    for (freq, mic, distance), df in df.groupby(["frequency", "mic", "distance"]):
+    for (freq, mic, distance), df_here in df.groupby(["frequency", "mic", "distance"]):
         if len(df) < n_spurious:
             # if verbose:
             #   print('removing', df)
-            remove_rows += list(df.index.values)
+            remove_rows += list(df_here.index.values)
             remove_names += [(freq, mic, distance)]
     if verbose:
         print(
@@ -509,7 +513,7 @@ class DataCollector(object):
         predicted_d = latest_d + average_delta_d
         if np.abs(new_d - predicted_d) > D_DELTA_MAX:
             print(
-                f"new position different from predicted: {latest_d} + {average_delta_d} + {D_DELTA}, {new_d}"
+                f"new position different from predicted: {latest_d} + {average_delta_d} + {D_DELTA_MAX}, {new_d}"
             )
             return True
 
@@ -661,7 +665,7 @@ class DataCollector(object):
         if normalize_method != "":
             all_mics = self.get_mics()
             mics_here = pt.index.values
-            m_indices = find_indices(mics_here, all_mics)
+            m_indices = find_indices(all_mics, mics_here)
 
             gains_f = normalize_method(freqs)
 
@@ -722,7 +726,7 @@ class DataCollector(object):
             distance_slice, distances_here, freqs, stds = get_distance_slice(df)
             mics_here = df.mic.unique()
             d_indices = find_indices(distances_here, distances)
-            mic_indices = find_indices(mics_here, mics)
+            mic_indices = find_indices(mics, mics_here)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
         return df_matrix, distances, frequencies
 

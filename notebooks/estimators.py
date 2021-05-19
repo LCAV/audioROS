@@ -6,6 +6,7 @@ distance_estimator.py:
 """
 
 import numpy as np
+from scipy.interpolate import interp1d
 
 from geometry import Context
 
@@ -20,24 +21,33 @@ def get_estimate(values, probs):
 
 
 def extract_pdf(distribution, method=METHOD):
+    """
+    Extract pdf from distribution. 
+    Distribution is of form:
+    {
+        x1: [p_1(x1), p_2(x1), ...]
+        x2: [p_1(x2), p_2(x2), ...]
+    }
+
+    """
     values = np.fromiter(distribution.keys(), dtype=float)
     sorted_idx = np.argsort(values)
     values = values[sorted_idx]
 
+    # get equally distributed values in the same range.
+    values_interp = np.linspace(values[0], values[-1], len(values))
     probabilities = np.empty(len(values))
+
     max_count = np.max([len(p_list) for p_list in distribution.values()])
     for i, p_list in enumerate(distribution.values()):
         if method == "product":
-            # TODO(FD) fix this.
-            p = np.sum(np.log10(p_list))
+            probabilities[i] = np.product(p_list)
+            # equivalent but potentially more stable numerically:
+            # probabilities[i] = 10**np.sum(np.log10(p_list))
         elif method == "sum":
-            p = np.mean(p_list)
-        probabilities[i] = p
-
-    if method == "product":
-        # probabilities -= np.max(probabilities)  # from 0 to 1
-        probabilites = 10 ** probabilities
-
+            probabilities[i] = np.mean(p_list)
+        else:
+            raise ValueError(method)
     probabilities /= np.sum(probabilities)
     return values, probabilities[sorted_idx]
 
@@ -63,27 +73,37 @@ class DistanceEstimator(object):
         else:
             azimuths_deg = [azimuth_deg]
 
-        distribution = {}
+        # get points for interpolation.
+        distances_all = []
+        for mic_idx, (deltas_m, delta_probs) in self.data.items():
+            for azimuth_deg in azimuths_deg:
+                ds_m = self.context.get_total_distance(deltas_m, azimuth_deg, mic_idx)
+                distances_all += list(ds_m)
+        distances_interp = np.linspace(
+            min(distances_all), max(distances_all), len(distances_all)
+        )
+        distribution = {d: [] for d in distances_interp}
+
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
             for azimuth_deg in azimuths_deg:
-
-                # TODO(FD) do uniform sampling along distances and interpolation instead of this.
                 ds_m = self.context.get_total_distance(deltas_m, azimuth_deg, mic_idx)
 
-                for d_m, prob in zip(ds_m, delta_probs):
-                    d_rounded_m = round(d_m / self.resolution_m) * self.resolution_m
+                # interpolate (ds_m, delta_probs) at current distances
+                interp1d_func = interp1d(
+                    ds_m, delta_probs, kind="linear", fill_value="extrapolate"
+                )
+                delta_probs_interp = interp1d_func(distances_interp)
+                # make sure probabiliy is positive.
+                delta_probs_interp[delta_probs_interp < 0] = EPS
 
-                    if verbose:
-                        print(f"rounded {d_m}cm to {d_rounded_m}")
-
-                    if d_rounded_m not in distribution.keys():
-                        distribution[d_rounded_m] = []
-
-                    # TODO(FD) add derivative here
-                    distribution[d_rounded_m].append(prob)
+                new_distribution = dict(zip(distances_interp, delta_probs_interp))
+                [
+                    distribution[d].append(prob)
+                    for d, prob in zip(distances_interp, delta_probs_interp)
+                ]
         return extract_pdf(distribution, method)
 
     def get_angle_distribution(

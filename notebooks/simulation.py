@@ -59,10 +59,11 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
 
 
 def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS):
+    """ Generate two-dimensional setup using pyroomacoustics. """
     source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
     m = pra.Material(energy_absorption="glass_3mm")
-    room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM, max_order=1, materials=m)
+    room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM[:2], max_order=1, materials=m)
 
     beam_former = pra.Beamformer(mic_positions.T, room.fs)
     room.add_microphone_array(beam_former)

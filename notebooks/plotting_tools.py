@@ -27,7 +27,7 @@ def save_fig(fig, fname, extension="pdf"):
     extension_current = fname.split(".")[-1]
     fname = fname.replace("." + extension_current, "." + extension)
     make_dirs(fname)
-    fig.savefig(fname, bbox_inches="tight")
+    fig.savefig(fname, bbox_inches="tight", dpi=200)  # default is 100
     print("saved as", fname)
 
 

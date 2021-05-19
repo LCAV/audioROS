@@ -13,6 +13,11 @@ from simulation import get_deltas_from_global
 EPS = 1e-30
 
 
+def eps_normalize(proba, eps=EPS):
+    proba_norm = (proba - np.min(proba) + eps) / (np.max(proba) - np.min(proba) + eps)
+    return proba_norm
+
+
 class Inference(object):
     def __init__(self):
         self.slices = None  # mics x n_data
@@ -69,8 +74,13 @@ class Inference(object):
             )
         elif algorithm == "cost":
             distances = self.distances[valid] if self.distances is not None else None
-            dists = np.arange(self.distance_range[0] + 7, self.distance_range[-1])
-            diffs_m, d0 = get_deltas_from_global(self.azimuth_deg, dists, mic_idx)
+
+            # make sure we use a reasonable distance range (need to add d0 to not
+            # "go inside wall")
+            __, d0 = get_deltas_from_global(self.azimuth_deg, [100], mic_idx)
+            d0_cm = round(d0 * 1e2)
+            dists = np.arange(self.distance_range[0] + d0_cm, self.distance_range[-1])
+            diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists, mic_idx)
             diffs = diffs_m * 1e2
             proba = get_probability_cost(
                 self.slices[mic_idx, valid],
@@ -85,17 +95,19 @@ class Inference(object):
             raise ValueError(algo_name)
 
         if normalize:
-            proba = (proba - np.min(proba) + EPS) / (
-                np.max(proba) - np.min(proba) + EPS
-            )
+            proba = eps_normalize(proba)
         return dists, proba, diffs
 
-    def plot(self, i_mic, ax, label=None, **kwargs):
+    def plot(self, i_mic, ax, label=None, normalize=False, **kwargs):
+        from copy import deepcopy
+
+        slice_mic = deepcopy(self.slices[i_mic, self.valid_idx])
+        if normalize:
+            slice_mic -= np.mean(slice_mic)
+            slice_mic /= np.std(slice_mic)
+
         ax.plot(
-            self.values[self.valid_idx],
-            self.slices[i_mic, self.valid_idx],
-            label=label,
-            **kwargs,
+            self.values[self.valid_idx], slice_mic, label=label, **kwargs,
         )
 
 
