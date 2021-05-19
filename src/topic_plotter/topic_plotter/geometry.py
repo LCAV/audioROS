@@ -73,9 +73,11 @@ class GeometryPlotter(Node):
 
         # need no starting position for pose as it has absolute positions
         self.pose_list = np.empty((3, 0))
-        self.time_list = []
+        self.times_list = []
+        self.start_time = None
 
         # for error calculations
+        self.source_direction_deg = None
         self.error_list = []
         self.ground_truth_synch = TopicSynchronizer(20)
         self.subscription = self.create_subscription(
@@ -85,14 +87,15 @@ class GeometryPlotter(Node):
             10,
         )
 
-    def init_plotter(self, name, xlabel="x", ylabel="y"):
+    def init_plotter(self, name, xlabel="x", ylabel="y", equal=True):
         if not (name in self.plotter_dict.keys()):
             self.plotter_dict[name] = LivePlotter(
                 np.inf, -np.inf, label=name, log=False
             )
             self.plotter_dict[name].ax.set_xlabel(xlabel)
             self.plotter_dict[name].ax.set_ylabel(ylabel)
-            self.plotter_dict[name].ax.axis("equal")
+            if equal:
+                self.plotter_dict[name].ax.axis("equal")
 
             # plot_room(self.plotter_dict[name].ax)
             # plot_source(self.plotter_dict[name].ax)
@@ -123,7 +126,6 @@ class GeometryPlotter(Node):
 
     def listener_callback_pose_raw(self, msg_pose_raw):
         """ Plot the latest poses, calculated from the velocity estimates. """
-        self.init_plotter("height raw", xlabel="time [s]", ylabel="z")
         self.init_plotter("position raw", xlabel=XLABEL, ylabel=YLABEL)
         r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
 
@@ -145,26 +147,37 @@ class GeometryPlotter(Node):
 
     def listener_callback_pose(self, msg_pose):
         """ Plot the latest poses. """
-        self.init_plotter("height", xlabel="time [s]", ylabel="z")
+        self.init_plotter("height", xlabel="time [s]", ylabel="z", equal=False)
         self.init_plotter("position", xlabel=XLABEL, ylabel=YLABEL)
 
         new_position, yaw, pitch, roll = read_pose_message(msg_pose)
         timestamp = convert_stamp_to_ms(msg_pose.header.stamp)
         assert pitch == 0, pitch
         assert roll == 0, roll
-
         self.pose_list = np.c_[self.pose_list, new_position]
+
+        if self.start_time is None:
+            self.start_time = timestamp
+
+        self.times_list.append(timestamp - self.start_time)
 
         if self.pose_list.shape[1] > MAX_LENGTH:
             self.pose_list = self.pose_list[:, -MAX_LENGTH:]
-        if len(self.time_list) > MAX_LENGTH:
-            self.time_list = self.time_list[:, -MAX_LENGTH:]
+        if len(self.times_list) > MAX_LENGTH:
+            self.times_list = self.times_list[-MAX_LENGTH:]
 
         self.update_plotter("position", self.pose_list, yaw)
         self.plotter_dict["position"].fig.canvas.draw()
 
-        self.update_scatter("height", self.time_list, self.pose_list[2, :])
-        self.plotter_dict["height"].fig.canvas.draw()
+        if self.pose_list.shape[1] > 0:
+            assert (
+                len(self.times_list) == self.pose_list.shape[1]
+            ), f"{self.times_list, self.pose_list}"
+
+            self.plotter_dict["height"].update_scatter(
+                self.times_list, self.pose_list[2, :]
+            )
+            self.plotter_dict["height"].fig.canvas.draw()
 
     def listener_callback_doa(self, msg_doa):
         """ Plot the estimated DOA directions on the most recent pose. """
@@ -173,10 +186,11 @@ class GeometryPlotter(Node):
         doa_estimates = list(msg_doa.doa_estimates_deg)
 
         for i, doa_estimate in enumerate(doa_estimates):
-            self.plotter_dict["position"].update_arrow(
-                self.pose_list[:2, -1], doa_estimate, label=f"doa {i}"
-            )
-        self.plotter_dict["position"].fig.canvas.draw()
+            if self.pose_list.shape[1] > 0:
+                self.plotter_dict["position"].update_arrow(
+                    self.pose_list[:2, -1], doa_estimate, label=f"doa {i}"
+                )
+            self.plotter_dict["position"].fig.canvas.draw()
 
         # calculate the current error
         message = self.ground_truth_synch.get_latest_message(

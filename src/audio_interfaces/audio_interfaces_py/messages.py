@@ -29,8 +29,8 @@ def get_quaternion(yaw_deg, pitch_deg=0, roll_deg=0):
     return Quaternion(x=r_quat[0], y=r_quat[1], z=r_quat[2], w=r_quat[3])
 
 
-def fill_header(msg, timestamp):
-    sec, nanosec = convert_ms_to_sec_nanosec(timestamp)
+def fill_header(msg, timestamp_ms):
+    sec, nanosec = convert_ms_to_sec_nanosec(timestamp_ms)
     msg.header.stamp.sec = sec
     msg.header.stamp.nanosec = nanosec
     msg.header.frame_id = "global"
@@ -43,19 +43,19 @@ def convert_ms_to_sec_nanosec(timestamp_ms):
 
 
 def convert_sec_nanosec_to_ms(sec, nanosec):
-    return int(round(sec * 1e-3 + nanosec * 1e-6))
+    return int(round(sec * 1e3 + nanosec * 1e-6))
 
 
 def convert_stamp_to_ms(stamp):
     return convert_sec_nanosec_to_ms(stamp.sec, stamp.nanosec)
 
 
-def create_pose_message(x, y, z, yaw_deg, timestamp=None, **dump):
+def create_pose_message(x, y, z, yaw_deg, timestamp_ms=None, **dump):
     """ Create PoseStamped message. """
     msg = PoseStamped()
 
-    if timestamp is not None:
-        fill_header(msg, timestamp)
+    if timestamp_ms is not None:
+        fill_header(msg, timestamp_ms)
 
     msg.pose.position = Point(x=x, y=y, z=z)
     msg.pose.orientation = get_quaternion(yaw_deg)

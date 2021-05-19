@@ -11,7 +11,7 @@ from audio_interfaces_py.messages import create_pose_message
 
 ROOM_DIM = np.array([10.0, 7.0, 5.0])  # room dimensions [m].
 SPEAKER_POSITION = np.array(
-    [5.0, 6.0, 1.0]
+    [10.0, 3.0, 1.0]
 )  # external source position [m], None for no external source.
 STARTING_POS = np.array([5.0, 0.2, 1.0])  # drone starting position [m]
 STARTING_YAW_DEG = 0  # starting absoltue yaw angle in degrees

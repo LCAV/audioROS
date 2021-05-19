@@ -34,9 +34,7 @@ class LinearPosePublisher(Node):
     ):
         super().__init__("linear_pose_publisher")
 
-        self.publisher_pose = self.create_publisher(
-            PoseStamped, "geometry/pose", 10
-        )
+        self.publisher_pose = self.create_publisher(PoseStamped, "geometry/pose", 10)
 
         self.rot = R.from_euler("z", starting_yaw_deg, degrees=True)
         self.constant_velocity = constant_velocity
@@ -82,9 +80,9 @@ class LinearPosePublisher(Node):
         quat = self.rot.as_quat()
 
         timestamp = self.get_time_ms()
-        msg = create_pose_message_from_arrays(quat, self.position, timestamp)
+        msg = create_pose_message_from_arrays(quat, self.position, timestamp=timestamp)
         self.publisher_pose.publish(msg)
-        self.get_logger().info("Pose has been published")
+        self.get_logger().info(f"Pose has been published at time {timestamp}")
 
 
 def main(args=None):
