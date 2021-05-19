@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from copy import deepcopy
 import os
 import sys
+from copy import deepcopy
 
 import numpy as np
 

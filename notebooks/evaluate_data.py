@@ -1,10 +1,10 @@
 import itertools
 import os
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
-
 from audio_bringup.helpers import get_filename
 from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
 from crazyflie_description_py.parameters import FS, N_BUFFER
@@ -77,9 +77,6 @@ def read_df(
     appendix="",
     **kwargs,
 ):
-    # for key, val in kwargs.items():
-    #    print(f'unused {key}:{val}')
-
     def convert_audio(row):
         arrays = [
             "signals_real_vect",
@@ -131,21 +128,15 @@ def read_df(
         inplace=True,
         errors="ignore",
     )
-
-    if "source_direction-deg" in df.columns:
-        df.rename(
-            columns={"source_direction-deg": "source_direction_deg"}, inplace=True
-        )
     pose_columns = set(
         [
-            "dx",
-            "dy",
+            "vx",
+            "vy",
             "x",
             "y",
             "z",
             "yaw_deg",
             "yaw_rate_deg",
-            "source_direction_deg",
             "timestamp",
             "index",
             "topic",
@@ -323,11 +314,19 @@ def get_positions_absolute(df_pos):
     """ Get absolute positions
     """
     if isinstance(df_pos, pd.DataFrame):
+        if not len({"x", "y", "z", "yaw_deg"}.intersection(df_pos.columns.values)):
+            warnings.warn("no position information found")
+            n_times = len(df_pos)
+            return np.zeros((n_times, 4))
         xs = df_pos.x.values
         ys = df_pos.y.values
         zs = df_pos.z.values
         yaws = df_pos.yaw_deg.values
     elif isinstance(df_pos, pd.Series):
+        if not len({"x", "y", "z", "yaw_deg"}.intersection(df_pos.index.values)):
+            warnings.warn("no position information found")
+            n_times = len(df_pos)
+            return np.zeros((n_times, 4))
         xs = df_pos.x
         ys = df_pos.y
         zs = df_pos.z
@@ -386,7 +385,7 @@ def evaluate_data(fname=""):
     ):
         try:
             df, df_pos = read_df(
-                degree=degree, props=props, snr=snr, motors=motors, source=source
+                degree=degree, props=props, snr=snr, motors=motors, source=source,
             )
         except FileNotFoundError:
             print("skipping:", degree, props, snr, motors, source)

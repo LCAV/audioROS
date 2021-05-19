@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+import warnings
 
 import numpy as np
 import rclpy
@@ -41,7 +42,11 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = '2021_02_09_wall'
 # EXTRA_DIRNAME = '2021_02_19_windows'
 # EXTRA_DIRNAME = '2021_02_23_wall'
-EXTRA_DIRNAME = "2021_03_01_flying"
+# EXTRA_DIRNAME = "2021_03_01_flying"
+# EXTRA_DIRNAME = "2021_04_30_hover"
+# EXTRA_DIRNAME = "2021_04_30_stepper"
+#EXTRA_DIRNAME = "2021_05_04_flying"
+EXTRA_DIRNAME = "2021_05_04_linear"
 
 bag_pid = None
 
@@ -55,7 +60,7 @@ def execute_commands(command_name):
         ]
     elif "all" in command_name:
         thrust = int(command_name.replace("all", ""))
-        command_list = ([("/gateway", "all", thrust, 0)],)
+        command_list = [("/gateway", "all", thrust, 0)]
     else:
         command_list = all_commands_lists[command_name]
 
@@ -69,7 +74,12 @@ def execute_commands(command_name):
         time.sleep(sleep)
 
 
-def get_total_time(command_list):
+def get_total_time(command_name):
+    if command_name in all_commands_lists.keys():
+        command_list = all_commands_lists[command_name]
+    else:
+        warnings.warn(f"Did not find {command_name} in {all_commands_lists.keys()}")
+        return 0
     time = 0
     for command in command_list:
         time += command[3]
@@ -109,12 +119,13 @@ def adjust_duration(duration, params):
             )
             duration = DURATION_360
 
-    duration_motors = get_total_time(all_commands_lists[params["motors"]])
-    if duration_motors > duration:
-        print(
-            f"ignoring global duration {duration} and using motor command duration {duration_motors}"
-        )
-        duration = duration_motors
+    if params["motors"] != 0:
+        duration_motors = get_total_time(params["motors"])
+        if duration_motors > duration:
+            print(
+                f"ignoring global duration {duration} and using motor command duration {duration_motors}"
+            )
+            duration = duration_motors
 
     if params["source"] is not None:
         *_, duration_buzzer = SOUND_EFFECTS[params["source"]]
@@ -153,7 +164,7 @@ def start_bag_recording(bag_filename):
 
 
 def start_turning(distance, angle):
-    if abs(angle) == 360:
+    if (angle is not None) and abs(angle) == 360:
         print(f"starting turning by {angle}")
         SerialIn.turn(angle, blocking=False)
     if distance == 51:
@@ -169,13 +180,12 @@ def save_bag_recording(csv_filename):
     set_param("/csv_writer", "filename", csv_filename)
 
 
-def save_wav_recording(recording, wav_filename):
-    recording_float32 = recording.astype(np.float32)
-    wavfile.write(wav_filename, global_params["fs_soundcard"], recording_float32)
-    print("wrote wav file as", wav_filename)
-
-
 def main(args=None):
+    def save_wav_recording(recording, wav_filename):
+        recording_float32 = recording.astype(np.float32)
+        wavfile.write(wav_filename, global_params["fs_soundcard"], recording_float32)
+        print("wrote wav file as", wav_filename)
+
     def perform_experiment(out_signal=None):
         recording = None
         start_time = time.time()
@@ -184,12 +194,13 @@ def main(args=None):
         elif source_type == "soundcard":
             sd.play(out_signal, blocking=False)
         elif global_params["n_meas_mics"] > 0:
+            print("recording measurement mic for {duration} seconds")
             n_frames = int(duration * global_params["fs_soundcard"])
             recording = sd.rec(n_frames, blocking=False)
 
         # execute motor commands
         if params["motors"] != 0:
-            print(f"executing motor commands:")
+            print(f"executing motor commands", params["motors"])
             execute_commands(params["motors"])
 
         # wait for exxtra time
@@ -342,7 +353,7 @@ def main(args=None):
         [p.get("angle", None) is not None for p in params_list]
     ):
         SerialIn = SerialMotors(
-            verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE
+            verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE,
         )
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
@@ -356,7 +367,7 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = ""  #'y'
+        answer = "" #"y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":
@@ -399,8 +410,8 @@ def main(args=None):
         set_all_parameters(params)
 
         #### perform experiment ###
-        recording = measure_wall_flying(params)
-        # recording = measure_wall(params)
+        # recording = measure_wall_flying(params)
+        recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
 

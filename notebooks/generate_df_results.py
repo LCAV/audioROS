@@ -1,21 +1,21 @@
 import itertools
+import sys
 
-import numpy as np
 import pandas as pd
 import progressbar
-
+from data_collector import DataCollector
 from pandas_utils import filter_by_dict
-from wall_detector import WallDetector
 
 OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
 # this corresponds to the setup in BC325 with stepper motor:
 D_OFFSET = 0.08  # actual distance at zero-distance, in meters
 
-def wall_detector_from_df(df_all, exp_name, mic_type, motors):
-    wall_detector = WallDetector(exp_name, mic_type)
+
+def data_collector_from_df(df_all, exp_name, mic_type, motors):
+    data_collector = DataCollector(exp_name, mic_type)
     if not OVERWRITE_RAW:
-        backup_found = wall_detector.fill_from_backup(
+        backup_found = data_collector.fill_from_backup(
             exp_name, mic_type, motors, appendix="_raw"
         )
     elif OVERWRITE_RAW or not backup_found:
@@ -32,22 +32,20 @@ def wall_detector_from_df(df_all, exp_name, mic_type, motors):
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
                 row.distance += D_OFFSET * 100
-                wall_detector.fill_from_row(row)
+                data_collector.fill_from_row(row)
                 p.update(i_row)
-        wall_detector.backup(exp_name, mic_type, motors, appendix="_raw")
-    return wall_detector
+        data_collector.backup(exp_name, mic_type, motors, appendix="_raw")
+    return data_collector
 
 
 if __name__ == "__main__":
     DEGREE = 0
     mic_types = ["audio_deck"]
-    motors_types = [
-        0, 
-        "all45000"
-    ]
+    motors_types = [0, "all45000"]
     exp_names = [
-            "2021_02_23_wall", 
-            "2021_02_25_wall"
+        # "2021_02_23_wall",
+        # "2021_02_25_wall"
+        "2021_04_30_stepper"
     ]
 
     # exp_name = '2021_02_09_wall_tukey';
@@ -62,8 +60,9 @@ if __name__ == "__main__":
             print("read", fname)
         except Exception as e:
             print("Error: run wall_analysis.py to parse experiments.")
+            sys.exit()
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
-            wall_detector = wall_detector_from_df(df_all, exp_name, mic_type, motors)
-            wall_detector.cleanup(verbose=False)
-            wall_detector.backup(exp_name, mic_type, motors)
+            data_collector = data_collector_from_df(df_all, exp_name, mic_type, motors)
+            data_collector.cleanup(verbose=False)
+            data_collector.backup(exp_name, mic_type, motors)

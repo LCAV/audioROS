@@ -2,15 +2,22 @@
 linear_pose_publisher.py: Publish linear movement of Crazyflie inside a room. 
 """
 
+import time
+
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation as R
 
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
 
-from audio_simulation.geometry import get_starting_pose
-from audio_simulation.geometry import ROOM_DIM, STARTING_POS, STARTING_YAW_DEG
+from audio_interfaces_py.messages import create_pose_message_from_arrays
+from crazyflie_description_py.experiments import (
+    get_starting_pose_msg,
+    ROOM_DIM,
+    STARTING_POS,
+    STARTING_YAW_DEG,
+)
 
 VELOCITY = np.array([0.0, 0.5, 0.0])  # m/s, in drone coordinates
 EPS = 0.2  # m, safety margin from walls
@@ -27,7 +34,7 @@ class LinearPosePublisher(Node):
     ):
         super().__init__("linear_pose_publisher")
 
-        self.publisher_pose = self.create_publisher(Pose, "geometry/pose", 10)
+        self.publisher_pose = self.create_publisher(PoseStamped, "geometry/pose", 10)
 
         self.rot = R.from_euler("z", starting_yaw_deg, degrees=True)
         self.constant_velocity = constant_velocity
@@ -43,8 +50,11 @@ class LinearPosePublisher(Node):
         # because the timer first waits for self.timer_period.
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
-        msg = get_starting_pose()
+        msg = get_starting_pose_msg()
         self.publisher_pose.publish(msg)
+
+    def get_time_ms(self):
+        return int(round(time.time() * 1e3))
 
     def timer_callback(self):
         delta = self.rot.apply(self.timer_period * self.constant_velocity)
@@ -69,17 +79,10 @@ class LinearPosePublisher(Node):
         self.position = new_position
         quat = self.rot.as_quat()
 
-        msg = Pose()
-        msg.orientation.x = quat[0]
-        msg.orientation.y = quat[1]
-        msg.orientation.z = quat[2]
-        msg.orientation.w = quat[3]
-        msg.position.x = self.position[0]
-        msg.position.y = self.position[1]
-        msg.position.z = self.position[2]
-
+        timestamp = self.get_time_ms()
+        msg = create_pose_message_from_arrays(quat, self.position, timestamp=timestamp)
         self.publisher_pose.publish(msg)
-        self.get_logger().info("Pose has been published")
+        self.get_logger().info(f"Pose has been published at time {timestamp}")
 
 
 def main(args=None):

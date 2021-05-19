@@ -2,11 +2,10 @@ import sys
 
 import numpy as np
 import pyroomacoustics as pra
-
 from audio_stack.beam_former import rotate_mics
-from crazyflie_description_py.parameters import N_BUFFER, FS
-
 from constants import SPEED_OF_SOUND
+from crazyflie_description_py.parameters import N_BUFFER, FS
+from crazyflie_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
 from frequency_analysis import get_bin
 from geometry import *
 
@@ -14,21 +13,18 @@ sys.path.append("../crazyflie-audio/python")
 from signals import generate_signal
 
 # default wall absorption (percentage of amplitude that is lost in reflection):
-WALL_ABSORPTION = 0.2 
-GAIN = 1.0 # default amplitude for input signals
-AZIMUTH_DEG = 0 # default angle of wall in degrees
-ROOM_DIM = [10, 8] # in meters
+WALL_ABSORPTION = 0.2
+GAIN = 1.0  # default amplitude for input signals
 WIDEBAND_FILE = "results/wideband.npy"
-
-# default
-N_TIMES = 10 # number of buffers to use for average (pyroomacoutics)
+N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
 
 
 def simulate_distance_estimator(
-    chosen_mics=range(4), distance_cm=10, azimuth_deg=0, ax=None
+    chosen_mics=range(4), distance_cm=10, azimuth_deg=WALL_ANGLE_DEG, ax=None
 ):
     from inference import get_probability_bayes
     from estimators import DistanceEstimator
+
     n_max = 1000
     frequencies = np.linspace(1000, 5000, 32)
     slices_f = get_freq_slice_theory(
@@ -44,7 +40,7 @@ def simulate_distance_estimator(
         distance_estimator.add_distribution(diff_cm * 1e-2, p_bayes, mic_idx)
         if ax is not None:
             ax.scatter(diff_cm, p_bayes, color=f"C{mic_idx}", label=f"mic{mic_idx}")
-            
+
     if ax is not None:
         ax.set_xlabel("path difference [cm]")
         ax.set_ylabel("probability [-]")
@@ -54,29 +50,20 @@ def simulate_distance_estimator(
 
 def create_wideband_signal(frequencies, duration_sec=1.0):
     phase = np.random.uniform(0, 2 * np.pi)
-    kwargs = dict( 
-        signal_type="mono",
-        duration_sec=duration_sec,
-        Fs=FS,
-    )
-    signal = generate_signal(
-        frequency_hz=frequencies[1],
-        phase_offset=phase,
-        **kwargs
-    )
+    kwargs = dict(signal_type="mono", duration_sec=duration_sec, Fs=FS,)
+    signal = generate_signal(frequency_hz=frequencies[1], phase_offset=phase, **kwargs)
     for f in frequencies[2:]:
         phase = np.random.uniform(0, 2 * np.pi)
-        signal += generate_signal(
-            frequency_hz=f, phase_offset=phase, **kwargs
-        )
+        signal += generate_signal(frequency_hz=f, phase_offset=phase, **kwargs)
     return signal
 
 
-def generate_room(distance_cm=0, azimuth_deg=AZIMUTH_DEG, ax=None, fs_here=FS):
+def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS):
+    """ Generate two-dimensional setup using pyroomacoustics. """
     source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
     m = pra.Material(energy_absorption="glass_3mm")
-    room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM, max_order=1, materials=m)
+    room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM[:2], max_order=1, materials=m)
 
     beam_former = pra.Beamformer(mic_positions.T, room.fs)
     room.add_microphone_array(beam_former)
@@ -84,16 +71,16 @@ def generate_room(distance_cm=0, azimuth_deg=AZIMUTH_DEG, ax=None, fs_here=FS):
     return room
 
 
-def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
-    """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg""" 
+def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True):
+    """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
     context = Context.get_crazyflie_setup()
 
-    d_wall_m = distance_cm * 1e-2 # distance of wall
-    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1]/2] # location of drone
+    d_wall_m = distance_cm * 1e-2  # distance of wall
+    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of drone
     mic_positions = context.mics
     source = context.source + offset
 
-    # note that we need to take the negative azimuth, because the drone has to 
+    # note that we need to take the negative azimuth, because the drone has to
     # be moved in the opposite direction.
     mic_positions = offset + rotate_mics(mic_positions, -azimuth_deg)
 
@@ -112,9 +99,9 @@ def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
         else:
             xmin = min([min(mic_positions[:, 0]), source[0], source_image[0]])
             xmax = max([max(mic_positions[:, 0]), source[0], source_image[0]])
-            delta = (xmax-xmin)/4
-            ax.set_xlim(xmin-delta, xmax+delta)
-            ax.axis('equal')
+            delta = (xmax - xmin) / 4
+            ax.set_xlim(xmin - delta, xmax + delta)
+            ax.axis("equal")
     return source, mic_positions
 
 
@@ -122,7 +109,7 @@ def get_setup(distance_cm=0, azimuth_deg=0, ax=None, zoom=True):
 
 
 def get_amplitude_function(
-    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=AZIMUTH_DEG
+    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=WALL_ANGLE_DEG
 ):
     deltas_m, d0 = get_deltas_from_global(azimuth_deg, distances_cm, mic_idx)
     alpha0 = 1 / (4 * np.pi * d0)  #
@@ -176,27 +163,29 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
 
     h_f_list = []
     idx = n_buffer  # skip first buffer to avoid boundary effects
-    for _ in range(n_times-1):
+    for _ in range(n_times - 1):
         output_f = np.fft.rfft(
             room.mic_array.signals[:, idx : idx + n_buffer], axis=1
-        ) # n_mics x n_frequencies
+        )  # n_mics x n_frequencies
         h_f_list.append(output_f[None, :, :] / n_buffer)
         idx += n_buffer
     h_f = np.concatenate(h_f_list, axis=0)  # n_times x n_mics x n_frequencies
     return np.mean(np.abs(h_f), axis=0)
 
 
-def get_df_theory(frequencies, distances, azimuth_deg=AZIMUTH_DEG, chosen_mics=range(4)):
+def get_df_theory(
+    frequencies, distances, azimuth_deg=WALL_ANGLE_DEG, chosen_mics=range(4)
+):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m, d0 = get_deltas_from_global(azimuth_deg=azimuth_deg, distances_cm=distances, mic_idx=mic)
+        deltas_m, d0 = get_deltas_from_global(
+            azimuth_deg=azimuth_deg, distances_cm=distances, mic_idx=mic
+        )
         H[i, :, :] = get_df_theory_simple(deltas_m, frequencies, d0).T
     return H
 
 
-def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=AZIMUTH_DEG):
-    import pandas as pd
-
+def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG):
     room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
 
     n_times = len(signal) // N_BUFFER
@@ -211,7 +200,9 @@ def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=AZIMUTH_
     return mag[:, bins_] ** 2
 
 
-def get_dist_slice_pyroom(frequency, distances_cm, azimuth_deg=AZIMUTH_DEG, n_times=100):
+def get_dist_slice_pyroom(
+    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG, n_times=100
+):
     from frequency_analysis import get_bin
 
     duration_sec = N_BUFFER * n_times / FS
@@ -230,7 +221,7 @@ def get_dist_slice_pyroom(frequency, distances_cm, azimuth_deg=AZIMUTH_DEG, n_ti
 
 
 def get_freq_slice_theory(
-    frequencies, distance_cm, azimuth_deg=AZIMUTH_DEG, chosen_mics=range(4)
+    frequencies, distance_cm, azimuth_deg=WALL_ANGLE_DEG, chosen_mics=range(4)
 ):
     """ 
     We can incorporate relative movement by providing
@@ -238,7 +229,9 @@ def get_freq_slice_theory(
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
-        deltas_m, d0 = get_deltas_from_global(azimuth_deg=azimuth_deg, distances_cm=distance_cm, mic_idx=mic)
+        deltas_m, d0 = get_deltas_from_global(
+            azimuth_deg=azimuth_deg, distances_cm=distance_cm, mic_idx=mic
+        )
         pattern = get_df_theory_simple(deltas_m, frequencies, d0, flat=True)
         Hs[:, i] = pattern
     return Hs
@@ -247,7 +240,7 @@ def get_freq_slice_theory(
 def get_dist_slice_theory(
     frequency,
     distances_cm,
-    azimuth_deg=AZIMUTH_DEG,
+    azimuth_deg=WALL_ANGLE_DEG,
     chosen_mics=range(4),
     wall_absorption=WALL_ABSORPTION,
     gains=[GAIN] * 4,
@@ -279,5 +272,5 @@ def get_dist_slice_theory(
 
 def factor_distance_to_delta(d1_cm, rel_movement_cm, mic, azimuth_deg=0):
     delta_d1, d0 = get_deltas_from_global(azimuth_deg, d1_cm, mic)
-    delta_d2, d0 = get_deltas_from_global(azimuth_deg, d1_cm-rel_movement_cm, mic)
-    return (delta_d1 - delta_d2) * 1e2 / rel_movement_cm 
+    delta_d2, d0 = get_deltas_from_global(azimuth_deg, d1_cm - rel_movement_cm, mic)
+    return (delta_d1 - delta_d2) * 1e2 / rel_movement_cm

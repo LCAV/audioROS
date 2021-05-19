@@ -62,7 +62,7 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 5,
             "max_time": 22,
-            "mag_thresh": 1e-3, # important
+            "mag_thresh": 1e-3,  # important
         },
         "measurement": {
             **kwargs_standard,
@@ -81,7 +81,7 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 5,
             "max_time": 22,
-            "mag_thresh": 1, # important
+            "mag_thresh": 1,  # important
         },
         "measurement": {
             **kwargs_standard,
@@ -100,6 +100,47 @@ kwargs_datasets = {
             "max_freq": 5000,
             "min_time": 10,
             "max_time": 27,
+        },
+    },
+    "2021_04_30_hover": {
+        "audio_deck": {
+            "offset": None,
+            "slope": None,
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 12,  # not active
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
+    "2021_04_30_stepper": {
+        "audio_deck": {
+            "offset": None,
+            "slope": None,
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 30,  # not active
+            "mag_thresh": 1,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
+    "2021_05_04_flying": {
+        "audio_deck": {
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 60,  # not active
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
+    "2021_05_04_linear": {
+        "audio_deck": {
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 60,  # not active
+            "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
 }

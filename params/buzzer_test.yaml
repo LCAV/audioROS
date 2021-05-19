@@ -10,7 +10,7 @@ gateway:
     n_average: 1 # not used without snr
     filter_snr_enable: 3
     filter_prop_enable: 0
-    window_type: 1
+    window_type: 2
 audio_plotter:
   ros__parameters:
     min_freq: 2000
