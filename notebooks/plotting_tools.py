@@ -1,5 +1,18 @@
+import matplotlib
 import matplotlib.pylab as plt
 import numpy as np
+import pandas as pd
+
+labels = {
+    "fft": "FFT method",
+    "cost": "optimization method",
+    "sigmadelta": "delta noise $\sigma_\\Delta$ [cm]",
+    "sigmay": "amplitude noise $\sigma_y$ [-]",
+    "distance": "distance $d$ [cm]",
+    np.nanstd: "error std",
+    np.nanmedian: "median error",
+    np.nanmean: "mean error",
+}
 
 
 def make_dirs(fname):
@@ -14,7 +27,7 @@ def save_fig(fig, fname, extension="pdf"):
     extension_current = fname.split(".")[-1]
     fname = fname.replace("." + extension_current, "." + extension)
     make_dirs(fname)
-    fig.savefig(fname, bbox_inches="tight")
+    fig.savefig(fname, bbox_inches="tight", dpi=200)  # default is 100
     print("saved as", fname)
 
 
@@ -173,7 +186,12 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
         xvals = sorted(np.abs(err_list))
         yvals = np.linspace(0, 1, len(xvals))
         axs[0, 1].plot(
-            xvals, yvals, label=method, marker=markers[i], ls=":", markersize=markersize
+            xvals,
+            yvals,
+            label=method,
+            marker=markers[i],
+            ls=":",
+            markersize=markersize,
         )
         i += 1
 
@@ -190,3 +208,142 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     axs[0, 1].grid(which="both")
     axs[0, 1].legend(loc="lower right")
     return fig, axs
+
+
+def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs):
+    """ pcolorfast with gray for nan and centered xticks and yticks. 
+
+    :param n_xticks: number of ticks along x. 
+    """
+
+    current_cmap = matplotlib.cm.get_cmap()
+    current_cmap.set_bad(color="gray")
+
+    assert values.shape == (len(ys), len(xs))
+
+    dx = xs[-1] - xs[-2]  # assumes uniform samples
+    dy = ys[-1] - ys[-2]
+    try:
+        im = ax.pcolorfast(xs, ys, values, **kwargs)
+    except ValueError:
+        # print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
+        im = ax.pcolorfast(
+            list(xs) + [xs[-1] + dx], list(ys) + [ys[-1] + dy], values, **kwargs
+        )
+    yticks = ys + dy / 2
+    xticks = xs + dx / 2
+    ax.set_xticks(xticks)
+    ax.set_yticks(yticks)
+    ax.set_xticklabels(xs)
+    ax.set_yticklabels(ys)
+
+    extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
+    im.set_extent(extent)
+
+    xticks = ax.get_xticks()
+    yticks = ax.get_yticks()
+    if n_xticks is None:
+        n_xticks = len(xticks)
+    width, height = ax.get_figure().get_size_inches()
+    n_yticks = int(n_xticks * height / width)
+    ax.set_xticks(xticks[:: len(xticks) // n_xticks])
+    ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
+    ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+    ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
+    return im
+
+
+def plot_error_distance(
+    sub_df, column, name, log=False, aggfunc=np.nanmedian, vmin=None, vmax=None
+):
+    table = pd.pivot_table(
+        sub_df,
+        values="error",
+        index=["method", column],
+        columns="distance",
+        aggfunc=aggfunc,
+    )
+    nonzero_values = table.values[table.values > 0]
+    if vmin is None and len(nonzero_values):
+        vmin = np.min(nonzero_values)
+    if vmax is None and len(nonzero_values):
+        vmax = np.max(nonzero_values)
+
+    fig, axs = plt.subplots(1, len(sub_df.method.unique()), sharey=True, squeeze=False)
+    fig.set_size_inches(5 * len(sub_df.method.unique()), 5)
+    for i, (method, df) in enumerate(table.groupby("method")):
+        index = df.index.get_level_values(column).values
+        distances = df.columns.values
+        if log:
+            im = pcolorfast_custom(
+                axs[0, i],
+                distances,
+                index,
+                np.log10(df.values),
+                vmin=np.log10(vmin),
+                vmax=np.log10(vmax),
+            )
+        else:
+            im = pcolorfast_custom(
+                axs[0, i], distances, index, df.values, vmin=vmin, vmax=vmax
+            )
+        axs[0, i].set_xlabel("distance $d$ [cm]")
+        axs[0, i].set_title(labels[method])
+    add_colorbar(fig, axs[0, -1], im, title=f"{labels[aggfunc]} [cm]")
+    axs[0, 0].set_ylabel(name.replace("_", " "))
+    return fig, axs
+
+
+def plot_error_gamma(
+    sub_df,
+    column,
+    name,
+    log=False,
+    aggfunc=np.nanmedian,
+    vmin=None,
+    vmax=None,
+    logy=False,
+    ax=None,
+    fig=None,
+    colorbar=True,
+):
+    table = pd.pivot_table(
+        sub_df,
+        values="error",
+        index=["method", column],
+        columns="gamma",
+        aggfunc=aggfunc,
+    )
+    nonzero_values = table.values[table.values > 0]
+    if vmin is None and len(nonzero_values):
+        vmin = np.min(nonzero_values)
+    if vmax is None and len(nonzero_values):
+        vmax = np.max(nonzero_values)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+        fig.set_size_inches(5, 5)
+
+    ys = table.index.get_level_values(column).values
+    # print(column, ys)
+    if logy:
+        ys = np.log10(ys)
+    gammas = table.columns.values
+    if log:
+        im = pcolorfast_custom(
+            ax,
+            gammas,
+            ys,
+            np.log10(table.values),
+            vmin=np.log10(vmin),
+            vmax=np.log10(vmax),
+        )
+    else:
+        im = pcolorfast_custom(ax, gammas, ys, table.values, vmin=vmin, vmax=vmax)
+    ax.set_xlabel("approach angle $\\gamma$ [deg]")
+    if colorbar:
+        from plotting_tools import add_colorbar
+
+        add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
+    ax.set_ylabel(name.replace("_", " "))
+    return fig, ax

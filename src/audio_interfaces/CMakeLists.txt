@@ -37,6 +37,7 @@ set(msg_files
   "msg/CrazyflieMotors.msg"
   "msg/CrazyflieStatus.msg"
   "msg/DoaEstimates.msg"
+  "msg/GroundTruth.msg"
   "msg/PoseRaw.msg"
   "msg/Spectrum.msg"
   "msg/Signals.msg"

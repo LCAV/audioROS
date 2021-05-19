@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-crazyflie.launch.py:  Launch the processing pipeline from the Crazyflie CRTP stream.
+doa_real.launch.py:  Launch the processing pipeline from the Crazyflie CRTP stream.
 """
 
 import sys
@@ -11,10 +11,12 @@ import launch
 
 from audio_bringup.helpers import get_launch_description
 
+LOG_LEVEL = "warn"
+BAG_FILE = ""
+
 node_config = {
     "gateway": {"params": [{"filter_snr_enable": 1}], "pkg": "crazyflie_crtp"},
-    # TODO(FD) make sure parameters are passed correctly to spectrum_estimator
-    "spectrum_estimator": {"params": ["bf_method": "das"], "pkg": "audio_stack"},
+    "spectrum_estimator": {"params": [{"bf_method": "das"}], "pkg": "audio_stack"},
     "doa_estimator": {"pkg": "audio_stack"},
     "csv_writer": {"pkg": "topic_writer"},
     "audio": {"pkg": "topic_plotter"},
@@ -24,7 +26,9 @@ node_config = {
 
 
 def generate_launch_description():
-    return get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=BAG_FILE)
+    return get_launch_description(
+        node_config, log_level=LOG_LEVEL, bag_filename=BAG_FILE
+    )
 
 
 def main(argv=sys.argv[1:]):

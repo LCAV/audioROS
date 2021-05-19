@@ -1,1 +1,6 @@
+pandas
+cflib
+pre-commit
+numpy
+scipy
 pyserial

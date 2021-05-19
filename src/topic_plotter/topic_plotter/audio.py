@@ -5,30 +5,28 @@ import matplotlib.pylab as plt
 from matplotlib.ticker import AutoMinorLocator
 
 from audio_interfaces.msg import Signals, SignalsFreq
-from audio_interfaces_py.messages import read_signals_message, read_signals_freq_message 
+from audio_interfaces_py.messages import read_signals_message, read_signals_freq_message
 from audio_interfaces_py.node_with_params import NodeWithParams
 
 from .live_plotter import LivePlotter
 
-XMIN_FREQ = 0 # min plotting frequency in Hz
-XMAX_FREQ = 1000 # max plotting frequency in Hz
-YMIN_FREQ = 1e-10 # min plotting frequency in Hz
-YMAX_FREQ = 1e5 # max plotting frequency in Hz
-YMIN_TIME = -1.1 # min plotting frequency in Hz
-YMAX_TIME = 1.1 # max plotting frequency in Hz
+XMIN_FREQ = 0  # min plotting frequency in Hz
+XMAX_FREQ = 1000  # max plotting frequency in Hz
+YMIN_FREQ = 1e-10  # min plotting frequency in Hz
+YMAX_FREQ = 1e5  # max plotting frequency in Hz
+YMIN_TIME = -1.1  # min plotting frequency in Hz
+YMAX_TIME = 1.1  # max plotting frequency in HTruez
 FIG_SIZE = (15, 10)
 
+
 class AudioPlotter(NodeWithParams):
-    PARAMS_DICT = {
-        "min_freq": XMIN_FREQ, 
-        "max_freq": XMAX_FREQ 
-    }
+    PARAMS_DICT = {"min_freq": XMIN_FREQ, "max_freq": XMAX_FREQ}
 
     def __init__(self):
-        #self.fig, ax = plt.subplots()
+        self.fig, ax = plt.subplots()
         self.fig, axs = plt.subplots(2)
         self.axs = {
-            #"signals frequency": ax,
+            # "signals frequency": ax,
             "signals frequency": axs[0],
             "signals time": axs[1],
         }
@@ -46,26 +44,43 @@ class AudioPlotter(NodeWithParams):
         self.subscription_signals = self.create_subscription(
             Signals, "audio/signals", self.listener_callback_signals, 10
         )
-        # need to do this here becasue it requires self.axs etc. 
-        
+        # need to do this here becasue it requires self.axs etc.
 
-
-
-    def init_plotter(self, name, xlabel='x', ylabel='y', log=True, ymin=-np.inf, ymax=np.inf, xmin=-np.inf, xmax=np.inf):
+    def init_plotter(
+        self,
+        name,
+        xlabel="x",
+        ylabel="y",
+        log=True,
+        ymin=-np.inf,
+        ymax=np.inf,
+        xmin=-np.inf,
+        xmax=np.inf,
+    ):
         if not name in self.plotter_dict.keys():
-            self.plotter_dict[name] = LivePlotter(ymax, ymin, label=name, log=log, max_xlim=xmax, min_xlim=xmin, ax=self.axs[name], fig=self.fig)
+            self.plotter_dict[name] = LivePlotter(
+                ymax,
+                ymin,
+                label=name,
+                log=log,
+                max_xlim=xmax,
+                min_xlim=xmin,
+                ax=self.axs[name],
+                fig=self.fig,
+            )
             self.plotter_dict[name].ax.set_xlabel(xlabel)
             self.plotter_dict[name].ax.set_ylabel(ylabel)
 
-
     def listener_callback_signals_f(self, msg):
-        self.init_plotter("signals frequency", 
-                xlabel="frequency [Hz]", 
-                ylabel="magnitude [-]", 
-                ymin=YMIN_FREQ, 
-                ymax=YMAX_FREQ, 
-                xmin=self.current_params["min_freq"], 
-                xmax=self.current_params["max_freq"])
+        self.init_plotter(
+            "signals frequency",
+            xlabel="frequency [Hz]",
+            ylabel="magnitude [-]",
+            ymin=YMIN_FREQ,
+            ymax=YMAX_FREQ,
+            xmin=self.current_params["min_freq"],
+            xmax=self.current_params["max_freq"],
+        )
 
         if msg.n_frequencies != self.current_n_frequencies:
             self.plotter_dict["signals frequency"].clear()
@@ -78,30 +93,41 @@ class AudioPlotter(NodeWithParams):
 
         # sort frequencies
         indices = np.argsort(freqs)
-        y = np.abs(signals_f[indices, :].T) # n_mics x n_freqs
+        y = np.abs(signals_f[indices, :].T)  # n_mics x n_freqs
         x = freqs[indices]
 
-        max_freq = x[np.argmax(y, axis=1)] 
+        max_freq = x[np.argmax(y, axis=1)]
         labels = [f"mic {i}" for i in range(y.shape[0])]
-        self.plotter_dict["signals frequency"].update_lines(y, x, labels, linestyle='-', marker='o')
+        self.plotter_dict["signals frequency"].update_lines(
+            y, x, labels, linestyle="-", marker="o"
+        )
 
         self.title = f"time [ms]: {msg.timestamp}, max at {max_freq}Hz"
         self.fig.suptitle(self.title, y=0.9)
 
-        self.plotter_dict["signals frequency"].ax.set_xticks(np.arange(self.current_params["min_freq"], self.current_params["max_freq"], 500))
-        self.plotter_dict["signals frequency"].ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+        self.plotter_dict["signals frequency"].ax.set_xticks(
+            np.arange(
+                self.current_params["min_freq"], self.current_params["max_freq"], 500
+            )
+        )
+        self.plotter_dict["signals frequency"].ax.xaxis.set_minor_locator(
+            AutoMinorLocator(2)
+        )
         self.plotter_dict["signals frequency"].update_axvlines(freqs)
         self.current_n_frequencies = msg.n_frequencies
 
-        self.plotter_dict["signals frequency"].ax.set_xlim(self.current_params["min_freq"], self.current_params["max_freq"])
+        self.plotter_dict["signals frequency"].ax.set_xlim(
+            self.current_params["min_freq"], self.current_params["max_freq"]
+        )
 
-        #[ax.axis('tight') for ax in self.axs.values()]
-        self.plotter_dict["signals frequency"].ax.legend(loc='lower left')
+        # [ax.axis('tight') for ax in self.axs.values()]
+        self.plotter_dict["signals frequency"].ax.legend(loc="lower left")
         self.fig.canvas.draw()
 
-
     def listener_callback_signals(self, msg):
-        self.init_plotter("signals time", xlabel="time idx [-]", ylabel="magnitude [-]", log=False)
+        self.init_plotter(
+            "signals time", xlabel="time idx [-]", ylabel="magnitude [-]", log=False
+        )
         __, signals = read_signals_message(msg)
         labels = [f"mic {i}" for i in range(msg.n_mics)]
 
@@ -117,22 +143,23 @@ class AudioPlotter(NodeWithParams):
         self.plotter_dict["signals time"].ax.set_ylim(YMIN_TIME, YMAX_TIME)
         self.fig.canvas.draw()
 
-
-    def custom_set_params(self): 
-        xmin=self.current_params["min_freq"]
-        xmax=self.current_params["max_freq"]
+    def custom_set_params(self):
+        xmin = self.current_params["min_freq"]
+        xmax = self.current_params["max_freq"]
         if "signals frequency" in self.plotter_dict.keys():
             self.plotter_dict["signals frequency"].ax.set_xlim(xmin, xmax)
-            self.get_logger().info(f'Set limits to {xmin, xmax}')
+            self.get_logger().info(f"Set limits to {xmin, xmax}")
         else:
-            self.init_plotter("signals frequency", 
-                xlabel="frequency [Hz]", 
-                ylabel="magnitude [-]", 
-                ymin=YMIN_FREQ, 
-                ymax=YMAX_FREQ, 
-                xmin=self.current_params["min_freq"], 
-                xmax=self.current_params["max_freq"])
-            self.get_logger().info(f'Init limits to {xmin, xmax}')
+            self.init_plotter(
+                "signals frequency",
+                xlabel="frequency [Hz]",
+                ylabel="magnitude [-]",
+                ymin=YMIN_FREQ,
+                ymax=YMAX_FREQ,
+                xmin=self.current_params["min_freq"],
+                xmax=self.current_params["max_freq"],
+            )
+            self.get_logger().info(f"Init limits to {xmin, xmax}")
 
 
 def main(args=None):
@@ -146,5 +173,5 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

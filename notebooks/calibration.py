@@ -5,15 +5,19 @@
 calibration.py: methods for gain calibration
 """
 
-import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 
 OFFSET_BOUNDS = [-1, 1]
 GAIN_BOUNDS = [0.1, 10]
 # wall absorption bounds: 1 would mean all energy lost and no interference.
-ABS_BOUNDS = [0.2, 0.8]
+ABS_BOUNDS = [0.0, 0.8]
 YAW_DEG = 0
+
+# interpolation parameters
+FILL_VALUE = "extrapolate"  # 0.0  # below and above
+KIND = "linear"
+BOUNDS_ERROR = False
 
 
 def plot_calibration(x, ys, function, ax):
@@ -44,7 +48,11 @@ def get_calibration_function(ax=None):
     calib_psd = row.psd
     calib_f = row.frequencies
     calib_function = interp1d(
-        x=calib_f, y=calib_psd, kind="linear", fill_value="extrapolate"
+        x=calib_f,
+        y=calib_psd,
+        kind=KIND,
+        fill_value=FILL_VALUE,
+        bounds_error=BOUNDS_ERROR,
     )
 
     if ax is not None:
@@ -54,12 +62,16 @@ def get_calibration_function(ax=None):
 
 def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
     from scipy.interpolate import interp1d
-    from wall_detector import prune_df_matrix
+    from data_collector import prune_df_matrix
 
     df_matrix_pruned, df_freq, __ = prune_df_matrix(df_matrix, df_freq)
     median_values = np.nanmedian(df_matrix_pruned, axis=2)  # n_mics x n_freqs
     calib_function = interp1d(
-        df_freq, median_values, kind="quadratic", fill_value="extrapolate"
+        df_freq,
+        median_values,
+        kind=KIND,
+        fill_value=FILL_VALUE,
+        bounds_error=BOUNDS_ERROR,
     )
     if ax is not None:
         plot_calibration(df_freq, median_values, calib_function, ax=ax)
@@ -75,31 +87,25 @@ def get_calibration_function_dict(ax=None, **filter_dict):
     df = filter_by_dict(results_df, filter_dict)
     assert len(df) == 1, df
     row = df.iloc[0]
-    return get_calibration_function_matrix(row.df_matrix, row.df_freq, ax=ax)
-
-
-# TODO(FD): deprecated
-def get_calibration_function_new(exp_name, mic_type, method="fit", ax=None, motors=0):
-    from wall_detector import WallDetector
-
-    wall_detector = WallDetector()
-    wall_detector.fill_from_backup(exp_name, mic_type, motors=motors)
-    return wall_detector.get_calib_function(method=method, ax=ax)
+    return (
+        get_calibration_function_matrix(row.df_matrix, row.df_freq, ax=ax),
+        row.df_freq,
+    )
 
 
 def get_calibration_function_fit(
     exp_name, mic_type, ax=None, motors=0, fit_one_gain=False
 ):
-    from wall_detector import WallDetector, prune_df_matrix
+    from data_collector import DataCollector, prune_df_matrix
     from scipy.interpolate import interp1d
 
-    wall_detector = WallDetector()
-    wall_detector.fill_from_backup(exp_name, mic_type, motors=motors)
+    data_collector = DataCollector()
+    data_collector.fill_from_backup(exp_name, mic_type, motors=motors)
 
-    matrix, distances, frequencies = wall_detector.get_df_matrix()
+    matrix, distances, frequencies = data_collector.get_df_matrix()
     matrix, frequencies, *_ = prune_df_matrix(matrix, frequencies)
 
-    mics = wall_detector.get_mics()
+    mics = data_collector.get_mics()
     gains = np.zeros((len(mics), len(frequencies)))
     for i, f in enumerate(frequencies):
         slices_raw = matrix[:, i, :]
@@ -107,7 +113,7 @@ def get_calibration_function_fit(
             slices_raw.T,
             distances,
             method="minimize",
-            yaw_deg=YAW_DEG,
+            azimuth_deg=YAW_DEG,
             frequency=f,
             chosen_mics=mics,
             optimize_absorption=True,
@@ -116,7 +122,7 @@ def get_calibration_function_fit(
         gains[:, i] = coeffs[2:]
 
     calib_function = interp1d(
-        frequencies, gains, kind="linear", fill_value="extrapolate", assume_sorted=True
+        frequencies, gains, kind=KIND, fill_value=FILL_VALUE, bounds_error=BOUNDS_ERROR,
     )
     if ax is not None:
         plot_calibration(frequencies, gains, calib_function, ax=ax)
@@ -126,13 +132,13 @@ def get_calibration_function_fit(
 def get_calibration_function_median(
     exp_name, mic_type, ax=None, motors=0, fit_one_gain=False
 ):
-    from wall_detector import WallDetector, prune_df_matrix
+    from data_collector import DataCollector, prune_df_matrix
     from scipy.interpolate import interp1d
 
-    wall_detector = WallDetector()
-    wall_detector.fill_from_backup(exp_name, mic_type, motors=motors)
+    data_collector = DataCollector()
+    data_collector.fill_from_backup(exp_name, mic_type, motors=motors)
 
-    matrix, distances, frequencies = wall_detector.get_df_matrix()
+    matrix, distances, frequencies = data_collector.get_df_matrix()
     matrix, frequencies, *_ = prune_df_matrix(matrix, frequencies)
 
     if fit_one_gain:
@@ -143,17 +149,17 @@ def get_calibration_function_median(
         gains = np.nanmedian(matrix, axis=2)
 
     calib_function = interp1d(
-        frequencies, gains, kind="linear", fill_value="extrapolate", assume_sorted=True
+        frequencies, gains, kind=KIND, fill_value=FILL_VALUE, bounds_error=BOUNDS_ERROR,
     )
     if ax is not None:
         plot_calibration(frequencies, gains, calib_function, ax=ax)
-    return calib_function
+    return calib_function, frequencies
 
 
 def fit_distance_slice(
     d_slice_exp,
     distances_cm,
-    yaw_deg,
+    azimuth_deg,
     frequency,
     chosen_mics,
     method="brute",
@@ -175,7 +181,7 @@ def fit_distance_slice(
         d_slice = get_dist_slice_theory(
             frequency,
             distances_cm=distances_cm + coeffs[1],
-            yaw_deg=yaw_deg,
+            azimuth_deg=azimuth_deg,
             wall_absorption=coeffs[0],
             gains=coeffs[2:],
             chosen_mics=chosen_mics,
@@ -222,7 +228,7 @@ def fit_distance_slice(
     d_slice = get_dist_slice_theory(
         frequency,
         distances_cm=distances_cm + coeffs[1],
-        yaw_deg=yaw_deg,
+        azimuth_deg=azimuth_deg,
         wall_absorption=coeffs[0],
         gains=coeffs[2:],
         chosen_mics=chosen_mics,

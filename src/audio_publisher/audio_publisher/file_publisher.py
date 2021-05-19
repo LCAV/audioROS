@@ -15,7 +15,7 @@ from audio_interfaces.msg import PoseRaw
 
 N_BUFFER = 2048
 
-# for older datsets only. 
+# for older datsets only.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(current_dir + "/../../../crazyflie-audio/python/"))
 import file_parser as fp
@@ -24,9 +24,12 @@ GT_DEGREES = 20
 LOUDNESS = "high"
 SOURCE = "white_noise"
 
+
 def read_recordings(exp_name, appendix=""):
-    if exp_name == "2021_01_07_snr_study": 
-        fname = f"experiments/{exp_name}/export/motors_nosnr_noprops_mono1750{appendix}.wav"
+    if exp_name == "2021_01_07_snr_study":
+        fname = (
+            f"experiments/{exp_name}/export/motors_nosnr_noprops_mono1750{appendix}.wav"
+        )
     else:
         raise ValueError(exp_name)
     fs_here, signals = read(fname)
@@ -41,7 +44,7 @@ class FilePublisher(AudioPublisher):
         """
         :param publish_rate: in Hz, at which rate to publish
         """
-        PARAMS_DICT = AudioPublisher.PARAMS_DICT 
+        PARAMS_DICT = AudioPublisher.PARAMS_DICT
         PARAMS_DICT["appendix"] = ""
 
         # for old datasets only
@@ -50,13 +53,14 @@ class FilePublisher(AudioPublisher):
         else:
             sys.path.append(f"experiments/{file_source}/")
             from params import global_params
+
             Fs = global_params["fs_soundcard"]
 
         super().__init__(
             "file_publisher",
             mic_positions=mic_positions,
             publish_rate=publish_rate,
-            Fs=Fs
+            Fs=Fs,
         )
         self.loop = loop
         self.read_file_source(file_source)
@@ -73,15 +77,20 @@ class FilePublisher(AudioPublisher):
             signals_props, signals_source, signals_all = fp.read_simulation(file_source)
         elif file_source == "recordings_16_7_20":
             signals_props, signals_source, signals_all = fp.read_recordings_16_7_20(
-                    loudness=LOUDNESS, 
-                    gt_degrees=GT_DEGREES, 
-                    source=SOURCE)
+                loudness=LOUDNESS, gt_degrees=GT_DEGREES, source=SOURCE
+            )
         elif file_source == "recordings_14_7_20":
-            signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(gt_degrees=GT_DEGREES)
+            signals_props, signals_source, signals_all = fp.read_recordings_14_7_20(
+                gt_degrees=GT_DEGREES
+            )
         elif file_source == "recordings_9_7_20":
-            signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(gt_degrees=GT_DEGREES)
+            signals_props, signals_source, signals_all = fp.read_recordings_9_7_20(
+                gt_degrees=GT_DEGREES
+            )
         elif file_source == "2021_01_07_snr_study":
-            signals_all = read_recordings(file_source, appendix=self.current_params["appendix"])
+            signals_all = read_recordings(
+                file_source, appendix=self.current_params["appendix"]
+            )
         else:
             raise ValueError(file_source)
 
@@ -96,7 +105,7 @@ class FilePublisher(AudioPublisher):
     def publish_signals(self):
         n_buffer = self.current_params["n_buffer"]
 
-        signals = self.signals_full[:, self.file_idx:self.file_idx + n_buffer]
+        signals = self.signals_full[:, self.file_idx : self.file_idx + n_buffer]
         self.process_signals(signals)
         self.publish_position()
 
@@ -121,11 +130,11 @@ class FilePublisher(AudioPublisher):
 def main(args=None):
     rclpy.init(args=args)
 
-    #file_source = "analytical"
-    #file_source = "pyroomacoustics"
-    #file_source = "recordings_9_7_20"
-    #file_source = "recordings_14_7_20"
-    #file_source = "recordings_16_7_20"
+    # file_source = "analytical"
+    # file_source = "pyroomacoustics"
+    # file_source = "recordings_9_7_20"
+    # file_source = "recordings_14_7_20"
+    # file_source = "recordings_16_7_20"
     file_source = "2021_01_07_snr_study"
 
     publisher = FilePublisher(file_source, loop=True)

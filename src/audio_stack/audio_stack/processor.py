@@ -21,11 +21,14 @@ from noise_cancellation import filter_iir_bandpass
 from bin_selection import select_frequencies as embedded_select_frequencies
 
 from audio_interfaces.msg import Signals, SignalsFreq
-from audio_interfaces_py.messages import create_signals_freq_message, read_signals_message
+from audio_interfaces_py.messages import (
+    create_signals_freq_message,
+    read_signals_message,
+)
 from audio_interfaces_py.node_with_params import NodeWithParams
 from audio_stack.parameters import TUKEY_ALPHA
 
-# Denoising method, available: 
+# Denoising method, available:
 # - "" (no denoising)
 # - "bandpass" (apply bandpass filter)
 # - "single" (keep only single frequency)
@@ -40,7 +43,7 @@ METHOD_NOISE_DICT = {"bandpass": {"fmin": 100, "fmax": 300, "order": 3}}
 METHOD_WINDOW = "tukey"
 
 
-def get_stft(signals, Fs, method_window="", method_noise=""):
+def get_stft(signals, fs, method_window="", method_noise=""):
     if method_window == "tukey":
         window = signal.tukey(signals.shape[1], alpha=TUKEY_ALPHA)
         signals *= window
@@ -58,7 +61,7 @@ def get_stft(signals, Fs, method_window="", method_noise=""):
     if method_noise == "bandpass":
         signals = filter_iir_bandpass(
             signals,
-            Fs=Fs,
+            Fs=fs,
             method="cheby2",
             plot=False,
             **METHOD_NOISE_DICT[method_noise],
@@ -66,7 +69,7 @@ def get_stft(signals, Fs, method_window="", method_noise=""):
     elif method_noise == "single":
         signals = filter_iir_bandpass(
             signals,
-            Fs=Fs,
+            Fs=fs,
             method="single",
             plot=False,
             **METHOD_NOISE_DICT[method_noise],
@@ -77,22 +80,23 @@ def get_stft(signals, Fs, method_window="", method_noise=""):
         ValueError(method_noise)
 
     signals_f = np.fft.rfft(signals, n=signals.shape[1], axis=1).T  # n_samples x n_mics
-    freqs = np.fft.rfftfreq(n=signals.shape[1], d=1/Fs)
+    freqs = np.fft.rfftfreq(n=signals.shape[1], d=1 / fs)
     return signals_f, freqs
 
 
 class Processor(NodeWithParams):
     """ Node to subscribe to audio/signals or audio/signals_f and publish correlations.
     """
+
     # Frequency selection
     # set min_freq==max_freq to choose one frequency only.
     PARAMS_DICT = {
         "n_freqs": 32,
         "min_freq": 100,
         "max_freq": 8000,
-        "delta_freq": 100, # not used without thrust
-        "filter_snr": 0, # equivalent to filter_snr_enable
-        "thrust": 0, # if > 0, we use filter_props_enable
+        "delta_freq": 100,  # not used without thrust
+        "filter_snr": 0,  # equivalent to filter_snr_enable
+        "thrust": 0,  # if > 0, we use filter_props_enable
     }
 
     def __init__(self):
@@ -104,7 +108,7 @@ class Processor(NodeWithParams):
         self.publisher_signals_f = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
-
+        self.mic_positions = None
 
     # below overwrites base class verify_validity function.
     @staticmethod
@@ -116,23 +120,23 @@ class Processor(NodeWithParams):
         assert params_dict["filter_snr"] in [0, 1]
         return True
 
-
     def listener_callback_signals(self, msg):
         t1 = time.time()
 
         self.mic_positions, signals = read_signals_message(msg)
-        signals_f, freqs = get_stft(signals, msg.fs, METHOD_WINDOW, METHOD_NOISE) # n_samples x n_mics
+        signals_f, freqs = get_stft(
+            signals, msg.fs, METHOD_WINDOW, METHOD_NOISE
+        )  # n_samples x n_mics
 
         bins = embedded_select_frequencies(
-            msg.n_buffer,
-            msg.fs,
-            buffer_f=signals_f.T,
-            **self.current_params,
+            msg.n_buffer, msg.fs, buffer_f=signals_f.T, **self.current_params,
         )
         freqs = freqs[bins]
         signals_f = signals_f[bins]
 
-        msg_freq = create_signals_freq_message(signals_f, freqs, self.mic_positions, msg.timestamp, None, msg.fs)
+        msg_freq = create_signals_freq_message(
+            signals_f, freqs, self.mic_positions, msg.timestamp, None, msg.fs
+        )
         self.publisher_signals_f.publish(msg_freq)
 
         self.get_logger().info(

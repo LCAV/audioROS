@@ -245,12 +245,14 @@ def apply_box_mask(
     return spec, frequencies
 
 
-def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose=False):
+def psd_df_from_spec(
+    spec, freqs, min_t=0, max_t=None, interpolation="", verbose=False, times=None,
+):
     """
-    Extract distance-frequency information from spectrogram and index_matrix.
+    Extract distance-frequency information from spectrogram.
 
     :param spec: spectrogram (n_freqs x n_mics x n_times)
-    :param freqs: frequencies (n_freqs)
+    :param freqs: frequencies (n_freqs,)
 
     structure of output: 
     | mic | frequency | distance | time | magnitude
@@ -300,9 +302,14 @@ def psd_df_from_spec(spec, freqs, min_t=0, max_t=None, interpolation="", verbose
                 magnitude_estimate = max_amp
                 frequency = max_f
 
+            if times is not None:
+                time = times[i_t]
+            else:
+                time = i_t
+
             update_dict = {
                 "mic": i_mic,
-                "time": i_t,
+                "time": time,
                 "counter": counter_dict[i_f],
                 "frequency": frequency,
                 "magnitude": magnitude_estimate,

@@ -14,24 +14,19 @@ from audio_interfaces.msg import Signals
 from audio_interfaces_py.messages import create_signals_message
 from audio_interfaces_py.node_with_params import NodeWithParams
 
-MAX_UINT32 = 2**32 - 1
+MAX_UINT32 = 2 ** 32 - 1
 N_BUFFER = 2048
 
 # number of buffers to save, for example 5 seconds
 SAVE_BUFFERS = int(5 * 44100 / 2048)  # set to 0 for no saving
 SAVE_DIR = "debug"
 
+
 class AudioPublisher(NodeWithParams):
-    PARAMS_DICT = {
-        "n_buffer": N_BUFFER
-    }
+    PARAMS_DICT = {"n_buffer": N_BUFFER}
 
     def __init__(
-        self,
-        name="audio_publisher",
-        publish_rate=None,
-        Fs=None,
-        mic_positions=None,
+        self, name="audio_publisher", publish_rate=None, Fs=None, mic_positions=None,
     ):
         super().__init__(name)
 
@@ -43,7 +38,7 @@ class AudioPublisher(NodeWithParams):
 
         self.Fs = Fs
         self.mic_positions = mic_positions
-        self.n_mics = None # will be set later
+        self.n_mics = None  # will be set later
         if mic_positions is not None:
             self.n_mics = mic_positions.shape[0]
 
@@ -61,7 +56,7 @@ class AudioPublisher(NodeWithParams):
             self.get_logger().warn("timestamp overflow")
             self.start_time = time.time()
             return 0
-        return timestamp 
+        return timestamp
 
     def process_signals(self, signals):
         t1 = time.time()
@@ -76,7 +71,9 @@ class AudioPublisher(NodeWithParams):
         assert self.Fs is not None, "Need to set Fs before processing."
 
         # publishing
-        msg = create_signals_message(signals, self.mic_positions, self.get_time_ms(), self.Fs)
+        msg = create_signals_message(
+            signals, self.mic_positions, self.get_time_ms(), self.Fs
+        )
         self.publisher_signals.publish(msg)
 
         # saving
@@ -85,8 +82,10 @@ class AudioPublisher(NodeWithParams):
                 self.save_data = np.empty((self.n_mics, n_buffer * SAVE_BUFFERS))
 
             if self.save_idx < SAVE_BUFFERS:
-                self.save_data[ :, self.save_idx * n_buffer : (self.save_idx + 1) * n_buffer] = signals
-            elif (self.save_idx == SAVE_BUFFERS):
+                self.save_data[
+                    :, self.save_idx * n_buffer : (self.save_idx + 1) * n_buffer
+                ] = signals
+            elif self.save_idx == SAVE_BUFFERS:
                 for i in range(self.save_data.shape[0]):
                     fname = f"{SAVE_DIR}/{self.get_name()}_mic{i}.wav"
                     write(fname, self.Fs, self.save_data[i])

@@ -2,15 +2,12 @@ import itertools
 
 import numpy as np
 import pandas as pd
-
 from audio_bringup.helpers import get_filename
 from crazyflie_description_py.parameters import N_BUFFER
-from evaluate_data import read_df, read_df_from_wav
-from evaluate_data import get_positions_absolute
 from dynamic_analysis import add_pose_to_df
+from evaluate_data import get_positions_absolute
+from evaluate_data import read_df, read_df_from_wav
 
-VELOCITY = 0.05  # [m/s], parameter in crazyflie
-D_START = 0.6  # [m], starting distance
 FILTERS = ["mic_type", "snr", "motors"]
 
 
@@ -34,71 +31,6 @@ def clean_stft(stft, max_value=N_BUFFER):
     stft[np.isnan(stft)] = 0.0
     stft[np.abs(stft) > max_value] = 0.0
     return stft
-
-
-# TODO(FD) probably deprecated, can be removed.
-def get_df_matrices(exp_name, max_distance=None, plot=False):
-    import progressbar
-    from pandas_utils import fill_df
-    from wall_detector import WallDetector
-
-    fname = f"../experiments/{exp_name}/all_data.pkl"
-    df_freq = pd.read_pickle(fname)
-
-    results_df = pd.DataFrame(
-        columns=[
-            "mic_type",
-            "snr",
-            "motors",
-            "exp_name",
-            "df_matrix",
-            "df_dist",
-            "df_freq",
-        ]
-    )
-
-    for chosen_tuple, df_mic in df_freq.groupby(FILTERS, sort=False):
-        filter_dict = dict(zip(FILTERS, chosen_tuple))
-
-        wall_detector = WallDetector(
-            exp_name=exp_name, mic_type=filter_dict["mic_type"]
-        )
-
-        if filter_dict["mic_type"] == "measurement" and filter_dict["snr"] == 1:
-            continue
-
-        d_idx = 0
-
-        if max_distance is not None:
-            df_mic = df_mic[df_mic.distance < max_distance]
-        max_value = len(df_mic)
-        with progressbar.ProgressBar(max_value=max_value) as p:
-            for counter, (i, row) in enumerate(df_mic.iterrows()):
-                if max_distance is not None and (row.distance > max_distance):
-                    continue
-                try:
-                    spec_masked_all, freqs_masked = wall_detector.fill_from_row(row)
-                except Exception as e:
-                    print("error with row", row)
-                    print(e)
-                    continue
-                p.update(counter)
-                if plot:
-                    fig, ax = plt.subplots()
-                    ax.pcolorfast(
-                        range(spec_masked_all.shape[-1]),
-                        freqs_masked,
-                        np.log10(spec_masked_all[:, 0, :]),
-                    )
-                    ax.set_title(f"distance={row.distance}cm")
-        wall_detector.cleanup()
-        df_amp, distances, frequencies = wall_detector.get_df_matrix()
-
-        filter_dict.update({"exp_name": exp_name})
-        fill_dict = {"df_dist": distances, "df_freq": frequencies, "df_matrix": df_amp}
-        print("filling results_df...")
-        results_df = fill_df(results_df, filter_dict, fill_dict)
-    return results_df
 
 
 def parse_experiments(
@@ -147,7 +79,13 @@ def parse_experiments(
         wav = True
         method_window = ""
     elif exp_name == "2021_02_09_wall_tukey":
-        appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]
+        appendix_list = [
+            "",
+            "_afterbug",
+            "_afterbug2",
+            "_with_3cm",
+            "_second shot",
+        ]
         snr_list = [3]
         props_list = [0]
         wav = True
@@ -183,6 +121,32 @@ def parse_experiments(
             "_30cm-newbuzzer",
             "_50cm-newbuzzer",
         ]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_04_30_hover":
+        appendix_list = [f"_test1_{i}" for i in range(6, 9)]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_04_30_stepper":
+        appendix_list = [""]
+        snr_list = [3]
+        props_list = [0]
+        wav = True
+        method_window = "flattop"
+    elif exp_name == "2021_05_04_linear":
+        appendix_list = [f"_{i}" for i in range(1, 6)] + [
+            f"_fast{i}" for i in range(1, 6)
+        ]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_05_04_flying":
+        appendix_list = [f"_{i}" for i in range(22, 25)]
         snr_list = [3]
         props_list = [0]
         wav = False
@@ -350,10 +314,14 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
+        "2021_05_04_linear",
+        "2021_05_04_flying",
+        # "2021_04_30_hover",
+        # "2021_04_30_stepper",
         # "2021_03_01_flying",
         # "2021_02_25_wall",
         # "2021_02_23_wall",
-        "2021_02_19_windows",
+        # "2021_02_19_windows",
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',

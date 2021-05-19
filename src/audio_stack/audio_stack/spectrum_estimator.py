@@ -11,24 +11,30 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 
 
-from audio_interfaces.msg import PoseRaw, SignalsFreq, Spectrum
-from audio_interfaces_py.messages import create_spectrum_message, read_signals_freq_message 
+from audio_interfaces.msg import SignalsFreq, Spectrum
+from audio_interfaces_py.messages import read_pose_message
+from geometry_msgs.msg import PoseStamped
+from audio_interfaces_py.messages import (
+    create_spectrum_message,
+    read_signals_freq_message,
+)
 from audio_stack.beam_former import BeamFormer
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
-# Beamforming method, available: 
+# Beamforming method, available:
 # - "das": delay-and-sum
 # - "mvdr": minimum-variance distortionless response
 BF_METHOD = "das"
-#BF_METHOD = "mvdr"
+# BF_METHOD = "mvdr"
 
-COMBINATION_N = 5 # number of spectra to combine
-COMBINATION_METHOD = "sum" # way to combine spectra
+COMBINATION_N = 5  # number of spectra to combine
+COMBINATION_METHOD = "sum"  # way to combine spectra
 
-#NORMALIZE = "zero_to_one_all"
-#NORMALIZE = "zero_to_one"
+# NORMALIZE = "zero_to_one_all"
+# NORMALIZE = "zero_to_one"
 NORMALIZE = "none"
-#NORMALIZE = "sum_to_one"
+# NORMALIZE = "sum_to_one"
+
 
 class SpectrumEstimator(Node):
     def __init__(self, plot=False):
@@ -38,12 +44,20 @@ class SpectrumEstimator(Node):
             SignalsFreq, "audio/signals_f", self.listener_callback_signals_f, 1
         )
 
-        self.raw_pose_synch = TopicSynchronizer(allowed_lag=20)
-        self.subscription = self.create_subscription(PoseRaw, "geometry/pose_raw", self.raw_pose_synch.listener_callback, 1)
+        self.pose_synch = TopicSynchronizer(allowed_lag_ms=20)
+        self.subscription = self.create_subscription(
+            PoseStamped, "geometry/pose", self.pose_synch.listener_callback, 1
+        )
 
-        self.publisher_spectrum_raw = self.create_publisher(Spectrum, "audio/spectrum_raw", 10)
-        self.publisher_spectrum_combined = self.create_publisher(Spectrum, "audio/spectrum_combined", 10)
-        self.publisher_spectrum_multi = self.create_publisher(Spectrum, "audio/spectrum_multi", 10)
+        self.publisher_spectrum_raw = self.create_publisher(
+            Spectrum, "audio/spectrum_raw", 10
+        )
+        self.publisher_spectrum_combined = self.create_publisher(
+            Spectrum, "audio/spectrum_combined", 10
+        )
+        self.publisher_spectrum_multi = self.create_publisher(
+            Spectrum, "audio/spectrum_multi", 10
+        )
 
         self.beam_former = None
 
@@ -62,12 +76,12 @@ class SpectrumEstimator(Node):
             rclpy.parameter.Parameter(
                 "combination_method",
                 rclpy.Parameter.Type.STRING,
-                self.combination_method
+                self.combination_method,
             ),
             rclpy.parameter.Parameter(
-                "combination_n", 
-                rclpy.Parameter.Type.INTEGER, 
-                self.combination_n 
+                "combination_n",
+                rclpy.Parameter.Type.INTEGER,
+                self.combination_n,
             ),
         ]
         self.set_parameters_callback(self.set_params)
@@ -78,7 +92,9 @@ class SpectrumEstimator(Node):
             if param.name == "bf_method":
                 self.bf_method = param.get_parameter_value().string_value
             elif param.name == "combination_method":
-                self.combination_method = param.get_parameter_value().string_value
+                self.combination_method = (
+                    param.get_parameter_value().string_value
+                )
             elif param.name == "combination_n":
                 self.combination_n = param.get_parameter_value().integer_value
             else:
@@ -101,8 +117,12 @@ class SpectrumEstimator(Node):
                     "need to set send mic_positions in Correlation to do DOA"
                 )
             self.beam_former = BeamFormer(mic_positions)
-            self.beam_former.init_dynamic_estimate(frequencies, self.combination_n, self.combination_method, "none")
-            self.beam_former.init_multi_estimate(frequencies, self.combination_n)
+            self.beam_former.init_dynamic_estimate(
+                frequencies, self.combination_n, self.combination_method, "none"
+            )
+            self.beam_former.init_multi_estimate(
+                frequencies, self.combination_n
+            )
 
         R = self.beam_former.get_correlation(signals_f)
         if self.bf_method == "mvdr":
@@ -119,34 +139,47 @@ class SpectrumEstimator(Node):
         # publish raw spectrum
         msg_spec = create_spectrum_message(spectrum, frequencies, msg.timestamp)
         self.publisher_spectrum_raw.publish(msg_spec)
-        self.get_logger().info(f"Published raw spectrum after {time.time() - t1:.2f}s.")
+        self.get_logger().info(
+            f"Published raw spectrum after {time.time() - t1:.2f}s."
+        )
 
         #### combined specra
-        pose_message = self.raw_pose_synch.get_latest_message(msg.timestamp, self.get_logger())
+        pose_message = self.pose_synch.get_latest_message(
+            msg.timestamp, self.get_logger()
+        )
         if pose_message is None:
-            print('skipping cause no pose')
+            print("skipping cause no pose")
             return
 
-        orientation = pose_message.yaw_deg
+        _, yaw_deg, *_ = read_pose_message(pose_message)
 
-        self.beam_former.add_to_dynamic_estimates(spectrum, orientation)
+        self.beam_former.add_to_dynamic_estimates(spectrum, yaw_deg)
         dynamic_spectrum = self.beam_former.get_dynamic_estimate()
 
         msg_dynamic = msg_spec
-        msg_dynamic.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
+        msg_dynamic.spectrum_vect = list(
+            dynamic_spectrum.astype(float).flatten()
+        )
         self.publisher_spectrum_combined.publish(msg_dynamic)
-        self.get_logger().info(f"Published dynamic spectrum after {time.time() - t1:.2f}s.")
-    
+        self.get_logger().info(
+            f"Published dynamic spectrum after {time.time() - t1:.2f}s."
+        )
+
         #### multi-spectra
         timestamp = msg.timestamp
-        self.beam_former.add_to_multi_estimate(signals_f, frequencies, timestamp, orientation)
-        spectrum_multi = self.beam_former.get_multi_estimate(method=self.bf_method)
+        self.beam_former.add_to_multi_estimate(
+            signals_f, frequencies, timestamp, yaw_deg
+        )
+        spectrum_multi = self.beam_former.get_multi_estimate(
+            method=self.bf_method
+        )
 
         msg_multi = msg_spec
         msg_multi.spectrum_vect = list(spectrum_multi.astype(float).flatten())
         self.publisher_spectrum_multi.publish(msg_multi)
-        self.get_logger().info(f"Published multi spectrum after {time.time() - t1:.2f}s.")
-
+        self.get_logger().info(
+            f"Published multi spectrum after {time.time() - t1:.2f}s."
+        )
 
 
 def main(args=None):
