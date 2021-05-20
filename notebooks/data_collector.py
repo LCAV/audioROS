@@ -170,7 +170,6 @@ def find_indices(values_here, values):
     values_here = np.array(values_here)
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
-        # d_indices = np.where(values[:, None] == values_here[None, :])[1]
         d_indices = np.where(values_here[:, None] == values[None, :])[1]
         try:
             np.testing.assert_allclose(values[d_indices], values_here)
@@ -442,13 +441,13 @@ class DataCollector(object):
             return kwargs
 
     def get_mics(self):
-        return sorted_and_unique(self.df, "mic")
+        return sorted_and_unique(self.df, "mic").astype(np.int)
 
     def get_distances(self):
-        return sorted_and_unique(self.df, "distance")
+        return sorted_and_unique(self.df, "distance").astype(np.float)
 
     def get_frequencies(self):
-        return sorted_and_unique(self.df, "frequency")
+        return sorted_and_unique(self.df, "frequency").astype(np.float)
 
     def next_fslice_ready(self, signals_f, frequencies):
         """ find big frequency jump, meaning end of sweep. """
@@ -718,13 +717,9 @@ class DataCollector(object):
         return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):
-        mics = self.get_mics()  # sorted_and_unique(self.df, "mic").astype(np.int)
-        frequencies = (
-            self.get_frequencies()
-        )  # sorted_and_unique(self.df, "frequency").astype(np.float)
-        distances = (
-            self.get_distances()
-        )  # sorted_and_unique(self.df, "distance").astype(np.float)
+        mics = self.get_mics()
+        frequencies = self.get_frequencies()
+        distances = self.get_distances()
         n_mics = len(mics)
 
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
@@ -732,7 +727,6 @@ class DataCollector(object):
             df = self.filter_by_column(frequency, "frequency")
             distance_slice, distances_here, freqs, stds = get_distance_slice(df)
             mics_here = df.mic.unique()
-
             d_indices = find_indices(distances_here, distances)
             mic_indices = find_indices(mics_here, mics)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice

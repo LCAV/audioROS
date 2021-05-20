@@ -57,32 +57,37 @@ class DistanceEstimator(object):
         self.data = {}  # structure: mic: (path_differences, probabilities)
         self.context = Context.get_crazyflie_setup()
 
-        self.resolution_m = 1e-2  # resolution of distances, in meters.
-        self.resolution_deg = 2  # resolution of angles, in degrees
-
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
             print("Warning: make sure path_differences_m is in meters!")
         self.data[mic_idx] = (path_differences_m, probabilities)
 
     def get_distance_distribution(
-        self, chosen_mics=None, verbose=False, method=METHOD, azimuth_deg=None
+        self,
+        chosen_mics=None,
+        verbose=False,
+        method=METHOD,
+        azimuth_deg=None,
+        distances_m=None,
     ):
         if azimuth_deg is None:
             azimuths_deg = np.arange(-180, 180, step=2)
         else:
             azimuths_deg = [azimuth_deg]
 
-        # get points for interpolation.
-        distances_all = []
-        for mic_idx, (deltas_m, delta_probs) in self.data.items():
-            for azimuth_deg in azimuths_deg:
-                ds_m = self.context.get_total_distance(deltas_m, azimuth_deg, mic_idx)
-                distances_all += list(ds_m)
-        distances_interp = np.linspace(
-            min(distances_all), max(distances_all), len(distances_all)
-        )
-        distribution = {d: [] for d in distances_interp}
+        if distances_m is None:
+            # get points for interpolation.
+            distances_all = []
+            for mic_idx, (deltas_m, delta_probs) in self.data.items():
+                for azimuth_deg in azimuths_deg:
+                    ds_m = self.context.get_total_distance(
+                        deltas_m, azimuth_deg, mic_idx
+                    )
+                    distances_all += list(ds_m)
+            distances_m = np.linspace(
+                min(distances_all), max(distances_all), len(distances_all)
+            )
+        distribution = {d: [] for d in distances_m}
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
@@ -95,45 +100,59 @@ class DistanceEstimator(object):
                 interp1d_func = interp1d(
                     ds_m, delta_probs, kind="linear", fill_value="extrapolate"
                 )
-                delta_probs_interp = interp1d_func(distances_interp)
+                delta_probs_interp = interp1d_func(distances_m)
+
                 # make sure probabiliy is positive.
                 delta_probs_interp[delta_probs_interp < 0] = EPS
-
-                new_distribution = dict(zip(distances_interp, delta_probs_interp))
                 [
                     distribution[d].append(prob)
-                    for d, prob in zip(distances_interp, delta_probs_interp)
+                    for d, prob in zip(distances_m, delta_probs_interp)
                 ]
         return extract_pdf(distribution, method)
 
     def get_angle_distribution(
-        self, distance_estimate_m, chosen_mics=None, method=METHOD
+        self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
     ):
         assert (
             np.linalg.norm(self.context.source) == 0
         ), "function only works for source at origin!"
         # azimuths_deg = np.arange(-180, 180, step=self.resolution_deg)
-        distribution = {}  # {azimuth_deg: 0 for azimuth_deg in azimuths_deg}
+
+        if azimuths_deg is None:
+            azimuths_deg = np.arange(-180, 180)
+
+        distribution = {a: [] for a in azimuths_deg}
+
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
-            # deltas_m = [deltas_m[np.argmax(delta_probs)]]
-            # delta_probs = [1.0]
+
+            thetas_deg = []
+            probs = []
+            # each delta and probability corresponds to one or two angles.
             for delta_m, prob in zip(deltas_m, delta_probs):
-                thetas_deg = self.context.get_angles(
+                theta_deg = self.context.get_angles(
                     delta_m=delta_m,
                     source_distance_m=distance_estimate_m,
                     mic_idx=mic_idx,
                 )
-                if thetas_deg is None:
+                if theta_deg is None:
                     continue
+                thetas_deg += list(theta_deg)
+                probs.append(prob)
 
-                for t in thetas_deg:
-                    t_rounded = round(t / self.resolution_deg) * self.resolution_deg
-                    if t_rounded not in distribution.keys():
-                        distribution[t_rounded] = []
+            # interpolate (ds_m, delta_probs) at current distances
+            interp1d_func = interp1d(
+                thetas_deg, probs, kind="linear", fill_value="extrapolate"
+            )
+            probs_interp = interp1d_func(azimuths_deg)
 
-                    distribution[t_rounded].append(prob)
+            # make sure probabiliy is positive.
+            probs_interp[probs_interp < 0] = EPS
+            [
+                distribution[a].append(prob)
+                for a, prob in zip(azimuths_deg, probs_interp)
+            ]
         return extract_pdf(distribution, method)
 
     def get_distance_estimate(self, chosen_mics=None):
@@ -147,33 +166,24 @@ class DistanceEstimator(object):
 
 class AngleEstimator(object):
     def __init__(self):
-        self.data = {}  # structure: mic: (path_differences, probabilities)
-        self.context = Context.get_crazyflie_setup(yaw_offset=0)
+        self.data = {}  # structure: mic: (gammas, probabilities, frequency)
+        self.context = Context.get_crazyflie_setup()
 
-        # resolution in sin(gamma)
-        self.resolution = 1e-2
+    def add_distribution(self, gammas, probabilities, mic_idx, frequency):
+        self.data[mic_idx] = (gammas, probabilities, frequency)
 
-    def add_distribution(self, periods_m, probabilities, mic_idx, frequency):
-        self.data[mic_idx] = (periods_m, probabilities, frequency)
-
-    def get_angle_distribution(self, chosen_mics=None):
-        azimuths_deg = np.arange(1, 90)
-        distribution = {}
-        for mic_idx, (periods_m, period_probs, frequency) in self.data.items():
+    def get_angle_distribution(self, chosen_mics=None, method=METHOD):
+        gammas_deg = np.arange(1, 90)
+        distribution = {g: [] for g in gammas_deg}
+        for mic_idx, (gammas_deg_here, probs, frequency) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
-            for azimuth_deg in azimuths_deg:
-                periods_m_ortho = context.get_delta(
-                    azimuth_deg=azimuth_deg,
-                    distance=starting_distance + periods_m,
-                    mic_idx=mic_idx,
-                )
-                sines_gamma = periods_m_ortho / period_theoretical
-                for s, prob in zip(sines_gamma, period_probs):
-                    s_rounded = round(s / self.resolution) * self.resolution
-                    distribution[s_rounded] = distribution.get(s_rounded, 0) + prob
-
+            interp1d_func = interp1d(
+                gammas_deg_here, probs, kind="linear", fill_value="extrapolate"
+            )
+            probs_interp = interp1d_func(gammas_deg)
+            [distribution[g].append(prob) for g, prob in zip(gammas_deg, probs_interp)]
         # gammas = np.full(len(sines_gamma), 90)
         # gammas[sines_gamma <= 1] = np.arcsin(sines_gamma[sines_gamma <= 1]) * 180 / np.pi
-        return distribution
+        return extract_pdf(distribution, method)

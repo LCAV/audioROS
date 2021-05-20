@@ -11,11 +11,18 @@ from crazyflie_description_py.experiments import WALL_ANGLE_DEG
 from simulation import get_deltas_from_global
 
 EPS = 1e-30
+WALL_ANGLE_DEG = None
 
 
 def eps_normalize(proba, eps=EPS):
     proba_norm = (proba - np.min(proba) + eps) / (np.max(proba) - np.min(proba) + eps)
     return proba_norm
+
+
+def standardize_vec(d_slice):
+    d_slice_norm = d_slice - np.nanmean(d_slice)
+    d_slice_norm /= np.nanstd(d_slice_norm)
+    return d_slice_norm
 
 
 class Inference(object):
@@ -98,13 +105,12 @@ class Inference(object):
             proba = eps_normalize(proba)
         return dists, proba, diffs
 
-    def plot(self, i_mic, ax, label=None, normalize=False, **kwargs):
+    def plot(self, i_mic, ax, label=None, standardize=False, **kwargs):
         from copy import deepcopy
 
         slice_mic = deepcopy(self.slices[i_mic, self.valid_idx])
-        if normalize:
-            slice_mic -= np.mean(slice_mic)
-            slice_mic /= np.std(slice_mic)
+        if standardize:
+            slice_mic = standardize_vec(slice_mic)
 
         ax.plot(
             self.values[self.valid_idx], slice_mic, label=label, **kwargs,
@@ -297,8 +303,7 @@ def get_approach_angle_cost(
 ):
     from simulation import get_dist_slice_theory
 
-    d_slice_norm = d_slice - np.mean(d_slice)
-    d_slice_norm /= np.std(d_slice_norm)
+    d_slice_norm = standardize_vec(d_slice)
 
     probs = np.zeros((len(start_distances_grid_cm), len(gammas_grid_deg)))
     for i, start_distance_cm in enumerate(start_distances_grid_cm):
@@ -310,10 +315,9 @@ def get_approach_angle_cost(
             d_slice_theory = get_dist_slice_theory(
                 frequency, distances_cm, azimuth_deg
             )[:, mic_idx]
-            d_slice_theory -= np.nanmean(d_slice_theory)
-            std = np.nanstd(d_slice_theory)
-            if std > 0:
-                d_slice_theory /= std
+
+            d_slice_theory = standardize_vec(d_slice_theory)
+
             assert d_slice_theory.shape == d_slice_norm.shape
             loss = np.linalg.norm(d_slice_theory - d_slice_norm)
             probs[i, j] = np.exp(-loss)
