@@ -23,6 +23,7 @@ class Gateway(Node):
                          automatically_declare_parameters_from_overrides=True, allow_undeclared_parameters=True)
         self.start_time = time.time()
 
+
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
@@ -41,6 +42,10 @@ class Gateway(Node):
 
         self.desired_rate = 1000  # Hz
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
+        self.send_desired_rate_serial()
+        
+
+
 
     def publish_current_data(self):
         # only the first one is for my publisher
@@ -71,6 +76,7 @@ class Gateway(Node):
         signals_f, position = self.data_rearrange(data, position, bin_number)
         print("position after extracting fft is", position)
         fbins,*_ = self.extract_bins(data, position, bin_number)
+
         print("position after extracting the bins is", position)
 
 
@@ -82,6 +88,7 @@ class Gateway(Node):
 
         all_frequencies = np.fft.fftfreq(n=N_BUFFER, d=1 / FS)
         n_frequencies = len(fbins)
+
 
         # the only allowed duplicates are 0
         # if len(set(fbins[fbins>0])) < len(fbins[fbins>0]):
@@ -171,9 +178,10 @@ class Gateway(Node):
         timestamp = timestamp[0]
         size = size[0]
 
-        print("size is", size)
+
         # reads the data
         rcv_buffer = self.port.read(size * 4)
+        print("size is", size, "len buffer is",len(rcv_buffer) )
         data = []
         # if we receive the good amount of data, we convert them in float32
         # send the data in uint16 for the rest
@@ -183,9 +191,9 @@ class Gateway(Node):
             while (i < size):
                 data.append(struct.unpack_from('<f', rcv_buffer, i * 4)[0])
                 i = i + 1
-            #print(data)
             return data, size, timestamp
         else:
+            print("wrong buffer size")
             return None
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
@@ -200,6 +208,8 @@ class Gateway(Node):
             print("there is nothing in the data")
             return data
 
+        print("data before interleaving is", data)
+
 
         signals_f = np.zeros((mics, bin_number), dtype=np.complex128)
 
@@ -207,9 +217,10 @@ class Gateway(Node):
         for i in range(bin_number):
             for j in range(mics):
                 pos = (j * bin_number + i) * 2 + position
-                signals_f.real[j, i] = data[pos ]
-                signals_f.imag[j, i] = data[pos + 1 ]
+                signals_f.real[j, i] = data[pos ] + 1
+                signals_f.imag[j, i] = data[pos + 1 ] + 1
 
+        print("signals f is", signals_f)
 
         return signals_f, pos + 2
 
@@ -217,8 +228,9 @@ class Gateway(Node):
         print('value of bin pos and num bins in extract bins is ', bin_pos, num_bins)
         bins = np.zeros(num_bins, np.int)
         for i in range(0, num_bins):
-            bins[i] = int(data[i + bin_pos])
+            bins[i] = int(data[i + bin_pos]) + 3
         print("the bins are", bins)
+
         return bins, bin_pos + num_bins
 
     def extract_timestamp(self, data, position):
@@ -226,6 +238,12 @@ class Gateway(Node):
 
     def extract_bin_number(self, data, position):
         return int(data[position]), position + 1
+
+    def send_desired_rate_serial(self):
+        port = self.port
+        port.write(b'DRATE')
+        port.write(struct.pack('<h', self.desired_rate))
+        print('sent desired rate to robot', self.desired_rate)
 
 
 
