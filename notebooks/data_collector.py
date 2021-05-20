@@ -165,14 +165,17 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
 
 def find_indices(values_here, values):
     """ find the indices of an array (values_here) inside another array (values) """
+    assert values_here.ndim == 1
+    assert values.ndim == 1
     values_here = np.array(values_here)
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
-        d_indices = np.where((values[:, None] == values_here[None, :]))[0]
+        # d_indices = np.where(values[:, None] == values_here[None, :])[1]
+        d_indices = np.where(values_here[:, None] == values[None, :])[1]
         try:
             np.testing.assert_allclose(values[d_indices], values_here)
         except:
-            print("error in find_indices.")
+            print("error in find_indices:", values[d_indices], values_here, d_indices)
             return np.arange(len(values))
     else:
         d_indices = np.arange(len(values))
@@ -663,9 +666,9 @@ class DataCollector(object):
         freqs = freqs_here[f_indices]
 
         if normalize_method != "":
-            all_mics = self.get_mics()
+            mics_all = self.get_mics()
             mics_here = pt.index.values
-            m_indices = find_indices(all_mics, mics_here)
+            m_indices = find_indices(mics_here, mics_all)
 
             gains_f = normalize_method(freqs)
 
@@ -715,9 +718,13 @@ class DataCollector(object):
         return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):
-        mics = sorted_and_unique(self.df, "mic").astype(np.int)
-        frequencies = sorted_and_unique(self.df, "frequency").astype(np.float)
-        distances = sorted_and_unique(self.df, "distance").astype(np.float)
+        mics = self.get_mics()  # sorted_and_unique(self.df, "mic").astype(np.int)
+        frequencies = (
+            self.get_frequencies()
+        )  # sorted_and_unique(self.df, "frequency").astype(np.float)
+        distances = (
+            self.get_distances()
+        )  # sorted_and_unique(self.df, "distance").astype(np.float)
         n_mics = len(mics)
 
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
@@ -725,8 +732,9 @@ class DataCollector(object):
             df = self.filter_by_column(frequency, "frequency")
             distance_slice, distances_here, freqs, stds = get_distance_slice(df)
             mics_here = df.mic.unique()
+
             d_indices = find_indices(distances_here, distances)
-            mic_indices = find_indices(mics, mics_here)
+            mic_indices = find_indices(mics_here, mics)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
         return df_matrix, distances, frequencies
 
