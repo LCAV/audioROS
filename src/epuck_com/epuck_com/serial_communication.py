@@ -15,6 +15,10 @@ from audio_interfaces_py.messages import create_signals_freq_message
 from audio_interfaces.msg._signals_freq import SignalsFreq
 
 
+def live_status_function(show_status, bins, data):
+    if(show_status):
+        print("the data is", data)
+        print("the bins are", bins)
 
 
 class Gateway(Node):
@@ -63,7 +67,7 @@ class Gateway(Node):
         timestamp = 4 #putting 4 to see if I get this value back
         data, size, timestamp = self.read_float_serial()
 
-        print("timestamp is", timestamp)
+
         if data is None:
             self.get_logger().warn("Empty audio. Not publishing")
             return
@@ -71,13 +75,12 @@ class Gateway(Node):
         #extracting all our values from the epuck serial package
         position = 0
         bin_number, position = self.extract_bin_number(data, position)
-        print("position after bin number is", position)
+
         # undo the interleaving and create separate matrixes for each microphone
         signals_f, position = self.data_rearrange(data, position, bin_number)
-        print("position after extracting fft is", position)
         fbins,*_ = self.extract_bins(data, position, bin_number)
 
-        print("position after extracting the bins is", position)
+
 
 
         # read frequencies
@@ -90,11 +93,6 @@ class Gateway(Node):
         n_frequencies = len(fbins)
 
 
-        # the only allowed duplicates are 0
-        # if len(set(fbins[fbins>0])) < len(fbins[fbins>0]):
-        # self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
-        # return
-
         if not np.any(fbins > 0):
             self.get_logger().warn(f"Empty fbins!")
             return
@@ -103,19 +101,15 @@ class Gateway(Node):
             return
 
         frequencies = all_frequencies[fbins]
-
-
-
         abs_signals_f = np.abs(signals_f)
-        if np.any(abs_signals_f > N_BUFFER):
-            self.get_logger().warn("Possibly in valid audio:")
-            self.get_logger().warn(f"mic 0 {abs_signals_f[0, :5]}")
-            self.get_logger().warn(f"mic 1 {abs_signals_f[1, :5]}")
-
         mic_positions_arr = np.array(MIC_POSITIONS)
         msg = create_signals_freq_message(signals_f.T, frequencies, mic_positions_arr,
                                           int(time.time()),
                                           int(timestamp), FS)
+
+        #switch the status to true to receive information on relevant data
+        live_status_function(False, fbins, signals_f)
+
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(
@@ -181,12 +175,10 @@ class Gateway(Node):
 
         # reads the data
         rcv_buffer = self.port.read(size * 4)
-        print("size is", size, "len buffer is",len(rcv_buffer) )
         data = []
         # if we receive the good amount of data, we convert them in float32
         # send the data in uint16 for the rest
         if (len(rcv_buffer) == 4 * size):
-            print("received the right amount of data")
             i = 0
             while (i < size):
                 data.append(struct.unpack_from('<f', rcv_buffer, i * 4)[0])
@@ -198,9 +190,7 @@ class Gateway(Node):
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
     def data_rearrange(self, data, position, bin_number):
-        print("rearanging interleaving")
-        print("the true data size is ", len(data))
-        mics = 4
+        mics = N_MICS
         # check that there is the right number of bins :
 
 
@@ -208,28 +198,21 @@ class Gateway(Node):
             print("there is nothing in the data")
             return data
 
-        print("data before interleaving is", data)
-
-
         signals_f = np.zeros((mics, bin_number), dtype=np.complex128)
 
         pos = 0
         for i in range(bin_number):
             for j in range(mics):
                 pos = (j * bin_number + i) * 2 + position
-                signals_f.real[j, i] = data[pos ] + 1
-                signals_f.imag[j, i] = data[pos + 1 ] + 1
-
-        print("signals f is", signals_f)
+                signals_f.real[j, i] = data[pos ]
+                signals_f.imag[j, i] = data[pos + 1 ]
 
         return signals_f, pos + 2
 
     def extract_bins(self, data, bin_pos, num_bins):
-        print('value of bin pos and num bins in extract bins is ', bin_pos, num_bins)
         bins = np.zeros(num_bins, np.int)
         for i in range(0, num_bins):
-            bins[i] = int(data[i + bin_pos]) + 3
-        print("the bins are", bins)
+            bins[i] = int(data[i + bin_pos])
 
         return bins, bin_pos + num_bins
 
@@ -244,7 +227,6 @@ class Gateway(Node):
         port.write(b'DRATE')
         port.write(struct.pack('<h', self.desired_rate))
         print('sent desired rate to robot', self.desired_rate)
-
 
 
 def main(args=None):
