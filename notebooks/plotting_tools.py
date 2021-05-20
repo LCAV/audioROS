@@ -27,7 +27,7 @@ def save_fig(fig, fname, extension="pdf"):
     extension_current = fname.split(".")[-1]
     fname = fname.replace("." + extension_current, "." + extension)
     make_dirs(fname)
-    fig.savefig(fname, bbox_inches="tight")
+    fig.savefig(fname, bbox_inches="tight", dpi=200)  # default is 100
     print("saved as", fname)
 
 
@@ -186,7 +186,12 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
         xvals = sorted(np.abs(err_list))
         yvals = np.linspace(0, 1, len(xvals))
         axs[0, 1].plot(
-            xvals, yvals, label=method, marker=markers[i], ls=":", markersize=markersize
+            xvals,
+            yvals,
+            label=method,
+            marker=markers[i],
+            ls=":",
+            markersize=markersize,
         )
         i += 1
 
@@ -205,29 +210,46 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     return fig, axs
 
 
-def pcolorfast_custom(ax, xs, ys, values, verbose=False, **kwargs):
+def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs):
     """ pcolorfast with gray for nan and centered xticks and yticks. 
+
+    :param n_xticks: number of ticks along x. 
     """
+
     current_cmap = matplotlib.cm.get_cmap()
     current_cmap.set_bad(color="gray")
 
     assert values.shape == (len(ys), len(xs))
 
-    dx = xs[1] - xs[0]  # assumes uniform samples
-    dy = ys[1] - ys[0]
+    dx = xs[-1] - xs[-2]  # assumes uniform samples
+    dy = ys[-1] - ys[-2]
     try:
         im = ax.pcolorfast(xs, ys, values, **kwargs)
-        yticks = ys + dy / 2
-        xticks = xs + dx / 2
-        ax.set_xticks(xticks)
-        ax.set_xticklabels(xs)
-        ax.set_yticks(yticks)
-        ax.set_yticklabels(ys)
-        extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
-        im.set_extent(extent)
-    except:
-        print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
-        im = ax.pcolorfast(list(xs)+[xs[-1]+dx], list(ys)+[ys[-1]+dy], values, **kwargs)
+    except ValueError:
+        # print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
+        im = ax.pcolorfast(
+            list(xs) + [xs[-1] + dx], list(ys) + [ys[-1] + dy], values, **kwargs
+        )
+    yticks = ys + dy / 2
+    xticks = xs + dx / 2
+    ax.set_xticks(xticks)
+    ax.set_yticks(yticks)
+    ax.set_xticklabels(xs)
+    ax.set_yticklabels(ys)
+
+    extent = [xs[0], xs[-1] + dx, ys[0], ys[-1] + dy]
+    im.set_extent(extent)
+
+    xticks = ax.get_xticks()
+    yticks = ax.get_yticks()
+    if n_xticks is None:
+        n_xticks = len(xticks)
+    width, height = ax.get_figure().get_size_inches()
+    n_yticks = int(n_xticks * height / width)
+    ax.set_xticks(xticks[:: len(xticks) // n_xticks])
+    ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
+    ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+    ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
     return im
 
 
@@ -271,9 +293,19 @@ def plot_error_distance(
     axs[0, 0].set_ylabel(name.replace("_", " "))
     return fig, axs
 
+
 def plot_error_gamma(
-    sub_df, column, name, log=False, aggfunc=np.nanmedian, vmin=None, vmax=None, logy=False,
-    ax=None, fig=None, colorbar=True
+    sub_df,
+    column,
+    name,
+    log=False,
+    aggfunc=np.nanmedian,
+    vmin=None,
+    vmax=None,
+    logy=False,
+    ax=None,
+    fig=None,
+    colorbar=True,
 ):
     table = pd.pivot_table(
         sub_df,
@@ -293,8 +325,8 @@ def plot_error_gamma(
         fig.set_size_inches(5, 5)
 
     ys = table.index.get_level_values(column).values
-    #print(column, ys)
-    if logy: 
+    # print(column, ys)
+    if logy:
         ys = np.log10(ys)
     gammas = table.columns.values
     if log:
@@ -311,6 +343,7 @@ def plot_error_gamma(
     ax.set_xlabel("approach angle $\\gamma$ [deg]")
     if colorbar:
         from plotting_tools import add_colorbar
+
         add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
     ax.set_ylabel(name.replace("_", " "))
     return fig, ax

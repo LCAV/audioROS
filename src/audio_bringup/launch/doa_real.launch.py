@@ -16,8 +16,7 @@ BAG_FILE = ""
 
 node_config = {
     "gateway": {"params": [{"filter_snr_enable": 1}], "pkg": "crazyflie_crtp"},
-    # TODO(FD) make sure parameters are passed correctly to spectrum_estimator
-    "spectrum_estimator": {"params": {"bf_method": "das"}, "pkg": "audio_stack"},
+    "spectrum_estimator": {"params": [{"bf_method": "das"}], "pkg": "audio_stack"},
     "doa_estimator": {"pkg": "audio_stack"},
     "csv_writer": {"pkg": "topic_writer"},
     "audio": {"pkg": "topic_plotter"},

@@ -2,14 +2,14 @@ import itertools
 
 import numpy as np
 import pandas as pd
-
 from audio_bringup.helpers import get_filename
 from crazyflie_description_py.parameters import N_BUFFER
-from evaluate_data import read_df, read_df_from_wav
-from evaluate_data import get_positions_absolute
 from dynamic_analysis import add_pose_to_df
+from evaluate_data import get_positions_absolute
+from evaluate_data import read_df, read_df_from_wav
 
 FILTERS = ["mic_type", "snr", "motors"]
+
 
 def load_params(exp_name):
     """ load parameters module at the experiment of interest """
@@ -79,7 +79,13 @@ def parse_experiments(
         wav = True
         method_window = ""
     elif exp_name == "2021_02_09_wall_tukey":
-        appendix_list = ["", "_afterbug", "_afterbug2", "_with_3cm", "_second shot"]
+        appendix_list = [
+            "",
+            "_afterbug",
+            "_afterbug2",
+            "_with_3cm",
+            "_second shot",
+        ]
         snr_list = [3]
         props_list = [0]
         wav = True
@@ -115,6 +121,32 @@ def parse_experiments(
             "_30cm-newbuzzer",
             "_50cm-newbuzzer",
         ]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_04_30_hover":
+        appendix_list = [f"_test1_{i}" for i in range(6, 9)]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_04_30_stepper":
+        appendix_list = [""]
+        snr_list = [3]
+        props_list = [0]
+        wav = True
+        method_window = "flattop"
+    elif exp_name == "2021_05_04_linear":
+        appendix_list = [f"_{i}" for i in range(1, 6)] + [
+            f"_fast{i}" for i in range(1, 6)
+        ]
+        snr_list = [3]
+        props_list = [0]
+        wav = False
+        method_window = "flattop"
+    elif exp_name == "2021_05_04_flying":
+        appendix_list = [f"_{i}" for i in range(22, 25)]
         snr_list = [3]
         props_list = [0]
         wav = False
@@ -282,10 +314,14 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
+        "2021_05_04_linear",
+        "2021_05_04_flying",
+        # "2021_04_30_hover",
+        # "2021_04_30_stepper",
         # "2021_03_01_flying",
         # "2021_02_25_wall",
         # "2021_02_23_wall",
-        "2021_02_19_windows",
+        # "2021_02_19_windows",
         #'2021_02_09_wall_tukey',
         #'2021_02_09_wall',
         #'2020_12_2_chirp',

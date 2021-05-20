@@ -68,7 +68,6 @@ class LivePlotter(object):
         # TODO(FD) this is not called when we resize
         # the figure, need to figure out why.
         self.fig.canvas.draw()
-        print("resize")
 
     def clear(self):
         for i in range(len(self.ax.lines)):
