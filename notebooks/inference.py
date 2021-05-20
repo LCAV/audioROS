@@ -129,43 +129,13 @@ def get_differences(frequencies, n_max=1000):
     return deltas_cm
 
 
-def convert_differences_to_distances(
-    differences_cm, mic_idx, distance_range, azimuth_deg
-):
+def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
     from geometry import get_orthogonal_distance_from_global
 
     distances = get_orthogonal_distance_from_global(
         azimuth_deg=azimuth_deg, deltas_cm=differences_cm, mic_idx=mic_idx
     )
-    mask = None
-    if distance_range is not None:
-        mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
-        distances = distances[mask]
     return distances, mask
-
-
-def get_probability_fft(
-    f_slice,
-    frequencies,
-    mic_idx=1,
-    distance_range=None,
-    n_max=1000,
-    azimuth_deg=WALL_ANGLE_DEG,
-):
-    print("Deprecation warning: do not use this function anymore")
-    assert f_slice.ndim == 1
-    abs_fft = get_abs_fft(f_slice, n_max)
-    differences = get_differences(frequencies, n_max=n_max)
-
-    distances, mask = convert_differences_to_distances(
-        differences, mic_idx, distance_range, azimuth_deg=azimuth_deg
-    )
-    if mask is not None:
-        abs_fft = abs_fft[mask]
-        differences = differences[mask]
-
-    prob = abs_fft / np.sum(abs_fft)
-    return distances, prob, differences
 
 
 def get_posterior(abs_fft, sigma=None, data=None):
@@ -210,14 +180,24 @@ def get_probability_bayes(
 ):
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
+
+    # get path interference differences corresponding to used frequencies
     differences = get_differences(frequencies, n_max=n_max)
+
+    # convert absolute fft to posterior (no correction yet!)
     posterior = get_posterior(abs_fft, sigma, data=f_slice)
-    distances, mask = convert_differences_to_distances(
-        differences, mic_idx, distance_range, azimuth_deg=azimuth_deg
+
+    # convert differences to distances, for intermediate use.
+    distances = convert_differences_to_distances(
+        differences, mic_idx, azimuth_deg=azimuth_deg
     )
-    if mask is not None:
+
+    if distance_range is not None:
+        mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
+        distances = distances[mask]
         posterior = posterior[mask]
         differences = differences[mask]
+
     posterior /= np.sum(posterior)
     return distances, posterior, differences
 
@@ -276,7 +256,9 @@ def get_periods_fft(
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
     else:
-        # print("Deprecation warning: do not use this function anymore")
+        print(
+            "Deprecation warning: do not use this function without bayes option anymore"
+        )
         prob = abs_fft / np.sum(abs_fft)
     return periods_m, prob
 

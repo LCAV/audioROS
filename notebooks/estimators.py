@@ -145,7 +145,6 @@ class DistanceEstimator(object):
         return get_estimate(ts, probs)
 
 
-# TODO(FD) below is not tested yet
 class AngleEstimator(object):
     def __init__(self):
         self.data = {}  # structure: mic: (path_differences, probabilities)
@@ -158,15 +157,11 @@ class AngleEstimator(object):
         self.data[mic_idx] = (periods_m, probabilities, frequency)
 
     def get_angle_distribution(self, chosen_mics=None):
-        from constants import SPEED_OF_SOUND
-
-        azimuths_deg = np.arange(-180, 180)
+        azimuths_deg = np.arange(1, 90)
         distribution = {}
         for mic_idx, (periods_m, period_probs, frequency) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
-
-            period_theoretical = SPEED_OF_SOUND / frequency  # m in terms of delta
 
             for azimuth_deg in azimuths_deg:
                 periods_m_ortho = context.get_delta(
