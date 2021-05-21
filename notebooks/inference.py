@@ -30,7 +30,7 @@ class Inference(object):
         self.slices = None  # mics x n_data
         self.values = None  # n_data
         self.stds = None  # n_data
-        self.distance_range = None
+        self.distance_range = None  # [min, max]
         self.is_calibrated = False
 
     def add_data(self, slices, values, stds=None, distances=None):
