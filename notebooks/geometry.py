@@ -4,6 +4,7 @@
 """
 geometry.py: Functions to convert between path differences and angles/distances for different mic-speaker geometries.
 """
+import warnings
 
 import numpy as np
 
@@ -15,8 +16,11 @@ DIM = 2
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
     context = Context.get_crazyflie_setup()
-    delta = context.get_delta(
-        azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx
+    delta = (
+        context.get_delta(
+            azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx
+        )
+        * 1e-2
     )
     d0 = context.get_direct_path(mic_idx)
     return delta, d0
@@ -24,8 +28,7 @@ def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
 
 def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None):
     context = Context.get_crazyflie_setup()
-    distances_m = context.get_total_distance(deltas_cm * 1e-2, azimuth_deg, mic_idx)
-    distances_cm = distances_m * 1e2
+    distances_cm = context.get_distance(deltas_cm, azimuth_deg, mic_idx)
     return distances_cm
 
 
@@ -41,33 +44,33 @@ def convert_angle(theta):
 
 def get_normal(distance, azimuth_deg, elevation_deg=0):
     """
-    both distance and azimuth_deg can be vectors, in which case they hav eto be of equal length.
+    both distance and azimuth_deg can be vectors, in which case they have to be of equal length.
     """
     assert np.ndim(elevation_deg) == 0
-    yaw = azimuth_deg / 180 * np.pi
+    azimuth = azimuth_deg / 180 * np.pi
     elevation = elevation_deg / 180 * np.pi
 
-    if (np.ndim(yaw) > 0) and (np.ndim(distance) > 0):
-        assert len(yaw) == len(distance), (yaw, distance)
+    if (np.ndim(azimuth) > 0) and (np.ndim(distance) > 0):
+        assert len(azimuth) == len(distance), (azimuth, distance)
 
-    if np.ndim(yaw) > 0:
+    if np.ndim(azimuth) > 0:
         dir_vector = np.c_[
-            np.cos(yaw) * np.cos(elevation),
-            np.sin(yaw) * np.cos(elevation),
-            np.full(yaw.shape, np.sin(elevation)),
+            np.cos(azimuth) * np.cos(elevation),
+            np.sin(azimuth) * np.cos(elevation),
+            np.full(azimuth.shape, np.sin(elevation)),
         ]
     else:
         dir_vector = np.array(
             [
-                np.cos(yaw) * np.cos(elevation),
-                np.sin(yaw) * np.cos(elevation),
+                np.cos(azimuth) * np.cos(elevation),
+                np.sin(azimuth) * np.cos(elevation),
                 np.sin(elevation),
             ]
         )
 
-    if np.ndim(distance) > 0 and np.ndim(yaw) == 0:
+    if np.ndim(distance) > 0 and np.ndim(azimuth) == 0:
         n = distance[:, None] * dir_vector[None, :]
-    elif np.ndim(distance) > 0 and np.ndim(yaw) > 0:
+    elif np.ndim(distance) > 0 and np.ndim(azimuth) > 0:
         n = distance[:, None] * dir_vector
     else:
         n = distance * dir_vector
@@ -98,56 +101,18 @@ def get_delta_from_normal(mic, source, normal):
     return delta
 
 
-# only two dimensions
-def get_source_distance(mic, source, delta, azimuth_deg):
-    vec = source - mic
-    r0 = np.linalg.norm(vec)
-    theta0 = np.arctan2(vec[1], vec[0])
-    r1 = delta + r0
-
-    theta = azimuth_deg / 180 * np.pi
-
-    cos = np.cos(theta - theta0)
-    distance_m = 0.5 * (-r0 * cos + np.sqrt(r1 ** 2 - r0 ** 2 * (1 - cos ** 2)))
-    return distance_m
-
-
-def get_total_distance(source, source_distance_m, azimuth_deg):
-    """ 
-    source_distance_m is the distance measured from the source to the wall.
-    To get the full distance we need to add the projection
-    of the source to the wall normal. 
-    """
-    normal = get_normal(source_distance_m, azimuth_deg)
-    normal = normal[..., :2]
-    if np.linalg.norm(source) == 0:
-        return source_distance_m
-    if np.ndim(source_distance_m) > 0:
-        total_distance_m = source_distance_m
-        valid = source_distance_m > 0
-        total_distance_m[valid] += (
-            np.inner(source, normal[valid]) / source_distance_m[valid]
-        )
-    else:
-        total_distance_m = (
-            source_distance_m + np.inner(source, normal) / source_distance_m
-        )
-    return total_distance_m
-
-
-def get_angles(mic, source, delta, source_distance):
+def get_angles(mic, source, delta_m, distance_m):
     vec = source - mic
     theta0 = np.arctan2(vec[1], vec[0])
     r0 = np.linalg.norm(vec)
-    r1 = delta + r0
+    r1 = delta_m + r0
     # import pudb; pudb.set_trace()
 
-    cos = (r1 ** 2 - r0 ** 2 - 4 * source_distance ** 2) / (4 * source_distance * r0)
+    cos = (r1 ** 2 - r0 ** 2 - 4 * distance_m ** 2) / (4 * distance_m * r0)
 
     EPS = 1e-10
     if np.abs(cos) > 1 + EPS:
-        # print(f"Warning: cos way to big ({cos}) for distance {source_distance}")
-        # print(r0, r1, source_distance)
+        # warnings.warn(f"cos too big ({cos}) for delta, distance: {delta_m, distance_m}")
         return None
     elif np.abs(cos) > 1:  # round cos to 1 or -1.
         cos = np.sign(cos)
@@ -201,47 +166,92 @@ class Context(object):
         l = 2 * (1 - self.source.dot(normal) / (d ** 2))
         return self.source + l * normal
 
-    def get_delta(self, azimuth_deg, distances_cm, mic_idx=0):
-        distances_here = np.array(distances_cm) * 1e-2
-        mic = self.mics[mic_idx]
-        normal = get_normal(distances_here, azimuth_deg)
-        if np.ndim(normal) > 1:
-            normal = normal[:, :2]
-        else:
-            normal = normal[:2]
-        return get_delta_from_normal(mic, self.source, normal)
+    def get_normal(self, distances_cm, azimuth_deg):
+        distances_m = np.array(distances_cm) * 1e-2
+        normal = get_normal(distances_m, azimuth_deg)
+        normal = normal[..., : self.dim]
+        return normal
 
-    def get_source_distance(self, delta_m, azimuth_deg, mic_idx):
-        if self.dim == 3:
-            raise NotImplementedError(
-                "distance retrieval only implemented for 2D setups"
+    def get_delta_from_normal(self, azimuth_deg, distances_cm, mic_idx=0):
+        normal = self.get_normal(distances_cm, azimuth_deg)
+        return get_delta_from_normal(self.mics[mic_idx], self.source, normal)
+
+    def get_delta(self, azimuth_deg, distances_cm, mic_idx=0):
+        """ 
+        :return: path difference in cm.
+        """
+        r0_cm = self.get_direct_path(mic_idx) * 1e2
+        theta0 = self.get_theta0(mic_idx)  # in rad
+        theta = azimuth_deg / 180 * np.pi
+        cos = np.cos(theta - theta0)
+        return (
+            np.sqrt(r0_cm ** 2 + 4 * distances_cm ** 2 - 4 * distances_cm * r0_cm * cos)
+            - r0_cm
+        )
+
+    def get_distance(self, delta_cm, azimuth_deg, mic_idx=0):
+        """ 
+        :return: distance to wall in cm.
+        """
+        r0_cm = self.get_direct_path(mic_idx) * 1e2
+        theta0 = self.get_theta0(mic_idx)  # in rad
+        theta = azimuth_deg / 180 * np.pi
+        cos = np.cos(theta - theta0)
+        return 0.5 * (
+            r0_cm * cos
+            + np.sqrt(delta_cm * (delta_cm + 2 * r0_cm) + r0_cm ** 2 * cos ** 2)
+        )
+
+    def get_delta_gradient(self, azimuth_deg, distances_cm, mic_idx):
+        r0_cm = self.get_direct_path(mic_idx) * 1e2
+        theta0 = self.get_theta0(mic_idx)  # in rad
+        theta = azimuth_deg / 180 * np.pi
+        return np.abs(
+            (4 * distances_cm - 2 * r0_cm * np.cos(theta - theta0))
+            / np.sqrt(
+                r0_cm ** 2
+                + 4 * distances_cm ** 2
+                - 4 * distances_cm * r0_cm * np.cos(theta - theta0)
             )
-        mic = self.mics[mic_idx, :]
-        return get_source_distance(mic, self.source, delta_m, azimuth_deg)
+        )
+
+    def get_delta_gradient_angle(self, distance_estimate_m, azimuths_deg, mic_idx):
+        # TODO(FD) fill below in
+        raise NotImplementedError("need to fill this in")
+        r0_cm = self.get_direct_path(mic_idx) * 1e2
+        theta0 = self.get_theta0(mic_idx)  # in rad
+        azimuths = azimuths_deg / 180 * np.pi
+        return None  # np.abs((4*distances_cm - 2*r0_cm*np.cos(theta-theta0)) / np.sqrt(r0_cm**2 + 4*distances_cm**2 - 4*distances_cm*r0_cm*np.cos(theta-theta0)))
 
     def get_total_distance(self, delta_m, azimuth_deg, mic_idx):
+        """ 
+        :return: distance of centre to wall in m.
+        """
+        warnings.warn(
+            "Do not use this function anymore, replace by get_distance (delta_cm input!)"
+        )
         if self.dim == 3:
             raise NotImplementedError(
                 "distance retrieval only implemented for 2D setups"
             )
-        source_distance_m = self.get_source_distance(delta_m, azimuth_deg, mic_idx)
-        total_distance_m = get_total_distance(
-            self.source, source_distance_m, azimuth_deg
-        )
-        return total_distance_m
+        return self.get_distance(delta_m * 1e2, azimuth_deg, mic_idx) * 1e-2
 
-    def get_angles(self, delta_m, source_distance_m, mic_idx):
+    def get_angles(self, delta_m, distance_m, mic_idx):
         if self.dim == 3:
             raise NotImplementedError("angle retrieval only implemented for 2D setups")
-        mic = self.mics[mic_idx, :]
-        return get_angles(mic, self.source, delta_m, source_distance_m)
+        return get_angles(self.mics[mic_idx], self.source, delta_m, distance_m)
 
     def get_direct_path(self, mic_idx):
+        """
+        :return: direct path in m
+        """
         return np.linalg.norm(self.source - self.mics[mic_idx])
 
     def get_theta0(self, mic_idx):
-        mic = self.mics[mic_idx, :]
-        vec = self.source - mic
+        """
+        :return: direct angle in rad
+        """
+        vec = self.mics[mic_idx, :] - self.source
         return np.arctan2(vec[1], vec[0])
 
     def plot(self, normal=None, azimuth_deg=None, distance=None, ax=None):
@@ -256,7 +266,7 @@ class Context(object):
 
         if azimuth_deg is not None and distance is not None:
             if normal is not None:
-                print("Warning: overwriting normal!")
+                warnings.warn("overwriting normal!")
             normal = get_normal(distance, azimuth_deg)[:2]
 
         if normal is not None:

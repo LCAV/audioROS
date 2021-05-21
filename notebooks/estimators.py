@@ -5,6 +5,8 @@
 distance_estimator.py: 
 """
 
+import warnings
+
 import numpy as np
 from scipy.interpolate import interp1d
 
@@ -71,7 +73,7 @@ class DistanceEstimator(object):
         distances_m=None,
     ):
         if azimuth_deg is None:
-            azimuths_deg = np.arange(-180, 180, step=2)
+            azimuths_deg = np.arange(-180, 180, step=10)
         else:
             azimuths_deg = [azimuth_deg]
 
@@ -80,8 +82,9 @@ class DistanceEstimator(object):
             distances_all = []
             for mic_idx, (deltas_m, delta_probs) in self.data.items():
                 for azimuth_deg in azimuths_deg:
-                    ds_m = self.context.get_total_distance(
-                        deltas_m, azimuth_deg, mic_idx
+                    ds_m = (
+                        self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
+                        * 1e-2
                     )
                     distances_all += list(ds_m)
             distances_m = np.linspace(
@@ -94,13 +97,22 @@ class DistanceEstimator(object):
                 continue
 
             for azimuth_deg in azimuths_deg:
-                ds_m = self.context.get_total_distance(deltas_m, azimuth_deg, mic_idx)
+                ds_m = (
+                    self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
+                    * 1e-2
+                )
 
-                # interpolate (ds_m, delta_probs) at current distances
+                # interpolate (ds_m, delta_probs) at fixed distances.
                 interp1d_func = interp1d(
                     ds_m, delta_probs, kind="linear", fill_value="extrapolate"
                 )
                 delta_probs_interp = interp1d_func(distances_m)
+
+                # gradient due to change of variables.
+                correction_factor = self.context.get_delta_gradient(
+                    azimuth_deg, distances_m * 1e2, mic_idx
+                )
+                delta_probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
                 delta_probs_interp[delta_probs_interp < 0] = EPS
@@ -124,28 +136,41 @@ class DistanceEstimator(object):
         distribution = {a: [] for a in azimuths_deg}
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
+            r0 = self.context.get_direct_path(mic_idx)
+
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
+
+            # for a given distance, only certain deltas are possible.
+            mask = (deltas_m <= 2 * distance_estimate_m) & (
+                deltas_m >= 2 * distance_estimate_m - 2 * r0
+            )
 
             thetas_deg = []
             probs = []
             # each delta and probability corresponds to one or two angles.
-            for delta_m, prob in zip(deltas_m, delta_probs):
+            for delta_m, prob in zip(deltas_m[mask], delta_probs[mask]):
                 theta_deg = self.context.get_angles(
-                    delta_m=delta_m,
-                    source_distance_m=distance_estimate_m,
-                    mic_idx=mic_idx,
+                    delta_m=delta_m, distance_m=distance_estimate_m, mic_idx=mic_idx,
                 )
                 if theta_deg is None:
+                    warnings.warn("no theta")
                     continue
                 thetas_deg += list(theta_deg)
-                probs.append(prob)
+                probs += [prob] * len(theta_deg)
 
+            if not len(thetas_deg):
+                warnings.warn("no valid thetas found")
+                continue
             # interpolate (ds_m, delta_probs) at current distances
             interp1d_func = interp1d(
                 thetas_deg, probs, kind="linear", fill_value="extrapolate"
             )
             probs_interp = interp1d_func(azimuths_deg)
+
+            # TODO(FD) add the gradient here
+            # correction_factor = self.context.get_delta_gradient_angle(distance_estimate_m, azimuths_deg, mic_idx)
+            # probs_interp *= correction_factor
 
             # make sure probabiliy is positive.
             probs_interp[probs_interp < 0] = EPS
@@ -184,6 +209,4 @@ class AngleEstimator(object):
             )
             probs_interp = interp1d_func(gammas_deg)
             [distribution[g].append(prob) for g, prob in zip(gammas_deg, probs_interp)]
-        # gammas = np.full(len(sines_gamma), 90)
-        # gammas[sines_gamma <= 1] = np.arcsin(sines_gamma[sines_gamma <= 1]) * 180 / np.pi
         return extract_pdf(distribution, method)

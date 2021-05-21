@@ -141,7 +141,7 @@ def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
     distances = get_orthogonal_distance_from_global(
         azimuth_deg=azimuth_deg, deltas_cm=differences_cm, mic_idx=mic_idx
     )
-    return distances, mask
+    return distances
 
 
 def get_posterior(abs_fft, sigma=None, data=None):
@@ -197,7 +197,6 @@ def get_probability_bayes(
     distances = convert_differences_to_distances(
         differences, mic_idx, azimuth_deg=azimuth_deg
     )
-
     if distance_range is not None:
         mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
         distances = distances[mask]

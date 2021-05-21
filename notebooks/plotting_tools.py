@@ -13,6 +13,13 @@ labels = {
     np.nanmedian: "median error",
     np.nanmean: "mean error",
 }
+titles = {
+    "cost": "optimization-based method",
+    "bayes": "FFT-based method",
+    "bayes-combination": "Bayesian method",
+    "bayes-combination-angle": "Bayesian method, angle",
+}
+linestyles = {"cost": ":", "bayes": "-"}
 
 
 def make_dirs(fname):
