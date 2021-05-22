@@ -63,7 +63,6 @@ class Inference(object):
         self.valid_idx &= valid_idx
 
     def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
-
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
