@@ -80,7 +80,7 @@ class Gateway(Node):
         signals_f, position = self.data_rearrange(data, position, bin_number)
         fbins,*_ = self.extract_bins(data, position, bin_number)
 
-
+        
 
 
         # read frequencies
