@@ -203,6 +203,7 @@ class Context(object):
         )
 
     def get_delta_gradient(self, azimuth_deg, distances_cm, mic_idx):
+        """ gradient of delta differentiated by angle """
         r0_cm = self.get_direct_path(mic_idx) * 1e2
         theta0 = self.get_theta0(mic_idx)  # in rad
         theta = azimuth_deg / 180 * np.pi
@@ -215,13 +216,23 @@ class Context(object):
             )
         )
 
-    def get_delta_gradient_angle(self, distance_estimate_m, azimuths_deg, mic_idx):
-        # TODO(FD) fill below in
-        raise NotImplementedError("need to fill this in")
-        r0_cm = self.get_direct_path(mic_idx) * 1e2
+    # TODO(FD) test below function
+    def get_delta_gradient_angle(self, distance_m, azimuths_deg, mic_idx):
+        """ gradient of delta differentiated by angle """
+        r0_m = self.get_direct_path(mic_idx)
         theta0 = self.get_theta0(mic_idx)  # in rad
         azimuths = azimuths_deg / 180 * np.pi
-        return None  # np.abs((4*distances_cm - 2*r0_cm*np.cos(theta-theta0)) / np.sqrt(r0_cm**2 + 4*distances_cm**2 - 4*distances_cm*r0_cm*np.cos(theta-theta0)))
+        return np.abs(
+            2
+            * distance_m
+            * r0_m
+            * np.sin(azimuths - theta0)
+            / np.sqrt(
+                r0_m ** 2
+                + 4 * distance_m ** 2
+                - 4 * distance_m * r0_m * np.cos(azimuths - theta0)
+            )
+        )
 
     def get_total_distance(self, delta_m, azimuth_deg, mic_idx):
         """ 

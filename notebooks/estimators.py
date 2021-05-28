@@ -125,10 +125,14 @@ class DistanceEstimator(object):
     def get_angle_distribution(
         self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
     ):
+        if distance_estimate_m is None:
+            distances_m = self.context.get_possible_distances()
+        else:
+            distances_m = [distance_estimate_m]
+
         assert (
             np.linalg.norm(self.context.source) == 0
         ), "function only works for source at origin!"
-        # azimuths_deg = np.arange(-180, 180, step=self.resolution_deg)
 
         if azimuths_deg is None:
             azimuths_deg = np.arange(-180, 180)
@@ -141,43 +145,48 @@ class DistanceEstimator(object):
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
-            # for a given distance, only certain deltas are possible.
-            mask = (deltas_m <= 2 * distance_estimate_m) & (
-                deltas_m >= 2 * distance_estimate_m - 2 * r0
-            )
+            for distance_estimate_m in distances_m:
 
-            thetas_deg = []
-            probs = []
-            # each delta and probability corresponds to one or two angles.
-            for delta_m, prob in zip(deltas_m[mask], delta_probs[mask]):
-                theta_deg = self.context.get_angles(
-                    delta_m=delta_m, distance_m=distance_estimate_m, mic_idx=mic_idx,
+                # for a given distance, only certain deltas are possible.
+                mask = (deltas_m <= 2 * distance_estimate_m) & (
+                    deltas_m >= 2 * distance_estimate_m - 2 * r0
                 )
-                if theta_deg is None:
-                    warnings.warn("no theta")
+
+                thetas_deg = []
+                probs = []
+                # each delta and probability corresponds to one or two angles.
+                for delta_m, prob in zip(deltas_m[mask], delta_probs[mask]):
+                    theta_deg = self.context.get_angles(
+                        delta_m=delta_m,
+                        distance_m=distance_estimate_m,
+                        mic_idx=mic_idx,
+                    )
+                    if theta_deg is None:
+                        warnings.warn("no theta")
+                        continue
+                    thetas_deg += list(theta_deg)
+                    probs += [prob] * len(theta_deg)
+
+                if not len(thetas_deg):
+                    warnings.warn("no valid thetas found")
                     continue
-                thetas_deg += list(theta_deg)
-                probs += [prob] * len(theta_deg)
+                # interpolate (ds_m, delta_probs) at current distances
+                interp1d_func = interp1d(
+                    thetas_deg, probs, kind="linear", fill_value="extrapolate"
+                )
+                probs_interp = interp1d_func(azimuths_deg)
 
-            if not len(thetas_deg):
-                warnings.warn("no valid thetas found")
-                continue
-            # interpolate (ds_m, delta_probs) at current distances
-            interp1d_func = interp1d(
-                thetas_deg, probs, kind="linear", fill_value="extrapolate"
-            )
-            probs_interp = interp1d_func(azimuths_deg)
+                correction_factor = self.context.get_delta_gradient_angle(
+                    distance_estimate_m, azimuths_deg, mic_idx
+                )
+                probs_interp *= correction_factor
 
-            # TODO(FD) add the gradient here
-            # correction_factor = self.context.get_delta_gradient_angle(distance_estimate_m, azimuths_deg, mic_idx)
-            # probs_interp *= correction_factor
-
-            # make sure probabiliy is positive.
-            probs_interp[probs_interp < 0] = EPS
-            [
-                distribution[a].append(prob)
-                for a, prob in zip(azimuths_deg, probs_interp)
-            ]
+                # make sure probabiliy is positive.
+                probs_interp[probs_interp < 0] = EPS
+                [
+                    distribution[a].append(prob)
+                    for a, prob in zip(azimuths_deg, probs_interp)
+                ]
         return extract_pdf(distribution, method)
 
     def get_distance_estimate(self, chosen_mics=None):

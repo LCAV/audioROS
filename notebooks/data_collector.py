@@ -729,6 +729,7 @@ class DataCollector(object):
             mics_here = df.mic.unique()
             d_indices = find_indices(distances_here, distances)
             mic_indices = find_indices(mics_here, mics)
+            np.testing.assert_equal(mics[mic_indices], mics_here)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
         return df_matrix, distances, frequencies
 
@@ -837,13 +838,22 @@ class DataCollector(object):
         return calib_function
 
     def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to raw measurements at given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
         from calibration import fit_distance_slice
 
         df_here = self.filter_by_column(frequency, "frequency")
         frequency_here = df_here.frequency.unique()[0]
         if mic_idx is not None:
-            df_here = df_here.loc[df_here.mic == mic_idx]
-            chosen_mics = [mic_idx]
+            df_here = df_here.loc[df_here.mic.isin(mic_idx)]
+            chosen_mics = mic_idx
         else:
             chosen_mics = sorted_and_unique(df_here, "mic")
 
@@ -880,25 +890,35 @@ class DataCollector(object):
         return coeffs_raw, distances_raw, d_slice_raw, cost_raw
 
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to the median measurements (per distance) and given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
         from calibration import fit_distance_slice
 
-        df_here = self.filter_by_column(frequency, "frequency")
-        frequency_here = df_here.frequency.unique()[0]
-
-        (distance_slices, distances_median, mics_here, *_,) = self.get_distance_slice(
-            frequency, mics=[mic_idx]
+        distance_slices, distances_median, *_ = self.get_distance_slice(
+            frequency, mics=mic_idx
         )
+        if mic_idx is None:
+            mics_here = self.df.mic.unique()
+        else:
+            mics_here = mic_idx
         coeffs_median, d_slice_median, cost_median = fit_distance_slice(
             distance_slices.T,
             distances_median,
             method="minimize",
             azimuth_deg=YAW_DEG,
-            frequency=frequency_here,
+            frequency=frequency,
             chosen_mics=mics_here,
             optimize_absorption=True,
             fit_one_gain=fit_one_gain,
         )
-        return coeffs_median, d_slice_median, distances_median, cost_median
+        return coeffs_median, distances_median, d_slice_median, cost_median
 
     def get_df_matrix_old(self):
         df = self.df

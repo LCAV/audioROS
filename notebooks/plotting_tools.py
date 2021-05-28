@@ -20,6 +20,7 @@ titles = {
     "bayes-combination-angle": "Bayesian method, angle",
 }
 linestyles = {"cost": ":", "bayes": "-"}
+all_linestyles = ["-", "-.", ":", "--"]
 
 
 def make_dirs(fname):
@@ -255,6 +256,8 @@ def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs
     n_yticks = int(n_xticks * height / width)
     ax.set_xticks(xticks[:: len(xticks) // n_xticks])
     ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
+    if len(yticks) // n_yticks == 0:
+        return im
     ax.set_yticks(yticks[:: len(yticks) // n_yticks])
     ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
     return im
