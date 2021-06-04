@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import progressbar
 from geometry import get_deltas_from_global
-from inference import get_probability_cost, get_probability_fft
+from inference import get_probability_cost, get_probability_bayes
 from simulation import get_df_theory_simple
 
 MIC_IDX = 1
@@ -68,7 +68,7 @@ def simulate_frequency_slice(
                     )
                     slice_f += np.random.normal(scale=sigma_y, size=len(slice_f))
 
-                    distances_fft, probs_fft = get_probability_fft(
+                    distances_fft, probs_fft, diff_fft = get_probability_bayes(
                         slice_f,
                         frequencies_noisy,
                         mic_idx=MIC_IDX,

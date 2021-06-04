@@ -21,7 +21,9 @@ def eps_normalize(proba, eps=EPS):
 
 def standardize_vec(d_slice):
     d_slice_norm = d_slice - np.nanmean(d_slice)
-    d_slice_norm /= np.nanstd(d_slice_norm)
+    std = np.nanstd(d_slice_norm)
+    if std > 0:
+        d_slice_norm /= std
     return d_slice_norm
 
 
