@@ -315,6 +315,12 @@ if __name__ == "__main__":
     degree_noise_list = [0]
     time_noise_list = np.logspace(-6, -2, 10)
     saveas = "results/time_noise.pkl"
+    # simulate_doa( degree_noise_list, signal_noise_list, time_noise_list, frequency_list, n_it, saveas,)
+
+    frequency_list = np.arange(1000, 5000, step=500)
+    degree_noise_list = np.arange(0, 22, step=2)
+    time_noise_list = np.logspace(-6, -2, 10)
+    saveas = "results/joint_noise.pkl"
     simulate_doa(
         degree_noise_list,
         signal_noise_list,
@@ -323,6 +329,3 @@ if __name__ == "__main__":
         n_it,
         saveas,
     )
-
-    # saveas = "results/signal_noise.pkl"
-    # simulate_doa(degree_noise_list, signal_noise_list, time_noise_list, frequency_list, n_it, saveas)
