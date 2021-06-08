@@ -7,7 +7,6 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
-from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import PoseStamped
 
 from audio_interfaces.msg import (
@@ -23,6 +22,7 @@ from audio_interfaces_py.messages import (
     create_signals_freq_message,
     create_ground_truth_message,
 )
+from audio_interfaces_py.node_with_params import NodeWithParams
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import (
@@ -49,34 +49,33 @@ MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
 
-# parameter default values, will be overwritten by
-# parameter yaml file, given by:
-# ros2 run crazyflie_crtp gateway --ros-args --params-file params/default.yaml
-PARAMS_DICT = {
-    "send_audio_enable": (rclpy.Parameter.Type.INTEGER, 1),
-    "min_freq": (rclpy.Parameter.Type.INTEGER, 4000),
-    "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
-    "delta_freq": (rclpy.Parameter.Type.INTEGER, 100),  # not used without prop
-    "n_average": (rclpy.Parameter.Type.INTEGER, 5),  # not used without snr
-    "filter_snr_enable": (rclpy.Parameter.Type.INTEGER, 0),
-    "filter_prop_enable": (rclpy.Parameter.Type.INTEGER, 0),
-    "window_type": (rclpy.Parameter.Type.INTEGER, 1),
-    "all": (rclpy.Parameter.Type.INTEGER, 0),
-    "m1": (rclpy.Parameter.Type.INTEGER, 0),
-    "m2": (rclpy.Parameter.Type.INTEGER, 0),
-    "m3": (rclpy.Parameter.Type.INTEGER, 0),
-    "m4": (rclpy.Parameter.Type.INTEGER, 0),
-    "hover_height": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "turn_angle": (rclpy.Parameter.Type.INTEGER, 0),
-    "land_velocity": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "move_distance": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "buzzer_idx": (rclpy.Parameter.Type.INTEGER, 0),
-    # "buzzer_effect": (rclpy.Parameter.Type.INTEGER, -1),
-    # "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
-}
+class Gateway(NodeWithParams):
+    # parameter default values, will be overwritten by
+    # parameter yaml file, given by:
+    # ros2 run crazyflie_crtp gateway --ros-args --params-file params/default.yaml
+    PARAMS_DICT = {
+        "send_audio_enable": (rclpy.Parameter.Type.INTEGER, 1),
+        "min_freq": (rclpy.Parameter.Type.INTEGER, 4000),
+        "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
+        "delta_freq": (rclpy.Parameter.Type.INTEGER, 100),  # not used without prop
+        "n_average": (rclpy.Parameter.Type.INTEGER, 5),  # not used without snr
+        "filter_snr_enable": (rclpy.Parameter.Type.INTEGER, 0),
+        "filter_prop_enable": (rclpy.Parameter.Type.INTEGER, 0),
+        "window_type": (rclpy.Parameter.Type.INTEGER, 1),
+        "all": (rclpy.Parameter.Type.INTEGER, 0),
+        "m1": (rclpy.Parameter.Type.INTEGER, 0),
+        "m2": (rclpy.Parameter.Type.INTEGER, 0),
+        "m3": (rclpy.Parameter.Type.INTEGER, 0),
+        "m4": (rclpy.Parameter.Type.INTEGER, 0),
+        "hover_height": (rclpy.Parameter.Type.DOUBLE, 0.0),
+        "turn_angle": (rclpy.Parameter.Type.INTEGER, 0),
+        "land_velocity": (rclpy.Parameter.Type.DOUBLE, 0.0),
+        "move_distance": (rclpy.Parameter.Type.DOUBLE, 0.0),
+        "buzzer_idx": (rclpy.Parameter.Type.INTEGER, 0),
+        # "buzzer_effect": (rclpy.Parameter.Type.INTEGER, -1),
+        # "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
+    }
 
-
-class Gateway(Node):
     def __init__(self, reader_crtp):
         super().__init__(
             "gateway",
@@ -84,18 +83,15 @@ class Gateway(Node):
             allow_undeclared_parameters=True,
         )
 
-
         self.start_time = time.time()
 
-        #I only need this publisher for now :
+        # I only need this publisher for now :
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
-
         self.publisher_motion_pose = self.create_publisher(
             PoseStamped, "geometry/pose", 10
         )
-
         self.publisher_motion_pose_raw = self.create_publisher(
             PoseRaw, "geometry/pose_raw", 10
         )
@@ -127,7 +123,7 @@ class Gateway(Node):
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
 
     def publish_current_data(self):
-        #only the first one is for my publisher
+        # only the first one is for my publisher
         if not self.reader_crtp.audio_dict["published"]:
             self.publish_audio_dict()
             self.reader_crtp.audio_dict["published"] = True
@@ -169,9 +165,7 @@ class Gateway(Node):
         data = self.reader_crtp.logging_dicts["motors"]["data"]
         if data is not None:
             msg.motors_pwm = [float(data[f"m{i}_pwm"]) for i in range(1, 5)]
-            msg.motors_thrust = [
-                float(data[f"m{i}_thrust"]) for i in range(1, 5)
-            ]
+            msg.motors_thrust = [float(data[f"m{i}_thrust"]) for i in range(1, 5)]
         else:
             msg.motors_pwm = []
             msg.motors_thrust = []
@@ -179,7 +173,7 @@ class Gateway(Node):
         self.publisher_motors.publish(msg)
 
     def publish_audio_dict(self):
-        #reader_crtp is the bluetooth reader for the crazyflie
+        # reader_crtp is the bluetooth reader for the crazyflie
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
@@ -243,9 +237,7 @@ class Gateway(Node):
         motion_dict = deepcopy(self.reader_crtp.logging_dicts["motion"]["data"])
         timestamp = self.reader_crtp.logging_dicts["motion"]["timestamp"]
 
-        msg_pose_raw = create_pose_raw_message(
-            **motion_dict, timestamp=timestamp
-        )
+        msg_pose_raw = create_pose_raw_message(**motion_dict, timestamp=timestamp)
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         # TODO(FD) generalize below to 3D
@@ -266,81 +258,60 @@ class Gateway(Node):
             timestamp=timestamp,
         )
         self.publisher_motion_pose.publish(msg_pose)
-        self.get_logger().debug(
-            f"{msg_pose_raw.timestamp}: Published motion data."
-        )
+        self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
-    def set_params(self, params):
+    def custom_set_params(self):
         """ Overwrite the function set_params by NodeWithParams. 
         We need this so we commute new parameters directly to the Crazyflie drone.
         """
         success = True
-
-        for param in params:
-
-            # we need this in case this parameter
-            # was not set yet at startup.
-            # then we use the default values.
-            if param.type_ == param.Type.NOT_SET:
-                param = rclpy.parameter.Parameter(
-                    param.name, *PARAMS_DICT[param.name]
-                )
-
+        for param_name, param_value in self.current_params.items():
             # send motor commands
-            if param.name == "hover_height":
-                if param.value > 0:
-                    success = self.reader_crtp.send_hover_command(param.value)
-            elif param.name == "turn_angle":
-                if param.value != 0:
-                    success = self.reader_crtp.send_turn_command(param.value)
-            elif param.name == "land_velocity":
-                if param.value > 0:
+            if param_name == "hover_height":
+                if param_value > 0:
+                    success = self.reader_crtp.send_hover_command(param_value)
+            elif param_name == "turn_angle":
+                if param_value != 0:
+                    success = self.reader_crtp.send_turn_command(param_value)
+            elif param_name == "land_velocity":
+                if param_value > 0:
                     success = self.reader_crtp.send_land_command()
-            elif param.name == "move_distance":
+            elif param_name == "move_distance":
                 # move by given distance, blocking
-                if param.value != 0:
-                    self.reader_crtp.send_move_command(param.value)
+                if param_value != 0:
+                    self.reader_crtp.send_move_command(param_value)
                 # move by given velocity, non-blocking
-            elif param.name == "move_forward":
-                if param.value != 0:
-                    self.reader_crtp.send_forward_command(param.value)
+            elif param_name == "move_forward":
+                if param_value != 0:
+                    self.reader_crtp.send_forward_command(param_value)
 
             # send buzzer commands
-            elif param.name == "buzzer_idx":
-                if param.value >= 0:
-                    self.get_logger().info(f"set {param.name} to {param.value}")
-                    self.reader_crtp.send_buzzer_idx(param.value)
-            elif param.name == "buzzer_effect":
-                if param.value >= 0:
-                    self.reader_crtp.send_buzzer_effect(param.value)
-            elif param.name == "buzzer_freq":
-                if param.value >= 0:
-                    self.reader_crtp.send_buzzer_freq(param.value)
+            elif param_name == "buzzer_idx":
+                if param_value >= 0:
+                    self.get_logger().info(f"set {param_name} to {param_value}")
+                    self.reader_crtp.send_buzzer_idx(param_value)
+            elif param_name == "buzzer_effect":
+                if param_value >= 0:
+                    self.reader_crtp.send_buzzer_effect(param_value)
+            elif param_name == "buzzer_freq":
+                if param_value >= 0:
+                    self.reader_crtp.send_buzzer_freq(param_value)
 
-            elif param.name == "all":
-                self.get_logger().info(f"set all motors to {param.value}")
-                success = self.reader_crtp.send_thrust_command(param.value)
-            elif param.name in [f"m{i}" for i in range(1, 5)]:
-                self.get_logger().info(f"set {param.name} to {param.value}")
-                success = self.reader_crtp.send_thrust_command(
-                    param.value, param.name
-                )
-            elif param.name == "send_audio_enable":
-                self.reader_crtp.send_audio_enable(param.value)
+            elif param_name == "all":
+                self.get_logger().info(f"set all motors to {param_value}")
+                success = self.reader_crtp.send_thrust_command(param_value)
+            elif param_name in [f"m{i}" for i in range(1, 5)]:
+                self.get_logger().info(f"set {param_name} to {param_value}")
+                success = self.reader_crtp.send_thrust_command(param_value, param_name)
+            elif param_name == "send_audio_enable":
+                self.reader_crtp.send_audio_enable(param_value)
             else:
                 self.set_audio_param(param)
-
-        if success:
-            return SetParametersResult(successful=True)
-        else:
-            return SetParametersResult(successful=False)
 
     def set_audio_param(self, param):
         old_value = self.get_parameter(param.name).value
         try:
-            self.reader_crtp.cf.param.set_value(
-                f"audio.{param.name}", param.value
-            )
+            self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
             self.get_logger().info(
                 f"changed {param.name} from {old_value} to {param.value}"
             )
