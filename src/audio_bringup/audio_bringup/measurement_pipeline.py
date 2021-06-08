@@ -22,11 +22,6 @@ from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 from serial_motors import SerialMotors, DURATION_50, DURATION_360
 
-#from crazyflie_description_py.commands import all_commands_lists
-#from crazyflie_description_py.parameters import SOUND_EFFECTS
-from epuck_description_py.commands import all_commands_lists
-from epuck_description_py.parameters import SOUND_EFFECTS
-
 from audio_bringup.helpers import (
     get_active_nodes,
     get_filename,
@@ -37,6 +32,7 @@ from audio_bringup.helpers import (
     TOPICS_TO_RECORD,
 )
 
+PLATFORM = "epuck"
 
 START_DISTANCE = 0
 START_ANGLE = 0
@@ -47,8 +43,9 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_03_01_flying"
 # EXTRA_DIRNAME = "2021_04_30_hover"
 # EXTRA_DIRNAME = "2021_04_30_stepper"
-#EXTRA_DIRNAME = "2021_05_04_flying"
-EXTRA_DIRNAME = "2021_05_04_linear"
+# EXTRA_DIRNAME = "2021_05_04_flying"
+# EXTRA_DIRNAME = "2021_05_04_linear"
+EXTRA_DIRNAME = "2021_06_08_epuck_stepper"
 
 bag_pid = None
 
@@ -310,6 +307,13 @@ def main(args=None):
 
         return perform_experiment()
 
+    if PLATFORM == "crazyflie":
+        from crazyflie_description_py.commands import all_commands_lists
+        from crazyflie_description_py.parameters import SOUND_EFFECTS
+    elif PLATFORM == "epuck":
+        from epuck_description_py.commands import all_commands_lists
+        from epuck_description_py.parameters import SOUND_EFFECTS
+
     rclpy.init(args=args)
 
     active_nodes = get_active_nodes()
@@ -369,7 +373,7 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = "" #"y"
+        answer = ""  # "y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":

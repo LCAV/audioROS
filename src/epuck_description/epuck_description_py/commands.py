@@ -55,4 +55,3 @@ buzzer_command_lists["stop_buzzer"] = [
     ("/gateway", "buzzer_idx", 0, 0),
 ]
 all_commands_lists = {**buzzer_command_lists, **motor_command_lists}
-
