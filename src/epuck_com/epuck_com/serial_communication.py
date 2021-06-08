@@ -46,7 +46,16 @@ class Gateway(Node):
 
         self.desired_rate = 1000  # Hz
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
-        self.send_desired_rate_serial()
+
+
+        self.send_buzzer_idx()
+        time.sleep(8)
+        self.move_forward()
+        time.sleep(8)
+        self.stop()
+        self.send_buzzer_idx()
+
+
         
 
 
@@ -62,9 +71,7 @@ class Gateway(Node):
     def publish_audio_dict(self):
         # reader_crtp is the bluetooth reader for the crazyflie
         # read audio
-
         # the format is all the interleaved real values of all four microphones and then all the complex values of all the microphones
-        timestamp = 4 #putting 4 to see if I get this value back
         data, size, timestamp = self.read_float_serial()
 
 
@@ -227,6 +234,31 @@ class Gateway(Node):
         port.write(b'DRATE')
         port.write(struct.pack('<h', self.desired_rate))
         print('sent desired rate to robot', self.desired_rate)
+
+    def move_forward(self):
+        port = self.port
+        port.write(b'MOTOR')
+        port.write(struct.pack('<h', 1))
+        print('sent move rate to robot')
+
+    def move_slight_right(self):
+        port = self.port
+        port.write(b'MOTOR')
+        port.write(struct.pack('<h', 4))
+        print('sent move rate to robot')
+
+    def stop(self):
+        port = self.port
+        port.write(b'STOPP')
+        print('stopped the robot from moving with motor')
+
+    def send_buzzer_idx(self):
+        port = self.port
+        port.write(b'BUZZR')
+        print('Sent buzzer start command')
+
+
+
 
 
 def main(args=None):

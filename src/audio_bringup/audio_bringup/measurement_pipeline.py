@@ -22,8 +22,10 @@ from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
 from serial_motors import SerialMotors, DURATION_50, DURATION_360
 
-from crazyflie_description_py.commands import all_commands_lists
-from crazyflie_description_py.parameters import SOUND_EFFECTS
+#from crazyflie_description_py.commands import all_commands_lists
+#from crazyflie_description_py.parameters import SOUND_EFFECTS
+from epuck_description_py.commands import all_commands_lists
+from epuck_description_py.parameters import SOUND_EFFECTS
 
 from audio_bringup.helpers import (
     get_active_nodes,
