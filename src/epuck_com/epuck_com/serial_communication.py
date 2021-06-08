@@ -4,6 +4,7 @@ import struct
 import sys
 import time
 import rclpy
+from rcl_interfaces.msg import SetParametersResult
 
 import numpy as np
 import serial
@@ -30,18 +31,12 @@ class Gateway(NodeWithParams):
     PARAMS_DICT = {
         "buzzer_idx": 0,
         "move_forward": 0,
-        "move_distance": 0,
         "stop": 0,
     }
 
     def __init__(self):
-        super().__init__("gateway")
-
+        self.desired_rate = 1000  # Hz
         self.start_time = time.time()
-
-        self.publisher_signals = self.create_publisher(
-            SignalsFreq, "audio/signals_f", 10
-        )
 
         # need the reader from the epuck initalized here
         self.port = "/dev/ttyACM1"
@@ -53,12 +48,12 @@ class Gateway(NodeWithParams):
             print("could not successfully connect to the epuck")
             sys.exit(0)
 
-        self.desired_rate = 1000  # Hz
+        super().__init__("gateway")
+        self.publisher_signals = self.create_publisher(
+            SignalsFreq, "audio/signals_f", 10
+        )
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
 
-        self.set_parameters_callback(self.set_params)
-        parameters = self.get_parameters(PARAMS_DICT.keys())
-        self.set_parameters(parameters)
 
     def publish_current_data(self):
         # only the first one is for my publisher
@@ -72,7 +67,10 @@ class Gateway(NodeWithParams):
         # reader_crtp is the bluetooth reader for the crazyflie
         # read audio
         # the format is all the interleaved real values of all four microphones and then all the complex values of all the microphones
-        data, size, timestamp = self.read_float_serial()
+        try:
+            data, size, timestamp = self.read_float_serial()
+        except:
+            return
 
         if data is None:
             self.get_logger().warn("Empty audio. Not publishing")
@@ -134,7 +132,7 @@ class Gateway(NodeWithParams):
             c1 = self.port.read(1)
             # timeout condition
             if c1 == b"":
-                print("Timout...")
+                print("Timeout...")
                 return []
 
             if state == 0:
@@ -234,14 +232,13 @@ class Gateway(NodeWithParams):
         print("sent desired rate to robot", self.desired_rate)
 
     def move_forward(self, velocity_m):
-        self.port.write(b"MOTOR")
-
         # convert velocity to epuck command.
         speed = int(round(velocity_m * 1000 / (100 * WHEEL_DIAMETER * np.pi)))
 
         if not (0 <= speed <= 10):
             self.get_logger().warn(f"invalid velocity: {velocity_m, speed}")
 
+        self.port.write(b"MOTOR")
         self.port.write(struct.pack("<h", 1))
         self.port.write(struct.pack("<h", speed))
         self.get_logger().info(f"sent move rate {speed} to robot")
@@ -260,30 +257,28 @@ class Gateway(NodeWithParams):
         self.port.write(b"BUZZR")
         print("sent buzzer start command")
 
-    def custom_set_params(self):
-        """ Overwrite the function custom_set_params by NodeWithParams. 
+    def set_params(self, params):
+        """ Overwrite the function set_params by NodeWithParams. 
         We need this so we commute new parameters directly to the Crazyflie drone.
         """
-        for param_name, param_value in self.current_params.items():
+        current_params = {param.name: param.value for param in params}
+        for param_name, param_value in current_params.items():
             # move by given angle, blocking
             if param_name == "turn_angle":
-                if param_value != 0:
+                if param_value not in [0, None]:
                     self.turn_angle(param_value)
-            # move by given distance, blocking
-            elif param_name == "move_distance":
-                if param_value != 0:
-                    self.move_distance(param_value)
             # move by given velocity, non-blocking
             elif param_name == "move_forward":
-                if param_value != 0:
+                if param_value not in [0, None]:
                     self.move_forward(param_value)
             elif param_name == "stop":
-                if param_value != 0:
+                if param_value not in [0, None]:
                     self.stop(param_value)
             # send buzzer commands
             elif param_name == "buzzer_idx":
-                if param_value != 0:
+                if param_value not in [0, None]:
                     self.send_buzzer_idx(param_value)
+        return SetParametersResult(successful=True)
 
 
 def main(args=None):
