@@ -26,6 +26,7 @@ def live_status_function(show_status, bins, data):
         print("the data is", data)
         print("the bins are", bins)
 
+PORT = "/dev/ttyACM1"
 
 class Gateway(NodeWithParams):
     PARAMS_DICT = {
@@ -38,22 +39,25 @@ class Gateway(NodeWithParams):
         self.desired_rate = 1000  # Hz
         self.start_time = time.time()
 
-        # need the reader from the epuck initalized here
-        self.port = "/dev/ttyACM1"
-
-        print("initiating connection to port", self.port)
-        try:
-            self.port = serial.Serial(self.port, timeout=0.5)
-        except:
-            print("could not successfully connect to the epuck")
-            sys.exit(0)
-
         super().__init__("gateway")
+
+        # need the reader from the epuck initalized here
+        self.get_logger().info(f"initiating connection to port {PORT}")
+        try:
+            self.port = serial.Serial(PORT, timeout=0.5)
+        except:
+            self.port = None
+            self.get_logger().warn("could not successfully connect to the epuck")
+            #sys.exit(0)
+
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
         )
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
 
+        if self.port is not None:
+            self.port.write(b"BUZZR")
+            time.sleep(8)
 
     def publish_current_data(self):
         # only the first one is for my publisher
@@ -66,7 +70,8 @@ class Gateway(NodeWithParams):
     def publish_audio_dict(self):
         # reader_crtp is the bluetooth reader for the crazyflie
         # read audio
-        # the format is all the interleaved real values of all four microphones and then all the complex values of all the microphones
+        # the format is all the interleaved real values of all four microphones 
+        # and then all the complex values of all the microphones
         try:
             data, size, timestamp = self.read_float_serial()
         except:
@@ -249,11 +254,13 @@ class Gateway(NodeWithParams):
         print("sent move rate to robot")
 
     def stop(self, *args):
-        self.port = self.port
         self.port.write(b"STOPP")
         print("stopped the robot from moving with motor")
 
     def send_buzzer_idx(self, *args):
+        if self.port is None:
+            self.get_logger().warn("cannot send buzzer index")
+            return 
         self.port.write(b"BUZZR")
         print("sent buzzer start command")
 
@@ -278,6 +285,8 @@ class Gateway(NodeWithParams):
             elif param_name == "buzzer_idx":
                 if param_value not in [0, None]:
                     self.send_buzzer_idx(param_value)
+            else:
+                self.get_logger().warn(f"setting unused parameter {param_name}")
         return SetParametersResult(successful=True)
 
 

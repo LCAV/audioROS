@@ -27,7 +27,6 @@ N_BUFFER = (
 FFTSIZE = 32  # number of frequency bins that are sent.
 
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
-
 SOUND_EFFECTS = {
     "sweep_new": (1, [3000, 5000], 7),
 }

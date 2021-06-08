@@ -49,6 +49,14 @@ EXTRA_DIRNAME = "2021_06_08_epuck_stepper"
 
 bag_pid = None
 
+if PLATFORM == "crazyflie":
+    from crazyflie_description_py.commands import all_commands_lists
+    from crazyflie_description_py.parameters import SOUND_EFFECTS
+elif PLATFORM == "epuck":
+    from epuck_description_py.commands import all_commands_lists
+    from epuck_description_py.parameters import SOUND_EFFECTS
+else:
+    raise ValueError(PLATFORM)
 
 def execute_commands(command_name):
     if "mono" in command_name:
@@ -193,7 +201,7 @@ def main(args=None):
         elif source_type == "soundcard":
             sd.play(out_signal, blocking=False)
         elif global_params["n_meas_mics"] > 0:
-            print("recording measurement mic for {duration} seconds")
+            print(f"recording measurement mic for {duration} seconds")
             n_frames = int(duration * global_params["fs_soundcard"])
             recording = sd.rec(n_frames, blocking=False)
 
@@ -306,13 +314,6 @@ def main(args=None):
             execute_commands(params["source"])
 
         return perform_experiment()
-
-    if PLATFORM == "crazyflie":
-        from crazyflie_description_py.commands import all_commands_lists
-        from crazyflie_description_py.parameters import SOUND_EFFECTS
-    elif PLATFORM == "epuck":
-        from epuck_description_py.commands import all_commands_lists
-        from epuck_description_py.parameters import SOUND_EFFECTS
 
     rclpy.init(args=args)
 

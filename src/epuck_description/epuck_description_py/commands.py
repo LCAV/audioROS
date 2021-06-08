@@ -1,3 +1,5 @@
+from epuck_description_py.parameters import SOUND_EFFECTS
+
 motor_command_lists = {
     "hover": [
         ("/gateway", "hover_height", 0.5, 0),
