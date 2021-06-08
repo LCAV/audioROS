@@ -20,13 +20,20 @@ from audio_interfaces_py.messages import create_signals_freq_message
 from audio_interfaces.msg import SignalsFreq
 from audio_interfaces_py.node_with_params import NodeWithParams
 
+""" Notes on Bluetooth:
+press USER button while turning on the robot with ON/OFF button (little black button above buzzer)
+find MAC_ADDR from bluetooth menu
+sudo rfcomm bind /dev/rfcomm0 MAC_ADDR 2
+https://www.gctronic.com/doc/index.php?title=e-puck2_PC_side_development
+PORT = /dev/rfcomm0
+"""
+
+PORT = "/dev/ttyACM0"
 
 def live_status_function(show_status, bins, data):
     if show_status:
         print("the data is", data)
         print("the bins are", bins)
-
-PORT = "/dev/ttyACM1"
 
 class Gateway(NodeWithParams):
     PARAMS_DICT = {
@@ -44,8 +51,10 @@ class Gateway(NodeWithParams):
         # need the reader from the epuck initalized here
         self.get_logger().info(f"initiating connection to port {PORT}")
         try:
-            self.port = serial.Serial(PORT, timeout=0.5)
-        except:
+            self.port = serial.Serial(PORT, 9600, timeout=0.5)
+            self.get_logger().info(f"connected at baudrate {self.port.baudrate}")
+        except Exception as e:
+            print(e)
             self.port = None
             self.get_logger().warn("could not successfully connect to the epuck")
             #sys.exit(0)
@@ -55,9 +64,9 @@ class Gateway(NodeWithParams):
         )
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
 
-        if self.port is not None:
-            self.port.write(b"BUZZR")
-            time.sleep(8)
+        #if self.port is not None:
+        #    self.port.write(b"BUZZR")
+        #    time.sleep(8)
 
     def publish_current_data(self):
         # only the first one is for my publisher
@@ -243,25 +252,26 @@ class Gateway(NodeWithParams):
         if not (0 <= speed <= 10):
             self.get_logger().warn(f"invalid velocity: {velocity_m, speed}")
 
-        self.port.write(b"MOTOR")
+        self.port.write(b"M")
         self.port.write(struct.pack("<h", 1))
         self.port.write(struct.pack("<h", speed))
         self.get_logger().info(f"sent move rate {speed} to robot")
 
     def move_slight_right(self, *args):
-        self.port.write(b"MOTOR")
+        self.port.write(b"M")
         self.port.write(struct.pack("<h", 4))
         print("sent move rate to robot")
 
     def stop(self, *args):
-        self.port.write(b"STOPP")
+        self.port.write(b"S")
         print("stopped the robot from moving with motor")
 
     def send_buzzer_idx(self, *args):
         if self.port is None:
             self.get_logger().warn("cannot send buzzer index")
             return 
-        self.port.write(b"BUZZR")
+        port = self.port 
+        port.write(b'B')
         print("sent buzzer start command")
 
     def set_params(self, params):
