@@ -28,7 +28,8 @@ https://www.gctronic.com/doc/index.php?title=e-puck2_PC_side_development
 PORT = /dev/rfcomm0
 """
 
-PORT = "/dev/ttyACM0"
+PORT = "/dev/ttyACM1"
+BAUDRATE = 115200
 
 def live_status_function(show_status, bins, data):
     if show_status:
@@ -51,13 +52,14 @@ class Gateway(NodeWithParams):
         # need the reader from the epuck initalized here
         self.get_logger().info(f"initiating connection to port {PORT}")
         try:
-            self.port = serial.Serial(PORT, 9600, timeout=0.5)
+            self.port = serial.Serial(PORT, BAUDRATE, timeout=0.5)
             self.get_logger().info(f"connected at baudrate {self.port.baudrate}")
         except Exception as e:
             print(e)
             self.port = None
             self.get_logger().warn("could not successfully connect to the epuck")
             #sys.exit(0)
+
 
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
@@ -79,8 +81,8 @@ class Gateway(NodeWithParams):
     def publish_audio_dict(self):
         # reader_crtp is the bluetooth reader for the crazyflie
         # read audio
-        # the format is all the interleaved real values of all four microphones 
-        # and then all the complex values of all the microphones
+        # the format is all the interleaved real values of all four microphones
+
         try:
             data, size, timestamp = self.read_float_serial()
         except:
@@ -253,8 +255,8 @@ class Gateway(NodeWithParams):
             self.get_logger().warn(f"invalid velocity: {velocity_m, speed}")
 
         self.port.write(b"M")
-        self.port.write(struct.pack("<h", 1))
-        self.port.write(struct.pack("<h", speed))
+        #self.port.write(struct.pack("<h", 1))
+        #self.port.write(struct.pack("<h", speed))
         self.get_logger().info(f"sent move rate {speed} to robot")
 
     def move_slight_right(self, *args):
