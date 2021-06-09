@@ -143,4 +143,17 @@ kwargs_datasets = {
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
+    "2021_06_09_stepper": {
+        "audio_deck": {
+            "offset": None,
+            "slope": None,
+            "min_freq": 2000,
+            "max_freq": 6000,
+            "min_time": 0,
+            "max_time": 30,  # not active
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
 }

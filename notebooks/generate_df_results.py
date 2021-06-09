@@ -31,8 +31,11 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors):
         max_index = df_filtered.iloc[-1].name
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
+
+                mode = "maximum" if row.snr != 5 else "all"
+
                 row.distance += D_OFFSET * 100
-                data_collector.fill_from_row(row)
+                data_collector.fill_from_row(row, mode=mode)
                 p.update(i_row)
         data_collector.backup(exp_name, mic_type, motors, appendix="_raw")
     return data_collector
@@ -45,7 +48,8 @@ if __name__ == "__main__":
     exp_names = [
         # "2021_02_23_wall",
         # "2021_02_25_wall"
-        "2021_04_30_stepper"
+        # "2021_04_30_stepper"
+        "2021_06_09_stepper"
     ]
 
     # exp_name = '2021_02_09_wall_tukey';

@@ -280,7 +280,7 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
             remove_rows += list(df_here.index.values)
         elif normalized_std(vals) > std_thresh:
             if verbose:
-                print(f"removing {freq} with std {normalized_std(vals)}")
+                print(f"removing {freq} with std {normalized_std(vals)}>{std_thresh}")
             remove_rows += list(df_here.index.values)
         elif verbose:
             print(
@@ -560,7 +560,11 @@ class DataCollector(object):
                 "magnitude": magnitude,
             }
 
-    def fill_from_row(self, row, verbose=False, mask=True):
+    def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
+        """ 
+        Fill dataset from row containing the spectral contents. 
+        :param mode: "maximum" or "all"
+        """
         distance = row.get("distance", DISTANCE)
         if distance is None:  # otherwise these rows get excluded in groupby operations
             distance = DISTANCE
@@ -573,6 +577,7 @@ class DataCollector(object):
             times=row.seconds,
             verbose=verbose,
             mask=mask,
+            mode=mode,
         )
 
     def fill_from_data(
@@ -584,6 +589,7 @@ class DataCollector(object):
         times=None,
         verbose=False,
         mask=True,
+        mode="maximum",
     ):
         spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
 
@@ -597,22 +603,21 @@ class DataCollector(object):
             if box_kwargs is not None:
                 spec, freqs = apply_box_mask(spec, freqs, times=times, **box_kwargs)
 
-        self.fill_from_spec(spec, freqs, distance, angle, verbose, times=times)
         self.current_spectrogram = spec
         self.current_freqs = freqs
-        return spec, freqs
 
-    def fill_from_spec(
-        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False, times=None
-    ):
         df = psd_df_from_spec(
-            spec, freqs, interpolation=self.interpolation, verbose=verbose, times=times,
+            spec,
+            freqs,
+            interpolation=self.interpolation,
+            verbose=verbose,
+            times=times,
+            mode=mode,
         )
-        assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         df.loc[:, "distance"] = distance
         df.loc[:, "angle"] = angle
-        # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
+        return spec, freqs
 
     def get_frequency_slice(self, distance=None, mics=None):
         """ 

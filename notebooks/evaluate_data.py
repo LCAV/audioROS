@@ -13,7 +13,8 @@ from crazyflie_description_py.parameters import FS, N_BUFFER
 # EXP_NAME = "2020_10_14_static"
 # EXP_NAME = "2020_10_14_static_new"
 # EXP_NAME = "2020_10_30_dynamic"
-EXP_NAME = "2020_11_30_wall_hover"
+# EXP_NAME = "2020_11_30_wall_hover"
+EXP_NAME = "2020_06_09_stepper"
 
 RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
 
