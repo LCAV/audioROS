@@ -45,7 +45,8 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_04_30_stepper"
 # EXTRA_DIRNAME = "2021_05_04_flying"
 # EXTRA_DIRNAME = "2021_05_04_linear"
-EXTRA_DIRNAME = "2021_06_08_epuck_stepper"
+# EXTRA_DIRNAME = "2021_06_08_epuck_stepper"
+EXTRA_DIRNAME = "2021_06_11_epuck_doa"
 
 bag_pid = None
 
@@ -57,6 +58,7 @@ elif PLATFORM == "epuck":
     from epuck_description_py.parameters import SOUND_EFFECTS
 else:
     raise ValueError(PLATFORM)
+
 
 def execute_commands(command_name):
     if "mono" in command_name:
