@@ -46,8 +46,10 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_04_30_hover"
 # EXTRA_DIRNAME = "2021_04_30_stepper"
 #EXTRA_DIRNAME = "2021_05_04_flying"
-EXTRA_DIRNAME = "2021_05_04_linear"
+#EXTRA_DIRNAME = "2021_05_04_linear"
+EXTRA_DIRNAME = "2021_06_09_stepper"
 
+EXTRA_REC_TIME = 2 # extra duration for recording time.
 bag_pid = None
 
 
@@ -194,14 +196,18 @@ def main(args=None):
         elif source_type == "soundcard":
             sd.play(out_signal, blocking=False)
         elif global_params["n_meas_mics"] > 0:
-            print("recording measurement mic for {duration} seconds")
-            n_frames = int(duration * global_params["fs_soundcard"])
+            print(f"recording measurement mic for {duration + EXTRA_REC_TIME} seconds")
+            n_frames = int((duration + EXTRA_REC_TIME) * global_params["fs_soundcard"])
             recording = sd.rec(n_frames, blocking=False)
 
         # execute motor commands
         if params["motors"] != 0:
             print(f"executing motor commands", params["motors"])
             execute_commands(params["motors"])
+
+        # play onboard sound
+        if params["source"] is not None:
+            execute_commands(params["source"])
 
         # wait for exxtra time
         extra_idle_time = duration - (time.time() - start_time)
@@ -250,10 +256,6 @@ def main(args=None):
 
         start_bag_recording(bag_filename)
         start_turning(distance, angle)
-
-        # play onboard sound
-        if params["source"] is not None:
-            execute_commands(params["source"])
 
         return perform_experiment()
 
