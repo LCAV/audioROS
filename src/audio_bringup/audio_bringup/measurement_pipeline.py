@@ -413,8 +413,8 @@ def main(args=None):
 
         #### set parameters ###
         duration = adjust_duration(global_params.get("duration", 30), params)
-        adjust_freq_lims(params)
-        set_all_parameters(params)
+        # adjust_freq_lims(params)
+        # set_all_parameters(params)
 
         #### perform experiment ###
         # recording = measure_wall_flying(params)
@@ -423,8 +423,8 @@ def main(args=None):
         # recording = measure_snr_onboard(params)
 
         #### wrap up ####
-        execute_commands("stop_motors")
-        execute_commands("stop_buzzer")
+        # execute_commands("stop_motors")
+        # execute_commands("stop_buzzer")
 
         save_bag_recording(csv_filename)
         if recording is not None:
