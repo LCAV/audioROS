@@ -33,6 +33,7 @@ from audio_bringup.helpers import (
 )
 
 PLATFORM = "epuck"
+USER_INPUT = False
 
 START_DISTANCE = 0
 START_ANGLE = 0
@@ -374,7 +375,11 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = ""  # "y"
+
+        if USER_INPUT:
+            answer = ""  
+        else:
+            answer = "y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":

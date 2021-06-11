@@ -28,7 +28,7 @@ https://www.gctronic.com/doc/index.php?title=e-puck2_PC_side_development
 PORT = /dev/rfcomm0
 """
 
-PORT = "/dev/ttyACM2"
+PORT = "/dev/ttyACM3"
 BAUDRATE = 115200
 
 def live_status_function(show_status, bins, data):
