@@ -13,8 +13,15 @@ DIM = 2
 
 
 # standalone functions
-def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
-    context = Context.get_crazyflie_setup()
+def get_deltas_from_global(
+    azimuth_deg, distances_cm, mic_idx, ax=None, platform="crazyflie"
+):
+    if platform == "crazyflie":
+        print("Warning: using crazyflie parameters")
+        context = Context.get_crazyflie_setup()
+    elif platform == "epuck":
+        context = Context.get_epuck_setup()
+
     delta = context.get_delta(
         azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx
     )
@@ -22,8 +29,14 @@ def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
     return delta, d0
 
 
-def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None):
-    context = Context.get_crazyflie_setup()
+def get_orthogonal_distance_from_global(
+    azimuth_deg, deltas_cm, mic_idx, ax=None, platform="crazyflie"
+):
+    if platform == "crazyflie":
+        print("Warning: using crazyflie parameters")
+        context = Context.get_crazyflie_setup()
+    elif platform == "epuck":
+        context = Context.get_epuck_setup()
     distances_m = context.get_total_distance(deltas_cm * 1e-2, azimuth_deg, mic_idx)
     distances_cm = distances_m * 1e2
     return distances_cm
@@ -173,6 +186,14 @@ class Context(object):
     @staticmethod
     def get_crazyflie_setup(dim=DIM):
         from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
+
+        mics = np.array(MIC_POSITIONS)[:, :dim]
+        source = np.array(BUZZER_POSITION)[0, :dim]
+        return Context(dim, mics, source)
+
+    @staticmethod
+    def get_epuck_setup(dim=DIM):
+        from epuck_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
         source = np.array(BUZZER_POSITION)[0, :dim]

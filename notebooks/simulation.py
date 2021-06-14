@@ -71,9 +71,15 @@ def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS
     return room
 
 
-def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True):
+def get_setup(
+    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True, platform="crazyflie"
+):
     """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
-    context = Context.get_crazyflie_setup()
+    if platform == "crazyflie":
+        print("Warning: using crazyflie parameters")
+        context = Context.get_crazyflie_setup()
+    else:
+        context = Context.get_epuck_setup()
 
     d_wall_m = distance_cm * 1e-2  # distance of wall
     offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of drone

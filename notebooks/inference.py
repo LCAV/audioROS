@@ -7,7 +7,9 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-from crazyflie_description_py.experiments import WALL_ANGLE_DEG
+# from crazyflie_description_py.experiments import WALL_ANGLE_DEG
+WALL_ANGLE_DEG = None
+
 from simulation import get_deltas_from_global
 
 EPS = 1e-30
@@ -152,6 +154,10 @@ def get_probability_fft(
     n_max=1000,
     azimuth_deg=WALL_ANGLE_DEG,
 ):
+
+    if azimuth_deg is None:
+        print("Warning: give azimuth_deg argument to avoid errors")
+
     print("Deprecation warning: do not use this function anymore")
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max)
@@ -208,6 +214,8 @@ def get_probability_bayes(
     sigma=None,
     azimuth_deg=WALL_ANGLE_DEG,
 ):
+    if azimuth_deg is None:
+        print("Warning: give azimuth_deg argument to avoid errors")
     assert f_slice.ndim == 1
     abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
     differences = get_differences(frequencies, n_max=n_max)
@@ -232,6 +240,8 @@ def get_probability_cost(
     absolute_yaws=None,
     ax=None,
 ):
+    if azimuth_deg is None:
+        print("Warning: give azimuth_deg argument to avoid errors")
     if np.any(distances < 1):
         raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_freq_slice_theory
@@ -313,6 +323,8 @@ def get_approach_angle_cost(
     ax=None,
     azimuth_deg=WALL_ANGLE_DEG,
 ):
+    if azimuth_deg is None:
+        print("Warning: give azimuth_deg argument to avoid errors")
     from simulation import get_dist_slice_theory
 
     d_slice_norm = d_slice - np.mean(d_slice)
