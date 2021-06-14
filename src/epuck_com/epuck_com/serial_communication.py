@@ -28,7 +28,7 @@ https://www.gctronic.com/doc/index.php?title=e-puck2_PC_side_development
 PORT = /dev/rfcomm0
 """
 
-PORT = "/dev/ttyACM1"
+PORT = "/dev/ttyACM3"
 BAUDRATE = 115200
 
 def live_status_function(show_status, bins, data):
@@ -106,7 +106,7 @@ class Gateway(NodeWithParams):
             self.get_logger().warn("No data yet. Not publishing")
             return
 
-        all_frequencies = np.fft.fftfreq(n=N_BUFFER, d=1 / FS)
+        all_frequencies = np.fft.fftfreq(n=N_BUFFER, d=1/FS)
         n_frequencies = len(fbins)
 
         if not np.any(fbins > 0):
