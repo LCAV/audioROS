@@ -297,8 +297,15 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
 
 def remove_bad_measurements(df, mag_thresh, verbose=False):
     index_remove = df[df.magnitude < mag_thresh].index
+    if len(index_remove) == len(df):
+        print(
+            f"Warning: want to remove all measurements! min:{np.min(df.magnitude)}, max:{np.max(df.magnitude)}, median:{np.median(df.magnitude)}, threshold:{mag_thresh}"
+        )
+        print("Exiting without doing anything")
+        return
+
     if verbose:
-        print(f"removing {len(index_remove)} rows")
+        print(f"removing {len(index_remove)}/{len(df)} rows")
     df.drop(index=index_remove, inplace=True)
 
 
@@ -351,7 +358,7 @@ def cleanup(df, params, verbose=False):
     remove_bad_measurements(df, mag_thresh, verbose)
     remove_bad_freqs(df, mag_thresh, std_thresh, verbose=verbose)
     merge_close_freqs(df, verbose=verbose)
-    remove_outliers(df, verbose)
+    # remove_outliers(df, verbose)
     remove_spurious_freqs(df, n_spurious, verbose=verbose)
     remove_nan_rows(df, verbose)
 
@@ -761,7 +768,7 @@ class DataCollector(object):
         self.remove_bad_measurements()
         self.remove_bad_freqs(verbose=verbose)
         self.merge_close_freqs(verbose=verbose)
-        self.remove_outliers()
+        # self.remove_outliers()
         self.remove_spurious_freqs(verbose=verbose)
         self.remove_nan_rows()
         self.to_numeric()

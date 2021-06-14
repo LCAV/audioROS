@@ -72,6 +72,7 @@ stash/
 notebooks/.ipynb_checkpoints
 notebooks/results/
 notebooks/plots/
+notebooks/plots_doa/
 
 
 # latex stuff
