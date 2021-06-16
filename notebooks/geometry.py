@@ -10,14 +10,16 @@ import numpy as np
 from audio_stack.beam_former import rotate_mics
 
 DIM = 2
+# PLATFORM = "crazyflie"
+PLATFORM = "epuck"
 
 
 # standalone functions
 def get_deltas_from_global(
-    azimuth_deg, distances_cm, mic_idx, ax=None, platform="crazyflie"
+    azimuth_deg, distances_cm, mic_idx, ax=None, platform=PLATFORM
 ):
     if platform == "crazyflie":
-        print("Warning: using crazyflie parameters")
+        print("Warning: using crazyflie parameters, get_deltas_from_global")
         context = Context.get_crazyflie_setup()
     elif platform == "epuck":
         context = Context.get_epuck_setup()
@@ -30,10 +32,10 @@ def get_deltas_from_global(
 
 
 def get_orthogonal_distance_from_global(
-    azimuth_deg, deltas_cm, mic_idx, ax=None, platform="crazyflie"
+    azimuth_deg, deltas_cm, mic_idx, ax=None, platform=PLATFORM
 ):
     if platform == "crazyflie":
-        print("Warning: using crazyflie parameters")
+        print("Warning: using crazyflie parameters, get_orthogonal")
         context = Context.get_crazyflie_setup()
     elif platform == "epuck":
         context = Context.get_epuck_setup()

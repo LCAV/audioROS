@@ -17,6 +17,7 @@ WALL_ABSORPTION = 0.2
 GAIN = 1.0  # default amplitude for input signals
 WIDEBAND_FILE = "results/wideband.npy"
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
+PLATFORM = "epuck"  # "crazyflie"
 
 
 def simulate_distance_estimator(
@@ -72,11 +73,11 @@ def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS
 
 
 def get_setup(
-    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True, platform="crazyflie"
+    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True, platform=PLATFORM
 ):
     """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
     if platform == "crazyflie":
-        print("Warning: using crazyflie parameters")
+        print("Warning: using crazyflie parameters, get_setup")
         context = Context.get_crazyflie_setup()
     else:
         context = Context.get_epuck_setup()
