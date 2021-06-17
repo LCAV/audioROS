@@ -35,6 +35,15 @@ from audio_bringup.helpers import (
     TOPICS_TO_RECORD,
 )
 
+DEFAULT_PARAMS = {
+    "min_freq": 0,
+    "max_freq": 16000,
+    "window_type": 0,
+    "snr": 0,
+    "props": 0,
+}
+# TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
+PARAM_NAMES = {"snr": "filter_snr_enable", "props": "filter_props_enable"}
 
 START_DISTANCE = 0
 START_ANGLE = 0
@@ -45,11 +54,11 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_03_01_flying"
 # EXTRA_DIRNAME = "2021_04_30_hover"
 # EXTRA_DIRNAME = "2021_04_30_stepper"
-#EXTRA_DIRNAME = "2021_05_04_flying"
-#EXTRA_DIRNAME = "2021_05_04_linear"
+# EXTRA_DIRNAME = "2021_05_04_flying"
+# EXTRA_DIRNAME = "2021_05_04_linear"
 EXTRA_DIRNAME = "2021_06_09_stepper"
 
-EXTRA_REC_TIME = 2 # extra duration for recording time.
+EXTRA_REC_TIME = 2  # extra duration for recording time.
 bag_pid = None
 
 
@@ -139,21 +148,12 @@ def adjust_duration(duration, params):
     return duration
 
 
-def set_all_parameters(params):
-    min_freq = params.get("min_freq", 0)
-    max_freq = params.get("max_freq", 16000)
-    window_type = params.get("window_type", 0)
-    filter_snr = params.get("snr", 0)
-    filter_props = params.get("props", 0)
+def set_all_parameters(params, params_old):
 
-    if (filter_snr > 0) and ((min_freq is None) or (max_freq is None)):
-        raise Warning("Need to set min_freq and max_freq when using snr filtering!")
-
-    set_param("/gateway", "filter_snr_enable", str(filter_snr))
-    set_param("/gateway", "filter_prop_enable", str(filter_props))
-    set_param("/gateway", "min_freq", str(min_freq))
-    set_param("/gateway", "max_freq", str(max_freq))
-    set_param("/gateway", "window_type", str(window_type))
+    for key, value in params.items():
+        value_old = params_old.get(key, DEFAULT_VALUES[key])
+        if value_old != value:
+            set_param("/gateway", PARAM_NAMES.get(key, key), str(value))
 
 
 def start_bag_recording(bag_filename):
@@ -365,11 +365,12 @@ def main(args=None):
     timestamp = int(time.time())
 
     param_i = 0
+    params_old = {}
     while param_i < len(params_list):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = "" #"y"
+        answer = ""  # "y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":
@@ -409,7 +410,7 @@ def main(args=None):
         #### set parameters ###
         duration = adjust_duration(global_params.get("duration", 30), params)
         adjust_freq_lims(params)
-        set_all_parameters(params)
+        set_all_parameters(params, params_old)
 
         #### perform experiment ###
         # recording = measure_wall_flying(params)
@@ -425,6 +426,7 @@ def main(args=None):
         if recording is not None:
             save_wav_recording(recording, wav_filename)
         param_i += 1
+        params_old = params
 
     # after last experiment: move back to position 0
     if SerialIn is not None:
