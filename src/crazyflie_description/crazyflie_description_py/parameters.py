@@ -22,7 +22,7 @@ HEIGHT_BUZZER = 0.01  # height of buzzer with resepect to drone center (in meter
 
 N_MICS = 4  # number of mics
 FS = 64000  # sampling frequency [Hz]
-N_BUFFER = 1048  # number of samples in audio buffer
+N_BUFFER = 1024  # number of samples in audio buffer
 FFTSIZE = 32  # number of frequency bins that are sent.
 
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
