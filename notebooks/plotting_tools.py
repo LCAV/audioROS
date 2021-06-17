@@ -13,6 +13,14 @@ labels = {
     np.nanmedian: "median error",
     np.nanmean: "mean error",
 }
+titles = {
+    "cost": "optimization-based method",
+    "bayes": "FFT-based method",
+    "bayes-combination": "Bayesian method",
+    "bayes-combination-angle": "Bayesian method, angle",
+}
+linestyles = {"cost": ":", "bayes": "-"}
+all_linestyles = ["-", "-.", ":", "--"]
 
 
 def make_dirs(fname):
@@ -210,12 +218,13 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     return fig, axs
 
 
-def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs):
+def pcolorfast_custom(
+    ax, xs, ys, values, verbose=False, n_xticks=None, n_yticks=None, **kwargs
+):
     """ pcolorfast with gray for nan and centered xticks and yticks. 
 
     :param n_xticks: number of ticks along x. 
     """
-
     current_cmap = matplotlib.cm.get_cmap()
     current_cmap.set_bad(color="gray")
 
@@ -226,7 +235,6 @@ def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs
     try:
         im = ax.pcolorfast(xs, ys, values, **kwargs)
     except ValueError:
-        # print("Warning: problem with dimensions in pcolorfast (bug by matplotlib)")
         im = ax.pcolorfast(
             list(xs) + [xs[-1] + dx], list(ys) + [ys[-1] + dy], values, **kwargs
         )
@@ -242,12 +250,15 @@ def pcolorfast_custom(ax, xs, ys, values, verbose=False, n_xticks=None, **kwargs
 
     xticks = ax.get_xticks()
     yticks = ax.get_yticks()
+    width, height = ax.get_figure().get_size_inches()
     if n_xticks is None:
         n_xticks = len(xticks)
-    width, height = ax.get_figure().get_size_inches()
-    n_yticks = int(n_xticks * height / width)
+    if n_yticks is None:
+        n_yticks = int(n_xticks * height / width)
     ax.set_xticks(xticks[:: len(xticks) // n_xticks])
     ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
+    if len(yticks) // n_yticks == 0:
+        return im
     ax.set_yticks(yticks[:: len(yticks) // n_yticks])
     ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
     return im
@@ -282,13 +293,25 @@ def plot_error_distance(
                 np.log10(df.values),
                 vmin=np.log10(vmin),
                 vmax=np.log10(vmax),
+                n_xticks=5,
+                n_yticks=5,
             )
         else:
             im = pcolorfast_custom(
-                axs[0, i], distances, index, df.values, vmin=vmin, vmax=vmax
+                axs[0, i],
+                distances,
+                index,
+                df.values,
+                vmin=vmin,
+                vmax=vmax,
+                n_xticks=5,
+                n_yticks=5,
             )
         axs[0, i].set_xlabel("distance $d$ [cm]")
         axs[0, i].set_title(labels[method])
+
+        # axs[0, i].set_xticks(distances[::len(distances)// 3]
+    # axs[0, 0].set_yticks(index[::len(index)// 3]
     add_colorbar(fig, axs[0, -1], im, title=f"{labels[aggfunc]} [cm]")
     axs[0, 0].set_ylabel(name.replace("_", " "))
     return fig, axs
@@ -337,13 +360,15 @@ def plot_error_gamma(
             np.log10(table.values),
             vmin=np.log10(vmin),
             vmax=np.log10(vmax),
+            n_xticks=5,
+            n_yticks=4,
         )
     else:
-        im = pcolorfast_custom(ax, gammas, ys, table.values, vmin=vmin, vmax=vmax)
+        im = pcolorfast_custom(
+            ax, gammas, ys, table.values, vmin=vmin, vmax=vmax, n_xticks=5, n_yticks=4
+        )
     ax.set_xlabel("approach angle $\\gamma$ [deg]")
     if colorbar:
-        from plotting_tools import add_colorbar
-
         add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
     ax.set_ylabel(name.replace("_", " "))
     return fig, ax

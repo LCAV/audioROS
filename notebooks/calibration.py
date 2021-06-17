@@ -8,10 +8,11 @@ calibration.py: methods for gain calibration
 import numpy as np
 import pandas as pd
 
-OFFSET_BOUNDS = [-1, 1]
-GAIN_BOUNDS = [0.1, 10]
+
 # wall absorption bounds: 1 would mean all energy lost and no interference.
-ABS_BOUNDS = [0.0, 0.8]
+ABS_BOUNDS = [0.1, 0.99]
+OFFSET_BOUNDS = [0, 15]
+GAIN_BOUNDS = [10, 100]
 YAW_DEG = 0
 
 # interpolation parameters

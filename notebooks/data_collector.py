@@ -165,14 +165,16 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
 
 def find_indices(values_here, values):
     """ find the indices of an array (values_here) inside another array (values) """
+    assert values_here.ndim == 1
+    assert values.ndim == 1
     values_here = np.array(values_here)
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
-        d_indices = np.where((values[:, None] == values_here[None, :]))[0]
+        d_indices = np.where(values_here[:, None] == values[None, :])[1]
         try:
             np.testing.assert_allclose(values[d_indices], values_here)
         except:
-            print("error in find_indices.")
+            print("error in find_indices:", values[d_indices], values_here, d_indices)
             return np.arange(len(values))
     else:
         d_indices = np.arange(len(values))
@@ -278,7 +280,7 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
             remove_rows += list(df_here.index.values)
         elif normalized_std(vals) > std_thresh:
             if verbose:
-                print(f"removing {freq} with std {normalized_std(vals)}")
+                print(f"removing {freq} with std {normalized_std(vals)}>{std_thresh}")
             remove_rows += list(df_here.index.values)
         elif verbose:
             print(
@@ -439,13 +441,13 @@ class DataCollector(object):
             return kwargs
 
     def get_mics(self):
-        return sorted_and_unique(self.df, "mic")
+        return sorted_and_unique(self.df, "mic").astype(np.int)
 
     def get_distances(self):
-        return sorted_and_unique(self.df, "distance")
+        return sorted_and_unique(self.df, "distance").astype(np.float)
 
     def get_frequencies(self):
-        return sorted_and_unique(self.df, "frequency")
+        return sorted_and_unique(self.df, "frequency").astype(np.float)
 
     def next_fslice_ready(self, signals_f, frequencies):
         """ find big frequency jump, meaning end of sweep. """
@@ -558,7 +560,11 @@ class DataCollector(object):
                 "magnitude": magnitude,
             }
 
-    def fill_from_row(self, row, verbose=False, mask=True):
+    def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
+        """ 
+        Fill dataset from row containing the spectral contents. 
+        :param mode: "maximum" or "all"
+        """
         distance = row.get("distance", DISTANCE)
         if distance is None:  # otherwise these rows get excluded in groupby operations
             distance = DISTANCE
@@ -571,6 +577,7 @@ class DataCollector(object):
             times=row.seconds,
             verbose=verbose,
             mask=mask,
+            mode=mode,
         )
 
     def fill_from_data(
@@ -582,6 +589,7 @@ class DataCollector(object):
         times=None,
         verbose=False,
         mask=True,
+        mode="maximum",
     ):
         spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
 
@@ -595,22 +603,21 @@ class DataCollector(object):
             if box_kwargs is not None:
                 spec, freqs = apply_box_mask(spec, freqs, times=times, **box_kwargs)
 
-        self.fill_from_spec(spec, freqs, distance, angle, verbose, times=times)
         self.current_spectrogram = spec
         self.current_freqs = freqs
-        return spec, freqs
 
-    def fill_from_spec(
-        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False, times=None
-    ):
         df = psd_df_from_spec(
-            spec, freqs, interpolation=self.interpolation, verbose=verbose, times=times,
+            spec,
+            freqs,
+            interpolation=self.interpolation,
+            verbose=verbose,
+            times=times,
+            mode=mode,
         )
-        assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         df.loc[:, "distance"] = distance
         df.loc[:, "angle"] = angle
-        # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
+        return spec, freqs
 
     def get_frequency_slice(self, distance=None, mics=None):
         """ 
@@ -663,9 +670,9 @@ class DataCollector(object):
         freqs = freqs_here[f_indices]
 
         if normalize_method != "":
-            all_mics = self.get_mics()
+            mics_all = self.get_mics()
             mics_here = pt.index.values
-            m_indices = find_indices(all_mics, mics_here)
+            m_indices = find_indices(mics_here, mics_all)
 
             gains_f = normalize_method(freqs)
 
@@ -715,9 +722,9 @@ class DataCollector(object):
         return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):
-        mics = sorted_and_unique(self.df, "mic").astype(np.int)
-        frequencies = sorted_and_unique(self.df, "frequency").astype(np.float)
-        distances = sorted_and_unique(self.df, "distance").astype(np.float)
+        mics = self.get_mics()
+        frequencies = self.get_frequencies()
+        distances = self.get_distances()
         n_mics = len(mics)
 
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
@@ -726,7 +733,8 @@ class DataCollector(object):
             distance_slice, distances_here, freqs, stds = get_distance_slice(df)
             mics_here = df.mic.unique()
             d_indices = find_indices(distances_here, distances)
-            mic_indices = find_indices(mics, mics_here)
+            mic_indices = find_indices(mics_here, mics)
+            np.testing.assert_equal(mics[mic_indices], mics_here)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
         return df_matrix, distances, frequencies
 
@@ -835,13 +843,22 @@ class DataCollector(object):
         return calib_function
 
     def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to raw measurements at given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
         from calibration import fit_distance_slice
 
         df_here = self.filter_by_column(frequency, "frequency")
         frequency_here = df_here.frequency.unique()[0]
         if mic_idx is not None:
-            df_here = df_here.loc[df_here.mic == mic_idx]
-            chosen_mics = [mic_idx]
+            df_here = df_here.loc[df_here.mic.isin(mic_idx)]
+            chosen_mics = mic_idx
         else:
             chosen_mics = sorted_and_unique(df_here, "mic")
 
@@ -878,25 +895,35 @@ class DataCollector(object):
         return coeffs_raw, distances_raw, d_slice_raw, cost_raw
 
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to the median measurements (per distance) and given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
         from calibration import fit_distance_slice
 
-        df_here = self.filter_by_column(frequency, "frequency")
-        frequency_here = df_here.frequency.unique()[0]
-
-        (distance_slices, distances_median, mics_here, *_,) = self.get_distance_slice(
-            frequency, mics=[mic_idx]
+        distance_slices, distances_median, *_ = self.get_distance_slice(
+            frequency, mics=mic_idx
         )
+        if mic_idx is None:
+            mics_here = self.df.mic.unique()
+        else:
+            mics_here = mic_idx
         coeffs_median, d_slice_median, cost_median = fit_distance_slice(
             distance_slices.T,
             distances_median,
             method="minimize",
             azimuth_deg=YAW_DEG,
-            frequency=frequency_here,
+            frequency=frequency,
             chosen_mics=mics_here,
             optimize_absorption=True,
             fit_one_gain=fit_one_gain,
         )
-        return coeffs_median, d_slice_median, distances_median, cost_median
+        return coeffs_median, distances_median, d_slice_median, cost_median
 
     def get_df_matrix_old(self):
         df = self.df
