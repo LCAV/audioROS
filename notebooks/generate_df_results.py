@@ -26,7 +26,7 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors):
         }
         df_filtered = filter_by_dict(df_all, chosen_dict)
         if len(df_filtered) == 0:
-            return []
+            return None
 
         max_index = df_filtered.iloc[-1].name
         with progressbar.ProgressBar(max_value=max_index) as p:
@@ -49,7 +49,8 @@ if __name__ == "__main__":
         # "2021_02_23_wall",
         # "2021_02_25_wall"
         # "2021_04_30_stepper"
-        "2021_06_09_stepper"
+        # "2021_06_09_stepper"
+        "2021_06_17_stepper"
     ]
 
     # exp_name = '2021_02_09_wall_tukey';
@@ -68,5 +69,6 @@ if __name__ == "__main__":
 
         for mic_type, motors in itertools.product(mic_types, motors_types):
             data_collector = data_collector_from_df(df_all, exp_name, mic_type, motors)
-            data_collector.cleanup(verbose=False)
-            data_collector.backup(exp_name, mic_type, motors)
+            if data_collector is not None:
+                data_collector.cleanup(verbose=False)
+                data_collector.backup(exp_name, mic_type, motors)
