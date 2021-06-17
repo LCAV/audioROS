@@ -33,7 +33,7 @@ from audio_bringup.helpers import (
 )
 
 PLATFORM = "epuck"
-USER_INPUT = False
+USER_INPUT = True
 
 START_DISTANCE = 0
 START_ANGLE = 0
