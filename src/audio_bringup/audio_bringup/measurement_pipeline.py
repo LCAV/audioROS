@@ -47,7 +47,8 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_04_30_stepper"
 #EXTRA_DIRNAME = "2021_05_04_flying"
 #EXTRA_DIRNAME = "2021_05_04_linear"
-EXTRA_DIRNAME = "2021_06_09_stepper"
+#EXTRA_DIRNAME = "2021_06_09_stepper"
+EXTRA_DIRNAME = "2021_06_17_stepper"
 
 EXTRA_REC_TIME = 2 # extra duration for recording time.
 bag_pid = None
