@@ -41,6 +41,11 @@ DEFAULT_PARAMS = {
     "window_type": 0,
     "snr": 0,
     "props": 0,
+    "distance": 0,
+    "degree": 0,
+    "motors": 0,
+    "source": None,
+    "appendix": ""
 }
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"snr": "filter_snr_enable", "props": "filter_props_enable"}
@@ -60,6 +65,7 @@ START_ANGLE = 0
 EXTRA_DIRNAME = "2021_06_17_stepper"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
+USER_INPUT = False
 bag_pid = None
 
 
@@ -149,10 +155,15 @@ def adjust_duration(duration, params):
     return duration
 
 
-def set_all_parameters(params, params_old):
-
+def set_audio_parameters(params, params_old):
+    audio_parameters = [
+        "min_freq", "max_freq", "window_type", "snr", "props"
+    ]
     for key, value in params.items():
-        value_old = params_old.get(key, DEFAULT_VALUES[key])
+        if not key in audio_parameters:
+            continue 
+
+        value_old = params_old.get(key, DEFAULT_PARAMS[key])
         if value_old != value:
             set_param("/gateway", PARAM_NAMES.get(key, key), str(value))
 
@@ -371,7 +382,7 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = ""  # "y"
+        answer = ""  if USER_INPUT else "y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":
@@ -411,7 +422,7 @@ def main(args=None):
         #### set parameters ###
         duration = adjust_duration(global_params.get("duration", 30), params)
         adjust_freq_lims(params)
-        set_all_parameters(params, params_old)
+        set_audio_parameters(params, params_old)
 
         #### perform experiment ###
         # recording = measure_wall_flying(params)
