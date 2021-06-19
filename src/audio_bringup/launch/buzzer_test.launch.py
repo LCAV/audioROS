@@ -16,12 +16,12 @@ params_file = os.path.join("params", "buzzer_test.yaml")
 
 node_config = {
     "gateway": {"params": [params_file], "pkg": "crazyflie_crtp"},
-    "audio": {"pkg": "topic_plotter"},
+    "audio": {"params": [params_file], "pkg": "topic_plotter"},
 }
 
 
 def generate_launch_description():
-    return get_launch_description(node_config)
+    return get_launch_description(node_config, log_level="WARN")
 
 
 def main(argv=sys.argv[1:]):

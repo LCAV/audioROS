@@ -175,13 +175,13 @@ class Gateway(Node):
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
-            self.get_logger().warn("Empty audio. Not publishing")
+            self.get_logger().info("Empty audio. Not publishing")
             return
 
         # read frequencies
         fbins = self.reader_crtp.audio_dict["fbins"]
         if fbins is None:
-            self.get_logger().warn("No data yet. Not publishing")
+            self.get_logger().info("No data yet. Not publishing")
             return
 
         all_frequencies = np.fft.rfftfreq(n=N_BUFFER, d=1 / FS)
@@ -192,7 +192,7 @@ class Gateway(Node):
         # self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
         # return
         if not np.any(fbins > 0):
-            self.get_logger().warn(f"Empty fbins!")
+            self.get_logger().info(f"Empty fbins!")
             return
         elif np.any(fbins >= len(all_frequencies)):
             self.get_logger().warn(
@@ -225,8 +225,9 @@ class Gateway(Node):
         )
         self.publisher_signals.publish(msg)
 
-        self.get_logger().info(
-            f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
+        self.get_logger().warn(
+            # f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0][[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
+            f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0]} and timestamp {msg.audio_timestamp}"
         )
 
     def publish_motion_dict(self):
