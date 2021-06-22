@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-snr_pipeline.py
+measurement_pipeline.py
 
 Experiment with a fixed loudspeaker playing some stationary signal.
 """
@@ -23,7 +23,7 @@ from signals import generate_signal
 from serial_motors import SerialMotors, DURATION_50, DURATION_360
 
 from crazyflie_description_py.commands import all_commands_lists
-from crazyflie_description_py.parameters import SOUND_EFFECTS
+from crazyflie_description_py.parameters import SOUND_EFFECTS, FS
 
 from audio_bringup.helpers import (
     get_active_nodes,
@@ -37,7 +37,7 @@ from audio_bringup.helpers import (
 
 DEFAULT_PARAMS = {
     "min_freq": 0,
-    "max_freq": 16000,
+    "max_freq": FS / 2, 
     "window_type": 0,
     "snr": 0,
     "props": 0,
@@ -62,19 +62,21 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_05_04_flying"
 # EXTRA_DIRNAME = "2021_05_04_linear"
 # EXTRA_DIRNAME = "2021_06_09_stepper"
-EXTRA_DIRNAME = "2021_06_17_stepper"
+#EXTRA_DIRNAME = "2021_06_17_stepper"
+#EXTRA_DIRNAME = "2021_06_19_stepper"
+EXTRA_DIRNAME = "2021_06_19_stepper_linear"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = False
-bag_pid = None
+USER_INPUT = True #False
 
+bag_pid = None
+SerialIn = None
 
 def execute_commands(command_name):
     if "mono" in command_name:
         freq = int(command_name.replace("mono", ""))
         command_list = [
-            ("/gateway", "buzzer_effect", 12, 0),
-            ("/gateway", "buzzer_freq", freq, 0),
+            ("/gateway", "buzzer_idx", freq, 0),
         ]
     elif "all" in command_name:
         thrust = int(command_name.replace("all", ""))
@@ -110,6 +112,13 @@ def adjust_freq_lims(params):
     max_freq = params.get("max_freq", None)
 
     if params["source"] is not None:
+
+        if "mono" in params["source"]:
+            freq = int(params["source"].replace("mono", ""))
+            assert (min_freq is None) or (freq > min_freq)
+            assert (max_freq is None) or (freq < max_freq)
+            return
+
         __, (min_freq_buzz, max_freq_buzz), __ = SOUND_EFFECTS[params["source"]]
         if min_freq is not None:
             print(f"Overwriting min_freq {min_freq} with buzzer {min_freq_buzz}.")
@@ -127,7 +136,7 @@ def adjust_duration(duration, params):
     if (distance is not None) and (abs(distance) == 51):
         if DURATION_50 > duration:
             print(
-                f"ignoring global duration {duration} and using move command duration {duration_move}"
+                f"ignoring global duration {duration} and using move command duration {DURATION_50}"
             )
             duration = DURATION_50
     if (angle is not None) and (abs(angle) == 360):
@@ -146,7 +155,10 @@ def adjust_duration(duration, params):
             duration = duration_motors
 
     if params["source"] is not None:
-        *_, duration_buzzer = SOUND_EFFECTS[params["source"]]
+        if "mono" in params["source"]:
+            duration_buzzer = 0
+        else:
+            *_, duration_buzzer = SOUND_EFFECTS[params["source"]]
         if duration_buzzer > duration:
             print(
                 f"ignoring global duration {duration} and using buzzer command duration {duration_buzzer}"
@@ -177,7 +189,8 @@ def start_bag_recording(bag_filename):
     print("started bag record")
 
 
-def start_turning(distance, angle):
+def start_moving(distance, angle):
+    global SerialIn
     if (angle is not None) and abs(angle) == 360:
         print(f"starting turning by {angle}")
         SerialIn.turn(angle, blocking=False)
@@ -225,12 +238,12 @@ def main(args=None):
         extra_idle_time = duration - (time.time() - start_time)
         if extra_idle_time > 0:
             print(
-                f"Finished motor commands faster than expected. sleeping for {extra_idle_time:.2f} seconds..."
+                f"Waiting for {extra_idle_time:.2f} seconds..."
             )
             time.sleep(extra_idle_time)
         elif extra_idle_time < 0:
             print(
-                f"Error: Finished recording before finishing motor commands! {extra_idle_time:.2f}"
+                f"Error: Finished recording before finishing everything else! {extra_idle_time:.2f}"
             )
         return recording
 
@@ -267,7 +280,8 @@ def main(args=None):
         assert source_type == "buzzer-onboard"
 
         start_bag_recording(bag_filename)
-        start_turning(distance, angle)
+        print('measure_wall: start moving')
+        start_moving(distance, angle)
 
         return perform_experiment()
 
@@ -362,13 +376,16 @@ def main(args=None):
             sd.play(sound, blocking=True)
 
     # motors check
-    SerialIn = None
     if any([p.get("distance", None) is not None for p in params_list]) or any(
         [p.get("angle", None) is not None for p in params_list]
     ):
+        global SerialIn
         SerialIn = SerialMotors(
             verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE,
         )
+        print('initalized serial motors')
+    else:
+        print('not initializing')
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
         if not os.path.exists(dirname):
@@ -401,11 +418,10 @@ def main(args=None):
                 )
                 or timestamp
             )
+            if answer == "n":
+                continue
             filename = f"{filename}_{answer}"
             bag_filename = os.path.join(exp_dirname, filename)
-
-        if answer == "n":
-            continue
 
         csv_filename = os.path.join(csv_dirname, filename)
         wav_filename = os.path.join(wav_dirname, filename) + ".wav"
@@ -414,10 +430,14 @@ def main(args=None):
         distance = params.get("distance", None)
         angle = params.get("degree", None)
 
+        print('checking for blocking movements...')
         if (distance is not None) and (abs(distance) != 51):
+            print('moving to', distance)
             SerialIn.move_to(distance, blocking=True)
         if (angle is not None) and (abs(angle) != 360):
+            print('moving to', angle)
             SerialIn.move_to(angle, blocking=True)
+        print('...done')
 
         #### set parameters ###
         duration = adjust_duration(global_params.get("duration", 30), params)
