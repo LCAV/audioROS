@@ -68,7 +68,7 @@ START_ANGLE = 0
 EXTRA_DIRNAME = "2021_06_22_stepper"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = True  # False
+USER_INPUT = False
 
 bag_pid = None
 SerialIn = None
@@ -404,6 +404,8 @@ def main(args=None):
             param_i += 1
             continue
 
+        print('experiment:', params)
+
         #### prepare filenames ####
         filename = get_filename(**params)
         bag_filename = os.path.join(exp_dirname, filename)
@@ -426,6 +428,7 @@ def main(args=None):
 
         #### move ####
         distance = params.get("distance", None)
+        print('distance:', distance, abs(distance))
         angle = params.get("degree", None)
 
         print("checking for blocking movements...")
