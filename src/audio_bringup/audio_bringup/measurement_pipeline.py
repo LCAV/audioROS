@@ -37,7 +37,7 @@ from audio_bringup.helpers import (
 
 DEFAULT_PARAMS = {
     "min_freq": 0,
-    "max_freq": FS / 2, 
+    "max_freq": FS / 2,
     "window_type": 0,
     "snr": 0,
     "props": 0,
@@ -45,7 +45,7 @@ DEFAULT_PARAMS = {
     "degree": 0,
     "motors": 0,
     "source": None,
-    "appendix": ""
+    "appendix": "",
 }
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"snr": "filter_snr_enable", "props": "filter_props_enable"}
@@ -62,15 +62,17 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_05_04_flying"
 # EXTRA_DIRNAME = "2021_05_04_linear"
 # EXTRA_DIRNAME = "2021_06_09_stepper"
-#EXTRA_DIRNAME = "2021_06_17_stepper"
-#EXTRA_DIRNAME = "2021_06_19_stepper"
-EXTRA_DIRNAME = "2021_06_19_stepper_linear"
+# EXTRA_DIRNAME = "2021_06_17_stepper"
+# EXTRA_DIRNAME = "2021_06_19_stepper"
+# EXTRA_DIRNAME = "2021_06_19_stepper_linear"
+EXTRA_DIRNAME = "2021_06_22_stepper"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = True #False
+USER_INPUT = True  # False
 
 bag_pid = None
 SerialIn = None
+
 
 def execute_commands(command_name):
     if "mono" in command_name:
@@ -168,12 +170,10 @@ def adjust_duration(duration, params):
 
 
 def set_audio_parameters(params, params_old):
-    audio_parameters = [
-        "min_freq", "max_freq", "window_type", "snr", "props"
-    ]
+    audio_parameters = ["min_freq", "max_freq", "window_type", "snr", "props"]
     for key, value in params.items():
         if not key in audio_parameters:
-            continue 
+            continue
 
         value_old = params_old.get(key, DEFAULT_PARAMS[key])
         if value_old != value:
@@ -237,9 +237,7 @@ def main(args=None):
         # wait for exxtra time
         extra_idle_time = duration - (time.time() - start_time)
         if extra_idle_time > 0:
-            print(
-                f"Waiting for {extra_idle_time:.2f} seconds..."
-            )
+            print(f"Waiting for {extra_idle_time:.2f} seconds...")
             time.sleep(extra_idle_time)
         elif extra_idle_time < 0:
             print(
@@ -280,7 +278,7 @@ def main(args=None):
         assert source_type == "buzzer-onboard"
 
         start_bag_recording(bag_filename)
-        print('measure_wall: start moving')
+        print("measure_wall: start moving")
         start_moving(distance, angle)
 
         return perform_experiment()
@@ -383,9 +381,9 @@ def main(args=None):
         SerialIn = SerialMotors(
             verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE,
         )
-        print('initalized serial motors')
+        print("initalized serial motors")
     else:
-        print('not initializing')
+        print("not initializing")
 
     for dirname in [exp_dirname, csv_dirname, wav_dirname]:
         if not os.path.exists(dirname):
@@ -399,7 +397,7 @@ def main(args=None):
 
         #### verify parameters ####
         params = params_list[param_i]
-        answer = ""  if USER_INPUT else "y"
+        answer = "" if USER_INPUT else "y"
         while not (answer in ["y", "n"]):
             answer = input(f"start experiment with {params}? ([y]/n)") or "y"
         if answer == "n":
@@ -430,14 +428,14 @@ def main(args=None):
         distance = params.get("distance", None)
         angle = params.get("degree", None)
 
-        print('checking for blocking movements...')
+        print("checking for blocking movements...")
         if (distance is not None) and (abs(distance) != 51):
-            print('moving to', distance)
+            print("moving to", distance)
             SerialIn.move_to(distance, blocking=True)
         if (angle is not None) and (abs(angle) != 360):
-            print('moving to', angle)
+            print("moving to", angle)
             SerialIn.move_to(angle, blocking=True)
-        print('...done')
+        print("...done")
 
         #### set parameters ###
         duration = adjust_duration(global_params.get("duration", 30), params)
