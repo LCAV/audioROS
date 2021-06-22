@@ -21,7 +21,7 @@ MAG_THRESH = 1e-3  # minimum magnitude
 STD_THRESH = 0.5  # maximum normalized std deviation
 DELTA_MERGE_FREQ = 50  # frequencies spaced by less are merged. sweep spacing: ca. 125
 RATIO_MISSING_ALLOWED = 0.2
-OUTLIER_FACTOR = 3
+FACTOR_OUTLIERS = 3
 
 SWEEP_DELTA = 1000  # jumps by more than this downwards are detected as end of sweep.
 F_DELTA = 100  # jumps by more than this in frequency mark end of mono
@@ -304,7 +304,7 @@ def remove_bad_measurements(df, mag_thresh, verbose=False):
     df.drop(index=index_remove, inplace=True)
 
 
-def remove_outliers(df, factor=OUTLIER_FACTOR, normalize=False, verbose=False):
+def remove_outliers(df, factor=FACTOR_OUTLIERS, normalize=False, verbose=False):
     index_remove = []
     for (mic, d, f), df_dist in df.groupby(["mic", "distance", "frequency"]):
         median_magnitude = df_dist.magnitude.median()
@@ -353,7 +353,7 @@ def cleanup(df, params, verbose=False):
     remove_bad_measurements(df, mag_thresh, verbose)
     remove_bad_freqs(df, mag_thresh, std_thresh, verbose=verbose)
     merge_close_freqs(df, verbose=verbose)
-    remove_outliers(df, verbose)
+    # remove_outliers(df, verbose=verbose)
     remove_spurious_freqs(df, n_spurious, verbose=verbose)
     remove_nan_rows(df, verbose)
 
@@ -389,7 +389,7 @@ class DataCollector(object):
 
         self.params = {}
         if exp_name is not None:
-            self.params.update(kwargs_datasets[exp_name][mic_type])
+            self.params.update(kwargs_datasets[exp_name].get(mic_type, {}))
 
     @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
@@ -761,7 +761,8 @@ class DataCollector(object):
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
         remove_bad_measurements(self.df, mag_thresh, verbose)
 
-    def remove_outliers(self, factor=OUTLIER_FACTOR, normalize=True, verbose=False):
+    def remove_outliers(self, normalize=True, verbose=False):
+        factor = self.params.get("factor_outliers", FACTOR_OUTLIERS)
         return remove_outliers(self.df, factor, normalize, verbose)
 
     def cleanup(self, verbose=False):
@@ -769,7 +770,7 @@ class DataCollector(object):
         self.remove_bad_measurements()
         self.remove_bad_freqs(verbose=verbose)
         self.merge_close_freqs(verbose=verbose)
-        self.remove_outliers()
+        # self.remove_outliers()
         self.remove_spurious_freqs(verbose=verbose)
         self.remove_nan_rows()
         self.to_numeric()

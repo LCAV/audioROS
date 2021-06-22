@@ -94,8 +94,6 @@ kwargs_datasets = {
     },
     "2021_03_01_flying": {
         "audio_deck": {
-            "offset": None,
-            "slope": None,
             "min_freq": 2900,
             "max_freq": 5000,
             "min_time": 10,
@@ -104,53 +102,28 @@ kwargs_datasets = {
     },
     "2021_04_30_hover": {
         "audio_deck": {
-            "offset": None,
-            "slope": None,
-            "min_freq": 2000,
-            "max_freq": 6000,
-            "min_time": 0,
-            "max_time": 12,  # not active
+            "max_time": 12,
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
     "2021_04_30_stepper": {
         "audio_deck": {
-            "offset": None,
-            "slope": None,
-            "min_freq": 2000,
-            "max_freq": 6000,
-            "min_time": 0,
-            "max_time": 30,  # not active
             "mag_thresh": 1,
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
     "2021_05_04_flying": {
         "audio_deck": {
-            "min_freq": 2000,
-            "max_freq": 6000,
-            "min_time": 0,
-            "max_time": 60,  # not active
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
     "2021_05_04_linear": {
         "audio_deck": {
-            "min_freq": 2000,
-            "max_freq": 6000,
-            "min_time": 0,
-            "max_time": 60,  # not active
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
     "2021_06_09_stepper": {
         "audio_deck": {
-            "offset": None,
-            "slope": None,
-            "min_freq": 2000,
-            "max_freq": 6000,
-            "min_time": 0,
-            "max_time": 30,  # not active
             "mag_thresh": 1e-2,
             "std_thresh": 100,
             "n_spurious": 1,  # important, because only one measurement per frequency.
@@ -158,12 +131,14 @@ kwargs_datasets = {
     },
     "2021_06_17_stepper": {
         "audio_deck": {
-            "offset": None,
-            "slope": None,
-            "min_freq": 2000,
-            "max_freq": 6000,
-            "min_time": 0,
-            "max_time": 30,  # not active
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
+    "2021_06_19_stepper": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
             "mag_thresh": 1e-2,
             "std_thresh": 100,
             "n_spurious": 1,  # important, because only one measurement per frequency.

@@ -69,10 +69,10 @@ stash/
 # evaluation
 *.pk
 *.pkl
-notebooks/.ipynb_checkpoints
-notebooks/results/
-notebooks/plots/
-notebooks/plots_doa/
+python/.ipynb_checkpoints
+python/results/
+python/plots/
+python/plots_doa/
 
 
 # latex stuff

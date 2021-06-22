@@ -15,5 +15,5 @@ audio_plotter:
   ros__parameters:
     min_freq: 1000
     max_freq: 6000
-    min_amp: 1e-5
+    min_amp: 1e-3
     max_amp: 1e2

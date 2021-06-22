@@ -43,14 +43,15 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors):
 
 if __name__ == "__main__":
     DEGREE = 0
-    mic_types = ["audio_deck"]
+    mic_types = ["audio_deck"]  # , "measurement"]
     motors_types = [0, "all45000"]
     exp_names = [
         # "2021_02_23_wall",
         # "2021_02_25_wall"
         # "2021_04_30_stepper"
         # "2021_06_09_stepper"
-        "2021_06_17_stepper"
+        # "2021_06_17_stepper"
+        "2021_06_19_stepper"
     ]
 
     # exp_name = '2021_02_09_wall_tukey';
