@@ -5,7 +5,7 @@ gateway:
     max_freq: 4200
     delta_freq: 100 # not used without prop
     n_average: 5 # not used without snr
-    filter_snr_enable: 0
+    bin_selection: 0
     filter_prop_enable: 0
     hover_height: 0.0
     turn_angle: 0

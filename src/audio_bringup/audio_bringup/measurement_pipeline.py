@@ -39,7 +39,7 @@ DEFAULT_PARAMS = {
     "min_freq": 0,
     "max_freq": FS / 2,
     "window_type": 0,
-    "snr": 0,
+    "bin_selection": 0,
     "props": 0,
     "distance": 0,
     "degree": 0,
@@ -48,7 +48,7 @@ DEFAULT_PARAMS = {
     "appendix": "",
 }
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
-PARAM_NAMES = {"snr": "filter_snr_enable", "props": "filter_props_enable"}
+PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
 
 START_DISTANCE = 0
 START_ANGLE = 0
@@ -170,7 +170,7 @@ def adjust_duration(duration, params):
 
 
 def set_audio_parameters(params, params_old):
-    audio_parameters = ["min_freq", "max_freq", "window_type", "snr", "props"]
+    audio_parameters = ["min_freq", "max_freq", "window_type", "bin_selection", "props"]
     for key, value in params.items():
         if not key in audio_parameters:
             continue

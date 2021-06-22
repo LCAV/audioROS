@@ -58,7 +58,7 @@ PARAMS_DICT = {
     "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
     "delta_freq": (rclpy.Parameter.Type.INTEGER, 100),  # not used without prop
     "n_average": (rclpy.Parameter.Type.INTEGER, 5),  # not used without snr
-    "filter_snr_enable": (rclpy.Parameter.Type.INTEGER, 3),
+    "bin_selection": (rclpy.Parameter.Type.INTEGER, 3),
     "filter_prop_enable": (rclpy.Parameter.Type.INTEGER, 0),
     "window_type": (rclpy.Parameter.Type.INTEGER, 1),
     "all": (rclpy.Parameter.Type.INTEGER, 0),
