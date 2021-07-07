@@ -1,0 +1,11 @@
+# Test simple arithmetics
+
+var i = 0
+var j = 1
+var k
+
+k = i + j	# 1
+k = 30 * k	# 30
+k = k / 3	# 10
+k = k - 1	# 9
+k = k % 5	# 4

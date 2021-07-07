@@ -1,0 +1,56 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="false"/>
+
+
+<!--node e-puck-->
+<node nodeId="1" name="e-puck">var maxBlueVal
+var maxBluePos
+var i
+
+wheel.left_speed = 100
+wheel.right_speed = 100
+
+onevent timer
+maxBlueVal = 0
+maxBluePos = 0
+i = 0
+
+while i &lt; 3 do
+        if cam.blue[i] > maxBlueVal then
+                maxBluePos = i
+                maxBlueVal = cam.blue[i]
+        end
+        i = i + 1
+end
+
+if maxBluePos == 0 then
+        wheel.left_speed = 0
+        wheel.right_speed = 13
+else
+        if maxBluePos == 1 then
+                wheel.left_speed = 10
+                wheel.right_speed = 10
+        else
+                wheel.left_speed = 13
+                wheel.right_speed = 0
+        end
+end
+
+if maxBlueVal &lt;= 50 then
+        wheel.left_speed = -10
+        wheel.right_speed = -5
+end
+</node>
+
+
+</network>
