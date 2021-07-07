@@ -3,6 +3,7 @@ import os
 import struct
 import sys
 import time
+from datetime import datetime
 import rclpy
 from rcl_interfaces.msg import SetParametersResult
 
@@ -28,12 +29,57 @@ https://www.gctronic.com/doc/index.php?title=e-puck2_PC_side_development
 PORT = /dev/rfcomm0
 """
 
-PORT = "/dev/ttyACM2"
-BAUDRATE = 115200
+def read_start(port):
+    state = 0
+    while state != 5:
+        # reads 1 byte
+        try:
+            c1 = port.read(1)
+        except KeyboardInterrupt:
+            print("interrupt during read")
+            return None
+
+        # timeout condition
+        if c1 == b"":
+            print("Timeout")
+            return False
+        if state == 0:
+            if c1 == b"S":
+                state = 1
+            else:
+                state = 0
+        elif state == 1:
+            if c1 == b"T":
+                state = 2
+            elif c1 == b"S":
+                state = 1
+            else:
+                state = 0
+        elif state == 2:
+            if c1 == b"A":
+                state = 3
+            elif c1 == b"S":
+                state = 1
+            else:
+                state = 0
+        elif state == 3:
+            if c1 == b"R":
+                state = 4
+            elif c1 == b"S":
+                state = 1
+            else:
+                state = 0
+        elif state == 4:
+            if c1 == b"T":
+                state = 5
+            elif c1 == b"S":
+                state = 1
+            else:
+                state = 0
+    return True
 
 def live_status_function(show_status, bins, data):
     if show_status:
-        print("the data is", data)
         print("the bins are", bins)
 
 class Gateway(NodeWithParams):
@@ -43,23 +89,14 @@ class Gateway(NodeWithParams):
         "stop": 0,
     }
 
-    def __init__(self):
+    def __init__(self, port):
         self.desired_rate = 1000  # Hz
         self.start_time = time.time()
 
         super().__init__("gateway")
 
         # need the reader from the epuck initalized here
-        self.get_logger().info(f"initiating connection to port {PORT}")
-        try:
-            self.port = serial.Serial(PORT, BAUDRATE, timeout=0.5)
-            self.get_logger().info(f"connected at baudrate {self.port.baudrate}")
-        except Exception as e:
-            print(e)
-            self.port = None
-            self.get_logger().warn("could not successfully connect to the epuck")
-            #sys.exit(0)
-
+        self.port = port
 
         self.publisher_signals = self.create_publisher(
             SignalsFreq, "audio/signals_f", 10
@@ -83,9 +120,10 @@ class Gateway(NodeWithParams):
         # read audio
         # the format is all the interleaved real values of all four microphones
 
-        try:
+        read_data = self.read_float_serial()
+        if read_data is not None:
             data, size, timestamp = self.read_float_serial()
-        except:
+        else:
             return
 
         if data is None:
@@ -131,7 +169,7 @@ class Gateway(NodeWithParams):
         )
 
         # switch the status to true to receive information on relevant data
-        live_status_function(False, fbins, signals_f)
+        live_status_function(True, fbins, signals_f)
 
         self.publisher_signals.publish(msg)
 
@@ -141,58 +179,24 @@ class Gateway(NodeWithParams):
 
     # reads the FFT in float32 from the serial
     def read_float_serial(self):
-        state = 0
+        #print("read float serial at ", now.srtftime("%H:%M:%S"))
+        print("read float serial")
 
-        while state != 5:
-            # reads 1 byte
-            c1 = self.port.read(1)
-            # timeout condition
-            if c1 == b"":
-                print("Timeout...")
-                return []
-
-            if state == 0:
-                if c1 == b"S":
-                    state = 1
-                else:
-                    state = 0
-            elif state == 1:
-                if c1 == b"T":
-                    state = 2
-                elif c1 == b"S":
-                    state = 1
-                else:
-                    state = 0
-            elif state == 2:
-                if c1 == b"A":
-                    state = 3
-                elif c1 == b"S":
-                    state = 1
-                else:
-                    state = 0
-            elif state == 3:
-                if c1 == b"R":
-                    state = 4
-                elif c1 == b"S":
-                    state = 1
-                else:
-                    state = 0
-            elif state == 4:
-                if c1 == b"T":
-                    state = 5
-                elif c1 == b"S":
-                    state = 1
-                else:
-                    state = 0
+        start_detected = read_start(self.port)
+        if start_detected is None:
+            self.port.close()
+            self.destroy_node()
+        elif not start_detected:
+            print("timeout")
+            return None
+        print("start detected")
 
         # normally this should unpack as an unsigned in of size 32 bits
-
         # reads the size
         # converts as short int in little endian the two bytes read
-        size = struct.unpack("<h", self.port.read(2))
-        timestamp = struct.unpack("<I", self.port.read(4))
-        timestamp = timestamp[0]
-        size = size[0]
+        size = struct.unpack("<H", self.port.read(2))[0] # H for unsigned short
+        timestamp = struct.unpack("<I", self.port.read(4))[0] # I for unsigned int
+        print(f"size of incoming data: {size} at timestamp {timestamp}")
 
         # reads the data
         rcv_buffer = self.port.read(size * 4)
@@ -206,7 +210,7 @@ class Gateway(NodeWithParams):
                 i = i + 1
             return data, size, timestamp
         else:
-            print("wrong buffer size")
+            print(f"wrong buffer size, recieved only {len(rcv_buffer)}")
             return None
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
@@ -223,17 +227,17 @@ class Gateway(NodeWithParams):
         pos = 0
         for i in range(bin_number):
             for j in range(mics):
-                pos = (j * bin_number + i) * 2 + position
                 signals_f.real[j, i] = data[pos]
-                signals_f.imag[j, i] = data[pos + 1]
-
-        return signals_f, pos + 2
+                pos += 1
+            for j in range(mics):
+                signals_f.imag[j, i] = data[pos]
+                pos += 1
+        return signals_f, pos + 1
 
     def extract_bins(self, data, bin_pos, num_bins):
         bins = np.zeros(num_bins, np.int)
         for i in range(0, num_bins):
             bins[i] = int(data[i + bin_pos])
-
         return bins, bin_pos + num_bins
 
     def extract_timestamp(self, data, position):
@@ -301,12 +305,36 @@ class Gateway(NodeWithParams):
                 self.get_logger().warn(f"setting unused parameter {param_name}")
         return SetParametersResult(successful=True)
 
-
 def main(args=None):
     rclpy.init(args=args)
 
-    gateway = Gateway()
+    PORT = "/dev/ttyACM"
+    BAUDRATE = 115200
+
+    port = None
+    for i in range(10):
+        port_id = PORT + str(i)
+        try:
+            port = serial.Serial(port_id, BAUDRATE, timeout=0.5)
+            print(f"connected to {port_id} at baudrate {port.baudrate}")
+
+            detected = read_start(port)
+            if detected:
+                print("detected start, ok")
+                break 
+            else:
+                print("did not detect start")
+        except:
+            print(f"could not connect to {port_id}")
+
+    if port is None:
+        print("could not successfully connect to the epuck")
+        sys.exit(0)
+
+    gateway = Gateway(port)
 
     rclpy.spin(gateway)
+
+    port.close()
     gateway.destroy_node()
     rclpy.shutdown()
