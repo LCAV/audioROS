@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Visionneuse de test pour la génération de code AESL depuis Blockly</title>
+<script src="../../blockly_uncompressed.js"></script>
+<script src="../../overrides/subroutines.js"></script>
+<script src="../../overrides/arrayvariables.js"></script>
+<script src="../../generators/javascript.js"></script>
+<script src="../../generators/javascript/logic.js"></script>
+<script src="../../generators/javascript/loops.js"></script>
+<script src="../../generators/javascript/math.js"></script>
+<script src="../../generators/javascript/text.js"></script>
+<script src="../../generators/javascript/lists.js"></script>
+<script src="../../generators/javascript/colour.js"></script>
+<script src="../../generators/javascript/variables.js"></script>
+<script src="../../generators/javascript/procedures.js"></script>
+<script src="../../generators/php.js"></script>
+<script src="../../generators/php/logic.js"></script>
+<script src="../../generators/php/loops.js"></script>
+<script src="../../generators/php/math.js"></script>
+<script src="../../generators/php/text.js"></script>
+<script src="../../generators/php/lists.js"></script>
+<script src="../../generators/php/colour.js"></script>
+<script src="../../generators/php/variables.js"></script>
+<script src="../../generators/php/procedures.js"></script>
+<script src="../../generators/python.js"></script>
+<script src="../../generators/python/logic.js"></script>
+<script src="../../generators/python/loops.js"></script>
+<script src="../../generators/python/math.js"></script>
+<script src="../../generators/python/text.js"></script>
+<script src="../../generators/python/lists.js"></script>
+<script src="../../generators/python/colour.js"></script>
+<script src="../../generators/python/variables.js"></script>
+<script src="../../generators/python/procedures.js"></script>
+<script src="../../generators/dart.js"></script>
+<script src="../../generators/dart/logic.js"></script>
+<script src="../../generators/dart/loops.js"></script>
+<script src="../../generators/dart/math.js"></script>
+<script src="../../generators/dart/text.js"></script>
+<script src="../../generators/dart/lists.js"></script>
+<script src="../../generators/dart/colour.js"></script>
+<script src="../../generators/dart/variables.js"></script>
+<script src="../../generators/dart/procedures.js"></script>
+<script src="../../generators/aesl.js"></script>
+<script src="../../generators/aesl/logic.js"></script>
+<script src="../../generators/aesl/math.js"></script>
+<script src="../../generators/aesl/thymio.js"></script>
+<script src="../../generators/aesl/loops.js"></script>
+<script src="../../generators/aesl/variables.js"></script>
+<script src="../../generators/aesl/procedures.js"></script>
+<script src="../../msg/js/fr.js"></script>
+<script src="../../blocks/logic.js"></script>
+<script src="../../blocks/loops.js"></script>
+<script src="../../blocks/math.js"></script>
+<script src="../../blocks/text.js"></script>
+<script src="../../blocks/lists.js"></script>
+<script src="../../blocks/colour.js"></script>
+<script src="../../blocks/variables.js"></script>
+<script src="../../blocks/procedures.js"></script>
+<script src="../../blocks/thymio.js"></script>
+<script src="../../overrides/blockcolors.js"></script>
+<script src="aesltests.js"></script>
+<script>
+'use strict';
+
+var workspace = null;
+
+function start() {
+  var toolbox = document.getElementById('toolbox');
+  workspace = Blockly.inject('blocklyDiv',
+          {comments: true,
+           disable: true,
+           collapse: true,
+           grid:
+             {spacing: 25,
+              length: 3,
+              colour: '#ccc',
+              snap: true},
+           media: '../../media/',
+           readOnly: true,
+           realtime: false,
+           rtl: false,
+           scrollbars: true,
+           toolbox: toolbox,
+           zoom:
+             {enabled: true,
+              controls: true,
+              wheel: true,
+              maxScale: 4,
+              minScale: .25,
+              scaleSpeed: 1.1
+             },
+          });
+  
+  document.getElementById('numTests').value = AeslTests.length;
+  update();
+}
+
+function prev()
+{
+	var newTestId = ((parseInt(document.getElementById('testId').value) - 1 + AeslTests.length - 1) % AeslTests.length) + 1;
+	document.getElementById('testId').value = newTestId;
+	update();
+}
+
+function update()
+{
+	var testId = parseInt(document.getElementById('testId').value) - 1;
+	
+	var testName = AeslTests[testId][0];
+	var testXml = AeslTests[testId][1];
+	var testExpected = AeslTests[testId][2];
+	
+	document.getElementById('testName').innerHTML = testName;
+	document.getElementById('testXml').value = testXml;
+	document.getElementById('testExpected').value = testExpected;
+	
+	workspace.clear();
+	
+	var dom = Blockly.Xml.textToDom(testXml);
+	Blockly.Xml.domToWorkspace(workspace, dom);
+	
+	workspace.zoomReset({
+		stopPropagation: function(e) {} // pass fake event handler 
+	});
+	
+	var testActual = Blockly['AESL'].workspaceToCode(workspace);
+	
+	if(testExpected == testActual) {
+		document.getElementById('testActual').style.backgroundColor = 'lightgreen';	
+	} else {
+		document.getElementById('testActual').style.backgroundColor = 'pink';
+	}
+		
+	document.getElementById('testActual').value = testActual;
+}
+
+function next()
+{
+	var newTestId = ((parseInt(document.getElementById('testId').value) - 1 + AeslTests.length + 1) % AeslTests.length + 1);
+	document.getElementById('testId').value = newTestId;
+	update();
+}
+</script>
+
+<style>
+html, body {
+  height: 100%;
+}
+body {
+  background-color: #fff;
+  font-family: sans-serif;
+  overflow: hidden;
+}
+h1 {
+  font-weight: normal;
+  font-size: 140%;
+}
+#blocklyDiv {
+  float: right;
+  height: 95%;
+  width: 70%;
+}
+#importExport {
+  font-family: monospace;
+}
+</style>
+</head>
+<body onload="start()">
+  <div id="blocklyDiv"></div>
+
+  <h1>Visionneuse de test pour la génération de code AESL depuis Blockly</h1>
+
+  <p>
+  	Test actuel: <span id="testName" style="font-style: italic"></span> <br> 
+  	<input type="button" value="<" onclick="prev()">
+  	<input id="testId" type="text" value="1" onchange="update()" size="3" style="text-align: center">&nbsp;&nbsp;/&nbsp;
+  	<input id="numTests" type="text" value="0" size="3" style="text-align: center" disabled>
+  	<input type="button" value=">" onclick="next()">
+    <br><br>
+    XML:<br>
+    <textarea id="testXml" style="width: 26%; height: 12em"></textarea>
+    <br>
+    Attendu:<br>
+    <textarea id="testExpected" style="width: 26%; height: 12em"></textarea>
+    <br>
+    Actuel:<br>
+    <textarea id="testActual" style="width: 26%; height: 12em"></textarea>
+  </p>
+  <hr>
+</body>
+</html>

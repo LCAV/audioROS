@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Interfaccia Thymio-Blockly</title>
+<script src="qrc:/plugins/ThymioBlockly/blockly/blockly_compressed.js"></script>
+<script src="qrc:/plugins/ThymioBlockly/blockly/blocks_compressed.js"></script>
+<script src="qrc:/plugins/ThymioBlockly/blockly/msg/js/it.js"></script>
+<script src="qrc:/plugins/ThymioBlockly/blockly/aesl_compressed.js"></script>
+<script src="qrc:/plugins/ThymioBlockly/blockly/overrides_compressed.js"></script>
+<script>
+'use strict';
+var workspace = null;
+function reset()
+{
+	workspace.clear();
+}
+function load(xml)
+{
+	workspace.clear();
+	
+	var dom = Blockly.Xml.textToDom(xml);
+	Blockly.Xml.domToWorkspace(workspace, dom);
+}
+function save()
+{
+	var xml = Blockly.Xml.workspaceToDom(workspace);
+	
+	if(typeof asebaJavascriptInterface !== 'undefined') {
+		asebaJavascriptInterface.saved(Blockly.Xml.domToPrettyText(xml));
+	}
+}
+function update()
+{
+	var code = Blockly.AESL.workspaceToCode(workspace);
+	if(typeof asebaJavascriptInterface !== 'undefined') {
+		asebaJavascriptInterface.compiled(code);
+	}
+}
+function start()
+{
+	var toolbox = document.getElementById('toolbox');
+	workspace = Blockly.inject('blocklyDiv', {
+		comments : true,
+		disable : true,
+		collapse : true,
+		grid : {
+			spacing : 25,
+			length : 3,
+			colour : '#ccc',
+			snap : true
+		},
+		media : 'qrc:/plugins/ThymioBlockly/blockly/media/',
+		readOnly : false,
+		realtime : false,
+		rtl : false,
+		scrollbars : true,
+		toolbox : toolbox,
+		zoom : {
+			enabled : true,
+			controls : true,
+			wheel : true,
+			maxScale : 4,
+			minScale : .25,
+			scaleSpeed : 1.1
+		},
+	});
+	workspace.addChangeListener(update);
+	
+	if(typeof asebaJavascriptInterface !== 'undefined') {
+		asebaJavascriptInterface.reset.connect(reset);
+		asebaJavascriptInterface.load.connect(load);
+		asebaJavascriptInterface.save.connect(save);
+	}
+}
+</script>
+
+<style>
+html, body {
+  height: 100%;
+}
+body {
+  background-color: #fff;
+  font-family: sans-serif;
+  overflow: hidden;
+}
+h1 {
+  font-weight: normal;
+  font-size: 140%;
+}
+#blocklyDiv {
+  float: right;
+  height: 97%;
+  width: 100%;
+}
+</style>
+</head>
+<body onload="start()">
+
+  <div id="blocklyDiv"></div>
+
+  <xml id="toolbox" style="display: none">
+    <category name="Eventi" colour="10">
+      <block type="thymio_event_button"></block>
+      <block type="thymio_event_prox"></block>
+      <block type="thymio_event_prox_ground"></block>
+      <block type="thymio_actuator_timer">
+        <field name="VARIABLE">timer.period[0]</field>
+        <value name="VALUE">
+          <shadow type="math_number">
+            <field name="NUM">1000</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_event_timer">
+        <field name="EVENT">timer0</field>
+      </block>
+      <block type="thymio_actuator_mic">
+        <value name="VALUE">
+          <shadow type="math_number">
+            <field name="NUM">40</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_event_sound">
+        <field name="EVENT">mic</field>
+      </block>
+      <block type="thymio_event_sound">
+        <field name="EVENT">sound.finished</field>
+      </block>
+      <block type="thymio_event_shock"></block>
+      <block type="thymio_event_receive">
+        <field name="EVENT">prox.comm</field>
+      </block>
+      <block type="thymio_event_receive">
+        <field name="EVENT">rc5</field>
+      </block>
+      <block type="thymio_event_update">
+        <field name="EVENT">motor</field>
+      </block>
+      <block type="thymio_event_update">
+        <field name="EVENT">temperature</field>
+      </block>
+      <block type="thymio_event_update">
+        <field name="EVENT">acc</field>
+      </block>
+      <block type="thymio_event_update">
+        <field name="EVENT">buttons</field>
+      </block>
+      <block type="thymio_event_update">
+        <field name="EVENT">prox</field>
+      </block>
+    </category>
+    <category name="Attuatori" colour="60">
+      <block type="thymio_motors_stop"></block>
+      <block type="thymio_motors_start">
+        <value name="SPEED">
+          <shadow type="math_number">
+            <field name="NUM">300</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_motors_start">
+        <field name="COMMAND">TURNLEFT</field>
+        <value name="SPEED">
+          <shadow type="math_number">
+            <field name="NUM">300</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_motors_start">
+        <field name="COMMAND">SPINCCW</field>
+        <value name="SPEED">
+          <shadow type="math_number">
+            <field name="NUM">300</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_actuator_motor">
+        <value name="VALUE">
+          <shadow type="math_number">
+            <field name="NUM">0</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_sound_stop"></block>
+      <block type="thymio_sound_system"></block>
+      <block type="thymio_sound_note">
+        <value name="FREQ">
+          <shadow type="math_number">
+            <field name="NUM">440</field>
+          </shadow>
+        </value>
+        <value name="DURATION">
+          <shadow type="math_number">
+            <field name="NUM">10</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_communication"></block>
+      <block type="thymio_actuator_comm">
+        <value name="VALUE">
+          <shadow type="math_number">
+            <field name="NUM">0</field>
+          </shadow>
+        </value>
+      </block>
+    </category>
+    <category name="LED" colour="160">
+      <block type="thymio_led_off"></block>
+      <block type="thymio_led"></block>
+      <block type="thymio_led_rgb">
+        <value name="RED">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="GREEN">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="BLUE">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+     <block type="thymio_led_circle">
+        <value name="CIRCLE0">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE1">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE2">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE3">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE4">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE5">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE6">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="CIRCLE7">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_led_prox">
+        <value name="PROX0">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX1">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX2">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX3">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX4">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX5">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX6">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX7">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_led_prox_ground">
+        <value name="PROX0">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="PROX1">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_led_button">
+        <value name="FORWARD">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="RIGHT">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="BACKWARD">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="LEFT">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_led_temperature">
+        <value name="RED">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+        <value name="BLUE">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_led_rc_sound">
+        <value name="INTENSITY">
+          <shadow type="math_number">
+            <field name="NUM">32</field>
+          </shadow>
+        </value>
+      </block>
+    </category>
+    <category name="Sensori" colour="230">
+      <block type="thymio_button_pressed"></block>
+      <block type="thymio_prox_check"></block>
+      <block type="thymio_prox_ground_check"></block>
+      <block type="thymio_sensor_prox"></block>
+      <block type="thymio_sensor_motor">
+        <field name="SENSOR">motor.left.speed</field>
+      </block>
+      <block type="thymio_sensor_acc">
+        <field name="SENSOR">acc[0]</field>
+      </block>
+      <block type="thymio_sensor_temperature">
+        <field name="SENSOR">temperature</field>
+      </block>
+      <block type="thymio_sensor_mic">
+        <field name="SENSOR">mic.intensity</field>
+      </block>
+      <block type="thymio_sensor_comm">
+        <field name="SENSOR">prox.comm.rx</field>
+      </block>
+      <block type="thymio_sensor_rc">
+        <field name="SENSOR">rc5.address</field>
+      </block>
+    </category>
+    <sep></sep>
+    <category name="Logica di controllo" colour="210">
+      <block type="controls_if">
+        <value name="IF0">
+          <shadow type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_when">
+        <value name="WHEN">
+          <shadow type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_compare">
+        <value name="A">
+          <shadow type="math_number">
+            <field name="NUM">0</field>
+          </shadow>
+        </value>
+        <value name="B">
+          <shadow type="math_number">
+            <field name="NUM">0</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="logic_operation">
+        <value name="A">
+          <shadow type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </shadow>
+        </value>
+        <value name="B">
+          <shadow type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="logic_negate">
+        <value name="BOOL">
+          <shadow type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="logic_boolean"></block>
+    </category>
+    <category name="Iterazioni" colour="120">
+      <block type="controls_repeat">
+        <field name="TIMES">10</field>
+      </block>
+      <block type="controls_whileUntil">
+        <value name="BOOL">
+          <shadow type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_for">
+        <field name="FROM">0</field>
+        <field name="TO">9</field>
+      </block>
+    </category>
+    <category name="Matematica" colour="230">
+      <block type="math_number"></block>
+      <block type="thymio_arithmetic">
+        <value name="A">
+          <shadow type="math_number">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+        <value name="B">
+          <shadow type="math_number">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_unary"></block>
+      <block type="thymio_unary">
+        <field name="OP">abs</field>
+      </block>
+      <block type="thymio_binary">
+        <value name="A">
+          <shadow type="math_number">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+        <value name="B">
+          <shadow type="math_number">
+            <field name="NUM">1</field>
+          </shadow>
+        </value>
+      </block>
+      <block type="thymio_unary">
+        <field name="OP">~</field>
+      </block>
+    </category>
+    <sep></sep>
+    <category name="Variabili" colour="330" custom="VARIABLE"></category>
+    <category name="Sottoprogrammi" colour="290" custom="PROCEDURE"></category>
+  </xml>
+</body>
+</html>
