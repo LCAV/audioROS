@@ -50,7 +50,7 @@ DEFAULT_PARAMS = {
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
 
-START_DISTANCE = 0
+START_DISTANCE = 0 
 START_ANGLE = 0
 
 # EXTRA_DIRNAME = '2021_02_09_wall'
@@ -66,11 +66,13 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_06_19_stepper"
 # EXTRA_DIRNAME = "2021_06_19_stepper_linear"
 # EXTRA_DIRNAME = "2021_06_22_stepper"
-EXTRA_DIRNAME = "2021_07_08_stepper"
+# EXTRA_DIRNAME = "2021_07_08_stepper"
 #EXTRA_DIRNAME = "2021_07_08_rotating"
+#EXTRA_DIRNAME = "2021_07_08_stepper_fast"
+EXTRA_DIRNAME = "2021_07_08_stepper_slow"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = True
+USER_INPUT = False
 
 bag_pid = None
 SerialIn = None
