@@ -22,7 +22,7 @@ WHEEL_DIAMETER = 0.041  # wheel radius in meters
 N_MICS = 4  # number of mics
 FS = 16000  # sampling frequency [Hz]
 N_BUFFER = (
-    2048  # number of samples in audio buffer (160 per microphones after demodulation)
+    1024  # number of samples in audio buffer (160 per microphones after demodulation)
 )
 FFTSIZE = 32  # number of frequency bins that are sent.
 

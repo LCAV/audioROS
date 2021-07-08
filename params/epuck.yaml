@@ -1,8 +1,8 @@
 gateway:
   ros__parameters:
-    min_freq: 2000
+    min_freq: 1000
     max_freq: 6000
 audio_plotter:
   ros__parameters:
-    min_freq: 2000
+    min_freq: 1000
     max_freq: 6000
