@@ -29,6 +29,12 @@
 #define BUZZER_FMAX 3000
 #define BUZZER_DF 125
 
+typedef enum states_enum_t {
+	WAIT_START, RECORD, WAIT_SEND, SEND, NEXT_NOTE, WAIT_ACK,
+} state_t;
+
+state_t state = WAIT_START;
+
 uint16_t buzzerFreq = BUZZER_FMIN;
 
 static void serial_start(void) {
@@ -85,44 +91,81 @@ int main(void) {
 
 	/* Infinite loop. */
 
-	chSequentialStreamWrite((BaseSequentialStream *) &SD3, (uint8_t*)"STARTING MAIN EPUCK\n\r", 21);
+	chSequentialStreamWrite((BaseSequentialStream * ) &SD3,
+			(uint8_t* )"STARTING MAIN EPUCK\n\r", 21);
 
+	uint8_t c;
 
 	while (1) {
 
-/*
-		uint8_t c1;
-		while(c1 != 's'){
-			c1 = chSequentialStreamGet((BaseSequentialStream *) &SD3);
-		}first
-*/
-#ifdef SEND_FROM_MIC
-		//waits until a result must be sent to the computer
-		wait_send_to_computer();
-#ifdef DOUBLE_BUFFERING
-		//we copy the buffer to avoid conflicts
-		arm_copy_f32(get_audio_buffer_ptr(ALL_OUTPUTS), send_tab, DATA_SIZE);
-		//add time to the  element of our data
-		timestamp += GPTD12.tim->CNT;
-		GPTD12.tim->CNT = 0;
-		SendFloatToComputer((BaseSequentialStream *) &SD3, send_tab, DATA_SIZE, timestamp);
+
+		if(c == 'x'){
+			state = WAIT_START;
+		}
+//
+		switch (state) {
+		case WAIT_START:
+			SendStart((BaseSequentialStream *) &SD3);
+
+			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
+
+			if (c == 's') {
+				state = RECORD;
+				dac_play(buzzerFreq);
+			}else{
+				dac_stop();
+			}
+
+
+			break;
+		case RECORD:
+			wait_send_to_computer();
+			//waits until a result must be sent to the computer
+			//we copy the buffer to avoid conflicts
+			arm_copy_f32(get_audio_buffer_ptr(ALL_OUTPUTS), send_tab,
+			DATA_SIZE);
+			//add time to the  element of our data
+			timestamp += GPTD12.tim->CNT;
+			GPTD12.tim->CNT = 0;
+
+			state = SEND;
+			break;
+		case SEND:
+			SendFrameToComputer((BaseSequentialStream *) &SD3, send_tab, DATA_SIZE, timestamp);
+			state = WAIT_ACK;
+			break;
+		case WAIT_ACK:
+			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
+
+			if (c == 'a') {
+				state = NEXT_NOTE;
+			}else if(c == 'n'){
+				state = SEND;
+			}
+			break;
+		case NEXT_NOTE:
+			if (buzzerFreq <= BUZZER_FMAX) { //every second
+				buzzerFreq += BUZZER_DF;
+			} else if (buzzerFreq > BUZZER_FMAX) {
 
 #ifdef BUZZER_FREQ_CYCLING
-		if (buzzerFreq <= BUZZER_FMAX) { //every second
-			buzzerFreq += BUZZER_DF;
-		}
-		else if (buzzerFreq > BUZZER_FMAX) {
-			buzzerFreq = BUZZER_FMIN;
-
-		}
-		dac_play(buzzerFreq);
-
-		//dac_stop();
-
+				buzzerFreq = BUZZER_FMIN;
+#else
+				dac_stop();
+				state = WAIT_START;
 #endif
+			}
+
+			dac_play(buzzerFreq);
+			state = RECORD;
+			break;
+		}
+#ifdef SEND_FROM_MIC
+
+#ifdef DOUBLE_BUFFERING
 
 #else
-		SendFloatToComputer((BaseSequentialStream *) &SD3, get_audio_buffer_ptr(LEFT_OUTPUT), FULL_MIC_SIZE);
+		SendFrameToComputer((BaseSequentialStream *) &SD3, get_audio_buffer_ptr(LEFT_OUTPUT), FULL_MIC_SIZE);
 #endif  /* DOUBLE_BUFFERING */
 #else
 		//time measurement variables
@@ -155,7 +198,7 @@ int main(void) {
 			time_mag = GPTD12.tim->CNT;
 			chSysUnlock();
 			uint32_t timestamp = 0;
-			SendFloatToComputer((BaseSequentialStream *) &SD3, bufferOutput, FFT_SIZE, timestamp);
+			SendFrameToComputer((BaseSequentialStream *) &SD3, bufferOutput, FFT_SIZE, timestamp);
 			//chprintf((BaseSequentialStream *) &SDU1, "time fft = %d us, time magnitude = %d us\n",time_fft, time_mag);
 
 		}

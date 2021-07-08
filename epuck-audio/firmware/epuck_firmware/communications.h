@@ -2,7 +2,8 @@
 #define COMMUNICATIONS_H
 
 
-void SendFloatToComputer(BaseSequentialStream* out, float* data, uint16_t size, uint32_t timestamp);
+void SendFrameToComputer(BaseSequentialStream* out, float* data, uint16_t size, uint32_t timestamp);
+void SendStart(BaseSequentialStream* out);
 
 uint16_t ReceiveInt16FromComputer(BaseSequentialStream* in, float* data, uint16_t size);
 

@@ -7,13 +7,20 @@
 /*
 *	Sends floats numbers to the computer
 */
-void SendFloatToComputer(BaseSequentialStream* out, float* data, uint16_t size, uint32_t timestamp)
+void SendFrameToComputer(BaseSequentialStream* out, float* data, uint16_t size, uint32_t timestamp)
 {	
 	chSequentialStreamWrite(out, (uint8_t*)"START", 5);
 	chSequentialStreamWrite(out, (uint8_t*)&size, sizeof(size));
 	chSequentialStreamWrite(out, (uint8_t*)&timestamp, sizeof(timestamp));
 	chSequentialStreamWrite(out, (uint8_t*)data, size * sizeof(float));
+	chSequentialStreamWrite(out, (uint8_t*)"END", 3);
 }
+
+void SendStart(BaseSequentialStream* out)
+{
+	chSequentialStreamWrite(out, (uint8_t*)"START", 5);
+}
+
 
 /*
  * Function that is responsible for receiving the frequency of the robot from the computer
