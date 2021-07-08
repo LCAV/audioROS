@@ -65,10 +65,12 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_06_17_stepper"
 # EXTRA_DIRNAME = "2021_06_19_stepper"
 # EXTRA_DIRNAME = "2021_06_19_stepper_linear"
-EXTRA_DIRNAME = "2021_06_22_stepper"
+# EXTRA_DIRNAME = "2021_06_22_stepper"
+EXTRA_DIRNAME = "2021_07_08_stepper"
+#EXTRA_DIRNAME = "2021_07_08_rotating"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = False
+USER_INPUT = True
 
 bag_pid = None
 SerialIn = None
@@ -133,7 +135,9 @@ def adjust_freq_lims(params):
 
 def adjust_duration(duration, params):
     distance = params.get("distance", None)
-    angle = params.get("angle", None)
+    print(params)
+    angle = params.get("degree", None)
+    print(angle)
 
     if (distance is not None) and (abs(distance) == 51):
         if DURATION_50 > duration:
@@ -142,9 +146,10 @@ def adjust_duration(duration, params):
             )
             duration = DURATION_50
     if (angle is not None) and (abs(angle) == 360):
+        print(angle)
         if DURATION_360 > duration:
             print(
-                f"ignoring global duration {duration} and using turn command duration {duration_turn}"
+                f"ignoring global duration {duration} and using turn command duration {DURATION_360}"
             )
             duration = DURATION_360
 
