@@ -160,4 +160,20 @@ kwargs_datasets = {
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
+    "2021_07_08_stepper_slow": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
+    "2021_07_08_stepper_fast": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+        },
+    },
 }
