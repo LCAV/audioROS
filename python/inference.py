@@ -184,20 +184,32 @@ def get_probability_bayes(
     n_max=1000,
     sigma=None,
     azimuth_deg=WALL_ANGLE_DEG,
+    interpolate=True,
 ):
     assert f_slice.ndim == 1
-    abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
 
-    # get path interference differences corresponding to used frequencies
-    differences = get_differences(frequencies, n_max=n_max)
+    if interpolate:
+        frequencies_grid = np.arange(min(frequencies), max(frequencies), step=50.0)
+        interpolator = scipy.interpolate.interp1d(frequencies, f_slice)
+        f_slice_grid = interpolator(frequencies_grid)
 
-    # convert absolute fft to posterior (no correction yet!)
-    posterior = get_posterior(abs_fft, sigma, data=f_slice)
+        abs_fft = get_abs_fft(f_slice_grid, n_max=n_max, norm=True)
+        differences = get_differences(frequencies_grid, n_max=n_max)
+        posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
+    else:
+        abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
 
-    # convert differences to distances, for intermediate use.
+        # get path interference differences corresponding to used frequencies
+        differences = get_differences(frequencies, n_max=n_max)
+
+        # convert absolute fft to posterior (no correction yet!)
+        posterior = get_posterior(abs_fft, sigma, data=f_slice)
+
+    # convert differences to distances, for immediate evaluations.
     distances = convert_differences_to_distances(
         differences, mic_idx, azimuth_deg=azimuth_deg
     )
+
     if distance_range is not None:
         mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
         distances = distances[mask]
@@ -277,13 +289,33 @@ def get_approach_angle_fft(
     bayes=False,
     sigma=None,
     reduced=False,
+    interpolate=True,
 ):
+    """ 
+    Get probabilities over approach angles.
+
+    :param d_slice: amplitude measurements along distance
+    :param frequency: operating frequency
+    :param relative_distances_cm: relative distance measurements
+    :param interpolate: interpolate measurements on 1cm-grid before inference.
+    """
     from constants import SPEED_OF_SOUND
 
     period_theoretical = frequency / SPEED_OF_SOUND  # 1/m in terms of delta
-    periods_m, probs = get_periods_fft(
-        d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
-    )
+
+    if interpolate:
+        relative_distances_cm_grid = np.arange(
+            min(relative_distances_cm), max(relative_distances_cm), step=1.0
+        )
+        interpolator = scipy.interpolate.interp1d(relative_distances_cm, d_slice)
+        d_slice_grid = interpolator(relative_distances_cm_grid)
+        periods_m, probs = get_periods_fft(
+            d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma
+        )
+    else:
+        periods_m, probs = get_periods_fft(
+            d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
+        )
     ratios = periods_m / period_theoretical
     if not reduced:
         return ratios, probs

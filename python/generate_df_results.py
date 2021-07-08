@@ -12,17 +12,18 @@ OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 D_OFFSET = 0.08  # actual distance at zero-distance, in meters
 
 
-def data_collector_from_df(df_all, exp_name, mic_type, motors):
+def data_collector_from_df(df_all, exp_name, mic_type, motors, snr=""):
     data_collector = DataCollector(exp_name, mic_type)
     if not OVERWRITE_RAW:
         backup_found = data_collector.fill_from_backup(
-            exp_name, mic_type, motors, appendix="_raw"
+            exp_name, mic_type, motors, snr, appendix="_raw"
         )
     elif OVERWRITE_RAW or not backup_found:
         chosen_dict = {
             "degree": DEGREE,
             "mic_type": mic_type,
             "motors": motors,
+            "snr": snr,
         }
         df_filtered = filter_by_dict(df_all, chosen_dict)
         if len(df_filtered) == 0:
@@ -32,12 +33,14 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors):
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
 
-                mode = "maximum" if row.snr != 5 else "all"
+                # for snr=5 and 6, we have a full sweep in each package, so we want to use all of the values.
+                # otherwise, we take the maximum per package.
+                mode = "maximum" if row.snr < 5 else "all"
 
                 row.distance += D_OFFSET * 100
                 data_collector.fill_from_row(row, mode=mode)
                 p.update(i_row)
-        data_collector.backup(exp_name, mic_type, motors, appendix="_raw")
+        data_collector.backup(exp_name, mic_type, motors, snr, appendix="_raw")
     return data_collector
 
 
@@ -45,13 +48,17 @@ if __name__ == "__main__":
     DEGREE = 0
     mic_types = ["audio_deck"]  # , "measurement"]
     motors_types = [0, "all45000"]
+    snr_types = [5, 6]
     exp_names = [
         # "2021_02_23_wall",
         # "2021_02_25_wall"
         # "2021_04_30_stepper"
         # "2021_06_09_stepper"
         # "2021_06_17_stepper"
-        "2021_06_19_stepper"
+        # "2021_06_19_stepper"
+        # "2021_07_07_stepper"
+        "2021_07_08_stepper"
+        # "2021_07_07_rotating"
     ]
 
     # exp_name = '2021_02_09_wall_tukey';
@@ -68,8 +75,12 @@ if __name__ == "__main__":
             print("Error: run wall_analysis.py to parse experiments.")
             sys.exit()
 
-        for mic_type, motors in itertools.product(mic_types, motors_types):
-            data_collector = data_collector_from_df(df_all, exp_name, mic_type, motors)
+        for mic_type, motors, snr in itertools.product(
+            mic_types, motors_types, snr_types
+        ):
+            data_collector = data_collector_from_df(
+                df_all, exp_name, mic_type, motors, snr
+            )
             if data_collector is not None:
                 data_collector.cleanup(verbose=False)
-                data_collector.backup(exp_name, mic_type, motors)
+                data_collector.backup(exp_name, mic_type, motors, snr)

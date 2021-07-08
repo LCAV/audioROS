@@ -776,9 +776,9 @@ class DataCollector(object):
         self.to_numeric()
 
     def fill_from_backup(
-        self, exp_name, mic_type="audio_deck", motors="0", appendix=""
+        self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""
     ):
-        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{appendix}.pkl"
+        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{snr}{appendix}.pkl"
         try:
             self.df = pd.read_pickle(fname)
             print("read", fname)
@@ -787,8 +787,8 @@ class DataCollector(object):
             print(f"did not find {fname}")
             return False
 
-    def backup(self, exp_name, mic_type="audio_deck", motors="0", appendix=""):
-        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{appendix}.pkl"
+    def backup(self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""):
+        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{snr}{appendix}.pkl"
         pd.to_pickle(self.df, fname)
         print("saved", fname)
 

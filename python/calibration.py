@@ -131,13 +131,13 @@ def get_calibration_function_fit(
 
 
 def get_calibration_function_median(
-    exp_name, mic_type, ax=None, motors=0, fit_one_gain=False
+    exp_name, mic_type, ax=None, motors=0, snr="", fit_one_gain=False
 ):
     from data_collector import DataCollector, prune_df_matrix
     from scipy.interpolate import interp1d
 
     data_collector = DataCollector()
-    data_collector.fill_from_backup(exp_name, mic_type, motors=motors)
+    data_collector.fill_from_backup(exp_name, mic_type, motors=motors, snr=snr)
 
     matrix, distances, frequencies = data_collector.get_df_matrix()
     matrix, frequencies, *_ = prune_df_matrix(matrix, frequencies)
