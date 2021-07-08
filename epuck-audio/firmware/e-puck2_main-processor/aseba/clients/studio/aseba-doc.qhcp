@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QHelpCollectionProject version="1.0">
+	<assistant>
+		<title>Aseba</title>
+		<cacheDirectory>Aseba/Aseba</cacheDirectory>
+
+		<startPage>qthelp://aseba.main/doc/doc/en_asebausermanual.html</startPage>
+
+		<aboutMenuText>
+			<text>About Aseba</text>
+		</aboutMenuText>
+
+		<enableDocumentationManager>false</enableDocumentationManager>
+		<enableAddressBar>true</enableAddressBar>
+		<enableFilterFunctionality>true</enableFilterFunctionality>
+	</assistant>
+
+	<docFiles>
+		<register>
+			<file>aseba-doc.qch</file>
+		</register>
+	</docFiles>
+</QHelpCollectionProject>
+

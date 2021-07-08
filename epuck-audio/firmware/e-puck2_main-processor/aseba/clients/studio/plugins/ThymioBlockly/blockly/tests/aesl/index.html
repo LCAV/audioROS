@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Blockly AESL tests</title>
+	<script src="../../blockly_uncompressed.js"></script>
+	<script src="../../overrides/subroutines.js"></script>
+	<script src="../../overrides/arrayvariables.js"></script>
+	<script src="../../generators/aesl.js"></script>
+	<script src="../../generators/aesl/logic.js"></script>
+	<script src="../../generators/aesl/math.js"></script>
+	<script src="../../generators/aesl/thymio.js"></script>
+	<script src="../../generators/aesl/loops.js"></script>
+	<script src="../../generators/aesl/variables.js"></script>
+	<script src="../../generators/aesl/procedures.js"></script>
+	<script src="../../msg/messages.js"></script>
+	<script src="../../blocks/logic.js"></script>
+	<script src="../../blocks/loops.js"></script>
+	<script src="../../blocks/math.js"></script>
+	<script src="../../blocks/text.js"></script>
+	<script src="../../blocks/lists.js"></script>
+	<script src="../../blocks/colour.js"></script>
+	<script src="../../blocks/variables.js"></script>
+	<script src="../../blocks/procedures.js"></script>
+	<script src="../../blocks/thymio.js"></script>
+	<script src="aesltests.js"></script>
+</head>
+<body>
+<div style="text-align: center">
+	<button onclick="run()">Run AESL tests</button>
+</div>
+
+<script>
+function run()
+{
+	console.log('Running tests...');
+	var success = 0;
+	var n = 0;
+		
+	AeslTests.forEach(function(test)
+	{
+		var name = test[0];
+		var xmlText = test[1];
+		var expected = test[2];
+
+		// Parse the XML into a tree.
+		try {
+			var xml = Blockly.Xml.textToDom(xmlText);
+		} catch(e) {
+			alert(e);
+			return;
+		}
+		
+		// Create a headless workspace.
+		var workspace = new Blockly.Workspace();
+		Blockly.Xml.domToWorkspace(workspace, xml);
+		
+		var code = Blockly.AESL.workspaceToCode(workspace);
+		
+		if(code != expected) {
+			console.log('Test "' + name + '" failed!\n\nExpected:\n[' + expected + ']\n\nActual:\n[' + code + ']');
+		} else {
+			console.log('Test "' + name + '" succeeded!');
+			success++;
+		}
+		
+		n++;
+	});
+	
+	var msg = success + '/' + n + ' tests passed!';
+	console.log(msg);
+	alert(msg);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+DEBVERS := $(shell dpkg-parsechangelog | sed -n -e 's/^Version: //p')
+VERSION := $(shell echo '$(DEBVERS)' | sed -e 's/^[[:digit:]]*://' -e 's/[~-].*//')
+
+build: clean
+	mkdir debian/build
+	cd debian/build && cmake -D USER_BUILD_VERSION=${DEBVERS} -D CMAKE_BUILD_TYPE=RelWithDebInfo -D CMAKE_INSTALL_PREFIX=../tmp/usr ../..
+	cd debian/build && make
+
+clean:
+	rm -rf debian/files debian/substvars debian/tmp debian/build
+
+binary: binary-arch binary-indep
+
+binary-indep:
+
+binary-arch:
+	rm -rf debian/tmp
+	install -d debian/tmp/DEBIAN
+	install -d debian/tmp/usr/bin
+	install -d debian/tmp/usr/share/doc/aseba
+	install -d debian/tmp/usr/share/doc/aseba/example-code
+	install -d debian/tmp/usr/share/doc/aseba/example-scenarios
+	install -d debian/tmp/usr/share/applications
+	install -d debian/tmp/usr/share/icons/hicolor/48x48/apps
+	install -d debian/tmp/usr/share/icons/hicolor/scalable/apps
+#	cp changelog debian/tmp/usr/share/doc/aseba/changelog
+	cp debian/changelog debian/tmp/usr/share/doc/aseba/changelog.debian
+	cp debian/copyright debian/tmp/usr/share/doc/aseba
+	cp targets/playground/unifr.playground debian/tmp/usr/share/doc/aseba/example-scenarios
+	cp targets/challenge/examples/challenge-goto-energy.aesl debian/tmp/usr/share/doc/aseba/example-code
+	cp menu/freedesktop/*.desktop debian/tmp/usr/share/applications
+	cp menu/freedesktop/48x48/*.png debian/tmp/usr/share/icons/hicolor/48x48/apps
+	cp menu/src/*.svg debian/tmp/usr/share/icons/hicolor/scalable/apps
+	strip --strip-unneeded -R .note -R .comment  debian/build/*/*.a
+	strip --strip-unneeded -R .note -R .comment  debian/build/*/*/*.a
+	cd debian/build && make install
+	cp debian/README.Debian debian/tmp/usr/share/doc/aseba/
+	dpkg-shlibdeps debian/tmp/usr/bin/*
+	chown -R root.root debian/tmp
+	chmod -R o-s,go=u,go-ws debian/tmp
+	dpkg-gencontrol
+	dpkg --build debian/tmp ..

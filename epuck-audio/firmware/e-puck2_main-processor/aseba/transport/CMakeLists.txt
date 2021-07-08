@@ -1,0 +1,2 @@
+add_subdirectory(buffer)
+add_subdirectory(dashel_plugins)

@@ -1,0 +1,18 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+	<file>textures/feeder.png</file>
+	<file>textures/feederr.png</file>
+	<file>asebachallenge_fr.qm</file>
+	<file>asebachallenge_de.qm</file>
+	<file>asebachallenge_es.qm</file>
+	<file>asebachallenge_it.qm</file>
+	<file>asebachallenge_ja.qm</file>
+	<!-- insert translation here (DO NOT REMOVE) -->
+	<file>fonts/SF Old Republic SC.ttf</file>
+	<file>doc/challenge.en.html</file>
+	<file>doc/challenge.fr.html</file>
+	<file>doc/challenge.es.html</file>
+	<file>doc/challenge.it.html</file>
+	<file>textures/asebachallenge.svgz</file>
+</qresource>
+</RCC>

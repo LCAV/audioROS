@@ -50,7 +50,7 @@ DEFAULT_PARAMS = {
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
 
-START_DISTANCE = 0
+START_DISTANCE = 0 
 START_ANGLE = 0
 
 # EXTRA_DIRNAME = '2021_02_09_wall'
@@ -65,10 +65,14 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_06_17_stepper"
 # EXTRA_DIRNAME = "2021_06_19_stepper"
 # EXTRA_DIRNAME = "2021_06_19_stepper_linear"
-EXTRA_DIRNAME = "2021_06_22_stepper"
+# EXTRA_DIRNAME = "2021_06_22_stepper"
+# EXTRA_DIRNAME = "2021_07_08_stepper"
+#EXTRA_DIRNAME = "2021_07_08_rotating"
+#EXTRA_DIRNAME = "2021_07_08_stepper_fast"
+EXTRA_DIRNAME = "2021_07_08_stepper_slow"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = True  # False
+USER_INPUT = False
 
 bag_pid = None
 SerialIn = None
@@ -133,7 +137,9 @@ def adjust_freq_lims(params):
 
 def adjust_duration(duration, params):
     distance = params.get("distance", None)
-    angle = params.get("angle", None)
+    print(params)
+    angle = params.get("degree", None)
+    print(angle)
 
     if (distance is not None) and (abs(distance) == 51):
         if DURATION_50 > duration:
@@ -142,9 +148,10 @@ def adjust_duration(duration, params):
             )
             duration = DURATION_50
     if (angle is not None) and (abs(angle) == 360):
+        print(angle)
         if DURATION_360 > duration:
             print(
-                f"ignoring global duration {duration} and using turn command duration {duration_turn}"
+                f"ignoring global duration {duration} and using turn command duration {DURATION_360}"
             )
             duration = DURATION_360
 
@@ -404,6 +411,8 @@ def main(args=None):
             param_i += 1
             continue
 
+        print('experiment:', params)
+
         #### prepare filenames ####
         filename = get_filename(**params)
         bag_filename = os.path.join(exp_dirname, filename)
@@ -426,6 +435,7 @@ def main(args=None):
 
         #### move ####
         distance = params.get("distance", None)
+        print('distance:', distance, abs(distance))
         angle = params.get("degree", None)
 
         print("checking for blocking movements...")

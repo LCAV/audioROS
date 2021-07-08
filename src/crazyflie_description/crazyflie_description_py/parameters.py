@@ -34,5 +34,6 @@ SOUND_EFFECTS = {
     "sweep_buzzer": (20, [0, 16000], 185),
     "sweep_slow": (21, [1000, 5000], 0),  # 0 will be overwritten
     "sweep_fast": (22, [1000, 5000], 0),  # 0 will be overwritten
-    "sweep_new": (3, [2000, 6000], 6),
+    "sweep_new": (3, [2000, 6000], 8), # was 17, 6
+    "sweep_cont": (1, [2000, 6000], 6),
 }
