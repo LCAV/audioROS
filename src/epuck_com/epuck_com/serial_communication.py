@@ -29,6 +29,7 @@ https://www.gctronic.com/doc/index.php?title=e-puck2_PC_side_development
 PORT = /dev/rfcomm0
 """
 
+
 def read_start(port):
     state = 0
     while state != 5:
@@ -78,9 +79,47 @@ def read_start(port):
                 state = 0
     return True
 
+
+def read_end(port):
+    state = 0
+    while state != 3:
+        # reads 1 byte
+        try:
+            c1 = port.read(1)
+        except KeyboardInterrupt:
+            print("interrupt during read")
+            return None
+
+        # timeout condition
+        if c1 == b"":
+            print("Timeout")
+            return False
+        if state == 0:
+            if c1 == b"E":
+                state = 1
+            else:
+                state = 0
+        elif state == 1:
+            if c1 == b"N":
+                state = 2
+            elif c1 == b"E":
+                state = 1
+            else:
+                state = 0
+        elif state == 2:
+            if c1 == b"D":
+                state = 3
+            elif c1 == b"E":
+                state = 1
+            else:
+                state = 0
+    return True
+
+
 def live_status_function(show_status, bins, data):
     if show_status:
         print("the bins are", bins)
+
 
 class Gateway(NodeWithParams):
     PARAMS_DICT = {
@@ -103,7 +142,7 @@ class Gateway(NodeWithParams):
         )
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
 
-        #if self.port is not None:
+        # if self.port is not None:
         #    self.port.write(b"BUZZR")
         #    time.sleep(8)
 
@@ -144,7 +183,7 @@ class Gateway(NodeWithParams):
             self.get_logger().warn("No data yet. Not publishing")
             return
 
-        all_frequencies = np.fft.fftfreq(n=N_BUFFER, d=1/FS)
+        all_frequencies = np.fft.fftfreq(n=N_BUFFER, d=1 / FS)
         n_frequencies = len(fbins)
 
         if not np.any(fbins > 0):
@@ -179,9 +218,6 @@ class Gateway(NodeWithParams):
 
     # reads the FFT in float32 from the serial
     def read_float_serial(self):
-        #print("read float serial at ", now.srtftime("%H:%M:%S"))
-        print("read float serial")
-
         start_detected = read_start(self.port)
         if start_detected is None:
             self.port.close()
@@ -194,8 +230,8 @@ class Gateway(NodeWithParams):
         # normally this should unpack as an unsigned in of size 32 bits
         # reads the size
         # converts as short int in little endian the two bytes read
-        size = struct.unpack("<H", self.port.read(2))[0] # H for unsigned short
-        timestamp = struct.unpack("<I", self.port.read(4))[0] # I for unsigned int
+        size = struct.unpack("<H", self.port.read(2))[0]  # H for unsigned short
+        timestamp = struct.unpack("<I", self.port.read(4))[0]  # I for unsigned int
         print(f"size of incoming data: {size} at timestamp {timestamp}")
 
         # reads the data
@@ -211,7 +247,16 @@ class Gateway(NodeWithParams):
             return data, size, timestamp
         else:
             print(f"wrong buffer size, recieved only {len(rcv_buffer)}")
+
+            self.send_non_acknowledge()
+
             return None
+
+        if not read_end(self.port):
+            self.send_non_acknowledge()
+
+    def send_non_acknowledge(self):
+        self.port.write(b"x")
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
     def data_rearrange(self, data, position, bin_number):
@@ -246,11 +291,6 @@ class Gateway(NodeWithParams):
     def extract_bin_number(self, data, position):
         return int(data[position]), position + 1
 
-    def send_desired_rate_serial(self):
-        self.port.write(b"DRATE")
-        self.port.write(struct.pack("<h", self.desired_rate))
-        print("sent desired rate to robot", self.desired_rate)
-
     def move_forward(self, velocity_m):
         # convert velocity to epuck command.
         speed = int(round(velocity_m * 1000 / (100 * WHEEL_DIAMETER * np.pi)))
@@ -259,8 +299,8 @@ class Gateway(NodeWithParams):
             self.get_logger().warn(f"invalid velocity: {velocity_m, speed}")
 
         self.port.write(b"M")
-        #self.port.write(struct.pack("<h", 1))
-        #self.port.write(struct.pack("<h", speed))
+        # self.port.write(struct.pack("<h", 1))
+        # self.port.write(struct.pack("<h", speed))
         self.get_logger().info(f"sent move rate {speed} to robot")
 
     def move_slight_right(self, *args):
@@ -269,15 +309,14 @@ class Gateway(NodeWithParams):
         print("sent move rate to robot")
 
     def stop(self, *args):
-        self.port.write(b"S")
+        self.port.write(b"x")
         print("stopped the robot from moving with motor")
 
     def send_buzzer_idx(self, *args):
         if self.port is None:
             self.get_logger().warn("cannot send buzzer index")
-            return 
-        port = self.port 
-        port.write(b'B')
+            return
+        self.port.write(b"s")
         print("sent buzzer start command")
 
     def set_params(self, params):
@@ -305,6 +344,7 @@ class Gateway(NodeWithParams):
                 self.get_logger().warn(f"setting unused parameter {param_name}")
         return SetParametersResult(successful=True)
 
+
 def main(args=None):
     rclpy.init(args=args)
 
@@ -321,7 +361,7 @@ def main(args=None):
             detected = read_start(port)
             if detected:
                 print("detected start, ok")
-                break 
+                break
             else:
                 print("did not detect start")
         except:
