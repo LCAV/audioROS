@@ -1,9 +1,14 @@
 import numpy as np
 from .parameters import SOUND_EFFECTS
 
+
+TOTAL_DISTANCE_M = 0.3 # meters
+
+VMIN_CMS = 7 # centimeter per second, minimum velocity
+
+
 # Format of all commands:
 # node, parameter, value, duration (seconds)
-
 # duration calculation:
 # for angles: angle_deg / 360 * 5
 # for distances: distance_m * 5 (/0.2)
@@ -38,6 +43,18 @@ motor_command_lists = {
         ("/gateway", "buzzer_idx", 1, 0),
         ("", "", "", 4),  # time delay only
         ("/gateway", "land_velocity", 0.2, 0),
+    ],
+    "linear_vmin": [
+        ("/gateway", "hover_height", 0.5, 0),
+        ("/gateway", "move_forward", VMIN_CMS * 1e-2, TOTAL_DISTANCE_M/(VMIN_CMS * 1e-2)),  # 50 cm
+        ("/gateway", "land_velocity", 0.2, 3),
+    ],
+    "linear_buzzer_cont": [
+        ("/gateway", "buzzer_idx", 1, 0),
+        ("/gateway", "hover_height", 0.5, 0),
+        ("/gateway", "move_forward", VMIN_CMS * 1e-2, TOTAL_DISTANCE_M/(VMIN_CMS * 1e-2)),  # 50 cm
+	("/gateway", "land_velocity", 0.2, 3),
+        ("/gateway", "buzzer_idx", 0, 0),
     ],
     "linear_sweep": [
         ("/gateway", "hover_height", 0.5, 0),

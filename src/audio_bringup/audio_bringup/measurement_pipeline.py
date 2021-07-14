@@ -50,7 +50,7 @@ DEFAULT_PARAMS = {
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
 
-START_DISTANCE = 10
+START_DISTANCE = 0
 START_ANGLE = 0
 
 # EXTRA_DIRNAME = '2021_02_09_wall'
@@ -70,7 +70,8 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_07_08_rotating"
 # EXTRA_DIRNAME = "2021_07_08_stepper_fast"
 # EXTRA_DIRNAME = "2021_07_08_stepper_slow"
-EXTRA_DIRNAME = "2021_07_14_propsweep"
+#EXTRA_DIRNAME = "2021_07_14_propsweep"
+EXTRA_DIRNAME = "2021_07_14_flying"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
 USER_INPUT = True
@@ -94,7 +95,7 @@ def execute_commands(command_name):
     for command in command_list:
         node, parameter, value, sleep = command
         if node != "":
-            print(f"execute {parameter}: {value} and sleep for {sleep}s...")
+            print(f"execute {parameter}: {value} and sleep for {sleep:.2f}s...")
             set_param(node, parameter, str(value))
         else:
             print(f"sleep for {sleep}s...")
@@ -436,7 +437,6 @@ def main(args=None):
 
         #### move ####
         distance = params.get("distance", None)
-        print("distance:", distance, abs(distance))
         angle = params.get("degree", None)
 
         print("checking for blocking movements...")
@@ -454,8 +454,8 @@ def main(args=None):
         set_audio_parameters(params, params_old)
 
         #### perform experiment ###
-        # recording = measure_wall_flying(params)
-        recording = measure_wall(params)
+        recording = measure_wall_flying(params)
+        # recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
 
