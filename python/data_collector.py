@@ -530,7 +530,9 @@ class DataCollector(object):
             return False  # True
         return False
 
-    def fill_from_signal(self, signals_f, frequencies, distance_cm=0, angle=0, time=0):
+    def fill_from_signal(
+        self, signals_f, frequencies, distance_cm=0, angle=0, time=0, mode="maximum"
+    ):
         """
         :param signals_f: shape (n_mics, n_freqs), complex
         :param frequencies: shape (n_freqs,)
@@ -538,27 +540,55 @@ class DataCollector(object):
         """
         sweep_complete = False
         for i_mic in range(signals_f.shape[0]):
-            idx = np.argmax(np.abs(signals_f[i_mic, :]))
-            f = frequencies[idx]
-            counter = len(
-                self.df.loc[
-                    (self.df.mic == i_mic)
-                    & (self.df.distance == distance_cm)
-                    & (self.df.angle == angle)
-                    & (self.df.frequency == f)
-                ]
-            )
-            magnitude = np.abs(signals_f[i_mic, idx])
+            if mode == "maximum":
+                i_f = np.argmax(np.abs(signals_f[i_mic, :]))
+                f = frequencies[i_f]
+                counter = len(
+                    self.df.loc[
+                        (self.df.mic == i_mic)
+                        & (self.df.distance == distance_cm)
+                        & (self.df.angle == angle)
+                        & (self.df.frequency == f)
+                    ]
+                )
+                magnitude = np.abs(signals_f[i_mic, i_f])
 
-            self.df.loc[len(self.df), :] = {
-                "time": time,
-                "counter": counter,
-                "mic": i_mic,
-                "frequency": f,
-                "distance": distance_cm,
-                "angle": angle,
-                "magnitude": magnitude,
-            }
+                update_dict = {
+                    "time": time,
+                    "counter": counter,
+                    "mic": i_mic,
+                    "frequency": f,
+                    "distance": distance_cm,
+                    "angle": angle,
+                    "magnitude": magnitude_estimate,
+                }
+                self.df.loc[len(self.df), list(update_dict.keys())] = list(
+                    update_dict.values()
+                )
+            elif mode == "all":
+                for i_f in range(len(signals_f)):
+                    f = frequencies[i_f]
+                    magnitude_estimate = np.abs(signals_f[i_mic, i_f])
+                    counter = len(
+                        self.df.loc[
+                            (self.df.mic == i_mic)
+                            & (self.df.distance == distance_cm)
+                            & (self.df.angle == angle)
+                            & (self.df.frequency == f)
+                        ]
+                    )
+                    update_dict = {
+                        "time": time,
+                        "counter": counter,
+                        "mic": i_mic,
+                        "frequency": f,
+                        "distance": distance_cm,
+                        "angle": angle,
+                        "magnitude": magnitude_estimate,
+                    }
+                    self.df.loc[len(self.df), list(update_dict.keys())] = list(
+                        update_dict.values()
+                    )
 
     def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
         """ 
@@ -688,6 +718,7 @@ class DataCollector(object):
 
     def get_current_frequency_slice(self, verbose=False):
         if self.latest_fslice_time is None:
+            print(self.df)
             self.latest_fslice_time = self.df.iloc[0].time
             if verbose:
                 print("set latest time to", self.latest_fslice_time)
@@ -709,6 +740,7 @@ class DataCollector(object):
 
     def get_current_distance_slice(self, verbose=False):
         if self.latest_dslice_time is None:
+            print(self.df)
             self.latest_dslice_time = self.df.iloc[0].time
             if verbose:
                 print("set latest time to", self.latest_dslice_time)

@@ -176,4 +176,17 @@ kwargs_datasets = {
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
     },
+    "2021_07_14_propsweep": {"appendix": ["", "_bin5_thirdtry", "_bin6_thirdtry"]},
+    "2021_07_14_flying": {"appendix": ["", "_2", "_3", "_4", "_5"]},
+    "2021_07_14_flying_hover": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 3000,
+            "max_freq": 5000,
+        },
+        "appendix": ["", "_2"],
+    },
 }
