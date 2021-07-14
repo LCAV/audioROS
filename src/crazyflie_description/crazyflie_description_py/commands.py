@@ -11,7 +11,7 @@ motor_command_lists = {
     "propsweep": [("/gateway", "buzzer_idx", 1, 0)]
     + [
         ("/gateway", "all", thrust, 1.0)
-        for thrust in np.arange(45000, 55000, step=1000)
+        for thrust in np.arange(45000, 61000, step=1000)
     ]
     + [("/gateway", "buzzer_idx", 0, 0), ("/gateway", "all", 0, 0)],
     "hover": [
