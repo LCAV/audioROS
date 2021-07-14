@@ -73,6 +73,7 @@ python/.ipynb_checkpoints
 python/results/
 python/plots/
 python/plots_doa/
+backup/
 
 
 # latex stuff
@@ -88,3 +89,4 @@ python/plots_doa/
 *.cb
 *.cb2
 .*.lb
+

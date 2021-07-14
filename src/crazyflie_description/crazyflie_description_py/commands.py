@@ -8,6 +8,12 @@ from .parameters import SOUND_EFFECTS
 # for angles: angle_deg / 360 * 5
 # for distances: distance_m * 5 (/0.2)
 motor_command_lists = {
+    "propsweep": [("/gateway", "buzzer_idx", 1, 0)]
+    + [
+        ("/gateway", "all", thrust, 1.0)
+        for thrust in np.arange(45000, 55000, step=1000)
+    ]
+    + [("/gateway", "buzzer_idx", 0, 0), ("/gateway", "all", 0, 0)],
     "hover": [
         ("/gateway", "hover_height", 0.5, 0),
         ("/gateway", "move_forward", 0, 20,),  # stay in place, but wait for 20 seconds.
