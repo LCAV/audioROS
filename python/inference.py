@@ -189,6 +189,8 @@ def get_probability_bayes(
     assert f_slice.ndim == 1
 
     if interpolate:
+        import scipy.interpolate
+
         frequencies_grid = np.arange(min(frequencies), max(frequencies), step=50.0)
         interpolator = scipy.interpolate.interp1d(frequencies, f_slice)
         f_slice_grid = interpolator(frequencies_grid)
@@ -304,6 +306,8 @@ def get_approach_angle_fft(
     period_theoretical = frequency / SPEED_OF_SOUND  # 1/m in terms of delta
 
     if interpolate:
+        import scipy.interpolate
+
         relative_distances_cm_grid = np.arange(
             min(relative_distances_cm), max(relative_distances_cm), step=1.0
         )

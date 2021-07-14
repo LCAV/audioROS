@@ -16,6 +16,7 @@ DEFAULT_DICT = {
     "props": {0},
     "bin_selection": {0},
     "window_type": {0},
+    "appendix": {""},
 }
 
 
@@ -62,11 +63,18 @@ def clean_stft(stft, max_value=N_BUFFER):
 def parse_experiments(exp_name="2020_12_9_moving"):
     from crazyflie_description_py.parameters import N_BUFFER
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
+    from dataset_parameters import kwargs_datasets
+
+    params_all = DEFAULT_DICT
 
     params_file = load_params(exp_name)
     params_from_file = extract_unique(params_file.params_list)
-    params_all = DEFAULT_DICT
     params_all.update(**params_from_file)
+
+    params_all["appendix"] = params_all["appendix"].union(
+        kwargs_datasets[exp_name]["appendix"]
+    )
+    print(params_all)
 
     df_total = pd.DataFrame(
         columns=list(params_all.keys())  # categories
@@ -75,16 +83,16 @@ def parse_experiments(exp_name="2020_12_9_moving"):
 
     params = {"exp_name": exp_name}
     for cat_values in itertools.product(*params_all.values()):
+
         params.update(dict(zip(params_all.keys(), cat_values)))
+        # for experiments where window types were changed by appendix
+        if "window" in params.get("appendix", ""):
+            params["window_type"] = int(params["appendix"].replace("_window", ""))
+        if "bin" in params.get("appendix", ""):
+            params["bin_selection"] = int(params["appendix"].replace("_bin", "")[0])
 
+        positions = None
         try:
-            # for experiments where window types were changed by appendix
-            if "window" in params.get("appendix", ""):
-                params["window_type"] = int(params["appendix"].replace("_window", ""))
-            if "bin" in params.get("appendix", ""):
-                params["bin_selection"] = int(params["appendix"].replace("_bin", "")[0])
-
-            positions = None
             if params["mic_type"] == "audio_deck":
                 df, df_pos = read_df(**params)
                 add_pose_to_df(
@@ -131,7 +139,10 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_07_08_stepper_slow",
+        "2021_07_14_flying_hover",
+        # "2021_07_14_flying",
+        # "2021_07_14_propsweep",
+        # "2021_07_08_stepper_slow",
         # "2021_07_08_stepper_fast",
         # "2021_07_08_stepper",
         # "2021_07_07_stepper",
