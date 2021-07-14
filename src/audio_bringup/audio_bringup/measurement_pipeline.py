@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 measurement_pipeline.py
-
-Experiment with a fixed loudspeaker playing some stationary signal.
 """
 
 import os
@@ -72,6 +70,7 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_07_08_stepper_slow"
 #EXTRA_DIRNAME = "2021_07_14_propsweep"
 EXTRA_DIRNAME = "2021_07_14_flying"
+#EXTRA_DIRNAME = "2021_07_14_flying_hover"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
 USER_INPUT = True
