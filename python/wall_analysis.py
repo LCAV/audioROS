@@ -8,7 +8,33 @@ from dynamic_analysis import add_pose_to_df
 from evaluate_data import get_positions_absolute
 from evaluate_data import read_df, read_df_from_wav
 
-FILTERS = ["mic_type", "snr", "motors"]
+FILENAME = "../experiments/datasets.csv"
+DEFAULT_DICT = {
+    "degree": {0},
+    "disance": {0},
+    "mic_type": {"audio_deck"},  # , "measurement"]
+    "props": {0},
+    "bin_selection": {0},
+    "window_type": {0},
+}
+
+
+def extract_unique(params_list):
+    params = {}
+    for p in params_list:
+        for key, val in p.items():
+            if key in params:
+                params[key].update({val})
+            else:
+                params[key] = {val}
+    return params
+
+
+def read_dataset_csv(exp_name):
+    df = pd.read_csv(FILENAME, index_col=0, squeeze=True)
+    df = df.apply(lambda row: row.str.strip(), axis=1)
+    row = df.loc[df.exp_name == exp_name, DEFAULT_DICT.keys()].iloc[0]
+    return row.to_dict()
 
 
 def load_params(exp_name):
@@ -33,171 +59,30 @@ def clean_stft(stft, max_value=N_BUFFER):
     return stft
 
 
-def parse_experiments(
-    exp_name="2020_12_9_moving", save_intermediate="", max_distance=None
-):
-    method_window = "hann"
-    if exp_name == "2020_12_7_moving":
-        appendix_list = ["", "_new"]
-        snr_list = [0, 1]
-        props_list = [0]
-        wav = True
-    elif exp_name == "2020_12_9_rotating":
-        appendix_list = ["", "_new"]
-        snr_list = [0, 1]
-        props_list = [0, 1]
-        wav = True
-    elif exp_name == "2020_12_18_flying":
-        appendix_list = ["", "_new"]
-        snr_list = [2]
-        props_list = [0, 1]
-        wav = False
-    elif exp_name == "2020_12_18_stepper":
-        appendix_list = ["", "_new"]
-        snr_list = [2]
-        props_list = [0, 1]
-        wav = True
-    elif exp_name == "2020_11_26_wall":
-        appendix_list = [""]
-        snr_list = [0]
-        props_list = [0]
-        wav = True
-    elif exp_name == "2020_12_11_calibration":
-        appendix_list = ["", "_BC329", "_HALL", "_HALL2", "_HALL3"]
-        snr_list = [0, 1]
-        props_list = [0, 1]
-        wav = False
-    elif exp_name == "2020_12_2_chirp":
-        appendix_list = [""]
-        snr_list = [0]
-        props_list = [0]
-        wav = True
-    elif exp_name == "2021_02_09_wall":
-        appendix_list = [""]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-        method_window = ""
-    elif exp_name == "2021_02_09_wall_tukey":
-        appendix_list = [
-            "",
-            "_afterbug",
-            "_afterbug2",
-            "_with_3cm",
-            "_second shot",
-        ]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-        method_window = ""
-    elif exp_name == "2021_02_19_windows":
-        appendix_list = [f"_window{i}" for i in range(4)]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-    elif exp_name == "2021_02_19_windows_newbuzzer":
-        appendix_list = [f"_window{i}" for i in range(4)]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-    elif exp_name == "2021_02_23_wall":
-        appendix_list = [""]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-        method_window = "flattop"
-    elif exp_name == "2021_02_25_wall":
-        appendix_list = ["", "_externalpsu"]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-        method_window = "flattop"
-    elif exp_name == "2021_03_01_flying":
-        appendix_list = [
-            "_30cm-paper",
-            "_50cm-paper",
-            "_30cm-nopaper",
-            "_50cm-nopaper",
-            "_30cm-newbuzzer",
-            "_50cm-newbuzzer",
-        ]
-        snr_list = [3]
-        props_list = [0]
-        wav = False
-        method_window = "flattop"
-    elif exp_name == "2021_04_30_hover":
-        appendix_list = [f"_test1_{i}" for i in range(6, 9)]
-        snr_list = [3]
-        props_list = [0]
-        wav = False
-        method_window = "flattop"
-    elif exp_name == "2021_04_30_stepper":
-        appendix_list = [""]
-        snr_list = [3]
-        props_list = [0]
-        wav = True
-        method_window = "flattop"
-    elif exp_name == "2021_05_04_linear":
-        appendix_list = [f"_{i}" for i in range(1, 6)] + [
-            f"_fast{i}" for i in range(1, 6)
-        ]
-        snr_list = [3]
-        props_list = [0]
-        wav = False
-        method_window = "flattop"
-    elif exp_name == "2021_05_04_flying":
-        appendix_list = [f"_{i}" for i in range(22, 25)]
-        snr_list = [3]
-        props_list = [0]
-        wav = False
-        method_window = "flattop"
-    else:
-        raise ValueError(exp_name)
-
-    if save_intermediate != "":
-        counter = 0
-
-    if wav:
-        mic_type_list = ["measurement", "audio_deck"]
-    else:
-        mic_type_list = ["audio_deck"]
-
+def parse_experiments(exp_name="2020_12_9_moving"):
     from crazyflie_description_py.parameters import N_BUFFER
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
 
     params_file = load_params(exp_name)
+    params_from_file = extract_unique(params_file.params_list)
+    params_all = DEFAULT_DICT
+    params_all.update(**params_from_file)
 
-    # TODO(FD) remove this when we use more angles again.
-    params_file.DEGREE_LIST = [0]
-
-    cat_columns = {
-        "appendix": appendix_list,
-        "degree": params_file.DEGREE_LIST,
-        "distance": params_file.DISTANCE_LIST,
-        "motors": params_file.MOTORS_LIST,
-        "source": [str(s) for s in params_file.SOURCE_LIST],
-        "snr": snr_list,
-        "props": props_list,
-        "mic_type": mic_type_list,
-    }
     df_total = pd.DataFrame(
-        columns=list(cat_columns.keys())  # categories
+        columns=list(params_all.keys())  # categories
         + ["seconds", "frequencies_matrix", "stft", "positions"]  # data
     )
 
     params = {"exp_name": exp_name}
-    for cat_values in itertools.product(*cat_columns.values()):
-        params.update(dict(zip(cat_columns.keys(), cat_values)))
-
-        if (max_distance is not None) and (params["distance"] > max_distance):
-            continue
+    for cat_values in itertools.product(*params_all.values()):
+        params.update(dict(zip(params_all.keys(), cat_values)))
 
         try:
             # for experiments where window types were changed by appendix
             if "window" in params.get("appendix", ""):
-                method_window = WINDOW_TYPES[
-                    int(params["appendix"].replace("_window", ""))
-                ]
+                params["window_type"] = int(params["appendix"].replace("_window", ""))
+            if "bin" in params.get("appendix", ""):
+                params["bin_selection"] = int(params["appendix"].replace("_bin", "")[0])
 
             positions = None
             if params["mic_type"] == "audio_deck":
@@ -210,7 +95,9 @@ def parse_experiments(
                 fname = get_filename(**params)
                 wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"
                 df = read_df_from_wav(
-                    wav_fname, n_buffer=N_BUFFER, method_window=method_window
+                    wav_fname,
+                    n_buffer=N_BUFFER,
+                    method_window=WINDOW_TYPES[params["window_type"]],
                 )
         except FileNotFoundError as e:
             print("skipping", e)
@@ -220,7 +107,7 @@ def parse_experiments(
             print("error, signals_f is empty. skipping...")
             continue
 
-        df.signals_f /= WINDOW_CORRECTION[method_window]
+        df.signals_f /= WINDOW_CORRECTION[WINDOW_TYPES[params["window_type"]]]
 
         stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
@@ -233,78 +120,8 @@ def parse_experiments(
             frequencies_matrix=frequencies_matrix,
             stft=stft,
             positions=positions,
+            **params,
         )
-        all_items.update(params)
-        df_total.loc[len(df_total), :] = all_items
-
-        if save_intermediate == "":
-            continue
-
-        counter += 1
-        if counter % 10 == 0:
-            pd.to_pickle(df_total, save_intermediate)
-            print("saved intermediate as", save_intermediate)
-
-    return df_total
-
-
-def parse_experiments_wav(exp_name="2020_12_9_rotating", n_buffer=44100):
-    if exp_name == "2020_12_9_rotating":
-        appendix_list = ["", "_new"]
-        snr_list = [0]
-        props_list = [0]
-    elif exp_name == "2020_11_26_wall":
-        appendix_list = [""]
-        snr_list = [0]
-        props_list = [0]
-    elif exp_name == "2021_02_09_wall":
-        appendix_list = [""]
-        snr_list = [0]
-        props_list = [0]
-    elif exp_name == "2021_02_09_wall_tukey":
-        appendix_list = [""]
-        snr_list = [0]
-        props_list = [0]
-    else:
-        raise ValueError(exp_name)
-    params_file = load_params(exp_name)
-
-    cat_columns = {
-        "appendix": appendix_list,
-        "degree": params_file.DEGREE_LIST,
-        "distance": params_file.DISTANCE_LIST,
-        "motors": params_file.MOTORS_LIST,
-        "source": [str(s) for s in params_file.SOURCE_LIST],
-        "snr": snr_list,
-        "props": props_list,
-        "mic_type": ["measurement"],
-    }
-    df_total = pd.DataFrame(
-        columns=list(cat_columns.keys())
-        + ["seconds", "frequencies_matrix", "stft"]  # categories
-    )
-    params = {"exp_name": exp_name}
-
-    for cat_values in itertools.product(*cat_columns.values()):
-        params.update(dict(zip(cat_columns.keys(), cat_values)))
-        try:
-            fname = get_filename(**params)
-            wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"
-            df = read_df_from_wav(wav_fname, n_buffer=n_buffer, fs_ref=None)
-        except FileNotFoundError:
-            print("skipping", params)
-            continue
-
-        stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
-        stft = clean_stft(stft)
-
-        seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
-        frequencies_matrix = np.array([*df.loc[:, "frequencies"]])
-
-        all_items = dict(
-            seconds=seconds, frequencies_matrix=frequencies_matrix, stft=stft,
-        )
-        all_items.update(params)
         df_total.loc[len(df_total), :] = all_items
 
     return df_total
@@ -314,8 +131,15 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_05_04_linear",
-        "2021_05_04_flying",
+        "2021_07_08_stepper_slow",
+        # "2021_07_08_stepper_fast",
+        # "2021_07_08_stepper",
+        # "2021_07_07_stepper",
+        # "2021_06_19_stepper",
+        # "2021_06_17_stepper",
+        # "2021_06_09_stepper",
+        # "2021_05_04_linear",
+        # "2021_05_04_flying",
         # "2021_04_30_hover",
         # "2021_04_30_stepper",
         # "2021_03_01_flying",

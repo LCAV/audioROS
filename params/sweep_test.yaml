@@ -4,16 +4,16 @@
 gateway:
   ros__parameters:
     send_audio_enable: 1
-    min_freq: 1000
+    min_freq: 2000
     max_freq: 6000
     delta_freq: 100 # not used without prop
     n_average: 1 # not used without snr
-    bin_selection: 6
+    bin_selection: 5
     filter_prop_enable: 0
     window_type: 2
 audio_plotter:
   ros__parameters:
-    min_freq: 1000
+    min_freq: 2000
     max_freq: 6000
-    min_amp: 1e-3
-    max_amp: 1e2
+    min_amp: 0.1
+    max_amp: 1000

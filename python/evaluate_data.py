@@ -13,7 +13,8 @@ from crazyflie_description_py.parameters import FS, N_BUFFER
 # EXP_NAME = "2020_10_14_static"
 # EXP_NAME = "2020_10_14_static_new"
 # EXP_NAME = "2020_10_30_dynamic"
-EXP_NAME = "2020_11_30_wall_hover"
+# EXP_NAME = "2020_11_30_wall_hover"
+EXP_NAME = "2020_06_09_stepper"
 
 RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
 
@@ -23,7 +24,7 @@ normalize_list = ["sum_to_one", "none", "zero_to_one", "zero_to_one_all"]
 method_list = ["mvdr", "das"]
 
 
-def get_fname_old(degree, props, snr, motors, source, **kwargs):
+def get_fname_old(degree, props, bin_selection, motors, source, **kwargs):
     ending = "" if degree == 0 else f"_{degree}"
     props_flag = "" if props else "no"
     motors_flag = "" if motors else "no"
@@ -31,14 +32,14 @@ def get_fname_old(degree, props, snr, motors, source, **kwargs):
         source_flag = "nosource"
     else:
         source_flag = "source"
-    snr_flag = "" if snr else "no"
-    return f"{motors_flag}motors_{snr_flag}snr_{props_flag}props_{source_flag}{ending}"
+    bin_selection_flag = "" if bin_selection else "no"
+    return f"{motors_flag}motors_{bin_selection_flag}snr_{props_flag}props_{source_flag}{ending}"
 
 
 def read_full_df(
     degree=0,
     props=True,
-    snr=True,
+    bin_selection=True,
     motors=True,
     source=True,
     exp_name=EXP_NAME,
@@ -48,13 +49,17 @@ def read_full_df(
     CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
     if exp_name == "2020_09_17_white-noise-static":
         filename = get_fname_old(
-            degree=degree, props=props, snr=snr, motors=motors, source=source
+            degree=degree,
+            props=props,
+            bin_selection=bin_selection,
+            motors=motors,
+            source=source,
         )
     else:
         filename = get_filename(
             degree=degree,
             props=props,
-            snr=snr,
+            bin_selection=bin_selection,
             motors=motors,
             source=source,
             distance=distance,
@@ -69,7 +74,7 @@ def read_full_df(
 def read_df(
     degree=0,
     props=True,
-    snr=True,
+    bin_selection=True,
     motors=True,
     source=True,
     exp_name=EXP_NAME,
@@ -112,7 +117,7 @@ def read_df(
     df = read_full_df(
         degree=degree,
         props=props,
-        snr=snr,
+        bin_selection=bin_selection,
         motors=motors,
         source=source,
         exp_name=exp_name,
@@ -149,7 +154,7 @@ def read_df(
 def read_df_others(
     degree=0,
     props=True,
-    snr=True,
+    bin_selection=True,
     motors=True,
     source=True,
     exp_name=EXP_NAME,
@@ -174,7 +179,7 @@ def read_df_others(
     df = read_full_df(
         degree=degree,
         props=props,
-        snr=snr,
+        bin_selection=bin_selection,
         motors=motors,
         source=source,
         exp_name=exp_name,
@@ -358,7 +363,7 @@ def evaluate_data(fname=""):
     source_list = SOURCE_LIST
     degree_list = DEGREE_LIST
     props_list = [True, False]
-    snr_list = [True, False]
+    bin_selection_list = [True, False]
     motors_list = [True, False]
 
     beam_former = None
@@ -368,7 +373,7 @@ def evaluate_data(fname=""):
             "index",
             "degree",
             "props",
-            "snr",
+            "bin_selection",
             "motors",
             "source",
             "combine",
@@ -380,15 +385,19 @@ def evaluate_data(fname=""):
         ]
     )
 
-    for degree, props, snr, motors, source in itertools.product(
-        degree_list, props_list, snr_list, motors_list, source_list
+    for degree, props, bin_selection, motors, source in itertools.product(
+        degree_list, props_list, bin_selection_list, motors_list, source_list
     ):
         try:
             df, df_pos = read_df(
-                degree=degree, props=props, snr=snr, motors=motors, source=source,
+                degree=degree,
+                props=props,
+                bin_selection=bin_selection,
+                motors=motors,
+                source=source,
             )
         except FileNotFoundError:
-            print("skipping:", degree, props, snr, motors, source)
+            print("skipping:", degree, props, bin_selection, motors, source)
             continue
 
         add_soundlevel(df, duration=duration)
@@ -431,7 +440,7 @@ def evaluate_data(fname=""):
                             "index": i,
                             "degree": degree,
                             "props": props,
-                            "snr": snr,
+                            "bin_selection": bin_selection,
                             "motors": motors,
                             "source": source,
                             "combine": combine,

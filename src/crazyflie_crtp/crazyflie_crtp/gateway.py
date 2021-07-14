@@ -58,7 +58,7 @@ PARAMS_DICT = {
     "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
     "delta_freq": (rclpy.Parameter.Type.INTEGER, 100),  # not used without prop
     "n_average": (rclpy.Parameter.Type.INTEGER, 5),  # not used without snr
-    "filter_snr_enable": (rclpy.Parameter.Type.INTEGER, 0),
+    "bin_selection": (rclpy.Parameter.Type.INTEGER, 3),
     "filter_prop_enable": (rclpy.Parameter.Type.INTEGER, 0),
     "window_type": (rclpy.Parameter.Type.INTEGER, 1),
     "all": (rclpy.Parameter.Type.INTEGER, 0),
@@ -164,9 +164,7 @@ class Gateway(Node):
         data = self.reader_crtp.logging_dicts["motors"]["data"]
         if data is not None:
             msg.motors_pwm = [float(data[f"m{i}_pwm"]) for i in range(1, 5)]
-            msg.motors_thrust = [
-                float(data[f"m{i}_thrust"]) for i in range(1, 5)
-            ]
+            msg.motors_thrust = [float(data[f"m{i}_thrust"]) for i in range(1, 5)]
         else:
             msg.motors_pwm = []
             msg.motors_thrust = []
@@ -177,13 +175,13 @@ class Gateway(Node):
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
-            self.get_logger().warn("Empty audio. Not publishing")
+            self.get_logger().info("Empty audio. Not publishing")
             return
 
         # read frequencies
         fbins = self.reader_crtp.audio_dict["fbins"]
         if fbins is None:
-            self.get_logger().warn("No data yet. Not publishing")
+            self.get_logger().info("No data yet. Not publishing")
             return
 
         all_frequencies = np.fft.rfftfreq(n=N_BUFFER, d=1 / FS)
@@ -194,7 +192,7 @@ class Gateway(Node):
         # self.get_logger().warn(f"Duplicate values in fbins! unique values:{len(set(fbins))}")
         # return
         if not np.any(fbins > 0):
-            self.get_logger().warn(f"Empty fbins!")
+            self.get_logger().info(f"Empty fbins!")
             return
         elif np.any(fbins >= len(all_frequencies)):
             self.get_logger().warn(
@@ -227,8 +225,9 @@ class Gateway(Node):
         )
         self.publisher_signals.publish(msg)
 
-        self.get_logger().info(
-            f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
+        self.get_logger().warn(
+            # f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0][[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
+            f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0]} and timestamp {msg.audio_timestamp}"
         )
 
     def publish_motion_dict(self):
@@ -237,9 +236,7 @@ class Gateway(Node):
         motion_dict = deepcopy(self.reader_crtp.logging_dicts["motion"]["data"])
         timestamp = self.reader_crtp.logging_dicts["motion"]["timestamp"]
 
-        msg_pose_raw = create_pose_raw_message(
-            **motion_dict, timestamp=timestamp
-        )
+        msg_pose_raw = create_pose_raw_message(**motion_dict, timestamp=timestamp)
         self.publisher_motion_pose_raw.publish(msg_pose_raw)
 
         # TODO(FD) generalize below to 3D
@@ -260,9 +257,7 @@ class Gateway(Node):
             timestamp=timestamp,
         )
         self.publisher_motion_pose.publish(msg_pose)
-        self.get_logger().debug(
-            f"{msg_pose_raw.timestamp}: Published motion data."
-        )
+        self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
         """ Overwrite the function set_params by NodeWithParams. 
@@ -276,9 +271,7 @@ class Gateway(Node):
             # was not set yet at startup.
             # then we use the default values.
             if param.type_ == param.Type.NOT_SET:
-                param = rclpy.parameter.Parameter(
-                    param.name, *PARAMS_DICT[param.name]
-                )
+                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
 
             # send motor commands
             if param.name == "hover_height":
@@ -316,9 +309,7 @@ class Gateway(Node):
                 success = self.reader_crtp.send_thrust_command(param.value)
             elif param.name in [f"m{i}" for i in range(1, 5)]:
                 self.get_logger().info(f"set {param.name} to {param.value}")
-                success = self.reader_crtp.send_thrust_command(
-                    param.value, param.name
-                )
+                success = self.reader_crtp.send_thrust_command(param.value, param.name)
             elif param.name == "send_audio_enable":
                 self.reader_crtp.send_audio_enable(param.value)
             else:
@@ -332,9 +323,7 @@ class Gateway(Node):
     def set_audio_param(self, param):
         old_value = self.get_parameter(param.name).value
         try:
-            self.reader_crtp.cf.param.set_value(
-                f"audio.{param.name}", param.value
-            )
+            self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
             self.get_logger().info(
                 f"changed {param.name} from {old_value} to {param.value}"
             )

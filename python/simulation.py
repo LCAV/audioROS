@@ -35,7 +35,7 @@ def simulate_distance_estimator(
     for i, mic_idx in enumerate(chosen_mics):
         slice_f = slices_f[:, i]
         d_bayes, p_bayes, diff_cm = get_probability_bayes(
-            slice_f, frequencies, n_max=n_max
+            slice_f, frequencies, n_max=n_max, azimuth_deg=azimuth_deg
         )
         distance_estimator.add_distribution(diff_cm * 1e-2, p_bayes, mic_idx)
         if ax is not None:

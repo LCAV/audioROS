@@ -8,10 +8,11 @@ calibration.py: methods for gain calibration
 import numpy as np
 import pandas as pd
 
-OFFSET_BOUNDS = [-1, 1]
-GAIN_BOUNDS = [0.1, 10]
+
 # wall absorption bounds: 1 would mean all energy lost and no interference.
-ABS_BOUNDS = [0.0, 0.8]
+ABS_BOUNDS = [0.1, 0.99]
+OFFSET_BOUNDS = [0, 15]
+GAIN_BOUNDS = [10, 100]
 YAW_DEG = 0
 
 # interpolation parameters
@@ -130,13 +131,13 @@ def get_calibration_function_fit(
 
 
 def get_calibration_function_median(
-    exp_name, mic_type, ax=None, motors=0, fit_one_gain=False
+    exp_name, mic_type, ax=None, motors=0, snr="", fit_one_gain=False
 ):
     from data_collector import DataCollector, prune_df_matrix
     from scipy.interpolate import interp1d
 
     data_collector = DataCollector()
-    data_collector.fill_from_backup(exp_name, mic_type, motors=motors)
+    data_collector.fill_from_backup(exp_name, mic_type, motors=motors, snr=snr)
 
     matrix, distances, frequencies = data_collector.get_df_matrix()
     matrix, frequencies, *_ = prune_df_matrix(matrix, frequencies)

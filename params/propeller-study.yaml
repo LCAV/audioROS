@@ -2,7 +2,7 @@ gateway:
   ros__parameters:
     min_freq: 100
     max_freq: 5000
-    filter_snr_enable: 1
+    bin_selection: 1
     filter_props_enable: 0
     buzzer_effect: 12
     buzzer_freq: 3190
