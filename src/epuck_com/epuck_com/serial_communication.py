@@ -247,16 +247,19 @@ class Gateway(NodeWithParams):
             return data, size, timestamp
         else:
             print(f"wrong buffer size, recieved only {len(rcv_buffer)}")
-
             self.send_non_acknowledge()
-
             return None
 
         if not read_end(self.port):
             self.send_non_acknowledge()
+        else:
+            send_acknowledge()
 
     def send_non_acknowledge(self):
-        self.port.write(b"x")
+        self.port.write(b"n")
+
+    def send_acknowledge(self):
+        self.port.write(b"a")
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
     def data_rearrange(self, data, position, bin_number):
@@ -312,11 +315,15 @@ class Gateway(NodeWithParams):
         self.port.write(b"x")
         print("stopped the robot from moving with motor")
 
-    def send_buzzer_idx(self, *args):
+    def send_buzzer_idx(self, buzzer_idx, *args):
         if self.port is None:
             self.get_logger().warn("cannot send buzzer index")
             return
-        self.port.write(b"s")
+
+        if buzzer_idx > 0:
+            self.port.write(b"s")
+        else:
+            self.port.write(b"x")
         print("sent buzzer start command")
 
     def set_params(self, params):
@@ -344,7 +351,6 @@ class Gateway(NodeWithParams):
                 self.get_logger().warn(f"setting unused parameter {param_name}")
         return SetParametersResult(successful=True)
 
-
 def main(args=None):
     rclpy.init(args=args)
 
@@ -358,6 +364,7 @@ def main(args=None):
             port = serial.Serial(port_id, BAUDRATE, timeout=0.5)
             print(f"connected to {port_id} at baudrate {port.baudrate}")
 
+            port.write(b"w")
             detected = read_start(port)
             if detected:
                 print("detected start, ok")

@@ -136,7 +136,7 @@ class GeometryPlotter(Node):
         d_imu = v_world * delta_sec
         self.previous_time = msg_pose_raw.timestamp
 
-        pose_imu = self.pose_imu_list[:, -1] + d_imu
+        pose_imu = self.pose_imu_list[:2, -1] + d_imu
         self.pose_imu_list = np.c_[self.pose_imu_list, pose_imu]
 
         if self.pose_imu_list.shape[1] > MAX_LENGTH:
