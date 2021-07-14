@@ -4,7 +4,7 @@
 """
 parameters.py: Parameters specific to the Crazyflie drone.
 """
-MIC_D = 0.0607  # distance of mics from centre
+MIC_D = 0.0627  # distance of mics from centre
 MIC_POSITIONS_UNIT = [
     [0, 1],
     [-1, 0],
@@ -34,6 +34,6 @@ SOUND_EFFECTS = {
     "sweep_buzzer": (20, [0, 16000], 185),
     "sweep_slow": (21, [1000, 5000], 0),  # 0 will be overwritten
     "sweep_fast": (22, [1000, 5000], 0),  # 0 will be overwritten
-    "sweep_new": (3, [2000, 6000], 8), # was 17, 6
+    "sweep_new": (3, [2000, 6000], 8),  # was 17, 6
     "sweep_cont": (1, [2000, 6000], 6),
 }
