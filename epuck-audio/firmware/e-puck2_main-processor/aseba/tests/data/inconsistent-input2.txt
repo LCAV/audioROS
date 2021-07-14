@@ -1,3 +1,0 @@
-# Unknown key word
-var i
-va j

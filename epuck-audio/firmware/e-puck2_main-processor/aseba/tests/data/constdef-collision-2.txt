@@ -1,3 +1,0 @@
-const TOTO = 5
-const TOTO = 10
-

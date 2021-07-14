@@ -1,6 +1,0 @@
-# allocate 254
-var foo1[3]
-var foo2[251]
-
-# require 3 more of temp space -> too much
-emit event2 [1,2,3]

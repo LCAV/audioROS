@@ -1,3 +1,0 @@
-var i
-var foo1[100]
-var foo2[156]

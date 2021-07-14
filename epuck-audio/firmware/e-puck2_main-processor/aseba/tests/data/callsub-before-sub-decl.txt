@@ -1,2 +1,0 @@
-callsub mysub
-sub mysub

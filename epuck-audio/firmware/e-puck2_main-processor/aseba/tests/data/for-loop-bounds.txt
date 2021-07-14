@@ -1,6 +1,0 @@
-var i
-var j
-
-for i in 0:32767 do
-	j = i
-end

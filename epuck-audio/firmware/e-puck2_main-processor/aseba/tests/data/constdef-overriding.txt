@@ -1,4 +1,0 @@
-# constants cannot be changed
-const TOTO = 10
-
-TOTO = 5

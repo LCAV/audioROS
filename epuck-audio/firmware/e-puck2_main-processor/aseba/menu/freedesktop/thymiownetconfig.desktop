@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Wireless Thymio Network Configurator
-Exec=thymiownetconfig
-TryExec=thymiownetconfig
-Categories=Education;Science;
-Icon=thymiownetconfig

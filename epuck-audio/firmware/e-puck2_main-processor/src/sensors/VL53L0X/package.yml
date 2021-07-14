@@ -1,9 +1,0 @@
-source:
-    - VL53L0X.c
-    - Api/core/src/vl53l0x_api.c
-    - Api/core/src/vl53l0x_api_calibration.c
-    - Api/core/src/vl53l0x_api_core.c
-    - Api/core/src/vl53l0x_api_ranging.c
-    - Api/core/src/vl53l0x_api_strings.c
-    - Api/platform/src/vl53l0x_i2c_platform.c
-    - Api/platform/src/vl53l0x_platform.c

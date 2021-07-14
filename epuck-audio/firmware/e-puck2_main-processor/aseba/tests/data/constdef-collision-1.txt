@@ -1,4 +1,0 @@
-# FOO is already defined by asebatest
-# compiler must throw an error
-const FOO = 10
-
