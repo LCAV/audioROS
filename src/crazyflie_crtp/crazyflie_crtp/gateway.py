@@ -290,6 +290,7 @@ class Gateway(Node):
                 # move by given velocity, non-blocking
             elif param.name == "move_forward":
                 if param.value != 0:
+                    self.get_logger().warn(f"send forward command {param.value}")
                     self.reader_crtp.send_forward_command(param.value)
 
             # send buzzer commands

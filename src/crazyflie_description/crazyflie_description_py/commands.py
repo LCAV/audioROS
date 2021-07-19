@@ -2,9 +2,9 @@ import numpy as np
 from .parameters import SOUND_EFFECTS
 
 
-TOTAL_DISTANCE_M = 0.3 # meters
+TOTAL_DISTANCE_M = 0.5 # meters
 
-VMIN_CMS = 7 # centimeter per second, minimum velocity
+VMIN_CMS = 3 # centimeter per second, minimum velocity
 
 
 # Format of all commands:
@@ -32,16 +32,16 @@ motor_command_lists = {
     ],
     "multi_sweep": [
         ("/gateway", "hover_height", 0.4, 0),  # start at 50
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 4),  # time delay only
+        ("/gateway", "buzzer_idx", 3, 0),
+        ("", "", "", 1.5),  # time delay only
         ("/gateway", "buzzer_idx", 0, 0),
         ("/gateway", "move_distance", 0.2, 0),  # 30
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 4),  # time delay only
+        ("/gateway", "buzzer_idx", 3, 0),
+        ("", "", "", 1.5),  # time delay only
         ("/gateway", "buzzer_idx", 0, 0),
         ("/gateway", "move_distance", 0.2, 0),  # 10 cm
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 4),  # time delay only
+        ("/gateway", "buzzer_idx", 3, 0),
+        ("", "", "", 1.5),  # time delay only
         ("/gateway", "land_velocity", 0.2, 0),
     ],
     "linear_vmin": [

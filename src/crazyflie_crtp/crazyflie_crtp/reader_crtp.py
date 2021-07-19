@@ -382,8 +382,10 @@ class ReaderCRTP(object):
 
     def send_forward_command(self, velocity=None):
         if velocity is None:
+            print('warning: using default', self.VELOCITY)
             self.mc.start_forward(self.VELOCITY)
         else:
+            print('velocity in reader_crtp:', velocity)
             self.mc.start_forward(velocity)
         return True
 
