@@ -65,8 +65,7 @@ if __name__ == "__main__":
         # "2021_07_07_stepper"
         # "2021_07_08_stepper"
         "2021_07_08_stepper_fast",
-        "2021_07_08_stepper_slow"
-        # "2021_07_07_rotating"
+        "2021_07_08_stepper_slow",
     ]
 
     # exp_name = '2021_02_09_wall_tukey';

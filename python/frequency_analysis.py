@@ -331,7 +331,7 @@ def psd_df_from_spec(
                 for i_f in range(len(signals_f)):
                     counter_dict[i_f] = counter_dict.get(i_f, 0) + 1
                     magnitude_estimate = np.abs(signals_f[i_f])
-                    frequency = frequencies[i_f]
+                    frequency = freqs[i_f]
                     if times is not None:
                         time = times[i_t]
                     else:

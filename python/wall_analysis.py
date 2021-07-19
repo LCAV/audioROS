@@ -72,7 +72,7 @@ def parse_experiments(exp_name="2020_12_9_moving"):
     params_all.update(**params_from_file)
 
     params_all["appendix"] = params_all["appendix"].union(
-        kwargs_datasets[exp_name]["appendix"]
+        kwargs_datasets[exp_name].get("appendix", {})
     )
     print(params_all)
 
@@ -88,8 +88,6 @@ def parse_experiments(exp_name="2020_12_9_moving"):
         # for experiments where window types were changed by appendix
         if "window" in params.get("appendix", ""):
             params["window_type"] = int(params["appendix"].replace("_window", ""))
-        if "bin" in params.get("appendix", ""):
-            params["bin_selection"] = int(params["appendix"].replace("_bin", "")[0])
 
         positions = None
         try:
@@ -139,13 +137,13 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_07_14_flying_hover",
+        # "2021_07_14_flying_hover",
         # "2021_07_14_flying",
         # "2021_07_14_propsweep",
         # "2021_07_08_stepper_slow",
         # "2021_07_08_stepper_fast",
         # "2021_07_08_stepper",
-        # "2021_07_07_stepper",
+        "2021_07_07_stepper",
         # "2021_06_19_stepper",
         # "2021_06_17_stepper",
         # "2021_06_09_stepper",
@@ -184,4 +182,4 @@ if __name__ == "__main__":
         else:
             df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
-        print("saved as", fname)
+        print(f"saved {len(df_total)} lines in", fname)
