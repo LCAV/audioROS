@@ -707,7 +707,8 @@ class DataCollector(object):
             gains_f = normalize_method(freqs)
 
             valid = np.all(gains_f > 0, axis=0)
-            gains_f = gains_f[m_indices, valid]
+            gains_f = gains_f[m_indices, :]
+            gains_f = gains_f[:, valid]
             slice_f[:, valid] /= gains_f  # n_mics x n_freqs
 
             stds = np.nanstd(slice_f, axis=1)

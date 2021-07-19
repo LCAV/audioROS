@@ -34,8 +34,15 @@ class Inference(object):
         self.stds = None  # n_data
         self.distance_range = None  # [min, max]
         self.is_calibrated = False
+        self.calibration_function = None
 
     def add_data(self, slices, values, stds=None, distances=None):
+        """
+        :param slices: interference slices of shape (n_mics, n_values)
+        :param values: values of shape (n_values, )
+        :param stds: standard deviations (n_mics, )
+        """
+        assert slices.shape[1] == len(values), slices.shape
         self.slices = slices
         self.values = values
         self.stds = stds
@@ -48,9 +55,14 @@ class Inference(object):
         self.azimuth_deg = azimuth_deg
 
     def add_calibration_function(self, calibration_function):
-        self.calibration_function = calibration_function
+        if calibration_function in [""]:
+            self.calibration_function = None
+        else:
+            self.calibration_function = calibration_function
 
     def calibrate(self):
+        if self.calibration_function is None:
+            return
         valid_idx = (self.values >= min(self.calibration_function.x)) & (
             self.values <= max(self.calibration_function.x)
         )
@@ -60,11 +72,21 @@ class Inference(object):
         self.slices[:, self.valid_idx] /= f_calib
         self.is_calibrated = True
 
-    def filter_out_freqs(self, freq_range):
-        valid_idx = (freq_range[1] <= self.values) | (self.values <= freq_range[0])
-        self.valid_idx &= valid_idx
+    def filter_out_freqs(self, freq_ranges):
+        """
+        :param freq_ranges: list of frequency ranges to filter out
+        """
+        for freq_range in freq_ranges:
+            self.valid_idx &= (freq_range[1] <= self.values) | (
+                self.values <= freq_range[0]
+            )
 
     def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
+        """
+        Perform inference.
+
+
+        """
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
@@ -85,7 +107,7 @@ class Inference(object):
 
             # make sure we use a reasonable distance range (need to add d0 to not
             # "go inside wall")
-            __, d0 = get_deltas_from_global(self.azimuth_deg, [100], mic_idx)
+            __, d0 = get_deltas_from_global(self.azimuth_deg, np.array([100]), mic_idx)
             d0_cm = round(d0 * 1e2)
             dists = np.arange(self.distance_range[0] + d0_cm, self.distance_range[-1])
             diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists, mic_idx)
