@@ -18,13 +18,6 @@
 
 #include <audio/audio_thread.h>
 
-//uncomment to send the FFTs results from the real microphones
-#define SEND_FROM_MIC
-//uncomment to use double buffering to send the FFT to the computer
-#define DOUBLE_BUFFERING
-//uncomment to use buzzer freq cycling
-#define BUZZER_FREQ_CYCLING
-
 #define BUZZER_FMIN 1000
 #define BUZZER_FMAX 3000
 #define BUZZER_DF 125
@@ -37,6 +30,8 @@ state_t state = WAIT_START;
 
 uint16_t buzzerFreq = BUZZER_FMIN;
 
+uint8_t c;
+
 static void serial_start(void) {
 	static SerialConfig ser_cfg = { 115200, 0, 0, 0, };
 
@@ -47,9 +42,10 @@ static void timer12_start(void) {
 	//General Purpose Timer configuration
 	//timer 12 is a 16 bit timer so we can measure time
 	//to about 65ms with a 1Mhz counter
-	static const GPTConfig gpt12cfg = { 1000000, /* 1MHz timer clock in order to measure uS.*/
-	NULL, /* Timer callback.*/
-	0, 0 };
+	static const GPTConfig gpt12cfg = {
+			1000000, /* 1MHz timer clock in order to measure uS.*/
+			NULL, /* Timer callback.*/
+			0, 0 };
 
 	gptStart(&GPTD12, &gpt12cfg);
 	//let the timer count to max value
@@ -78,29 +74,23 @@ int main(void) {
 	static float send_tab[DATA_SIZE];
 	uint32_t timestamp = 0;
 
-#ifdef SEND_FROM_MIC
 	//starts the microphones processing thread.
 	//it calls the callback given in parameter when samples are ready
 	mic_start(&processAudioData);
-#endif  /* SEND_FROM_MIC */
 
-	//INITIALIZING THE PARAMETERS NEEDED FOR THE ROBOT TO WORK, COMMENT TO NOT NEED TO USE THE PYTHON SCRIPT
-	//uint16_t frequency = ReceiveFrequencyFromComputer((BaseSequentialStream *) &SD3);
+	// Welcome message
+	chSequentialStreamWrite((BaseSequentialStream * ) &SD3, (uint8_t* )"STARTING MAIN EPUCK\n\r", 21);
+
 
 	/* Infinite loop. */
-
-	chSequentialStreamWrite((BaseSequentialStream * ) &SD3,
-			(uint8_t* )"STARTING MAIN EPUCK\n\r", 21);
-
-	uint8_t c;
-
 	while (1) {
 		switch (state) {
 		case WAIT_START:
+			// heart beat like function to dectect the active port on the computer
 			SendStart((BaseSequentialStream *) &SD3);
 
+			// Detect start sequence
 			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
-
 			if (c == 's') {
 				state = RECORD;
 				dac_play(buzzerFreq);
@@ -110,11 +100,10 @@ int main(void) {
 
 			break;
 		case RECORD:
-			wait_send_to_computer();
 			//waits until a result must be sent to the computer
+			wait_send_to_computer();
 			//we copy the buffer to avoid conflicts
-			arm_copy_f32(get_audio_buffer_ptr(ALL_OUTPUTS), send_tab,
-			DATA_SIZE);
+			arm_copy_f32(get_audio_buffer_ptr(ALL_OUTPUTS), send_tab, DATA_SIZE);
 			//add time to the  element of our data
 			timestamp += GPTD12.tim->CNT;
 			GPTD12.tim->CNT = 0;
@@ -141,62 +130,13 @@ int main(void) {
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
 				buzzerFreq += BUZZER_DF;
 			} else if (buzzerFreq > BUZZER_FMAX) {
-
-#ifdef BUZZER_FREQ_CYCLING
 				buzzerFreq = BUZZER_FMIN;
-#else
-				dac_stop();
-				state = WAIT_START;
-#endif
 			}
 
 			dac_play(buzzerFreq);
 			state = RECORD;
 			break;
 		}
-#ifdef SEND_FROM_MIC
-
-#ifdef DOUBLE_BUFFERING
-
-#else
-		SendFrameToComputer((BaseSequentialStream *) &SD3, get_audio_buffer_ptr(LEFT_OUTPUT), FULL_MIC_SIZE);
-#endif  /* DOUBLE_BUFFERING */
-#else
-		//time measurement variables
-		volatile uint16_t time_fft = 0;
-		volatile uint16_t time_mag = 0;
-
-		float* bufferCmplxInput = get_audio_buffer_ptr(LEFT_CMPLX_INPUT);
-		float* bufferOutput = get_audio_buffer_ptr(LEFT_OUTPUT);
-
-		uint16_t size = ReceiveInt16FromComputer((BaseSequentialStream *) &SD3, bufferCmplxInput, FFT_SIZE);
-
-		if(size == FFT_SIZE) {
-			/*
-			 *   Optimized FFT
-			 */
-
-			chSysLock();
-			//reset the timer counter
-			GPTD12.tim->CNT = 0;
-
-			doFFT_optimized(FFT_SIZE, bufferCmplxInput);
-
-			time_fft = GPTD12.tim->CNT;
-
-			//reset the timer counter
-			GPTD12.tim->CNT = 0;
-
-			arm_cmplx_mag_f32(bufferCmplxInput, bufferOutput, FFT_SIZE);
-
-			time_mag = GPTD12.tim->CNT;
-			chSysUnlock();
-			uint32_t timestamp = 0;
-			SendFrameToComputer((BaseSequentialStream *) &SD3, bufferOutput, FFT_SIZE, timestamp);
-			//chprintf((BaseSequentialStream *) &SDU1, "time fft = %d us, time magnitude = %d us\n",time_fft, time_mag);
-
-		}
-#endif  /* SEND_FROM_MIC */
 	}
 }
 

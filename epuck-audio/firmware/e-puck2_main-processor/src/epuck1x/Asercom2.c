@@ -55,7 +55,7 @@ extern char buffer[BUFFER_SIZE];
 //extern int e_mic_scan[3][MIC_SAMP_NB];
 //extern unsigned int e_last_mic_scan_id;
 extern int selector; //extern int selector;
-extern char c;
+extern char buffer_in;
 //extern int e_ambient_ir[10];						// ambient light measurement
 //extern int e_ambient_and_reflected_ir[10];		// light when led is on
 
@@ -154,7 +154,7 @@ int run_asercom2(void) {
     	if(gumstix_connected) { // Communicate with gumstix (i2c).
 
     	} else if (use_bt) { // Communicate with ESP32 (uart) => BT.
-            while (e_getchar_uart1(&c) == 0)
+            while (e_getchar_uart1(&buffer_in) == 0)
 #ifdef IR_RECEIVER
             {
                 ir_move = e_get_data();
@@ -216,7 +216,7 @@ int run_asercom2(void) {
                 ;
 #endif
         } else { // Communicate with the pc (usb).
-            while (e_getchar_uart2(&c) == 0)
+            while (e_getchar_uart2(&buffer_in) == 0)
 #ifdef IR_RECEIVER
             {
                 ir_move = e_get_data();
@@ -279,10 +279,10 @@ int run_asercom2(void) {
 #endif
         }
 
-        if ((int8_t)c < 0) { // binary mode (big endian)
+        if ((int8_t)buffer_in < 0) { // binary mode (big endian)
             i = 0;
             do {
-                switch ((int8_t)-c) {
+                switch ((int8_t)-buffer_in) {
 					case 0xA: // RGB setting => ESP32
 						for(j=0; j<12; j++) {
 							if(gumstix_connected) { // Communicate with gumstix (i2c).
@@ -640,11 +640,11 @@ int run_asercom2(void) {
                 if (gumstix_connected) { // Communicate with gumstix (i2c).
 
                 } else if (use_bt) { // Communicate with ESP32 (uart) => BT.
-                    while (e_getchar_uart1(&c) == 0); // get next command
+                    while (e_getchar_uart1(&buffer_in) == 0); // get next command
                 } else { // Communicate with the pc (usb).
-                    while (e_getchar_uart2(&c) == 0); // get next command
+                    while (e_getchar_uart2(&buffer_in) == 0); // get next command
                 }
-            } while (c);
+            } while (buffer_in);
             if (i != 0) {
                 if (gumstix_connected == 0) {
                     if (wait_cam) {
@@ -665,24 +665,24 @@ int run_asercom2(void) {
                 }
             }
             // **** ascii mode ****
-        } else if (c > 0) { // ascii mode
+        } else if (buffer_in > 0) { // ascii mode
         	if (gumstix_connected) { // Communicate with gumstix (i2c).
 
         	} else if (use_bt) { // Communicate with ESP32 (uart) => BT.
-                while (c == '\n' || c == '\r') e_getchar_uart1(&c);
+                while (buffer_in == '\n' || buffer_in == '\r') e_getchar_uart1(&buffer_in);
             } else { // Communicate with the pc (usb).
-                while (c == '\n' || c == '\r') e_getchar_uart2(&c);
+                while (buffer_in == '\n' || buffer_in == '\r') e_getchar_uart2(&buffer_in);
             }
-            buffer[0] = c;
+            buffer[0] = buffer_in;
             i = 1;
             if (gumstix_connected) { // Communicate with gumstix (i2c).
 
             } else if (use_bt) { // Communicate with ESP32 (uart) => BT.
-                do if (e_getchar_uart1(&c)) buffer[i++] = c;
-                    while (c != '\n' && c != '\r');
+                do if (e_getchar_uart1(&buffer_in)) buffer[i++] = buffer_in;
+                    while (buffer_in != '\n' && buffer_in != '\r');
             } else { // Communicate with the pc (usb).
-                do if (e_getchar_uart2(&c)) buffer[i++] = c;
-                    while (c != '\n' && c != '\r');
+                do if (e_getchar_uart2(&buffer_in)) buffer[i++] = buffer_in;
+                    while (buffer_in != '\n' && buffer_in != '\r');
             }
             buffer[i++] = '\0';
 
