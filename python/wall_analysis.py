@@ -16,7 +16,7 @@ DEFAULT_DICT = {
     "props": {0},
     "bin_selection": {0},
     "window_type": {0},
-    "appendix": {""},
+    "appendix": set(),
 }
 
 
