@@ -30,7 +30,7 @@
 #define BUZZER_DF 125
 
 typedef enum states_enum_t {
-	WAIT_START, RECORD, WAIT_SEND, SEND, NEXT_NOTE, WAIT_ACK,
+	WAIT_START, RECORD, SEND, NEXT_NOTE, WAIT_ACK,
 } state_t;
 
 state_t state = WAIT_START;
@@ -87,8 +87,6 @@ int main(void) {
 	//INITIALIZING THE PARAMETERS NEEDED FOR THE ROBOT TO WORK, COMMENT TO NOT NEED TO USE THE PYTHON SCRIPT
 	//uint16_t frequency = ReceiveFrequencyFromComputer((BaseSequentialStream *) &SD3);
 
-	uint32_t timeElapsed = timestamp;
-
 	/* Infinite loop. */
 
 	chSequentialStreamWrite((BaseSequentialStream * ) &SD3,
@@ -97,12 +95,6 @@ int main(void) {
 	uint8_t c;
 
 	while (1) {
-
-
-		if(c == 'x'){
-			state = WAIT_START;
-		}
-//
 		switch (state) {
 		case WAIT_START:
 			SendStart((BaseSequentialStream *) &SD3);
@@ -115,7 +107,6 @@ int main(void) {
 			}else{
 				dac_stop();
 			}
-
 
 			break;
 		case RECORD:
@@ -141,6 +132,9 @@ int main(void) {
 				state = NEXT_NOTE;
 			}else if(c == 'n'){
 				state = SEND;
+			}if(c == 'x'){
+				state = WAIT_START;
+				buzzerFreq = BUZZER_FMIN;
 			}
 			break;
 		case NEXT_NOTE:
