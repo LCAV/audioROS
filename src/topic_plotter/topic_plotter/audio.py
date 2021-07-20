@@ -10,8 +10,8 @@ from audio_interfaces_py.node_with_params import NodeWithParams
 
 from .live_plotter import LivePlotter
 
-XMIN_FREQ = 1000  # min plotting frequency in Hz
-XMAX_FREQ = 2000  # max plotting frequency in Hz
+XMIN_FREQ = 800  # min plotting frequency in Hz
+XMAX_FREQ = 3500  # max plotting frequency in Hz
 YMIN_FREQ = 1e-10  # min plotting frequency in Hz
 YMAX_FREQ = 1e10  # max plotting frequency in Hz
 YMIN_TIME = -1.1  # min plotting frequency in Hz

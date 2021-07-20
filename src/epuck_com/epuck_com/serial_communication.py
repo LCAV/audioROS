@@ -142,6 +142,8 @@ class Gateway(NodeWithParams):
         )
         self.create_timer(1 / self.desired_rate, self.publish_current_data)
 
+        self.buzzer_idx = 0
+
         # if self.port is not None:
         #    self.port.write(b"BUZZR")
         #    time.sleep(8)
@@ -159,9 +161,13 @@ class Gateway(NodeWithParams):
         # read audio
         # the format is all the interleaved real values of all four microphones
 
+        if self.buzzer_idx == 0:
+            self.send_stop()
+            return
+
         read_data = self.read_float_serial()
         if read_data is not None:
-            data, size, timestamp = self.read_float_serial()
+            data, size, timestamp = read_data
         else:
             return
 
@@ -216,6 +222,7 @@ class Gateway(NodeWithParams):
             f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
         )
 
+
     # reads the FFT in float32 from the serial
     def read_float_serial(self):
         start_detected = read_start(self.port)
@@ -223,20 +230,23 @@ class Gateway(NodeWithParams):
             self.port.close()
             self.destroy_node()
         elif not start_detected:
-            print("timeout")
+            print(f"timeout in read_float_serial")
             return None
-        print("start detected")
-
+        
         # normally this should unpack as an unsigned in of size 32 bits
         # reads the size
         # converts as short int in little endian the two bytes read
-        size = struct.unpack("<H", self.port.read(2))[0]  # H for unsigned short
-        timestamp = struct.unpack("<I", self.port.read(4))[0]  # I for unsigned int
-        print(f"size of incoming data: {size} at timestamp {timestamp}")
-
+        res = self.port.read(2)
+        if(len(res) > 0):
+            size = struct.unpack("<H", res)[0]  # H for unsigned short
+            timestamp = struct.unpack("<I", self.port.read(4))[0]  # I for unsigned int
+        else:
+            print(f'size of data not recieved')
+            return None
         # reads the data
         rcv_buffer = self.port.read(size * 4)
         data = []
+
         # if we receive the good amount of data, we convert them in float32
         # send the data in uint16 for the rest
         if len(rcv_buffer) == 4 * size:
@@ -244,6 +254,7 @@ class Gateway(NodeWithParams):
             while i < size:
                 data.append(struct.unpack_from("<f", rcv_buffer, i * 4)[0])
                 i = i + 1
+            self.send_acknowledge()
             return data, size, timestamp
         else:
             print(f"wrong buffer size, recieved only {len(rcv_buffer)}")
@@ -253,13 +264,21 @@ class Gateway(NodeWithParams):
         if not read_end(self.port):
             self.send_non_acknowledge()
         else:
-            send_acknowledge()
+            self.send_acknowledge()
+
+
 
     def send_non_acknowledge(self):
         self.port.write(b"n")
 
     def send_acknowledge(self):
         self.port.write(b"a")
+
+    def send_stop(self):
+        self.port.write(b"x")
+
+    def send_start(self):
+        self.port.write(b"s")
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
     def data_rearrange(self, data, position, bin_number):
@@ -311,20 +330,19 @@ class Gateway(NodeWithParams):
         self.port.write(struct.pack("<h", 4))
         print("sent move rate to robot")
 
-    def stop(self, *args):
-        self.port.write(b"x")
-        print("stopped the robot from moving with motor")
-
     def send_buzzer_idx(self, buzzer_idx, *args):
+        self.buzzer_idx = buzzer_idx
+
         if self.port is None:
             self.get_logger().warn("cannot send buzzer index")
             return
 
         if buzzer_idx > 0:
-            self.port.write(b"s")
+            self.send_start()
+            print("sent buzzer start command")
         else:
-            self.port.write(b"x")
-        print("sent buzzer start command")
+            self.send_stop()
+            print("sent buzzer stop command")
 
     def set_params(self, params):
         """ Overwrite the function set_params by NodeWithParams. 
@@ -345,7 +363,7 @@ class Gateway(NodeWithParams):
                     self.stop(param_value)
             # send buzzer commands
             elif param_name == "buzzer_idx":
-                if param_value not in [0, None]:
+                if param_value not in [None]:
                     self.send_buzzer_idx(param_value)
             else:
                 self.get_logger().warn(f"setting unused parameter {param_name}")
