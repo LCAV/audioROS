@@ -177,7 +177,17 @@ kwargs_datasets = {
         },
     },
     "2021_07_14_propsweep": {"appendix": ["", "_thirdtry"]},
-    "2021_07_14_flying": {"appendix": ["", "_2", "_3", "_4", "_5"]},
+    "2021_07_14_flying": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 3000,
+            "max_freq": 5000,
+        },
+        "appendix": [f"_{i}" for i in range(11, 20)],
+    },
     "2021_07_14_flying_hover": {
         "audio_deck": {
             "factor_outliers": 1e3,

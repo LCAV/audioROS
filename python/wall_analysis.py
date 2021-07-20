@@ -138,12 +138,12 @@ if __name__ == "__main__":
 
     exp_names = [
         # "2021_07_14_flying_hover",
-        # "2021_07_14_flying",
+        "2021_07_14_flying",
         # "2021_07_14_propsweep",
         # "2021_07_08_stepper_slow",
         # "2021_07_08_stepper_fast",
         # "2021_07_08_stepper",
-        "2021_07_07_stepper",
+        # "2021_07_07_stepper",
         # "2021_06_19_stepper",
         # "2021_06_17_stepper",
         # "2021_06_09_stepper",

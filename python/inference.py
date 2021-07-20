@@ -13,6 +13,8 @@ from simulation import get_deltas_from_global
 EPS = 1e-30
 WALL_ANGLE_DEG = None
 
+BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+
 
 def eps_normalize(proba, eps=EPS):
     proba_norm = (proba - np.min(proba) + eps) / (np.max(proba) - np.min(proba) + eps)
@@ -72,7 +74,7 @@ class Inference(object):
         self.slices[:, self.valid_idx] /= f_calib
         self.is_calibrated = True
 
-    def filter_out_freqs(self, freq_ranges):
+    def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES):
         """
         :param freq_ranges: list of frequency ranges to filter out
         """

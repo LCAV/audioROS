@@ -255,8 +255,6 @@ def remove_spurious_freqs(df, n_spurious, verbose=False, dryrun=False):
     remove_names = []
     for (freq, mic, distance), df_here in df.groupby(["frequency", "mic", "distance"]):
         if len(df) < n_spurious:
-            # if verbose:
-            #   print('removing', df)
             remove_rows += list(df_here.index.values)
             remove_names += [(freq, mic, distance)]
     if verbose:
@@ -300,7 +298,7 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
 def remove_bad_measurements(df, mag_thresh, verbose=False):
     index_remove = df[df.magnitude < mag_thresh].index
     if verbose:
-        print(f"removing {len(index_remove)} rows")
+        print(f"removing bad {len(index_remove)} rows")
     df.drop(index=index_remove, inplace=True)
 
 
@@ -327,12 +325,10 @@ def remove_outliers(df, factor=FACTOR_OUTLIERS, normalize=False, verbose=False):
 
 def remove_nan_rows(df, verbose=False):
     if verbose:
-        print(f"dropping {len(df.loc[df.magnitude.isnull()])} rows")
+        print(f"remove_nan_rows: dropping {len(df.loc[df.magnitude.isnull()])} rows")
     len_before = len(df)
     df.dropna(axis=0, subset=["magnitude"], inplace=True)
     len_after = len(df)
-    if verbose:
-        print("dropped", len_before - len_after)
 
 
 def to_numeric(df):
@@ -566,7 +562,7 @@ class DataCollector(object):
                     update_dict.values()
                 )
             elif mode == "all":
-                for i_f in range(len(signals_f)):
+                for i_f in range(signals_f.shape[1]):
                     f = frequencies[i_f]
                     magnitude_estimate = np.abs(signals_f[i_mic, i_f])
                     counter = len(
@@ -719,12 +715,11 @@ class DataCollector(object):
 
     def get_current_frequency_slice(self, verbose=False):
         if self.latest_fslice_time is None:
-            print(self.df)
             self.latest_fslice_time = self.df.iloc[0].time
             if verbose:
                 print("set latest time to", self.latest_fslice_time)
 
-        latest_df = self.df[self.df.time > self.latest_fslice_time]
+        latest_df = self.df[self.df.time >= self.latest_fslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
 
         f_slice, freqs, stds, d_slice = get_frequency_slice(latest_df_clean)
