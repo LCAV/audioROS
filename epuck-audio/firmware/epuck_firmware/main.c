@@ -24,6 +24,7 @@
 #define BUZZER_FMIN 1000
 #define BUZZER_FMAX 3000
 #define BUZZER_DF 125
+#define SPEED 200
 
 typedef enum states_enum_t {
 	WAIT_START, RECORD, SEND, MOVE, MOVE_WAIT, NEXT_NOTE, WAIT_ACK,
@@ -34,6 +35,8 @@ state_t state = WAIT_START;
 uint16_t buzzerFreq = BUZZER_FMIN;
 
 uint8_t c;
+
+uint8_t buzzer_idx;
 
 static void serial_start(void) {
 	static SerialConfig ser_cfg = { 115200, 0, 0, 0, };
@@ -95,13 +98,32 @@ int main(void) {
 
 			// Detect start sequence
 			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
+
+			if ((c < '9') && (c > '0')) {
+				buzzer_idx = c - '0';
+				if (buzzer_idx == 1) {
+					dac_play(buzzerFreq);
+				} else {
+					dac_play(buzzer_idx * 1000);
+					left_motor_set_speed(SPEED);
+					right_motor_set_speed(SPEED);
+				}
+				state = RECORD;
+			}else{
+				left_motor_set_speed(0);
+				right_motor_set_speed(0);
+				dac_stop();
+			}
+/*
 			if (c == 's') {
 				state = RECORD;
 				dac_play(buzzerFreq);
 			}else{
+				left_motor_set_speed(0);
+				right_motor_set_speed(0);
 				dac_stop();
 			}
-
+*/
 			break;
 		case RECORD:
 			//waits until a result must be sent to the computer
@@ -141,8 +163,8 @@ int main(void) {
 		case MOVE:
 			dac_stop();
 
-			left_motor_set_speed(200);
-			right_motor_set_speed(200);
+			left_motor_set_speed(SPEED);
+			right_motor_set_speed(SPEED);
 			state = MOVE_WAIT;
 			timestamp += GPTD12.tim->CNT;
 			GPTD12.tim->CNT = 0;
@@ -156,7 +178,6 @@ int main(void) {
 				right_motor_set_speed(0);
 				state = NEXT_NOTE;
 			}
-
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
