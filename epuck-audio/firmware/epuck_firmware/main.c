@@ -18,12 +18,15 @@
 
 #include <audio/audio_thread.h>
 
+#define WHEEL_DISTANCE      5.35f    //cm TO ADJUST IF NECESSARY. NOT ALL THE E-PUCK2 HAVE EXACTLY THE SAME WHEEL DISTANCE
+#define PERIMETER_EPUCK     (PI * WHEEL_DISTANCE)
+
 #define BUZZER_FMIN 1000
 #define BUZZER_FMAX 3000
 #define BUZZER_DF 125
 
 typedef enum states_enum_t {
-	WAIT_START, RECORD, SEND, MOVE, NEXT_NOTE, WAIT_ACK,
+	WAIT_START, RECORD, SEND, MOVE, MOVE_WAIT, NEXT_NOTE, WAIT_ACK,
 } state_t;
 
 state_t state = WAIT_START;
@@ -73,6 +76,8 @@ int main(void) {
 	//to avoid modifications of the buffer while sending it
 	static float send_tab[DATA_SIZE];
 	uint32_t timestamp = 0;
+	uint32_t tickstart = 0;
+	uint32_t tick = 0;
 
 	//starts the microphones processing thread.
 	//it calls the callback given in parameter when samples are ready
@@ -80,7 +85,6 @@ int main(void) {
 
 	// Welcome message
 	chSequentialStreamWrite((BaseSequentialStream * ) &SD3, (uint8_t* )"STARTING MAIN EPUCK\n\r", 21);
-
 
 	/* Infinite loop. */
 	while (1) {
@@ -132,20 +136,27 @@ int main(void) {
 				buzzerFreq = BUZZER_FMIN;
 				break;
 			}
-			/*
-			if (c == 'a') {
-				state = NEXT_NOTE;
-			}else if(c == 'n'){
-				state = SEND;
-			}if(c == 'x'){
-				state = WAIT_START;
-				buzzerFreq = BUZZER_FMIN;
-			}
-			*/
+
 			break;
 		case MOVE:
+			dac_stop();
 
-			state = NEXT_NOTE;
+			left_motor_set_speed(200);
+			right_motor_set_speed(200);
+			state = MOVE_WAIT;
+			timestamp += GPTD12.tim->CNT;
+			GPTD12.tim->CNT = 0;
+			tickstart = timestamp;
+			break;
+		case MOVE_WAIT:
+			timestamp += GPTD12.tim->CNT;
+			GPTD12.tim->CNT = 0;
+			if(timestamp > (tickstart + 200000)){
+				left_motor_set_speed(0);
+				right_motor_set_speed(0);
+				state = NEXT_NOTE;
+			}
+
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
