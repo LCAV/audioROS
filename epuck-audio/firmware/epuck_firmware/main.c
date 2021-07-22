@@ -23,7 +23,7 @@
 #define BUZZER_DF 125
 
 typedef enum states_enum_t {
-	WAIT_START, RECORD, SEND, NEXT_NOTE, WAIT_ACK,
+	WAIT_START, RECORD, SEND, MOVE, NEXT_NOTE, WAIT_ACK,
 } state_t;
 
 state_t state = WAIT_START;
@@ -124,6 +124,9 @@ int main(void) {
 			case 'n':
 				state = SEND;
 				break;
+			case 'm':
+				state = MOVE;
+				break;
 			case 'x':
 				state = WAIT_START;
 				buzzerFreq = BUZZER_FMIN;
@@ -139,6 +142,10 @@ int main(void) {
 				buzzerFreq = BUZZER_FMIN;
 			}
 			*/
+			break;
+		case MOVE:
+
+			state = NEXT_NOTE;
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
