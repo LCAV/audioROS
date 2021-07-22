@@ -117,6 +117,19 @@ int main(void) {
 		case WAIT_ACK:
 			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
+			switch(c){
+			case 'a':
+				state = NEXT_NOTE;
+				break;
+			case 'n':
+				state = SEND;
+				break;
+			case 'x':
+				state = WAIT_START;
+				buzzerFreq = BUZZER_FMIN;
+				break;
+			}
+			/*
 			if (c == 'a') {
 				state = NEXT_NOTE;
 			}else if(c == 'n'){
@@ -125,6 +138,7 @@ int main(void) {
 				state = WAIT_START;
 				buzzerFreq = BUZZER_FMIN;
 			}
+			*/
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
