@@ -129,6 +129,7 @@ class Gateway(NodeWithParams):
     }
 
     def __init__(self, port):
+        self.sweep_index = 0
         self.desired_rate = 1000  # Hz
         self.start_time = time.time()
 
@@ -165,7 +166,7 @@ class Gateway(NodeWithParams):
             self.send_stop()
             return
 
-        read_data = self.read_float_serial()
+        read_data = self.read_float_serial(self.sweep_index)
         if read_data is not None:
             data, size, timestamp = read_data
         else:
@@ -254,13 +255,20 @@ class Gateway(NodeWithParams):
             while i < size:
                 data.append(struct.unpack_from("<f", rcv_buffer, i * 4)[0])
                 i = i + 1
-            self.send_acknowledge()
+
+            if(self.sweep_index < self.sweep_length){
+                self.send_acknowledge()
+            } else {
+                self.send_move()
+            }
             return data, size, timestamp
         else:
             print(f"wrong buffer size, recieved only {len(rcv_buffer)}")
             self.send_non_acknowledge()
             return None
 
+
+        # We should not get there, remove if necessary
         if not read_end(self.port):
             self.send_non_acknowledge()
         else:
@@ -277,8 +285,11 @@ class Gateway(NodeWithParams):
     def send_stop(self):
         self.port.write(b"x")
 
-    def send_start(self):
-        self.port.write(b"s")
+    def send_start(self, idx):
+        self.port.write(str(idx))
+
+    def send_move(self):
+        self.port.write(b"m")
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
     def data_rearrange(self, data, position, bin_number):
@@ -338,7 +349,7 @@ class Gateway(NodeWithParams):
             return
 
         if buzzer_idx > 0:
-            self.send_start()
+            self.send_start(buzzer_idx)
             print("sent buzzer start command")
         else:
             self.send_stop()
