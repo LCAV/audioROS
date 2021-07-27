@@ -279,7 +279,7 @@ class Gateway(NodeWithParams):
         self.port.write(b"a")
 
     def send_stop(self):
-        self.port.write(b"x")
+        self.port.write(b"xx")
 
     def send_start(self, idx):
         self.port.write(b"{idx}")
@@ -367,7 +367,7 @@ class Gateway(NodeWithParams):
                     self.move_forward(param_value)
             elif param_name == "stop":
                 if param_value not in [0, None]:
-                    self.stop(param_value)
+                    self.send_stop()
             # send buzzer commands
             elif param_name == "buzzer_idx":
                 if param_value not in [None]:
