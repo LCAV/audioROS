@@ -16,6 +16,7 @@ from epuck_description_py.parameters import (
     FS,
     N_MICS,
     WHEEL_DIAMETER,
+    SWEEP_LENGTH
 )
 from audio_interfaces_py.messages import create_signals_freq_message
 from audio_interfaces.msg import SignalsFreq
@@ -166,7 +167,8 @@ class Gateway(NodeWithParams):
             self.send_stop()
             return
 
-        read_data = self.read_float_serial(self.sweep_index)
+        read_data = self.read_float_serial()
+
         if read_data is not None:
             data, size, timestamp = read_data
         else:
@@ -234,7 +236,7 @@ class Gateway(NodeWithParams):
             print(f"timeout in read_float_serial")
             return None
         
-        # normally this should unpack as an unsigned in of size 32 bits
+        # normally this should unpack as an unsigned int of size 32 bits
         # reads the size
         # converts as short int in little endian the two bytes read
         res = self.port.read(2)
@@ -256,25 +258,19 @@ class Gateway(NodeWithParams):
                 data.append(struct.unpack_from("<f", rcv_buffer, i * 4)[0])
                 i = i + 1
 
-            if(self.sweep_index < self.sweep_length){
+            # for 0 to 15, we tell it to play next note
+            if (self.sweep_index <= SWEEP_LENGTH):
                 self.send_acknowledge()
-            } else {
+                self.sweep_index += 1
+            # for 16, we move and start again
+            else:
+                self.sweep_index = 0
                 self.send_move()
-            }
             return data, size, timestamp
         else:
-            print(f"wrong buffer size, recieved only {len(rcv_buffer)}")
+            print(f"wrong buffer size, recieved only {len(rcv_buffer)} instead of {4*size}")
             self.send_non_acknowledge()
             return None
-
-
-        # We should not get there, remove if necessary
-        if not read_end(self.port):
-            self.send_non_acknowledge()
-        else:
-            self.send_acknowledge()
-
-
 
     def send_non_acknowledge(self):
         self.port.write(b"n")
@@ -286,7 +282,7 @@ class Gateway(NodeWithParams):
         self.port.write(b"x")
 
     def send_start(self, idx):
-        self.port.write(str(idx))
+        self.port.write(b"{idx}")
 
     def send_move(self):
         self.port.write(b"m")
@@ -362,11 +358,11 @@ class Gateway(NodeWithParams):
         current_params = {param.name: param.value for param in params}
         for param_name, param_value in current_params.items():
             # move by given angle, blocking
-            if param_name == "turn_angle":
-                if param_value not in [0, None]:
-                    self.turn_angle(param_value)
+            #if param_name == "turn_angle":
+            #    if param_value not in [0, None]:
+            #        self.turn_angle(param_value)
             # move by given velocity, non-blocking
-            elif param_name == "move_forward":
+            if param_name == "move_forward":
                 if param_value not in [0, None]:
                     self.move_forward(param_value)
             elif param_name == "stop":
@@ -400,7 +396,8 @@ def main(args=None):
                 break
             else:
                 print("did not detect start")
-        except:
+        except Exception as e:
+            print(e)
             print(f"could not connect to {port_id}")
 
     if port is None:
