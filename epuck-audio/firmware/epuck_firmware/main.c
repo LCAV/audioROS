@@ -99,21 +99,24 @@ int main(void) {
 			// Detect start sequence
 			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
-			if ((c < '9') && (c > '0')) {
-				buzzer_idx = c - '0';
-				if (buzzer_idx == 1) {
-					dac_play(buzzerFreq);
-				} else {
-					dac_play(buzzer_idx * 1000);
-					left_motor_set_speed(SPEED);
-					right_motor_set_speed(SPEED);
+			if(c != 'x'){
+				if ((c < 9) && (c > 0)) {
+					buzzer_idx = c;// - '0';
+					if (buzzer_idx == 1) {
+						dac_play(buzzerFreq);
+					} else {
+						dac_play(buzzer_idx * 1000);
+						left_motor_set_speed(SPEED);
+						right_motor_set_speed(SPEED);
+					}
+					state = RECORD;
 				}
-				state = RECORD;
 			}else{
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
 				dac_stop();
 			}
+
 /*
 			if (c == 's') {
 				state = RECORD;
@@ -127,7 +130,8 @@ int main(void) {
 			break;
 		case RECORD:
 			//waits until a result must be sent to the computer
-			wait_send_to_computer();
+			wait_finish_record();
+
 			//we copy the buffer to avoid conflicts
 			arm_copy_f32(get_audio_buffer_ptr(ALL_OUTPUTS), send_tab, DATA_SIZE);
 			//add time to the  element of our data
@@ -145,7 +149,11 @@ int main(void) {
 
 			switch(c){
 			case 'a':
-				state = NEXT_NOTE;
+				if(buzzer_idx == 1){
+					state = NEXT_NOTE;
+				}else{
+					state = RECORD;
+				}
 				break;
 			case 'n':
 				state = SEND;
@@ -187,6 +195,7 @@ int main(void) {
 			}
 
 			dac_play(buzzerFreq);
+
 			state = RECORD;
 			break;
 		}

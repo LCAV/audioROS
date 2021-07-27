@@ -163,6 +163,7 @@ class Gateway(NodeWithParams):
         # read audio
         # the format is all the interleaved real values of all four microphones
 
+        # make sure that the stop command is received
         if self.buzzer_idx == 0:
             self.send_stop()
             return
@@ -259,7 +260,7 @@ class Gateway(NodeWithParams):
                 i = i + 1
 
             # for 0 to 15, we tell it to play next note
-            if (self.sweep_index <= SWEEP_LENGTH):
+            if (self.sweep_index < SWEEP_LENGTH):
                 self.send_acknowledge()
                 self.sweep_index += 1
             # for 16, we move and start again
@@ -273,6 +274,7 @@ class Gateway(NodeWithParams):
             return None
 
     def send_non_acknowledge(self):
+        print("sending n")
         self.port.write(b"n")
 
     def send_acknowledge(self):
@@ -282,7 +284,9 @@ class Gateway(NodeWithParams):
         self.port.write(b"xx")
 
     def send_start(self, idx):
-        self.port.write(b"{idx}")
+        byte = bytes([idx])# + b'\x48'
+        print("writing", byte)
+        self.port.write(byte)
 
     def send_move(self):
         self.port.write(b"m")

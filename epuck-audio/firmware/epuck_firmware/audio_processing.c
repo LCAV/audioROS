@@ -239,7 +239,7 @@ void processAudioData(int16_t *data, uint16_t num_samples){
 	}
 }
 
-void wait_send_to_computer(void){
+void wait_finish_record(void){
 	chBSemWait(&sendToComputer_sem);
 }
 
