@@ -13,6 +13,7 @@ import serial
 from epuck_description_py.parameters import (
     MIC_POSITIONS,
     N_BUFFER,
+    FFTSIZE,
     FS,
     N_MICS,
     WHEEL_DIAMETER,
@@ -117,11 +118,6 @@ def read_end(port):
     return True
 
 
-def live_status_function(show_status, bins, data):
-    if show_status:
-        print("the bins are", bins)
-
-
 class Gateway(NodeWithParams):
     PARAMS_DICT = {
         "buzzer_idx": 0,
@@ -133,6 +129,8 @@ class Gateway(NodeWithParams):
         self.sweep_index = 0
         self.desired_rate = 1000  # Hz
         self.start_time = time.time()
+        self.timestamp_old = 0
+        self.old_bins = 0
 
         super().__init__("gateway")
 
@@ -180,12 +178,12 @@ class Gateway(NodeWithParams):
             return
 
         # extracting all our values from the epuck serial package
-        position = 0
-        bin_number, position = self.extract_bin_number(data, position)
+        bin_number = int(data[0])
+        assert bin_number == FFTSIZE, bin_number
 
         # undo the interleaving and create separate matrixes for each microphone
-        signals_f, position = self.data_rearrange(data, position, bin_number)
-        fbins, *_ = self.extract_bins(data, position, bin_number)
+        signals_f = self.data_rearrange(data, bin_number)
+        fbins = np.array(data[-FFTSIZE:], dtype=np.int)
 
         # read frequencies
 
@@ -217,9 +215,6 @@ class Gateway(NodeWithParams):
             FS,
         )
 
-        # switch the status to true to receive information on relevant data
-        live_status_function(True, fbins, signals_f)
-
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(
@@ -229,6 +224,7 @@ class Gateway(NodeWithParams):
 
     # reads the FFT in float32 from the serial
     def read_float_serial(self):
+        self.timestamp_old
         start_detected = read_start(self.port)
         if start_detected is None:
             self.port.close()
@@ -237,6 +233,7 @@ class Gateway(NodeWithParams):
             print(f"timeout in read_float_serial")
             return None
         
+        print("start detected")
         # normally this should unpack as an unsigned int of size 32 bits
         # reads the size
         # converts as short int in little endian the two bytes read
@@ -247,6 +244,15 @@ class Gateway(NodeWithParams):
         else:
             print(f'size of data not recieved')
             return None
+
+        if( timestamp == self.timestamp_old ):
+            self.send_non_acknowledge()
+            print("Discarding because of same timestamp")
+            return None
+        else:
+            print(f"previous timestamp {self.timestamp_old}, new timestamp {timestamp}")
+            self.timestamp_old = timestamp
+
         # reads the data
         rcv_buffer = self.port.read(size * 4)
         data = []
@@ -259,14 +265,22 @@ class Gateway(NodeWithParams):
                 data.append(struct.unpack_from("<f", rcv_buffer, i * 4)[0])
                 i = i + 1
 
+            #print(f"Data is: {data}")
+
             # for 0 to 15, we tell it to play next note
-            if (self.sweep_index < SWEEP_LENGTH):
-                self.send_acknowledge()
-                self.sweep_index += 1
+            #if (self.sweep_index < SWEEP_LENGTH):
+                #self.send_acknowledge()
+
+                #new_bins = data[-FFTSIZE]                
+                #if(new_bins != self.old_bins):
+                #    self.sweep_index += 1
+                #self.old_bins = new_bins
+        
             # for 16, we move and start again
-            else:
-                self.sweep_index = 0
-                self.send_move()
+            # else:
+                #self.sweep_index = 0
+                #self.send_move()
+            self.send_acknowledge()
             return data, size, timestamp
         else:
             print(f"wrong buffer size, recieved only {len(rcv_buffer)} instead of {4*size}")
@@ -278,6 +292,7 @@ class Gateway(NodeWithParams):
         self.port.write(b"n")
 
     def send_acknowledge(self):
+        print(f"sending a {self.sweep_index}")
         self.port.write(b"a")
 
     def send_stop(self):
@@ -289,10 +304,11 @@ class Gateway(NodeWithParams):
         self.port.write(byte)
 
     def send_move(self):
+        print(f"Moving {self.sweep_index}")
         self.port.write(b"m")
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
-    def data_rearrange(self, data, position, bin_number):
+    def data_rearrange(self, data, bin_number):
         mics = N_MICS
         # check that there is the right number of bins :
 
@@ -302,7 +318,8 @@ class Gateway(NodeWithParams):
 
         signals_f = np.zeros((mics, bin_number), dtype=np.complex128)
 
-        pos = 0
+        pos = 1
+        # TODO(FD): can replace these for loops 
         for i in range(bin_number):
             for j in range(mics):
                 signals_f.real[j, i] = data[pos]
@@ -310,13 +327,7 @@ class Gateway(NodeWithParams):
             for j in range(mics):
                 signals_f.imag[j, i] = data[pos]
                 pos += 1
-        return signals_f, pos + 1
-
-    def extract_bins(self, data, bin_pos, num_bins):
-        bins = np.zeros(num_bins, np.int)
-        for i in range(0, num_bins):
-            bins[i] = int(data[i + bin_pos])
-        return bins, bin_pos + num_bins
+        return signals_f
 
     def extract_timestamp(self, data, position):
         return data[position], position + 1

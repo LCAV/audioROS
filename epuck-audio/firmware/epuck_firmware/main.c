@@ -93,7 +93,7 @@ int main(void) {
 	while (1) {
 		switch (state) {
 		case WAIT_START:
-			// heart beat like function to dectect the active port on the computer
+			// heart beat like function to detect the active port on the computer
 			SendStart((BaseSequentialStream *) &SD3);
 
 			// Detect start sequence
@@ -111,7 +111,9 @@ int main(void) {
 					}
 					state = RECORD;
 				}
-			}else{
+			}else if (c == 'm'){
+				state = MOVE;
+			} else{
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
 				dac_stop();
@@ -142,6 +144,7 @@ int main(void) {
 			break;
 		case SEND:
 			SendFrameToComputer((BaseSequentialStream *) &SD3, send_tab, DATA_SIZE, timestamp);
+
 			state = WAIT_ACK;
 			break;
 		case WAIT_ACK:
@@ -157,9 +160,6 @@ int main(void) {
 				break;
 			case 'n':
 				state = SEND;
-				break;
-			case 'm':
-				state = MOVE;
 				break;
 			case 'x':
 				state = WAIT_START;
@@ -184,19 +184,21 @@ int main(void) {
 			if(timestamp > (tickstart + 200000)){
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
-				state = NEXT_NOTE;
+				state = WAIT_START;
 			}
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
 				buzzerFreq += BUZZER_DF;
+				dac_play(buzzerFreq);
+				state = RECORD;
 			} else if (buzzerFreq > BUZZER_FMAX) {
 				buzzerFreq = BUZZER_FMIN;
+				dac_stop();
+				state = WAIT_START;
 			}
 
-			dac_play(buzzerFreq);
 
-			state = RECORD;
 			break;
 		}
 	}
