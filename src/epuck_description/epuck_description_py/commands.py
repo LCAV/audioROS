@@ -2,30 +2,10 @@ from epuck_description_py.parameters import SOUND_EFFECTS
 
 motor_command_lists = {
     "sweep_and_move": [
-        ("/gateway", "buzzer_idx", 1, 0.0),
+        ("/gateway", "buzzer_idx", 1, 10.0),
+        ("/gateway", "move_forward", 1, 2.0),
     ],
-    "multi_sweep": [
-        ("/gateway", "hover_height", 0.4, 0),  # start at 50
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 4),  # time delay only
-        ("/gateway", "buzzer_idx", 0, 0),
-        ("/gateway", "move_distance", 0.2, 0),  # 30
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 4),  # time delay only
-        ("/gateway", "buzzer_idx", 0, 0),
-        ("/gateway", "move_distance", 0.2, 0),  # 10 cm
-        ("/gateway", "buzzer_idx", 1, 0),
-        ("", "", "", 4),  # time delay only
-        ("/gateway", "land_velocity", 0.2, 0),
-    ],
-    "linear_3000": [
-        ("/gateway", "hover_height", 0.4, 0),
-        ("/gateway", "buzzer_idx", 3000, 0),
-        ("/gateway", "move_forward", 0.05, 10),  # 50 cm
-        ("/gateway", "buzzer_idx", 0, 0),
-        ("/gateway", "land_velocity", 0.2, 0),
-    ],
-    "stop_motors": [("/gateway", "stop", 0, 0)],
+    "stop_motors": [("/gateway", "stop", 1, 0)],
 }
 
 buzzer_command_lists = {

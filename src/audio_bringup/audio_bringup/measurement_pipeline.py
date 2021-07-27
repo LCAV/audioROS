@@ -33,21 +33,12 @@ from audio_bringup.helpers import (
 )
 
 PLATFORM = "epuck"
-USER_INPUT = True
+USER_INPUT = False 
 
 START_DISTANCE = 0
 START_ANGLE = 0
 
-# EXTRA_DIRNAME = '2021_02_09_wall'
-# EXTRA_DIRNAME = '2021_02_19_windows'
-# EXTRA_DIRNAME = '2021_02_23_wall'
-# EXTRA_DIRNAME = "2021_03_01_flying"
-# EXTRA_DIRNAME = "2021_04_30_hover"
-# EXTRA_DIRNAME = "2021_04_30_stepper"
-# EXTRA_DIRNAME = "2021_05_04_flying"
-# EXTRA_DIRNAME = "2021_05_04_linear"
-# EXTRA_DIRNAME = "2021_06_08_epuck_stepper"
-EXTRA_DIRNAME = "2021_06_11_epuck_doa"
+EXTRA_DIRNAME = "2021_07_27_epuck_wall"
 
 bag_pid = None
 
@@ -359,9 +350,10 @@ def main(args=None):
 
     # motors check
     SerialIn = None
-    if any([p.get("distance", None) is not None for p in params_list]) or any(
-        [p.get("angle", None) is not None for p in params_list]
-    ):
+    if (PLATFORM == "crazyflie") and (
+            any([p.get("distance", None) is not None for p in params_list]) or 
+            any([p.get("angle", None) is not None for p in params_list])
+        ):
         SerialIn = SerialMotors(
             verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE,
         )
@@ -413,9 +405,9 @@ def main(args=None):
         distance = params.get("distance", None)
         angle = params.get("degree", None)
 
-        if (distance is not None) and (abs(distance) != 51):
+        if (SerialIn is not None) and (distance is not None) and (abs(distance) != 51):
             SerialIn.move_to(distance, blocking=True)
-        if (angle is not None) and (abs(angle) != 360):
+        if (SerialIn is not None) and (angle is not None) and (abs(angle) != 360):
             SerialIn.move_to(angle, blocking=True)
 
         #### set parameters ###
@@ -424,8 +416,8 @@ def main(args=None):
         # set_all_parameters(params)
 
         #### perform experiment ###
-        # recording = measure_wall_flying(params)
-        recording = measure_wall(params)
+        recording = measure_wall_flying(params)
+        # recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
 

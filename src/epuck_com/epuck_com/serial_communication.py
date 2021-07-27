@@ -292,7 +292,7 @@ class Gateway(NodeWithParams):
         self.port.write(b"n")
 
     def send_acknowledge(self):
-        print(f"sending a {self.sweep_index}")
+        #print(f"sending a {self.sweep_index}")
         self.port.write(b"a")
 
     def send_stop(self):
@@ -304,7 +304,7 @@ class Gateway(NodeWithParams):
         self.port.write(byte)
 
     def send_move(self):
-        print(f"Moving {self.sweep_index}")
+        #print(f"Moving {self.sweep_index}")
         self.port.write(b"m")
 
     # function to rearange the interleaving of the epuck to the actual interleaving we want
@@ -342,10 +342,9 @@ class Gateway(NodeWithParams):
         if not (0 <= speed <= 10):
             self.get_logger().warn(f"invalid velocity: {velocity_m, speed}")
 
-        self.port.write(b"M")
-        # self.port.write(struct.pack("<h", 1))
-        # self.port.write(struct.pack("<h", speed))
-        self.get_logger().info(f"sent move rate {speed} to robot")
+        self.send_move()
+        #self.get_logger().info(f"sent move rate {speed} to robot")
+        self.get_logger().info(f"sent move command to robot")
 
     def move_slight_right(self, *args):
         self.port.write(b"M")

@@ -22,7 +22,7 @@
 #define PERIMETER_EPUCK     (PI * WHEEL_DISTANCE)
 
 #define BUZZER_FMIN 1000
-#define BUZZER_FMAX 3000
+#define BUZZER_FMAX 5000
 #define BUZZER_DF 125
 #define SPEED 200
 
@@ -99,25 +99,25 @@ int main(void) {
 			// Detect start sequence
 			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
-			if(c != 'x'){
-				if ((c < 9) && (c > 0)) {
-					buzzer_idx = c;// - '0';
-					if (buzzer_idx == 1) {
-						dac_play(buzzerFreq);
-					} else {
-						dac_play(buzzer_idx * 1000);
-						left_motor_set_speed(SPEED);
-						right_motor_set_speed(SPEED);
-					}
-					state = RECORD;
+
+			if ((c < 9) && (c > 0)) {
+				buzzer_idx = c;// - '0';
+				if (buzzer_idx == 1) {
+					dac_play(buzzerFreq);
+				} else {
+					dac_play(buzzer_idx * 1000);
+					left_motor_set_speed(SPEED);
+					right_motor_set_speed(SPEED);
 				}
-			}else if (c == 'm'){
-				state = MOVE;
+				state = RECORD;
 			} else{
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
 				dac_stop();
 			}
+			 if (c == 'm'){
+				state = MOVE;
+			 }
 
 /*
 			if (c == 's') {
