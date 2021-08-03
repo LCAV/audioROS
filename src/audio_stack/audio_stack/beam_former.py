@@ -251,7 +251,9 @@ class BeamFormer(object):
         self.index_multi = 0
         self.params["multi"] = dict(combination_n=combination_n,)
 
-    def add_to_multi_estimate(self, signals_f, frequencies, time_sec, orientation_deg):
+    def add_to_multi_estimate(
+        self, signals_f, frequencies, time_sec, orientation_deg, offset=0
+    ):
         np.testing.assert_allclose(frequencies, self.frequencies_multi)
 
         # delay the signals according to recording times
@@ -266,7 +268,10 @@ class BeamFormer(object):
         ] = signals_f_aligned
 
         # add the new microphone position according to "orientation"
-        moved_mic_positions = rotate_mics(self.mic_positions, orientation_deg)
+        moved_mic_positions = (
+            rotate_mics(self.mic_positions, orientation_deg)
+            + np.array([offset, 0])[None, :]
+        )
         self.multi_mic_positions[
             n_mics * self.index_multi : n_mics * (self.index_multi + 1), :
         ] = moved_mic_positions
