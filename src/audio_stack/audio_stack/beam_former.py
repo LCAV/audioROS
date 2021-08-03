@@ -17,7 +17,7 @@ sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
 
-LAMDA = 1e-3
+LAMDA = 1  # 1e-10
 INVERSE = "pinv"  # use standard pseudoinverse
 # INVERSE = 'low-rank' # use own low-rank inverse (rank in each freq bin is assuemd one)
 
@@ -125,7 +125,7 @@ class BeamFormer(object):
                 frequencies_hz,
                 mic_positions,
                 constraints,
-                lamda=lamda,
+                lamda=lamda / (mic_positions.shape[0] ** 2),
                 inverse=inverse,
             )
             spectrum[:, i] = get_powers(H_mvdr, R)
