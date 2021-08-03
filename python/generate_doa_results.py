@@ -109,10 +109,36 @@ def from_0_to_360(angle_deg):
     return 180 / np.pi * from_0_to_2pi(angle_deg / 180 * np.pi)
 
 
+def move_mics(mics, degrees, offsets, noise_dict={}, time_quantization=6):
+    mics_list = []
+    for degree, offset in zip(degrees, offsets):
+        degree_noise = noise_dict.get("degree", 0)
+        offset_noise = noise_dict.get("offset", 0)
+        if degree_noise > 0:
+            degree += np.random.normal(scale=degree_noise)
+        if offset_noise > 0:
+            assert offset_noise < 1, "make sure offset noise is in m and below 1"
+            offset += np.random.normal(scale=offset_noise)
+        mics_list.append(
+            rotate_mics(mics, orientation_deg=degree) + np.array([offset, 0])[None, :]
+        )
+    return mics_list
+
+
+def get_noisy_times(time_list, time_noise, time_quantization=6):
+    time_list_noisy = deepcopy(time_list)
+    time_list_noisy = time_list + np.random.normal(
+        scale=time_noise, size=time_list.shape
+    )
+    if time_quantization > 0:
+        time_list_noisy = np.round(time_list_noisy, time_quantization)
+    return time_list_noisy
+
+
 def inner_loop(
-    mics_drone, degrees, times_noisy, signals_f_list, signals_f_multimic, frequencies
+    mics, degrees, times_noisy, signals_f_list, signals_f_multimic, frequencies
 ):
-    mics_clean = [rotate_mics(mics_drone, orientation_deg=degree) for degree in degrees]
+    mics_clean = [rotate_mics(mics, orientation_deg=degree) for degree in degrees]
     mics_array_theoretical = np.concatenate([*mics_clean])
 
     ##################### DOA estimation
@@ -125,7 +151,7 @@ def inner_loop(
         spectrum_multimic = beam_former.get_das_spectrum(R_multimic, frequencies)
 
     ## combined spectrum
-    beam_former = BeamFormer(mic_positions=mics_drone)
+    beam_former = BeamFormer(mic_positions=mics)
     beam_former.init_dynamic_estimate(
         frequencies,
         combination_n=len(degrees),
@@ -142,7 +168,7 @@ def inner_loop(
     spectrum_dynamic = beam_former.get_dynamic_estimate()
 
     ## combined raw signals
-    beam_former = BeamFormer(mic_positions=mics_drone)
+    beam_former = BeamFormer(mic_positions=mics)
     beam_former.init_multi_estimate(frequencies, combination_n=len(degrees))
     for i, (sig_f, time) in enumerate(zip(signals_f_list, times_noisy)):
         beam_former.add_to_multi_estimate(sig_f, frequencies, time, degrees[i])
@@ -160,6 +186,7 @@ def inner_loop(
 
 def simulate_doa(
     degree_noise_list,
+    offset_noise_list,
     signal_noise_list,
     time_noise_list,
     frequency_list,
@@ -190,32 +217,44 @@ def simulate_doa(
 
     # fixed quantitites
     frequencies_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
-    mics_noise = 1e-5  # noise added to mic positions (rigid)
     time_quantization = 6  # number of decimal places to keep
 
     # geometry setup
     gt_distance = 1  # meters, distance of source
     angular_velocity_deg = 20  # deg/sec, velocity of drone
-    n_samples = 3
+    linear_velocity_cm = 1  # cm / s, linear velocity of drone
+    n_samples = 3  # number of positions to consider
     sampling_time = 0.3  # sampling time
 
     context = Context.get_crazyflie_setup()
-    mics_drone = context.mics
-    mics_drone -= np.mean(mics_drone, axis=0)
-    # mics_drone = get_uniform_array(2, baseline=baseline) # 4 x 2
+    mics = context.mics
+    mics -= np.mean(mics, axis=0)
+    # mics = get_uniform_array(2, baseline=baseline) # 4 x 2
 
     gt_angle_rad = GT_ANGLE_DEG * np.pi / 180.0
     source = gt_distance * np.array([np.cos(gt_angle_rad), np.sin(gt_angle_rad)])
     time_index = int((2 * gt_distance) / SPEED_OF_SOUND * FS)
     times = np.arange(n_samples) * sampling_time
     degrees = times * angular_velocity_deg  # orientations
+    offsets_cm = times * linear_velocity_cm  # offsets
     assert DURATION > max(times)
 
     seed = 0
-    for degree_noise, time_noise, signal_noise, frequency in itertools.product(
-        degree_noise_list, time_noise_list, signal_noise_list, frequency_list
+    for (
+        degree_noise,
+        offset_noise,
+        time_noise,
+        signal_noise,
+        frequency,
+    ) in itertools.product(
+        degree_noise_list,
+        offset_noise_list,
+        time_noise_list,
+        signal_noise_list,
+        frequency_list,
     ):
         print(f"degree noise {degree_noise} of {degree_noise_list}")
+        print(f"lateral noise {offset_noise} of {offset_noise_list}")
         print(f"time noise {time_noise} of {time_noise_list}")
         print(f"signal noise {signal_noise} of {signal_noise_list}")
         print(f"frequency {frequency} of {frequency_list}")
@@ -227,20 +266,23 @@ def simulate_doa(
             ##################### generate signals
 
             # create noisy versions
-            mics_drone_noisy = deepcopy(mics_drone)
+            mics_noisy = deepcopy(mics)
             times_noisy = deepcopy(times)
             degrees_noisy = deepcopy(degrees)
-            if mics_noise > 0:
-                mics_drone_noisy += np.random.normal(
-                    scale=mics_noise, size=mics_drone.shape
-                )
+            offsets_noisy = deepcopy(offsets_cm)
             if time_noise > 0:
-                times_noisy += np.random.normal(scale=time_noise, size=times.shape)
+                times_noisy += np.random.normal(
+                    scale=time_noise, size=times_noisy.shape
+                )
             if time_quantization > 0:
                 times_noisy = np.round(times_noisy, time_quantization)
             if degree_noise > 0:
                 degrees_noisy += np.random.normal(
-                    scale=degree_noise, size=degrees.shape
+                    scale=degree_noise, size=degrees_noisy.shape
+                )
+            if offset_noise > 0:
+                offsets_noisy += np.random.normal(
+                    scale=offset_noise, size=offsets_noisy.shape
                 )
 
             # choose frequency bin (for now we make sure that the source signal is one of the available bins)
@@ -253,8 +295,9 @@ def simulate_doa(
             ### generate signals at different positions
             signals_f_list = []
             mics_list_noisy = [
-                rotate_mics(mics_drone_noisy, orientation_deg=degree)
-                for degree in degrees_noisy
+                rotate_mics(mics_noisy, orientation_deg=degree)
+                + np.array([offset * 1e-2, 0])[None, :]
+                for degree, offset in zip(degrees_noisy, offsets_noisy)
             ]
             for mics, time in zip(mics_list_noisy, times_noisy):
                 signals_received = generate_signals_analytical(
@@ -275,12 +318,7 @@ def simulate_doa(
             signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[[f_idx], :]
 
             spectrum_dynamic, spectrum_delayed, spectrum_multimic = inner_loop(
-                mics_drone,
-                degrees,
-                times,
-                signals_f_list,
-                signals_f_multimic,
-                frequencies,
+                mics, degrees, times, signals_f_list, signals_f_multimic, frequencies,
             )
 
             df.loc[len(df), :] = dict(
