@@ -11,7 +11,7 @@ import numpy as np
 sys.path.append(
     os.path.dirname(os.path.realpath(__file__)) + "/../crazyflie-audio/python/"
 )
-from algos_basics import get_mic_delays_near
+from algos_basics import get_mic_delays_near, get_mic_delays
 from signals import generate_signal_mono
 from constants import SPEED_OF_SOUND
 
@@ -73,12 +73,23 @@ def generate_signals_pyroom(
 
 
 def generate_signals_analytical(
-    source, mics_rotated, frequency_hz, time, noise=0, ax=None, phase_offset=0
+    source,
+    mics_rotated,
+    frequency_hz,
+    time,
+    noise=0,
+    ax=None,
+    phase_offset=0,
+    farfield=False,
 ):
     """
     :param mics_rotated: shape n_mics x 2
     """
-    delays_relative = get_mic_delays_near(mics_rotated, source)
+    if farfield:
+        azimuth = np.arctan2(source[1], source[0])
+        delays_relative = get_mic_delays(mics_rotated, azimuth=azimuth)
+    else:
+        delays_relative = get_mic_delays_near(mics_rotated, source)
     delays = np.linalg.norm(mics_rotated[0] - source) / SPEED_OF_SOUND + delays_relative
 
     times = np.arange(time, time + DURATION, step=1 / FS)  # n_times

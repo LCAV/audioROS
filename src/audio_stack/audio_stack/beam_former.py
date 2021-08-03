@@ -125,7 +125,7 @@ class BeamFormer(object):
                 frequencies_hz,
                 mic_positions,
                 constraints,
-                lamda=lamda / (mic_positions.shape[0] ** 2),
+                lamda=lamda,
                 inverse=inverse,
             )
             spectrum[:, i] = get_powers(H_mvdr, R)
