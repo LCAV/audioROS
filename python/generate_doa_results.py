@@ -24,8 +24,6 @@ COMBINATION_METHOD = "sum"  # can be sum or product
 NORMALIZATION_METHOD = "none"  # zero_to_one, zero_to_one_all, sum_to_one
 METHOD = "mvdr"
 
-GT_ANGLE_DEG = 50  # angle of ground truth
-
 
 def generate_signals_pyroom(
     source, mics_rotated, frequency_hz, time, noise=0, ax=None, phase_offset=0
@@ -214,6 +212,7 @@ def inner_loop(
 
 
 def simulate_doa(
+    gt_angle_deg,
     degree_noise_list,
     offset_noise_list,
     signal_noise_list,
@@ -264,7 +263,7 @@ def simulate_doa(
     mics_local = context.mics
     mics_local -= np.mean(mics_local, axis=0)
 
-    source = get_source(GT_ANGLE_DEG, degrees=True, source_distance=gt_distance)
+    source = get_source(gt_angle_deg, degrees=True, source_distance=gt_distance)
     time_index = int((2 * gt_distance) / SPEED_OF_SOUND * FS)
 
     seed = 0
@@ -379,6 +378,7 @@ if __name__ == "__main__":
     signal_noise_list = [1e-3]  # np.logspace(-5, -1, 5)
 
     # movement noise study
+    gt_angle_deg = 50  # angle of ground truth
     frequency_list = np.arange(1000, 6000, step=1000)
     angular_velocity_deg = [30]
     degree_noise_list = np.arange(0, 40, step=5)
@@ -387,6 +387,7 @@ if __name__ == "__main__":
     n_samples = 2
     saveas = "results/doa_degree_noise.pkl"
     # simulate_doa(
+    #    gt_angle_deg,
     #    degree_noise_list,
     #    offset_noise_list,
     #    signal_noise_list,
@@ -407,6 +408,7 @@ if __name__ == "__main__":
     n_samples = 2
     saveas = "results/doa_time_noise.pkl"
     # simulate_doa(
+    #    gt_angle_deg,
     #    degree_noise_list,
     #    offset_noise_list,
     #    signal_noise_list,
@@ -419,6 +421,7 @@ if __name__ == "__main__":
     # )
 
     # lateral movement study
+    gt_angle_deg = 50
     frequency_list = np.arange(1000, 6000, step=1000)
     angular_velocity_deg = [0.0]
     linear_velocity_cm = np.arange(500, step=50, dtype=np.float)
@@ -428,6 +431,7 @@ if __name__ == "__main__":
     n_samples = 2
     saveas = "results/doa_lateral_movement.pkl"
     simulate_doa(
+        gt_angle_deg,
         degree_noise_list,
         offset_noise_list,
         signal_noise_list,
