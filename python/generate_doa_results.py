@@ -24,6 +24,9 @@ COMBINATION_METHOD = "sum"  # can be sum or product
 NORMALIZATION_METHOD = "none"  # zero_to_one, zero_to_one_all, sum_to_one
 METHOD = "mvdr"
 
+GT_DISTANCE = 1  # meters, distance of source
+SAMPLING_TIME = 0.5  # sampling time in sconds
+
 
 def generate_signals_pyroom(
     source, mics_rotated, frequency_hz, time, noise=0, ax=None, phase_offset=0
@@ -32,6 +35,19 @@ def generate_signals_pyroom(
     :param mics_rotated: shape n_mics x 2
     """
     import pyroomacoustics as pra
+
+    # add multiple sources by superposition
+    if type(source) == list:
+        signals = None
+        for s, p in zip(source, phase_offset):
+            new_signal = generate_signals_pyroom(
+                s, mics_rotated, frequency_hz, time, noise, ax, p, farfield
+            )
+            if signals is None:
+                signals = new_signal
+            else:
+                signals += new_signal
+        return signals
 
     source_signal = generate_signal_mono(
         FS, DURATION, frequency_hz=frequency_hz, phase_offset=phase_offset
@@ -83,6 +99,19 @@ def generate_signals_analytical(
     """
     :param mics_rotated: shape n_mics x 2
     """
+    # add multiple sources by superposition
+    if type(source) == list:
+        signals = None
+        for s, p in zip(source, phase_offset):
+            new_signal = generate_signals_analytical(
+                s, mics_rotated, frequency_hz, time, noise, ax, p, farfield
+            )
+            if signals is None:
+                signals = new_signal
+            else:
+                signals += new_signal
+        return signals
+
     if farfield:
         azimuth = np.arctan2(source[1], source[0])
         delays_relative = get_mic_delays(mics_rotated, azimuth=azimuth)
@@ -177,12 +206,11 @@ def inner_loop(
     frequencies,
 ):
     mics_clean = move_mics(mics_local, degrees, offsets)
-    # print("mics_clean:", mics_clean)
-    mics_array_theoretical = np.concatenate([*mics_clean])
+    mics_array_clean = np.concatenate([*mics_clean])
 
     ##################### DOA estimation
     ## multi-mic spectrum
-    beam_former = BeamFormer(mic_positions=mics_array_theoretical)
+    beam_former = BeamFormer(mic_positions=mics_array_clean)
     R_multimic = beam_former.get_correlation(signals_f_multimic)
     if METHOD == "mvdr":
         spectrum_multimic = beam_former.get_mvdr_spectrum(R_multimic, frequencies)
@@ -253,17 +281,23 @@ def simulate_doa(
 
     # fixed quantitites
     frequencies_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
-    time_quantization = 9  # number of decimal places to keep
+    time_quantization = 6  # number of decimal places to keep
 
     # geometry setup
-    gt_distance = 1  # meters, distance of source
-    sampling_time = 0.5  # sampling time in sconds
+    gt_distance = GT_DISTANCE  # meters, distance of source
+    sampling_time = SAMPLING_TIME  # sampling time in sconds
 
     context = Context.get_crazyflie_setup()
     mics_local = context.mics
     mics_local -= np.mean(mics_local, axis=0)
 
-    source = get_source(gt_angle_deg, degrees=True, source_distance=gt_distance)
+    # can have one more multiple sources.
+    sources = get_source(gt_angle_deg, degrees=True, source_distance=gt_distance)
+    if type(gt_angle_deg) == list:
+        phase_offsets = np.random.uniform(0, 2 * np.pi, size=len(gt_angle_deg))
+    else:
+        phase_offsets = 0
+
     time_index = int((2 * gt_distance) / SPEED_OF_SOUND * FS)
 
     seed = 0
@@ -324,7 +358,12 @@ def simulate_doa(
             signals_f_list = []
             for mics_noisy, time in zip(mics_list_noisy, times):
                 signals_received = generate_signals_analytical(
-                    source, mics_noisy, frequency_hz, time, noise=signal_noise
+                    sources,
+                    mics_noisy,
+                    frequency_hz,
+                    time,
+                    noise=signal_noise,
+                    phase_offset=phase_offsets,
                 )
                 buffer_ = signals_received[:, time_index : time_index + N_BUFFER]
                 signals_f = np.fft.rfft(buffer_).T
@@ -333,7 +372,12 @@ def simulate_doa(
             ### generate "real" multi-mic signals
             mics_array_noisy = np.concatenate([*mics_list_noisy])
             signals_multimic = generate_signals_analytical(
-                source, mics_array_noisy, frequency_hz, time=0, noise=signal_noise
+                sources,
+                mics_array_noisy,
+                frequency_hz,
+                time=0,
+                noise=signal_noise,
+                phase_offset=phase_offsets,
             )
             buffer_multimic = signals_multimic[:, time_index : time_index + N_BUFFER]
             signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[[f_idx], :]
@@ -374,29 +418,29 @@ def simulate_doa(
 if __name__ == "__main__":
     import pandas as pd
 
-    n_it = 3
-    signal_noise_list = [1e-3]  # np.logspace(-5, -1, 5)
+    n_it = 10
+    signal_noise_list = [1e-3]
 
     # movement noise study
-    gt_angle_deg = 50  # angle of ground truth
-    frequency_list = np.arange(1000, 6000, step=1000)
+    gt_angle_deg = 130  # angle of ground truth
+    frequency_list = np.arange(1000, 10000, step=1000)
     angular_velocity_deg = [30]
-    degree_noise_list = np.arange(0, 40, step=5)
+    degree_noise_list = np.arange(0, 25, step=2)
     offset_noise_list = [0]
     time_noise_list = [0]
     n_samples = 2
     saveas = "results/doa_degree_noise.pkl"
     # simulate_doa(
-    #    gt_angle_deg,
-    #    degree_noise_list,
-    #    offset_noise_list,
-    #    signal_noise_list,
-    #    time_noise_list,
-    #    frequency_list,
-    #    n_samples,
-    #    n_it,
-    #    angular_velocity_deg_list=angular_velocity_deg,
-    #    saveas=saveas,
+    #   gt_angle_deg,
+    #   degree_noise_list,
+    #   offset_noise_list,
+    #   signal_noise_list,
+    #   time_noise_list,
+    #   frequency_list,
+    #   n_samples,
+    #   n_it,
+    #   angular_velocity_deg_list=angular_velocity_deg,
+    #   saveas=saveas,
     # )
 
     # timestamp noise study
@@ -422,9 +466,9 @@ if __name__ == "__main__":
 
     # lateral movement study
     gt_angle_deg = 50
-    frequency_list = np.arange(1000, 6000, step=1000)
+    frequency_list = np.arange(1000, 6000, step=200)
     angular_velocity_deg = [0.0]
-    linear_velocity_cm = np.arange(500, step=50, dtype=np.float)
+    linear_velocity_cm = np.arange(300, step=20, dtype=np.float)
     degree_noise_list = [0.0]
     offset_noise_list = [1e-2]  # m/s
     time_noise_list = [0.0]
@@ -442,3 +486,27 @@ if __name__ == "__main__":
         linear_velocity_cm_list=linear_velocity_cm,
         saveas=saveas,
     )
+
+    # multiple sources
+    gt_angle_deg = [10, 50]
+    frequency_list = np.arange(1000, 10000, step=1000)
+    angular_velocity_deg = [30.0]
+    linear_velocity_cm = [10]
+    degree_noise_list = np.arange(25, step=2)
+    offset_noise_list = [0]  # m/s
+    time_noise_list = [0.0]
+    n_samples = 4
+    saveas = "results/doa_multi_joint.pkl"
+    # simulate_doa(
+    #    gt_angle_deg,
+    #    degree_noise_list,
+    #    offset_noise_list,
+    #    signal_noise_list,
+    #    time_noise_list,
+    #    frequency_list,
+    #    n_samples,
+    #    n_it,
+    #    linear_velocity_cm_list=linear_velocity_cm,
+    #    angular_velocity_deg_list=angular_velocity_deg,
+    #    saveas=saveas,
+    # )
