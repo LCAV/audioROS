@@ -287,7 +287,7 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
-    frequencies = np.linspace(1000, 5000, 3)
+    frequencies = [1000, 3000, 10000]  # np.linspace(1000, 5000, 3)
     n_instances = 10
 
     fname = "results/simulation/angle_relative_noise_new.pkl"
