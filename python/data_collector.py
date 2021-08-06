@@ -787,6 +787,8 @@ class DataCollector(object):
 
     def remove_bad_measurements(self, verbose=False):
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
+        if verbose:
+            print("mag_thresh:", mag_thresh)
         remove_bad_measurements(self.df, mag_thresh, verbose)
 
     def remove_outliers(self, normalize=True, verbose=False):

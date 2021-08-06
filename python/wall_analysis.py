@@ -3,7 +3,6 @@ import itertools
 import numpy as np
 import pandas as pd
 from audio_bringup.helpers import get_filename
-from crazyflie_description_py.parameters import N_BUFFER
 from dynamic_analysis import add_pose_to_df
 from evaluate_data import get_positions_absolute
 from evaluate_data import read_df, read_df_from_wav
@@ -18,6 +17,12 @@ DEFAULT_DICT = {
     "window_type": {0},
     "appendix": set(),
 }
+PLATFORM = "crazyflie"
+
+if PLATFORM == "crazyflie":
+    from crazyflie_description_py.parameters import N_BUFFER
+else:
+    from epuck_description_py.parameters import N_BUFFER
 
 
 def extract_unique(params_list):
@@ -56,12 +61,11 @@ def clean_stft(stft, max_value=N_BUFFER):
     so values outside of this range are due to communication errors.
     """
     stft[np.isnan(stft)] = 0.0
-    stft[np.abs(stft) > max_value] = 0.0
+    # stft[np.abs(stft) > max_value] = 0.0
     return stft
 
 
 def parse_experiments(exp_name="2020_12_9_moving"):
-    from crazyflie_description_py.parameters import N_BUFFER
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
     from dataset_parameters import kwargs_datasets
 
@@ -137,32 +141,14 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
+        # "2021_07_27_hover",
+        # "2021_07_27_manual",
+        "2021_07_27_epuck_wall",
         # "2021_07_14_flying_hover",
-        "2021_07_14_flying",
+        # "2021_07_14_flying",
         # "2021_07_14_propsweep",
         # "2021_07_08_stepper_slow",
         # "2021_07_08_stepper_fast",
-        # "2021_07_08_stepper",
-        # "2021_07_07_stepper",
-        # "2021_06_19_stepper",
-        # "2021_06_17_stepper",
-        # "2021_06_09_stepper",
-        # "2021_05_04_linear",
-        # "2021_05_04_flying",
-        # "2021_04_30_hover",
-        # "2021_04_30_stepper",
-        # "2021_03_01_flying",
-        # "2021_02_25_wall",
-        # "2021_02_23_wall",
-        # "2021_02_19_windows",
-        #'2021_02_09_wall_tukey',
-        #'2021_02_09_wall',
-        #'2020_12_2_chirp',
-        #'2020_12_11_calibration',
-        #'2020_12_9_rotating',
-        #'2020_12_18_flying',
-        #'2020_12_18_stepper',
-        #'2020_11_26_wall',
     ]
     for exp_name in exp_names:
         # fname = f'results/{exp_name}_real.pkl'

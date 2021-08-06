@@ -296,11 +296,9 @@ def psd_df_from_spec(
                 i_f = np.argmax(np.abs(signals_f))
                 counter_dict[i_f] = counter_dict.get(i_f, 0) + 1
                 max_amp = np.abs(signals_f[i_f])
-                max_f = frequencies[i_f]
+                max_f = freqs[i_f]
                 if interpolation == "lagrange":
-                    magnitude_estimate, frequency = interpolate_peak(
-                        signals_f, frequencies
-                    )
+                    magnitude_estimate, frequency = interpolate_peak(signals_f, freqs)
                     if verbose and (frequency != 0):
                         print(
                             f"peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}"

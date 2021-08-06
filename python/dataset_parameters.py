@@ -199,4 +199,37 @@ kwargs_datasets = {
         },
         "appendix": ["", "_2"],
     },
+    "2021_07_27_hover": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 3000,
+            "max_freq": 5000,
+        },
+        "appendix": ["_30", "_50"],
+    },
+    "2021_07_27_manual": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-2,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 3000,
+            "max_freq": 5000,
+        },
+        "appendix": ["", "_2", "_3", "_4"],
+    },
+    "2021_07_27_epuck_wall": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e4,
+            "std_thresh": 100,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 1000,
+            "max_freq": 6000,
+        },
+        "appendix": [""],
+    },
 }

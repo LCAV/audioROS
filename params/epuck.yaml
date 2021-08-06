@@ -1,0 +1,19 @@
+# this file is to be used with the two commands
+# ros2 run crazyflie_crtp gateway --ros-args --params-file params/buzzer_test.yaml
+# ros2 run topic_plotter audio --ros-args --params-file params/buzzer_test.yaml
+gateway:
+  ros__parameters:
+    send_audio_enable: 1
+    min_freq: 1000
+    max_freq: 6000
+    delta_freq: 100 # not used without prop
+    n_average: 1 # not used without snr
+    bin_selection: 5
+    filter_prop_enable: 0
+    window_type: 2
+audio_plotter:
+  ros__parameters:
+    min_freq: 1000
+    max_freq: 6000
+    min_amp: 1e3
+    max_amp: 1e7
