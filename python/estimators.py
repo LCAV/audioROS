@@ -57,7 +57,7 @@ def extract_pdf(distribution, method=METHOD):
 class DistanceEstimator(object):
     def __init__(self):
         self.data = {}  # structure: mic: (path_differences, probabilities)
-        self.context = Context.get_crazyflie_setup()
+        self.context = Context.get_platform_setup()
 
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
@@ -201,7 +201,7 @@ class DistanceEstimator(object):
 class AngleEstimator(object):
     def __init__(self):
         self.data = {}  # structure: mic: (gammas, probabilities, frequency)
-        self.context = Context.get_crazyflie_setup()
+        self.context = Context.get_platform_setup()
 
     def add_distribution(self, gammas, probabilities, mic_idx, frequency):
         self.data[mic_idx] = (gammas, probabilities, frequency)
