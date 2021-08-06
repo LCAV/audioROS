@@ -6,8 +6,9 @@ import pandas as pd
 labels = {
     "fft": "FFT method",
     "cost": "optimization method",
-    "sigmadelta": "delta noise $\sigma_\\Delta$ [cm]",
-    "sigmay": "amplitude noise $\sigma_y$ [-]",
+    "sigmadelta": "delta noise $\,\sigma_\\Delta$ [cm]",
+    "sigmay": "amplitude noise $\,\sigma_y$ [-]",
+    "sigmaf": "frequency noise $\,\sigma_f$ [Hz]",
     "distance": "distance $d$ [cm]",
     np.nanstd: "error std",
     np.nanmedian: "median error",
@@ -21,6 +22,8 @@ titles = {
 }
 linestyles = {"cost": ":", "bayes": "-"}
 all_linestyles = ["-", "-.", ":", "--"]
+
+FIGSIZE = 3
 
 
 def make_dirs(fname):
@@ -281,7 +284,7 @@ def plot_error_distance(
         vmax = np.max(nonzero_values)
 
     fig, axs = plt.subplots(1, len(sub_df.method.unique()), sharey=True, squeeze=False)
-    fig.set_size_inches(5 * len(sub_df.method.unique()), 5)
+    fig.set_size_inches(FIGSIZE * len(sub_df.method.unique()), FIGSIZE)
     for i, (method, df) in enumerate(table.groupby("method")):
         index = df.index.get_level_values(column).values
         distances = df.columns.values
@@ -308,12 +311,12 @@ def plot_error_distance(
                 n_yticks=5,
             )
         axs[0, i].set_xlabel("distance $d$ [cm]")
-        axs[0, i].set_title(labels[method])
+        # axs[0, i].set_title(labels[method])
 
         # axs[0, i].set_xticks(distances[::len(distances)// 3]
     # axs[0, 0].set_yticks(index[::len(index)// 3]
     add_colorbar(fig, axs[0, -1], im, title=f"{labels[aggfunc]} [cm]")
-    axs[0, 0].set_ylabel(name.replace("_", " "))
+    axs[0, 0].set_ylabel(labels[column])
     return fig, axs
 
 
@@ -345,7 +348,7 @@ def plot_error_gamma(
 
     if ax is None:
         fig, ax = plt.subplots()
-        fig.set_size_inches(5, 5)
+        fig.set_size_inches(FIGSIZE, FIGSIZE)
 
     ys = table.index.get_level_values(column).values
     # print(column, ys)
