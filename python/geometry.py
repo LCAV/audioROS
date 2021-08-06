@@ -17,7 +17,7 @@ DIM = 2
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
-    Context.get_platform_setup()
+    context = Context.get_platform_setup()
     delta = (
         context.get_delta(
             azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx

@@ -7,13 +7,16 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-from crazyflie_description_py.experiments import WALL_ANGLE_DEG
+from constants import PLATFORM
 from simulation import get_deltas_from_global
 
 EPS = 1e-30
 WALL_ANGLE_DEG = None
 
-BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+if PLATFORM == "crazyflie":
+    BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+else:
+    BAD_FREQ_RANGES = [[0, 2500]]
 
 
 def eps_normalize(proba, eps=EPS):
@@ -38,7 +41,7 @@ class Inference(object):
         self.is_calibrated = False
         self.calibration_function = None
 
-    def add_data(self, slices, values, stds=None, distances=None):
+    def add_data(self, slices, values, stds=None, distances=None, mics=range(4)):
         """
         :param slices: interference slices of shape (n_mics, n_values)
         :param values: values of shape (n_values, )
@@ -51,6 +54,7 @@ class Inference(object):
         self.distances = distances
         self.valid_idx = np.ones(len(values), dtype=bool)
         self.is_calibrated = False
+        self.mics = mics
 
     def add_geometry(self, distance_range, azimuth_deg):
         self.distance_range = distance_range
@@ -71,7 +75,8 @@ class Inference(object):
         self.valid_idx &= valid_idx
 
         f_calib = self.calibration_function(self.values[self.valid_idx])
-        self.slices[:, self.valid_idx] /= f_calib
+        f_calib_mics = f_calib[self.mics, :]
+        self.slices[:, self.valid_idx] /= f_calib_mics
         self.is_calibrated = True
 
     def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES):

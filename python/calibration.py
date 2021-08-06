@@ -7,6 +7,12 @@ calibration.py: methods for gain calibration
 
 import numpy as np
 import pandas as pd
+from constants import PLATFORM
+
+if PLATFORM == "epuck":
+    MOTORS = "sweep_and_move"
+else:
+    MOTORS = 0
 
 
 # wall absorption bounds: 1 would mean all energy lost and no interference.
@@ -131,7 +137,7 @@ def get_calibration_function_fit(
 
 
 def get_calibration_function_median(
-    exp_name, mic_type, ax=None, motors=0, snr="", fit_one_gain=False
+    exp_name, mic_type, ax=None, motors=MOTORS, snr="", fit_one_gain=False
 ):
     from data_collector import DataCollector, prune_df_matrix
     from scipy.interpolate import interp1d
