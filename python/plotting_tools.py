@@ -262,8 +262,12 @@ def pcolorfast_custom(
     ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
     if len(yticks) // n_yticks == 0:
         return im
-    ax.set_yticks(yticks[:: len(yticks) // n_yticks])
-    ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
+    if ys.dtype == np.float:
+        ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+        ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks], 1))
+    else:
+        ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+        ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
     return im
 
 
@@ -370,8 +374,8 @@ def plot_error_gamma(
         im = pcolorfast_custom(
             ax, gammas, ys, table.values, vmin=vmin, vmax=vmax, n_xticks=5, n_yticks=4
         )
-    ax.set_xlabel("approach angle $\\gamma$ [deg]")
+    ax.set_xlabel("approach angle $\\gamma$ [$^\\circ$]")
     if colorbar:
-        add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
+        add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [$^\\circ$]")
     ax.set_ylabel(name.replace("_", " "))
     return fig, ax

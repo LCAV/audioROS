@@ -287,7 +287,7 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
-    frequencies = np.linspace(1000, 5000, 5)
+    frequencies = np.linspace(1000, 5000, 3)
     n_instances = 10
 
     fname = "results/simulation/angle_relative_noise_new.pkl"
@@ -339,11 +339,14 @@ if __name__ == "__main__":
     pd.to_pickle(results_df, fname)
     print("saved as", fname)
 
+if 0:  # __name__ == "__main__":
     ######### frequency slice study
     ### amplitude noise study
+    n_instances = 10
+    np.random.seed(1)
     frequencies = FREQUENCIES
-    distances_cm = np.arange(1, 50, dtype=np.float)
-    distances_cm += np.random.uniform(low=-1, high=1, size=len(distances_cm))
+    distances_cm = np.arange(8, 60, dtype=np.float)
+    # distances_cm += np.random.uniform(low=-1, high=1, size=len(distances_cm))
 
     fname = "results/simulation/amplitude_noise_new.pkl"
     sigmas_delta_cm = [0]
