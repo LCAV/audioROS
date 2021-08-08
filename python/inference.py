@@ -298,7 +298,7 @@ def get_periods_fft(
     n = max(len(d_slice), n_max)
 
     # periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
-    periods_m = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of orthogonal
+    periods_m = np.arange(0, n // 2 + 1) / (d_m * n)  # 1/m in terms of orthogonal
 
     abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
     if bayes:
@@ -321,6 +321,7 @@ def get_approach_angle_fft(
     sigma=None,
     reduced=False,
     interpolate=True,
+    factor=2,
 ):
     """ 
     Get probabilities over approach angles.
@@ -332,7 +333,10 @@ def get_approach_angle_fft(
     """
     from constants import SPEED_OF_SOUND
 
-    period_theoretical = frequency / SPEED_OF_SOUND  # 1/m in terms of delta
+    # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
+    period_theoretical = (
+        factor * frequency / SPEED_OF_SOUND
+    )  # 1/m in terms of orthogonal distance
 
     if interpolate:
         import scipy.interpolate
@@ -349,6 +353,7 @@ def get_approach_angle_fft(
         periods_m, probs = get_periods_fft(
             d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
         )
+
     ratios = periods_m / period_theoretical
     if not reduced:
         return ratios, probs
@@ -398,9 +403,14 @@ def get_approach_angle_cost(
     return probs_angle
 
 
-def get_gamma_distribution(ratios, probs, factor=2, eps=1e-1):
-    ratios /= factor
+def get_gamma_distribution(ratios, probs, eps=0.2):
     valid = ratios <= 1 + eps
+    # set all ratios between 1 and 1 + eps to 1.0
     ratios[valid & (ratios > 1)] = 1.0
-    probs[~valid] = 0
-    return np.arcsin(ratios[valid]) * 180 / np.pi, probs[valid]
+
+    # angles
+    gammas = np.arcsin(ratios[valid])
+
+    # correction factor
+    # probs[valid] *= np.abs(np.cos(gammas))
+    return gammas * 180 / np.pi, probs[valid]

@@ -6,10 +6,14 @@ import progressbar
 from data_collector import DataCollector
 from pandas_utils import filter_by_dict
 
-OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
+from constants import PLATFORM
 
-# this corresponds to the setup in BC325 with stepper motor:
-D_OFFSET = 0.08  # actual distance at zero-distance, in meters
+if PLATFORM == "epuck":
+    from epuck_description_py.experiments import DISTANCES_CM
+elif PLATFORM == "crazyflie":
+    from crazyflie_description_py.experiments import WALL_DISTANCE_CM_STEPPER
+
+OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
 
 def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection=""):
@@ -39,7 +43,11 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection="")
                 # otherwise, we take the maximum per package.
                 mode = "maximum" if row.bin_selection < 5 else "all"
 
-                row.distance += D_OFFSET * 100
+                if PLATFORM == "epuck":
+                    row.distance = DISTANCES_CM[i_row]
+                else:
+                    row.distance += WALL_DISTANCE_CM_STEPPER
+
                 data_collector.fill_from_row(row, mode=mode)
                 p.update(i_row)
         data_collector.backup(
