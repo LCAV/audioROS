@@ -208,7 +208,7 @@ kwargs_datasets = {
             "min_freq": 3000,
             "max_freq": 5000,
         },
-        "appendix": ["_30", "_50"],
+        "appendix": ["", "_30", "_50"],
     },
     "2021_07_27_manual": {
         "audio_deck": {

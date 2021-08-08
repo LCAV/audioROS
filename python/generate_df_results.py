@@ -38,6 +38,7 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection="")
         max_index = df_filtered.iloc[-1].name
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
+                print(row)
 
                 # for bin_selection=5 and 6, we have a full sweep in each package, so we want to use all of the values.
                 # otherwise, we take the maximum per package.
@@ -64,16 +65,17 @@ if __name__ == "__main__":
     bin_selection_types = [5, 6]
     exp_names = [
         # "2021_07_08_stepper_fast",
+        "2021_07_27_manual",
         # "2021_07_08_stepper_slow",
     ]
 
     # epuck
-    motors_types = ["sweep_and_move"]
-    bin_selection_types = [0]
-    mic_types = ["audio_deck"]
-    exp_names = [
-        "2021_07_27_epuck_wall",
-    ]
+    # motors_types = ["sweep_and_move"]
+    # bin_selection_types = [0]
+    # mic_types = ["audio_deck"]
+    # exp_names = [
+    #     "2021_07_27_epuck_wall",
+    # ]
 
     # exp_name = '2021_02_09_wall_tukey';
     # exp_name = '2021_02_09_wall';

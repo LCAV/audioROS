@@ -160,7 +160,7 @@ def get_differences(frequencies, n_max=1000):
     from constants import SPEED_OF_SOUND
 
     n = max(len(frequencies), n_max)
-    df = np.mean(frequencies[1:] - frequencies[:-1])
+    df = np.median(frequencies[1:] - frequencies[:-1])
     deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
     return deltas_cm
 
@@ -213,7 +213,7 @@ def get_probability_bayes(
     n_max=1000,
     sigma=None,
     azimuth_deg=WALL_ANGLE_DEG,
-    interpolate=True,
+    interpolate=False,
 ):
     assert f_slice.ndim == 1
 
@@ -320,7 +320,7 @@ def get_approach_angle_fft(
     bayes=False,
     sigma=None,
     reduced=False,
-    interpolate=True,
+    interpolate=False,
     factor=2,
 ):
     """ 
@@ -354,7 +354,7 @@ def get_approach_angle_fft(
             d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
         )
 
-    ratios = periods_m / period_theoretical
+    ratios = periods_m / period_theoretical  # arcsin(ratio) will be the angle estimate
     if not reduced:
         return ratios, probs
     else:

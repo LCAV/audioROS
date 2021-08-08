@@ -10,7 +10,7 @@ from evaluate_data import read_df, read_df_from_wav
 FILENAME = "../experiments/datasets.csv"
 DEFAULT_DICT = {
     "degree": {0},
-    "disance": {0},
+    "distance": {0},
     "mic_type": {"audio_deck"},  # , "measurement"]
     "props": {0},
     "bin_selection": {0},
@@ -142,8 +142,8 @@ if __name__ == "__main__":
 
     exp_names = [
         # "2021_07_27_hover",
-        # "2021_07_27_manual",
-        "2021_07_27_epuck_wall",
+        "2021_07_27_manual",
+        # "2021_07_27_epuck_wall",
         # "2021_07_14_flying_hover",
         # "2021_07_14_flying",
         # "2021_07_14_propsweep",
