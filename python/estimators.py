@@ -206,8 +206,10 @@ class AngleEstimator(object):
     def add_distribution(self, gammas, probabilities, mic_idx, frequency):
         self.data[mic_idx] = (gammas, probabilities, frequency)
 
-    def get_angle_distribution(self, chosen_mics=None, method=METHOD):
-        gammas_deg = np.arange(1, 90)
+    def get_angle_distribution(
+        self, chosen_mics=None, method=METHOD, mics_left_right=None
+    ):
+        gammas_deg = np.arange(1, 91)
         distribution = {g: [] for g in gammas_deg}
         for mic_idx, (gammas_deg_here, probs, frequency) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
@@ -218,4 +220,24 @@ class AngleEstimator(object):
             )
             probs_interp = interp1d_func(gammas_deg)
             [distribution[g].append(prob) for g, prob in zip(gammas_deg, probs_interp)]
-        return extract_pdf(distribution, method)
+
+        gammas, probs = extract_pdf(distribution, method)
+        argmax = np.argmax(probs)
+
+        if mics_left_right is not None:
+            score_left = 0
+            score_right = 0
+            for mic_left in mics_left_right[0]:
+                score_left += self.data[mic_left][1][argmax]
+            for mic_right in mics_left_right[1]:
+                score_right += probs[argmax]
+
+            if score_right > score_left:
+                # print("wall is on the right")
+                gammas = 180 - gammas
+            else:
+                # print("wall is on the left")
+                pass
+        # TODO(FD): maybe recalculate the distribution using
+        # only the correct mics?
+        return gammas, probs

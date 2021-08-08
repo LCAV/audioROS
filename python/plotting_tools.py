@@ -23,7 +23,7 @@ titles = {
 linestyles = {"cost": ":", "bayes": "-"}
 all_linestyles = ["-", "-.", ":", "--"]
 
-FIGSIZE = 3
+FIGSIZE = 5
 
 
 def make_dirs(fname):
@@ -179,13 +179,13 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     markers = [m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]]
 
     i = 0
-    fig, axs = plt.subplots(1, 2, squeeze=False)
-    fig.set_size_inches(10, 5)
+    fig, axs = plt.subplots(1, 2)
+    fig.set_size_inches(2 * FIGSIZE, FIGSIZE)
     max_abs = 0
     for method, err_list in err_dict.items():
         markersize = 8 - i
 
-        axs[0, 0].plot(
+        axs[0].plot(
             xs,
             err_list,
             label=method,
@@ -196,7 +196,7 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
 
         xvals = sorted(np.abs(err_list))
         yvals = np.linspace(0, 1, len(xvals))
-        axs[0, 1].plot(
+        axs[1].plot(
             xvals,
             yvals,
             label=method,
@@ -208,16 +208,15 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
 
         max_abs = max(max_abs, max(xvals))
 
-    # axs[0, 0].set_yscale('log')
-    axs[0, 0].set_ylim(-max_abs, max_abs)
-    axs[0, 0].set_ylabel(ylabel)
-    axs[0, 0].set_xlabel(xlabel)
-    axs[0, 0].legend(loc="upper right")
+    axs[0].set_ylim(-max_abs, max_abs)
+    axs[0].set_ylabel(ylabel)
+    axs[0].set_xlabel(xlabel)
+    axs[0].legend(loc="upper right")
 
-    axs[0, 1].set_ylabel("cdf")
-    axs[0, 1].set_xlabel("absolute " + ylabel)
-    axs[0, 1].grid(which="both")
-    axs[0, 1].legend(loc="lower right")
+    axs[1].set_ylabel("cdf")
+    axs[1].set_xlabel("absolute " + ylabel)
+    axs[1].grid(which="both")
+    axs[1].legend(loc="lower right")
     return fig, axs
 
 

@@ -17,6 +17,7 @@ if PLATFORM == "crazyflie":
     BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
+INTERPOLATE = True
 
 
 def eps_normalize(proba, eps=EPS):
@@ -197,7 +198,9 @@ def get_posterior(abs_fft, sigma=None, data=None):
         # arg may not be negative.
         if np.any(arg <= 0):
             valid = np.where(arg > 0)[0]
-            print("Warning, arg is non-positive at", arg[arg <= 0])
+            print(
+                "Warning, arg is non-positive at", arg[arg <= 0], np.where(arg <= 0)[0]
+            )
             arg[arg <= 0] = np.min(arg[arg > 0])
 
         posterior = (arg) ** ((2 - N) / 2)
@@ -213,14 +216,17 @@ def get_probability_bayes(
     n_max=1000,
     sigma=None,
     azimuth_deg=WALL_ANGLE_DEG,
-    interpolate=False,
+    interpolate=INTERPOLATE,
 ):
     assert f_slice.ndim == 1
 
     if interpolate:
         import scipy.interpolate
 
-        frequencies_grid = np.arange(min(frequencies), max(frequencies), step=50.0)
+        diff = frequencies[1:] - frequencies[:-1]
+        spacing = np.median(diff)
+        frequencies_grid = np.arange(min(frequencies), max(frequencies), step=spacing)
+
         interpolator = scipy.interpolate.interp1d(frequencies, f_slice)
         f_slice_grid = interpolator(frequencies_grid)
 
@@ -320,7 +326,7 @@ def get_approach_angle_fft(
     bayes=False,
     sigma=None,
     reduced=False,
-    interpolate=False,
+    interpolate=INTERPOLATE,
     factor=2,
 ):
     """ 
@@ -403,7 +409,7 @@ def get_approach_angle_cost(
     return probs_angle
 
 
-def get_gamma_distribution(ratios, probs, eps=0.2):
+def get_gamma_distribution(ratios, probs, eps=1e-3):
     valid = ratios <= 1 + eps
     # set all ratios between 1 and 1 + eps to 1.0
     ratios[valid & (ratios > 1)] = 1.0
@@ -411,6 +417,10 @@ def get_gamma_distribution(ratios, probs, eps=0.2):
     # angles
     gammas = np.arcsin(ratios[valid])
 
+    # accumulate probabilities over duplicate gammas (at 90, for instance)
+    gammas_unique, index = np.unique(gammas, return_inverse=True)
+    probs_unique = np.bincount(index, probs[valid])
+
     # correction factor
     # probs[valid] *= np.abs(np.cos(gammas))
-    return gammas * 180 / np.pi, probs[valid]
+    return gammas_unique * 180 / np.pi, probs_unique
