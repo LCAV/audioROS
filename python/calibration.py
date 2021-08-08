@@ -163,6 +163,37 @@ def get_calibration_function_median(
     return calib_function, frequencies
 
 
+def get_calibration_function_moving(
+    exp_name, ax=None, motors=MOTORS, fit_one_gain=False
+):
+    from scipy.interpolate import interp1d
+
+    results_df = pd.read_pickle(f"../experiments/{exp_name}/all_data.pkl")
+    rows = results_df.loc[results_df.motors == motors, :]
+
+    matrix = np.abs(np.concatenate([*rows.stft], axis=0))
+    if fit_one_gain:
+        gains = np.repeat(
+            np.nanmedian(matrix, axis=[0, 1])[None, :], matrix.shape[1], axis=0
+        )
+    else:
+        gains = np.nanmedian(matrix, axis=0)  # n_mics x n_freqs
+
+    # all are the same
+    freq = rows.iloc[0].frequencies_matrix[0, :]
+
+    calib_function = interp1d(
+        freq[freq > 0],
+        gains[:, freq > 0],
+        kind=KIND,
+        fill_value=FILL_VALUE,
+        bounds_error=BOUNDS_ERROR,
+    )
+    if ax is not None:
+        plot_calibration(freq, gains, calib_function, ax=ax)
+    return calib_function, freq
+
+
 def fit_distance_slice(
     d_slice_exp,
     distances_cm,

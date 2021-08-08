@@ -62,7 +62,12 @@ class DistanceEstimator(object):
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
             print("Warning: make sure path_differences_m is in meters!")
-        self.data[mic_idx] = (path_differences_m, probabilities)
+
+        current_data = self.data.get(mic_idx, ([], []))
+        self.data[mic_idx] = (
+            np.r_[current_data[0], path_differences_m],
+            np.r_[current_data[1], probabilities],
+        )
 
     def get_distance_distribution(
         self,
@@ -93,6 +98,10 @@ class DistanceEstimator(object):
         distribution = {d: [] for d in distances_m}
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
+
+            deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
+            delta_probs = np.bincount(inverse, delta_probs)
+
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
