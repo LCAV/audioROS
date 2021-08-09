@@ -55,6 +55,9 @@ def extract_pdf(distribution, method=METHOD):
 
 
 class DistanceEstimator(object):
+    DISTANCES_M = np.arange(7, 100) * 1e-2
+    AZIMUTHS_DEG = np.arange(-180, 180, step=10)
+
     def __init__(self):
         self.data = {}  # structure: mic: (path_differences, probabilities)
         self.context = Context.get_platform_setup()
@@ -78,23 +81,13 @@ class DistanceEstimator(object):
         distances_m=None,
     ):
         if azimuth_deg is None:
-            azimuths_deg = np.arange(-180, 180, step=10)
+            azimuths_deg = self.AZIMUTHS_DEG
         else:
             azimuths_deg = [azimuth_deg]
 
         if distances_m is None:
-            # get points for interpolation.
-            distances_all = []
-            for mic_idx, (deltas_m, delta_probs) in self.data.items():
-                for azimuth_deg in azimuths_deg:
-                    ds_m = (
-                        self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
-                        * 1e-2
-                    )
-                    distances_all += list(ds_m)
-            distances_m = np.linspace(
-                min(distances_all), max(distances_all), len(distances_all)
-            )
+            distances_m = self.DISTANCES_M
+
         distribution = {d: [] for d in distances_m}
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():

@@ -76,9 +76,9 @@ def parse_experiments(exp_name="2020_12_9_moving"):
     params_all.update(**params_from_file)
 
     params_all["appendix"] = params_all["appendix"].union(
-        kwargs_datasets[exp_name].get("appendix", {})
+        kwargs_datasets[exp_name].get("appendix", {""})
     )
-    print(params_all)
+    print("all:", params_all)
 
     df_total = pd.DataFrame(
         columns=list(params_all.keys())  # categories
@@ -142,13 +142,13 @@ if __name__ == "__main__":
 
     exp_names = [
         # "2021_07_27_hover",
-        "2021_07_27_manual",
+        # "2021_07_27_manual",
         # "2021_07_27_epuck_wall",
         # "2021_07_14_flying_hover",
         # "2021_07_14_flying",
         # "2021_07_14_propsweep",
         # "2021_07_08_stepper_slow",
-        # "2021_07_08_stepper_fast",
+        "2021_07_08_stepper_fast",
     ]
     for exp_name in exp_names:
         # fname = f'results/{exp_name}_real.pkl'
