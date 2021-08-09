@@ -164,12 +164,14 @@ def get_calibration_function_median(
 
 
 def get_calibration_function_moving(
-    exp_name, ax=None, motors=MOTORS, fit_one_gain=False
+    exp_name, ax=None, motors=MOTORS, fit_one_gain=False, appendix_list=[""]
 ):
     from scipy.interpolate import interp1d
 
     results_df = pd.read_pickle(f"../experiments/{exp_name}/all_data.pkl")
-    rows = results_df.loc[results_df.motors == motors, :]
+    rows = results_df.loc[
+        (results_df.motors == motors) & (results_df.appendix.isin(appendix_list)), :
+    ]
 
     matrix = np.abs(np.concatenate([*rows.stft], axis=0))
     if fit_one_gain:
