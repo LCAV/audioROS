@@ -9,24 +9,14 @@ import argparse
 from get_background import get_background, extract_roi
 import signal
 
-from constants import THRESHOLD, RADIUS
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input", help="path to the input video", required=True)
-parser.add_argument(
-    "-c",
-    "--consecutive-frames",
-    default=4,
-    type=int,
-    dest="consecutive_frames",
-    help="path to the input video",
-)
-args = vars(parser.parse_args())
+from constants import THRESHOLD, RADIUS, SAVE_EVERY_K, CONSECUTIVE_FRAMES
 
 
 class main:
-    def __init__(self):
+    def __init__(self, input_file):
         self.stop_by_signal = False
+        self.input_file = input_file
+        self.output_file = f"outputs/{input_file.split('/')[-1].split('.')[0]}"
         return
 
     def signal_term_handler(self, signal, frame):
@@ -36,15 +26,11 @@ class main:
     def run(self):
         signal.signal(signal.SIGTERM, self.signal_term_handler)
 
-        self.cap = cv2.VideoCapture(args["input"])
-        count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        pos = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
-        print("before", count, pos)
+        self.cap = cv2.VideoCapture(self.input_file)
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
         pos = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
-        print("after", count, pos)
-        # self.cap.set(cv2.CAP_PROP_FRAME_COUNT, count - FRAME_START)
+        print("counts", count, pos)
 
         # get the background model
         print("getting background...", end="")
@@ -55,18 +41,19 @@ class main:
         # get the video frame height and width
         frame_width = background.shape[1]
         frame_height = background.shape[0]
-        save_name = f"outputs/{args['input'].split('/')[-1]}"
 
         # define codec and create VideoWriter object
         self.out = cv2.VideoWriter(
-            save_name, cv2.VideoWriter_fourcc(*"mp4v"), 10, (frame_width, frame_height)
+            self.output_file + ".mp4",
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            10,
+            (frame_width, frame_height),
         )
 
-        frame_count = 0
-        consecutive_frame = args["consecutive_frames"]
         all_points = {}
-        point_i = 0
-        num_points = 100
+        frame_count = 0
+        last_save = 0
+        consecutive_frame = CONSECUTIVE_FRAMES
         while self.cap.isOpened():
 
             if self.stop_by_signal == True:
@@ -107,47 +94,44 @@ class main:
                     image, contours, hierarchy = cv2.findContours(
                         sum_frames, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                     )
-                    # draw the contours, not strictly necessary
-                    for i, cnt in enumerate(contours):
-                        cv2.drawContours(frame, contours, i, (0, 0, 255), 3)
                     for contour in contours:
                         # continue through the loop if contour area is less than 500...
                         # ... helps in removing noise detection
                         if cv2.contourArea(contour) < 500:
                             continue
-                        # get the xmin, ymin, width, and height coordinates from the contours
-                        (x, y, w, h) = cv2.boundingRect(contour)
-                        x_center = int(x + w / 2)
-                        y_center = int(y + h / 2)
 
-                        # draw the bounding boxes
-                        # cv2.rectangle(orig_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                        circle_center, rad = cv2.minEnclosingCircle(contour)
+                        circle_center = (int(circle_center[0]), int(circle_center[1]))
 
-                        if x_center not in all_points.keys():
-                            all_points[x_center] = {}
-                        all_points[x_center][y_center] = 1
+                        if circle_center not in all_points.keys():
+                            all_points[circle_center] = 0
+                        all_points[circle_center] += 1
 
-                        # all_points.insert(point_i, (x_center, y_center))
-                        # point_i = (point_i + 1) % num_points
-                        for x, ys in all_points.items():
-                            for y in ys.keys():
-                                cv2.circle(
-                                    orig_frame,
-                                    (x, y),
-                                    int(RADIUS),
-                                    (0, 0, 255),
-                                    thickness=-1,
-                                )
+                        for circle_center in all_points.keys():
+                            cv2.circle(
+                                orig_frame,
+                                circle_center,
+                                int(RADIUS),
+                                (0, 0, 255),
+                                thickness=-1,
+                            )
 
                     cv2.imshow("Detected Objects", orig_frame)
                     self.out.write(orig_frame)
                     last_annotated = orig_frame
+
+                    if (frame_count - last_save) > SAVE_EVERY_K:
+                        fname = self.output_file + f"_{frame_count}.png"
+                        cv2.imwrite(fname, orig_frame)
+                        last_save = frame_count
+                        print("wrote", fname)
+
                     if cv2.waitKey(100) & 0xFF == ord("q"):
                         print("cv2 exit detected")
                         break
 
                 if last_annotated is not None:
-                    cv2.imwrite(save_name + "_final.png", last_annotated)
+                    cv2.imwrite(self.output_file + "_final.png", last_annotated)
                 print("...done")
             else:
                 break
@@ -161,9 +145,11 @@ class main:
 
 
 if __name__ == "__main__":
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", help="path to the input video", required=True)
+    args = vars(parser.parse_args())
     try:
-        main = main()
+        main = main(args["input"])
         main.run()
 
     except Exception as e:

@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-from constants import ROI_X, ROI_Y
+from constants import ROI_X, ROI_Y, N_IMAGES_BACKGROUND
 
 
 def extract_roi(frame):
@@ -15,7 +15,9 @@ def extract_roi(frame):
 
 def get_background(cap):
     # we will randomly select 50 frames for the calculating the median
-    frame_indices = cap.get(cv2.CAP_PROP_FRAME_COUNT) * np.random.uniform(size=50)
+    frame_indices = cap.get(cv2.CAP_PROP_FRAME_COUNT) * np.random.uniform(
+        size=N_IMAGES_BACKGROUND
+    )
     # we will store the frames in array
     frames = []
     for idx in frame_indices:
