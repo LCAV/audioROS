@@ -231,15 +231,17 @@ class AngleEstimator(object):
             score_right = 0
             for mic_left in mics_left_right[0]:
                 score_left += self.data[mic_left][1][argmax]
+                # score_left += np.max(self.data[mic_left][1])
             for mic_right in mics_left_right[1]:
-                score_right += probs[argmax]
+                score_right += self.data[mic_right][1][argmax]
+                # score_right += np.max(self.data[mic_right][1])
 
             if score_right > score_left:
-                # print("wall is on the right")
-                gammas = 180 - gammas
-            else:
-                # print("wall is on the left")
                 pass
+                # print("wall is on the right")
+            else:
+                gammas = 180 - gammas
+                # print("wall is on the left")
         # TODO(FD): maybe recalculate the distribution using
         # only the correct mics?
         return gammas, probs

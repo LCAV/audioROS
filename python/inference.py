@@ -17,7 +17,7 @@ if PLATFORM == "crazyflie":
     BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
-INTERPOLATE = True
+INTERPOLATE = False
 
 
 def eps_normalize(proba, eps=EPS):
@@ -92,8 +92,6 @@ class Inference(object):
     def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
         """
         Perform inference.
-
-
         """
         if calibrate and not self.is_calibrated:
             self.calibrate()

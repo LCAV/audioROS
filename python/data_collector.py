@@ -445,16 +445,20 @@ class DataCollector(object):
     def get_frequencies(self):
         return sorted_and_unique(self.df, "frequency").astype(np.float)
 
-    def next_fslice_ready(self, signals_f, frequencies):
+    def next_fslice_ready(self, signals_f, frequencies, verbose=False):
         """ find big frequency jump, meaning end of sweep. """
         fslice_ready = False
 
         f, magnitude = get_peak_freq(signals_f, frequencies)
 
         if len(self.df) == 0:
+            if verbose:
+                print("empty df")
             return False
 
         latest_frequency = self.df.loc[len(self.df) - 1, "frequency"]
+        if verbose:
+            print(f"{f} ?< {latest_frequency - SWEEP_DELTA}")
 
         if (magnitude > self.params.get("mag_thresh", MAG_THRESH)) and (
             f < latest_frequency - SWEEP_DELTA
@@ -556,7 +560,7 @@ class DataCollector(object):
                     "frequency": f,
                     "distance": distance_cm,
                     "angle": angle,
-                    "magnitude": magnitude_estimate,
+                    "magnitude": magnitude,
                 }
                 self.df.loc[len(self.df), list(update_dict.keys())] = list(
                     update_dict.values()
@@ -736,10 +740,8 @@ class DataCollector(object):
 
     def get_current_distance_slice(self, verbose=False):
         if self.latest_dslice_time is None:
-            print(self.df)
             self.latest_dslice_time = self.df.iloc[0].time
-            if verbose:
-                print("set latest time to", self.latest_dslice_time)
+            print("set latest time to", self.latest_dslice_time)
 
         latest_df = self.df[self.df.time > self.latest_dslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
