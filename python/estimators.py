@@ -225,14 +225,17 @@ class AngleEstimator(object):
 
         gammas, probs = extract_pdf(distribution, method)
         argmax = np.argmax(probs)
+        gamma = gammas[argmax]
 
         if mics_left_right is not None:
             score_left = 0
             score_right = 0
             for mic_left in mics_left_right[0]:
-                score_left += self.data[mic_left][1][argmax]
+                arg = np.argmin(abs(gamma - self.data[mic_left][0]))
+                score_left += self.data[mic_left][1][arg]
             for mic_right in mics_left_right[1]:
-                score_right += probs[argmax]
+                arg = np.argmin(abs(gamma - self.data[mic_right][0]))
+                score_right += self.data[mic_right][1][arg]
 
             if score_right > score_left:
                 # print("wall is on the right")
