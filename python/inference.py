@@ -17,7 +17,7 @@ if PLATFORM == "crazyflie":
     BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
-INTERPOLATE = False
+INTERPOLATE = True
 
 
 def eps_normalize(proba, eps=EPS):

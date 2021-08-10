@@ -65,12 +65,12 @@ class DistanceEstimator(object):
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
             print("Warning: make sure path_differences_m is in meters!")
-
-        current_data = self.data.get(mic_idx, ([], []))
-        self.data[mic_idx] = (
-            np.r_[current_data[0], path_differences_m],
-            np.r_[current_data[1], probabilities],
-        )
+        self.data[mic_idx] = (path_differences_m, probabilities)
+        # current_data = self.data.get(mic_idx, ([], []))
+        # self.data[mic_idx] = (
+        #    np.r_[current_data[0], path_differences_m],
+        #    np.r_[current_data[1], probabilities],
+        # )
 
     def get_distance_distribution(
         self,
@@ -87,7 +87,18 @@ class DistanceEstimator(object):
 
         if distances_m is None:
             distances_m = self.DISTANCES_M
-
+            # get points for interpolation.
+            distances_all = []
+            for mic_idx, (deltas_m, delta_probs) in self.data.items():
+                for azimuth_deg in azimuths_deg:
+                    ds_m = (
+                        self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
+                        * 1e-2
+                    )
+                    distances_all += list(ds_m)
+            distances_m = np.linspace(
+                min(distances_all), max(distances_all), len(distances_all)
+            )
         distribution = {d: [] for d in distances_m}
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
@@ -225,15 +236,23 @@ class AngleEstimator(object):
 
         gammas, probs = extract_pdf(distribution, method)
         argmax = np.argmax(probs)
+        gamma = gammas[argmax]
 
         if mics_left_right is not None:
             score_left = 0
             score_right = 0
             for mic_left in mics_left_right[0]:
-                score_left += self.data[mic_left][1][argmax]
+
+                # get probability of the best gamma for this data.
+                arg = np.argmin(abs(self.data[mic_left][0]) - gamma)
+
+                # might not always have the maximum at the same place.
+                score_left += self.data[mic_left][1][arg]
                 # score_left += np.max(self.data[mic_left][1])
             for mic_right in mics_left_right[1]:
-                score_right += self.data[mic_right][1][argmax]
+
+                arg = np.argmin(abs(self.data[mic_right][0]) - gamma)
+                score_right += self.data[mic_right][1][arg]
                 # score_right += np.max(self.data[mic_right][1])
 
             if score_right > score_left:
