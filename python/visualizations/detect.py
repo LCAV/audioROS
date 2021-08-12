@@ -23,6 +23,11 @@ class main:
 		self.stop_by_signal = True
 		return
 
+	def debug_image(self, title ,image):
+		cv2.imshow(title, image)
+		cv2.waitKey(0) 
+		cv2.destroyAllWindows() 
+
 	def run(self):
 		signal.signal(signal.SIGTERM, self.signal_term_handler)
 
@@ -76,6 +81,9 @@ class main:
 
 				# find the difference between current frame and base frame
 				frame_diff = cv2.absdiff(gray, background)
+
+				#self.debug_image("frame diff with background", frame_diff)
+
 				# thresholding to convert the frame to binary
 				ret, thres = cv2.threshold(
 					frame_diff, THRESHOLD, 255, cv2.THRESH_BINARY
@@ -84,16 +92,21 @@ class main:
 				# dilate the frame a bit to get some more white area...
 				# ... makes the detection of contours a bit easier
 				dilate_frame = cv2.dilate(thres, None, iterations=2)
+
+				#self.debug_image("dilatation", frame_diff)
+
 				# append the final result into the `frame_diff_list`
 				frame_diff_list.append(dilate_frame)
 				# if we have reached `consecutive_frame` number of frames
 				if len(frame_diff_list) == consecutive_frame:
 					# add all the frames in the `frame_diff_list`
 					sum_frames = sum(frame_diff_list)
+
+					#self.debug_image("sum_frames", frame_diff)
+
 					# find the contours around the white segmented areas
-					image, contours, hierarchy = cv2.findContours(
-						sum_frames, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-					)
+					contours, hierarchy = cv2.findContours( sum_frames, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
 					for contour in contours:
 						# continue through the loop if contour area is less than 500...
 						# ... helps in removing noise detection
