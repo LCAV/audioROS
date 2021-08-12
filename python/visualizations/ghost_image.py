@@ -137,6 +137,13 @@ class main:
 					circle_center = (int(circle_center[0]), int(circle_center[1]))
 					
 					if DEBUG:
+						print(f"enclosing diameter {rad}")
+
+					if rad > 200:
+						print("Contour not used, too large enclosing diameter")
+						continue
+
+					if DEBUG:
 						#plot for debug
 						cv2.circle( im_contour, circle_center, int(rad), (0, 0, 255), thickness=-1, )
 						self.debug_image("im_contour", im_contour)
