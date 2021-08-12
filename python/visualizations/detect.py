@@ -56,12 +56,12 @@ class main:
 		consecutive_frame = CONSECUTIVE_FRAMES
 		while self.cap.isOpened():
 
-			if self.stop_by_signal == True:
+			if self.stop_by_signal is True:
 				print("Want to stop...")
 				raise KeyboardInterrupt
 
 			ret, frame = self.cap.read()
-			if ret == True:
+			if ret is True:
 				frame_count += 1
 
 				frame = extract_roi(frame)
