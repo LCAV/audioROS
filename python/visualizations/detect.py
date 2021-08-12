@@ -82,8 +82,6 @@ class main:
 				# find the difference between current frame and base frame
 				frame_diff = cv2.absdiff(gray, background)
 
-				#self.debug_image("frame diff with background", frame_diff)
-
 				# thresholding to convert the frame to binary
 				ret, thres = cv2.threshold(
 					frame_diff, THRESHOLD, 255, cv2.THRESH_BINARY
