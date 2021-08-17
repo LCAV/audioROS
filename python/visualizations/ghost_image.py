@@ -4,7 +4,7 @@ Code from:
 https://linuxize.com/post/how-to-install-opencv-on-ubuntu-18-04/
 
 """
-import cv2
+import cv2, os
 import argparse
 import numpy as np
 from get_background import get_background, extract_roi
@@ -15,10 +15,21 @@ from constants import THRESHOLD, RADIUS, SAVE_EVERY_K, CONSECUTIVE_FRAMES
 DEBUG = 0
 
 class main:
-	def __init__(self, input_file):
+	def __init__(self, input_file, output_folder, ext, output_in_place):
 		self.stop_by_signal = False
 		self.input_file = input_file
-		self.output_file = f"outputs/{input_file.split('/')[-1].split('.')[0]}"
+		self.input_file_name = input_file.split('/')[-1].split('.')[0]
+		print(f"input file :{self.input_file}")
+		if output_in_place:
+			self.output_file = f"{os.path.dirname(input_file)}/{self.input_file_name}{ext}.png"
+		else:
+			self.output_file = f"{output_folder}{self.input_file_name}{ext}.png"
+		print(f"output file :{self.output_file}")
+
+		if not os.path.exists(output_folder):
+			print(f"Created output folder: {output_folder}")
+			os.makedirs(output_folder)		
+		self.output_folder = output_folder
 		return
 
 	def signal_term_handler(self, signal, frame):
@@ -49,14 +60,6 @@ class main:
 
 		background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
 
-
-		# get the video frame height and width
-		frame_width = background.shape[1]
-		frame_height = background.shape[0]
-
-		# define codec and create VideoWriter object
-		#self.out = cv2.VideoWriter( self.output_file + ".mp4", cv2.VideoWriter_fourcc(*"mp4v"), 10, (frame_width, frame_height), )
-
 		frame_counter = 0
 
 		consecutive_frame = CONSECUTIVE_FRAMES
@@ -83,14 +86,12 @@ class main:
 					print(f"treating frame {frame_counter}...", end="")
 					#self.debug_image("original frame", frame)
 
-					last_annotated = None
-
 					gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 					# find the difference between current frame and base frame
 					frame_diff = cv2.absdiff(gray, background)
 
-#					# threshold for noise reduction
+					# threshold for noise reduction
 					frame_diff[frame_diff < 50] = 0
 
 					# thresholding to convert the frame to binary
@@ -169,20 +170,12 @@ class main:
 						print("cv2 exit detected")
 						break
 
-				# if self.count == frame_counter:
-				# #if frame_counter > 400:
-
-				# 	self.debug_image("final_patchwork", final_patchwork)
-				# 	cv2.imwrite(self.output_file + "_final.png", final_patchwork)
-				# print("...done")
 			else:
 				self.debug_image("final_patchwork", final_patchwork)
 				print("end of stream")				
 				print("Writing to output file: ", end = "")
-				print(self.output_file + "_final.png")
-				cv2.imwrite(self.output_file + "_final.png", final_patchwork)
+				cv2.imwrite(self.output_file, final_patchwork)
 				break
-		#self.out.release()
 		self.stop()
 
 	def stop(self):
@@ -194,9 +187,13 @@ class main:
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-i", "--input", help="path to the input video", required=True)
+	parser.add_argument("-o", "--output", help="path to the output folder ending with /", required=False, default= "output/")
+	parser.add_argument("-ext", "--ext", help="extension name for the output image", required=False, default= "_merged")
+	parser.add_argument("-ip", "--output_in_place", help="ignore the output folder and place output with input video", required=False, default= "False")
+
 	args = vars(parser.parse_args())
 	#try:
-	main = main(args["input"])
+	main = main(args["input"], args["output"], args["ext"], args["output_in_place"])
 	main.run()
 
 	# except Exception as e:
