@@ -210,6 +210,9 @@ class main:
 
 
 		#TODO: Plot last one
+		#TODO: Lower resolution on 2021_07_14_flying_hover
+		#TODO: epuck
+		
 
 		#print(f"data: {data[abs(data - np.mean(data)) < m * np.std(data)]}")
 		self.debug_image("final_patchwork", final_patchwork)
