@@ -55,7 +55,7 @@ class main:
 		frame_height = background.shape[0]
 
 		# define codec and create VideoWriter object
-		self.out = cv2.VideoWriter( self.output_file + ".mp4", cv2.VideoWriter_fourcc(*"mp4v"), 10, (frame_width, frame_height), )
+		#self.out = cv2.VideoWriter( self.output_file + ".mp4", cv2.VideoWriter_fourcc(*"mp4v"), 10, (frame_width, frame_height), )
 
 		frame_counter = 0
 
@@ -182,7 +182,7 @@ class main:
 				print(self.output_file + "_final.png")
 				cv2.imwrite(self.output_file + "_final.png", final_patchwork)
 				break
-		self.out.release()
+		#self.out.release()
 		self.stop()
 
 	def stop(self):
