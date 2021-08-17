@@ -4,15 +4,20 @@ Code from:
 https://linuxize.com/post/how-to-install-opencv-on-ubuntu-18-04/
 
 """
-import cv2, os
+import cv2, os, math
 import argparse
 import numpy as np
 from get_background import get_background, extract_roi
 import signal
+import matplotlib.pyplot as plt
 
 from constants import THRESHOLD, RADIUS, SAVE_EVERY_K, CONSECUTIVE_FRAMES
 
-DEBUG = 0
+MARGIN_NEXT_FRAME = 1.6
+DEBUG = 1
+DEBUG_PLOT_IMAGE = 1
+DEBUG_IMAGE_FRAMES = 0
+DEBUG_last_snapshot_position_FILTER = 1
 
 class main:
 	def __init__(self, input_file, output_folder, ext, output_in_place):
@@ -37,9 +42,10 @@ class main:
 		return
 
 	def debug_image(self, title , image):
-		cv2.imshow(title, image)
-		cv2.waitKey(0) 
-		cv2.destroyAllWindows() 
+		if DEBUG_PLOT_IMAGE:
+			cv2.imshow(title, image)
+			cv2.waitKey(0) 
+			cv2.destroyAllWindows() 
 
 	def run(self):
 		signal.signal(signal.SIGTERM, self.signal_term_handler)
@@ -62,9 +68,11 @@ class main:
 
 		frame_counter = 0
 
-		consecutive_frame = CONSECUTIVE_FRAMES
+		consecutive_frame = 3#CONSECUTIVE_FRAMES
 
 		frame_list = []
+		radius_vect = []
+		last_snapshot_position = []
 
 		while self.cap.isOpened():
 
@@ -84,8 +92,7 @@ class main:
 
 					frame = extract_roi(frame)
 					print(f"treating frame {frame_counter}...", end="")
-					#self.debug_image("original frame", frame)
-
+					
 					gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 					# find the difference between current frame and base frame
@@ -100,7 +107,7 @@ class main:
 					# dilatatation to enclose the whole drone without separate blobs
 					dilated_frame = cv2.dilate(frame_diff, None, iterations=7)
 
-					if DEBUG:
+					if DEBUG_IMAGE_FRAMES:
 						self.debug_image("dilated_frame", dilated_frame)
 
 					# find the contours around the white segmented areas
@@ -111,7 +118,11 @@ class main:
 					else:
 						im2, contours, hierarchy = cv2.findContours(dilated_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-					contour_max = max(contours, key = cv2.contourArea)
+					if contours == []:
+						continue
+					else:
+						contour_max = max(contours, key = cv2.contourArea)
+
 
 					im_contour = frame.copy()
 					
@@ -121,7 +132,7 @@ class main:
 
 					print(f"contour area is {area}")
 					
-					if DEBUG:
+					if DEBUG_IMAGE_FRAMES:
 						# debug print
 						cv2.drawContours(im_contour, contour_max, -1, (0, 255, 0), 3)
 						
@@ -134,34 +145,52 @@ class main:
 						continue
 
 					# find enclosing circle
-					circle_center, rad = cv2.minEnclosingCircle(contour_max)
+					circle_center, radius = cv2.minEnclosingCircle(contour_max)
 					circle_center = (int(circle_center[0]), int(circle_center[1]))
+					radius_vect.append(radius)
 					
-					if DEBUG:
-						print(f"enclosing diameter {rad}")
+					if len(last_snapshot_position) >= 1:
+						dist = math.dist(circle_center,last_snapshot_position[-1]) 
+						print(f"radius is : {radius}, last position {last_snapshot_position[-1]}, current position {circle_center}")
+						if dist > MARGIN_NEXT_FRAME * radius:
+							last_snapshot_position.append(circle_center)
+							print("Snapshot taken")
+						else:
+							print("Snapshot passed")
+							continue
+					else:
+						last_snapshot_position.append(circle_center)
 
-					if rad > 200:
+
+					if DEBUG_IMAGE_FRAMES:
+						print(f"enclosing diameter {radius}")
+
+					if radius > 200:
 						print("Contour not used, too large enclosing diameter")
 						continue
 
-					if DEBUG:
+					if DEBUG_IMAGE_FRAMES:
 						#plot for debug
-						cv2.circle( im_contour, circle_center, int(rad), (0, 0, 255), thickness=-1, )
+						cv2.circle( im_contour, circle_center, int(radius), (0, 0, 255), thickness=-1, )
 						self.debug_image("im_contour", im_contour)
 					
+
+
+						print(f"last_snapshot_position: {last_snapshot_position[-1]}, type {type(last_snapshot_position)}, length {len(last_snapshot_position)}")
+
 					#creating circle mask arround the area of interrest
 					circle_mask = np.zeros_like(frame_diff)
-					cv2.circle(circle_mask, circle_center, int(rad), 255, -1)
+					cv2.circle(circle_mask, circle_center, int(radius), 255, -1)
 
 					ajusted_mask = dilated_frame.copy()
 					ajusted_mask[circle_mask == 0] = 0
 					
-					if DEBUG:
+					if DEBUG_IMAGE_FRAMES:
 						self.debug_image("ajusted_mask", ajusted_mask)
 
 					final_patchwork[ajusted_mask > 0, :] = frame[ajusted_mask > 0 , :]
 
-					if DEBUG:
+					if DEBUG_IMAGE_FRAMES:
 						self.debug_image("final_patchwork", final_patchwork)
 
 					frame_list.append(frame_diff)
@@ -171,10 +200,22 @@ class main:
 						break
 
 			else:
+
+				#print(f"data: {data[abs(data - np.mean(data)) < m * np.std(data)]}")
 				self.debug_image("final_patchwork", final_patchwork)
 				print("end of stream")				
 				print("Writing to output file: ", end = "")
 				cv2.imwrite(self.output_file, final_patchwork)
+
+				if 1:
+					fig = plt.figure()
+					plt.plot(radius_vect,'.-')
+					plt.title("Radius of detected drones")
+					plt.show()
+					print(f"radius_vect = {radius_vect}")
+					print(f"std radius_vect = {np.std(radius_vect)}")
+					data = radius_vect
+					m = 2
 				break
 		self.stop()
 
