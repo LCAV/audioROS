@@ -556,7 +556,7 @@ class DataCollector(object):
                     "frequency": f,
                     "distance": distance_cm,
                     "angle": angle,
-                    "magnitude": magnitude_estimate,
+                    "magnitude": magnitude,
                 }
                 self.df.loc[len(self.df), list(update_dict.keys())] = list(
                     update_dict.values()

@@ -164,7 +164,12 @@ def get_calibration_function_median(
 
 
 def get_calibration_function_moving(
-    exp_name, ax=None, motors=MOTORS, fit_one_gain=False, appendix_list=[""]
+    exp_name,
+    ax=None,
+    motors=MOTORS,
+    fit_one_gain=False,
+    appendix_list=[""],
+    check_height=True,
 ):
     from scipy.interpolate import interp1d
 
@@ -173,7 +178,15 @@ def get_calibration_function_moving(
         (results_df.motors == motors) & (results_df.appendix.isin(appendix_list)), :
     ]
 
-    matrix = np.abs(np.concatenate([*rows.stft], axis=0))
+    valid_stfts = []
+    for i, row in rows.iterrows():
+        if check_height:
+            stft = row.stft[row.positions[:, 2] > 0.3, ...]
+            # print(f'using {stft.shape[0]} out of {row.stft.shape[0]}')
+        else:
+            stft = row.stft
+        valid_stfts.append(stft)
+    matrix = np.abs(np.concatenate(valid_stfts, axis=0))
     if fit_one_gain:
         gains = np.repeat(
             np.nanmedian(matrix, axis=[0, 1])[None, :], matrix.shape[1], axis=0

@@ -22,7 +22,7 @@ def get_estimate(values, probs):
     return values[np.argmax(probs)]
 
 
-def extract_pdf(distribution, method=METHOD):
+def extract_pdf(distribution, method=METHOD, verbose=False):
     """
     Extract pdf from distribution. 
     Distribution is of form:
@@ -30,6 +30,9 @@ def extract_pdf(distribution, method=METHOD):
         x1: [p_1(x1), p_2(x1), ...]
         x2: [p_1(x2), p_2(x2), ...]
     }
+
+    For example
+    distance 1: [p_mic1(distance 1), p_mic2(distance 2), ...]
 
     """
     values = np.fromiter(distribution.keys(), dtype=float)
@@ -90,6 +93,12 @@ class DistanceEstimator(object):
 
         distribution = {d: [] for d in distances_m}
 
+        if verbose:
+            import matplotlib.pylab as plt
+
+            plt.figure()
+
+        # go over all data saved.
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
 
             deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
@@ -98,6 +107,7 @@ class DistanceEstimator(object):
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
+            # "integral" over possible angles
             for azimuth_deg in azimuths_deg:
                 ds_m = (
                     self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
@@ -105,6 +115,22 @@ class DistanceEstimator(object):
                 )
 
                 # interpolate (ds_m, delta_probs) at fixed distances.
+                if verbose:
+                    np.set_printoptions(precision=2)
+                    print(
+                        "interpolating",
+                        min(ds_m),
+                        max(ds_m),
+                        np.mean(ds_m[1:] - ds_m[:-1]),
+                    )
+                    print(
+                        "on",
+                        min(distances_m),
+                        max(distances_m),
+                        np.mean(distances_m[1:] - distances_m[:-1]),
+                    )
+                    np.set_printoptions(precision=None)
+
                 interp1d_func = interp1d(
                     ds_m, delta_probs, kind="linear", fill_value="extrapolate"
                 )
@@ -122,7 +148,10 @@ class DistanceEstimator(object):
                     distribution[d].append(prob)
                     for d, prob in zip(distances_m, delta_probs_interp)
                 ]
-        return extract_pdf(distribution, method)
+                if verbose:
+                    plt.plot(ds_m, delta_probs)
+                    plt.scatter(distances_m, delta_probs_interp)
+        return extract_pdf(distribution, method, verbose)
 
     def get_angle_distribution(
         self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
