@@ -251,6 +251,7 @@ def simulate_doa(
     linear_velocity_cm_list=[0],
     angular_velocity_deg_list=[0],  # deg/sec, velocity of drone
     saveas="",
+    verbose=False,
 ):
     """
     :param degree_noise_list:  noise added to each degree position, in degrees
@@ -260,6 +261,7 @@ def simulate_doa(
     :param linear_velocity_cm_list:  linear velocity of drone in cm/s
     :param angular_velocity_deg_list:  velocity of drone in deg/sec
     """
+    import progressbar
     from mic_array import get_square_array
     from geometry import Context
 
@@ -301,129 +303,147 @@ def simulate_doa(
     time_index = int((2 * gt_distance) / SPEED_OF_SOUND * FS)
 
     seed = 0
-    for (
-        degree_noise,
-        offset_noise,
-        time_noise,
-        signal_noise,
-        frequency,
-        angular_velocity_deg,
-        linear_velocity_cm,
-    ) in itertools.product(
-        degree_noise_list,
-        offset_noise_list,
-        time_noise_list,
-        signal_noise_list,
-        frequency_list,
-        angular_velocity_deg_list,
-        linear_velocity_cm_list,
-    ):
-        print(f"degree noise {degree_noise} of {degree_noise_list}")
-        print(f"lateral noise {offset_noise} of {offset_noise_list}")
-        print(f"time noise {time_noise} of {time_noise_list}")
-        print(f"signal noise {signal_noise} of {signal_noise_list}")
-        print(f"frequency {frequency} of {frequency_list}")
-        print(f"linear velocity {linear_velocity_cm} of {linear_velocity_cm_list}")
-        print(f"angular velocity {angular_velocity_deg} of {angular_velocity_deg_list}")
 
-        for it in range(n_it):
-            print(f"iteration {it + 1}/{n_it}")
-            np.random.seed(seed)
-            seed += 1
+    combinations = list(
+        itertools.product(
+            degree_noise_list,
+            offset_noise_list,
+            time_noise_list,
+            signal_noise_list,
+            frequency_list,
+            angular_velocity_deg_list,
+            linear_velocity_cm_list,
+        )
+    )
 
-            ##################### generate signals
-            # create noisy versions
-            degrees, offsets, times = get_movement(
-                angular_velocity_deg, linear_velocity_cm, n_samples, sampling_time
-            )
-            times_noisy = get_noisy_times(times, time_noise, time_quantization)
+    with progressbar.ProgressBar(max_value=len(combinations) * n_it) as p:
+        for (
+            degree_noise,
+            offset_noise,
+            time_noise,
+            signal_noise,
+            frequency,
+            angular_velocity_deg,
+            linear_velocity_cm,
+        ) in combinations:
 
-            # choose frequency bin (for now we make sure that the source signal is one of the available bins)
-            f_idx = np.argmin(np.abs(frequencies_all - frequency))
-            frequency_hz = frequencies_all[f_idx]
-            frequencies = np.array(
-                [frequency_hz]
-            )  # because algorithms expect multiple frequencies
-            if abs(frequency_hz - frequency) > 100:
-                print("Warning: frequency mismatch", frequency_hz, frequency)
+            if verbose:
+                print(f"degree noise {degree_noise} of {degree_noise_list}")
+                print(f"lateral noise {offset_noise} of {offset_noise_list}")
+                print(f"time noise {time_noise} of {time_noise_list}")
+                print(f"signal noise {signal_noise} of {signal_noise_list}")
+                print(f"frequency {frequency} of {frequency_list}")
+                print(
+                    f"linear velocity {linear_velocity_cm} of {linear_velocity_cm_list}"
+                )
+                print(
+                    f"angular velocity {angular_velocity_deg} of {angular_velocity_deg_list}"
+                )
 
-            mics_list_noisy = move_mics(
-                mics_local,
-                degrees,
-                offsets,
-                noise_dict={"degree": degree_noise, "offset": offset_noise},
-            )
+            for it in range(n_it):
 
-            ### generate signals at different positions
-            signals_f_list = []
-            for mics_noisy, time in zip(mics_list_noisy, times):
-                signals_received = generate_signals_analytical(
+                if verbose:
+                    print(f"iteration {it + 1}/{n_it}")
+                np.random.seed(seed)
+                p.update(seed)
+                seed += 1
+
+                ##################### generate signals
+                # create noisy versions
+                degrees, offsets, times = get_movement(
+                    angular_velocity_deg, linear_velocity_cm, n_samples, sampling_time
+                )
+                times_noisy = get_noisy_times(times, time_noise, time_quantization)
+
+                # choose frequency bin (for now we make sure that the source signal is one of the available bins)
+                f_idx = np.argmin(np.abs(frequencies_all - frequency))
+                frequency_hz = frequencies_all[f_idx]
+                frequencies = np.array(
+                    [frequency_hz]
+                )  # because algorithms expect multiple frequencies
+                if abs(frequency_hz - frequency) > 100:
+                    print("Warning: frequency mismatch", frequency_hz, frequency)
+
+                mics_list_noisy = move_mics(
+                    mics_local,
+                    degrees,
+                    offsets,
+                    noise_dict={"degree": degree_noise, "offset": offset_noise},
+                )
+
+                ### generate signals at different positions
+                signals_f_list = []
+                for mics_noisy, time in zip(mics_list_noisy, times):
+                    signals_received = generate_signals_analytical(
+                        sources,
+                        mics_noisy,
+                        frequency_hz,
+                        time,
+                        noise=signal_noise,
+                        phase_offset=phase_offsets,
+                    )
+                    buffer_ = signals_received[:, time_index : time_index + N_BUFFER]
+                    signals_f = np.fft.rfft(buffer_).T
+                    signals_f_list.append(signals_f[[f_idx], :])
+
+                ### generate "real" multi-mic signals
+                mics_array_noisy = np.concatenate([*mics_list_noisy])
+                signals_multimic = generate_signals_analytical(
                     sources,
-                    mics_noisy,
+                    mics_array_noisy,
                     frequency_hz,
-                    time,
+                    time=0,
                     noise=signal_noise,
                     phase_offset=phase_offsets,
                 )
-                buffer_ = signals_received[:, time_index : time_index + N_BUFFER]
-                signals_f = np.fft.rfft(buffer_).T
-                signals_f_list.append(signals_f[[f_idx], :])
+                buffer_multimic = signals_multimic[
+                    :, time_index : time_index + N_BUFFER
+                ]
+                signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[[f_idx], :]
 
-            ### generate "real" multi-mic signals
-            mics_array_noisy = np.concatenate([*mics_list_noisy])
-            signals_multimic = generate_signals_analytical(
-                sources,
-                mics_array_noisy,
-                frequency_hz,
-                time=0,
-                noise=signal_noise,
-                phase_offset=phase_offsets,
-            )
-            buffer_multimic = signals_multimic[:, time_index : time_index + N_BUFFER]
-            signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[[f_idx], :]
+                # print("mics_list_noisy", mics_list_noisy)
+                # note that below we use the noiseless quantities for degrees, offsets, and times!
+                # this is because we added the noise for generating the signals themselves.
+                spectrum_dynamic, spectrum_delayed, spectrum_multimic = inner_loop(
+                    mics_local,
+                    degrees,
+                    offsets,
+                    times_noisy,
+                    signals_f_list,
+                    signals_f_multimic,
+                    frequencies,
+                )
 
-            # print("mics_list_noisy", mics_list_noisy)
-            # note that below we use the noiseless quantities for degrees, offsets, and times!
-            # this is because we added the noise for generating the signals themselves.
-            spectrum_dynamic, spectrum_delayed, spectrum_multimic = inner_loop(
-                mics_local,
-                degrees,
-                offsets,
-                times_noisy,
-                signals_f_list,
-                signals_f_multimic,
-                frequencies,
-            )
+                df.loc[len(df), :] = dict(
+                    it=it,
+                    seed=seed,
+                    degree_noise=degree_noise,
+                    offset_nosie=offset_noise,
+                    time_noise=time_noise,
+                    frequency=frequency_hz,
+                    angular_velocity_deg=angular_velocity_deg,
+                    linear_velocity_cm=linear_velocity_cm,
+                    spectrum_dynamic=spectrum_dynamic,
+                    spectrum_delayed=spectrum_delayed,
+                    spectrum_multimic=spectrum_multimic,
+                )
 
-            df.loc[len(df), :] = dict(
-                it=it,
-                seed=seed,
-                degree_noise=degree_noise,
-                offset_nosie=offset_noise,
-                time_noise=time_noise,
-                frequency=frequency_hz,
-                angular_velocity_deg=angular_velocity_deg,
-                linear_velocity_cm=linear_velocity_cm,
-                spectrum_dynamic=spectrum_dynamic,
-                spectrum_delayed=spectrum_delayed,
-                spectrum_multimic=spectrum_multimic,
-            )
-
-        if saveas != "":
-            df.to_pickle(saveas)
-            print(f"saved intermediate to {saveas}")
-    return df
+            if saveas != "":
+                df.to_pickle(saveas)
+                if verbose:
+                    print(f"saved intermediate to {saveas}")
+        return df
 
 
 if __name__ == "__main__":
     import pandas as pd
 
-    n_it = 10
+    n_it = 20
     signal_noise_list = [1e-3]
 
     # movement noise study
     gt_angle_deg = 130  # angle of ground truth
-    frequency_list = np.arange(1000, 10000, step=1000)
+    frequency_list = np.arange(1000, 5000, step=1000)
     angular_velocity_deg = [30]
     degree_noise_list = np.arange(0, 25, step=2)
     offset_noise_list = [0]
@@ -448,55 +468,32 @@ if __name__ == "__main__":
     angular_velocity_deg = [30]
     degree_noise_list = [0]
     offset_noise_list = [0]
-    time_noise_list = np.logspace(-6, 0, 10)
+    time_noise_list = np.logspace(-6, 0, 20)
     n_samples = 2
     saveas = "results/doa_time_noise.pkl"
     # simulate_doa(
-    #    gt_angle_deg,
-    #    degree_noise_list,
-    #    offset_noise_list,
-    #    signal_noise_list,
-    #    time_noise_list,
-    #    frequency_list,
-    #    n_samples,
-    #    n_it,
-    #    angular_velocity_deg_list=angular_velocity_deg,
-    #    saveas=saveas,
+    #   gt_angle_deg,
+    #   degree_noise_list,
+    #   offset_noise_list,
+    #   signal_noise_list,
+    #   time_noise_list,
+    #   frequency_list,
+    #   n_samples,
+    #   n_it,
+    #   angular_velocity_deg_list=angular_velocity_deg,
+    #   saveas=saveas,
     # )
 
     # lateral movement study
     gt_angle_deg = 50
-    frequency_list = np.arange(1000, 6000, step=200)
+    frequency_list = np.arange(1000, 11000, step=1000)
     angular_velocity_deg = [0.0]
-    linear_velocity_cm = np.arange(300, step=20, dtype=np.float)
+    linear_velocity_cm = np.arange(300, step=10, dtype=np.float)
     degree_noise_list = [0.0]
     offset_noise_list = [1e-2]  # m/s
     time_noise_list = [0.0]
     n_samples = 2
-    saveas = "results/doa_lateral_movement.pkl"
-    simulate_doa(
-        gt_angle_deg,
-        degree_noise_list,
-        offset_noise_list,
-        signal_noise_list,
-        time_noise_list,
-        frequency_list,
-        n_samples,
-        n_it,
-        linear_velocity_cm_list=linear_velocity_cm,
-        saveas=saveas,
-    )
-
-    # multiple sources
-    gt_angle_deg = [10, 50]
-    frequency_list = np.arange(1000, 10000, step=1000)
-    angular_velocity_deg = [30.0]
-    linear_velocity_cm = [10]
-    degree_noise_list = np.arange(25, step=2)
-    offset_noise_list = [0]  # m/s
-    time_noise_list = [0.0]
-    n_samples = 4
-    saveas = "results/doa_multi_joint.pkl"
+    saveas = "results/doa_lateral_movement_highres.pkl"
     # simulate_doa(
     #    gt_angle_deg,
     #    degree_noise_list,
@@ -507,6 +504,30 @@ if __name__ == "__main__":
     #    n_samples,
     #    n_it,
     #    linear_velocity_cm_list=linear_velocity_cm,
-    #    angular_velocity_deg_list=angular_velocity_deg,
     #    saveas=saveas,
     # )
+
+    # multiple sources
+    n_it = 10
+    gt_angle_deg = [10, 50]
+    frequency_list = np.arange(1000, 11000, step=1000)
+    angular_velocity_deg = [30.0]
+    linear_velocity_cm = [10]
+    degree_noise_list = np.arange(25, step=1)
+    offset_noise_list = [0]  # m/s
+    time_noise_list = [0.0]
+    n_samples = 3
+    saveas = "results/doa_multi_joint_highres.pkl"
+    simulate_doa(
+        gt_angle_deg,
+        degree_noise_list,
+        offset_noise_list,
+        signal_noise_list,
+        time_noise_list,
+        frequency_list,
+        n_samples,
+        n_it,
+        linear_velocity_cm_list=linear_velocity_cm,
+        angular_velocity_deg_list=angular_velocity_deg,
+        saveas=saveas,
+    )
