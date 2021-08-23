@@ -17,8 +17,8 @@ else:
 
 # wall absorption bounds: 1 would mean all energy lost and no interference.
 ABS_BOUNDS = [0.1, 0.99]
-OFFSET_BOUNDS = [0, 15]
-GAIN_BOUNDS = [10, 100]
+OFFSET_BOUNDS = [0, 20]
+GAIN_BOUNDS = [1, 100]
 YAW_DEG = 0
 
 # interpolation parameters

@@ -65,6 +65,7 @@ if __name__ == "__main__":
     bin_selection_types = [5, 6]
     exp_names = [
         # "2021_07_08_stepper_fast",
+        # "2021_07_27_manual",
         "2021_07_27_manual",
         # "2021_07_08_stepper_slow",
     ]

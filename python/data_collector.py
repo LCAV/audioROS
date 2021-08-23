@@ -877,58 +877,6 @@ class DataCollector(object):
             plot_calibration(freqs, gains, calib_function, ax=ax)
         return calib_function
 
-    def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
-        """ 
-        Fit anlalytical function to raw measurements at given frequency. 
-
-        :return: 
-            - coefficients (absorption, offset, gain(s))
-            - distances used
-            - fitted slice(s)
-            - fitting cost
-        """
-        from calibration import fit_distance_slice
-
-        df_here = self.filter_by_column(frequency, "frequency")
-        frequency_here = df_here.frequency.unique()[0]
-        if mic_idx is not None:
-            df_here = df_here.loc[df_here.mic.isin(mic_idx)]
-            chosen_mics = mic_idx
-        else:
-            chosen_mics = sorted_and_unique(df_here, "mic")
-
-        distances_raw = sorted_and_unique(df_here, "distance")
-        mags_pt = pd.pivot_table(
-            df_here,
-            values="magnitude",
-            index=["mic", "distance"],
-            columns="counter",
-            fill_value=0.0,
-        )
-        counters = mags_pt.columns.values
-        raw_values = np.empty((len(distances_raw), len(chosen_mics), len(counters)))
-        for i, mic in enumerate(chosen_mics):
-            # get table corresponding to this mic
-            table = mags_pt[(mags_pt.index.get_level_values("mic") == mic)]
-
-            # will raw values with corresponding magnitudes
-            distances_here = table.index.get_level_values("distance")
-            indices = find_indices(distances_here, distances_raw)
-            new_values = table.values
-            raw_values[indices, i, : new_values.shape[-1]] = new_values
-
-        coeffs_raw, d_slice_raw, cost_raw = fit_distance_slice(
-            raw_values,
-            distances_raw,
-            method="minimize",
-            azimuth_deg=YAW_DEG,
-            frequency=frequency_here,
-            chosen_mics=chosen_mics,
-            optimize_absorption=True,
-            fit_one_gain=fit_one_gain,
-        )
-        return coeffs_raw, distances_raw, d_slice_raw, cost_raw
-
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
         """ 
         Fit anlalytical function to the median measurements (per distance) and given frequency. 
