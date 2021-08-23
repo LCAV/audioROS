@@ -73,6 +73,7 @@ python/.ipynb_checkpoints
 python/results/
 python/plots/
 python/plots_doa/
+python/visualizations/
 backup/
 epuck-audio/
 
