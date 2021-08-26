@@ -10,7 +10,7 @@ import math
 import av
 import argparse
 import numpy as np
-from get_background import get_background, extract_roi
+from get_background import get_background, cancel_roi
 import signal
 import matplotlib.pyplot as plt
 
@@ -22,6 +22,8 @@ DEBUG_PLOT_IMAGE = 1
 DEBUG_BACKGROUND = 0
 DEBUG_IMAGE_FRAMES = 0
 DEBUG_last_snapshot_position_FILTER = 0
+
+EPUCK = 1
 
 class main:
 	def __init__(self, input_file, output_folder, ext, output_in_place):
@@ -102,7 +104,6 @@ class main:
 			# if we have reached `consecutive_frame` number of frames
 			if (frame_counter % consecutive_frame) == 0:
 
-				#frame = extract_roi(frame)
 				print(f"treating frame {frame_counter}/{self.count}...", end="")
 				
 				gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -117,11 +118,22 @@ class main:
 				ret, frame_diff = cv2.threshold(frame_diff, 40, 255, cv2.THRESH_BINARY)
 
 				# dilatatation to enclose the whole drone without separate blobs
-				dilated_frame = cv2.dilate(frame_diff, None, iterations=7)
+				if not EPUCK:
+					dilated_frame = cv2.dilate(frame_diff, None, iterations=7)
+				else:
+					dilated_frame = cv2.erode(frame_diff, None, iterations=4)
+					dilated_frame = cv2.dilate(dilated_frame, None, iterations=14)
+
 
 				if DEBUG_IMAGE_FRAMES:
 					self.debug_image("dilated_frame", dilated_frame)
 
+				dilated_frame = cancel_roi(dilated_frame)
+
+
+				if DEBUG_IMAGE_FRAMES:
+					self.debug_image("dilated_frame after ROI", dilated_frame)
+				
 				# find the contours around the white segmented areas
 				contours, hierarchy = cv2.findContours( dilated_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -135,7 +147,6 @@ class main:
 				else:
 					contour_max = max(contours, key = cv2.contourArea)
 
-
 				im_contour = frame.copy()
 				
 				# continue through the loop if contour area is too small...
@@ -148,16 +159,31 @@ class main:
 					# debug print
 					cv2.drawContours(im_contour, contour_max, -1, (0, 255, 0), 3)
 					
-				if area < 7000:
+				if EPUCK:
+					min_area = 500
+				else:
+					min_area = 7000
+
+				if area < min_area:
 					print("Contour not used, too small")
 					continue
 
-				if area > 35000:
-					print("Contour not used, too big")
+				if EPUCK:
+					max_area = 30000
+				else:
+					max_area = 35000
+
+				if area > max_area:
+					print(f"Contour not used, too big area: {area}")
 					continue
 
 				# find enclosing circle
 				circle_center, radius = cv2.minEnclosingCircle(contour_max)
+
+				# for e-puck
+				if EPUCK:
+					radius = 1.3 * radius
+
 				circle_center = (int(circle_center[0]), int(circle_center[1]))
 				radius_vect.append(radius)
 				
@@ -169,7 +195,7 @@ class main:
 						last_snapshot_position.append(circle_center)
 						print("Snapshot taken")
 					else:
-						print("Snapshot passed")
+						print(f"Snapshot passed, no movement big enough, distance: {dist}")
 						continue
 				else:
 					last_snapshot_position.append(circle_center)
@@ -198,6 +224,9 @@ class main:
 				ajusted_mask = dilated_frame.copy()
 				ajusted_mask[circle_mask == 0] = 0
 				
+				if EPUCK:
+					ajusted_mask = circle_mask
+
 				if DEBUG_IMAGE_FRAMES:
 					self.debug_image("ajusted_mask", ajusted_mask)
 
