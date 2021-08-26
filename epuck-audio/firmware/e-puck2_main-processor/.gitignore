@@ -1,0 +1,6 @@
+/.cproject
+/.project
+/libssp.a
+/libssp_nonshared.a
+/build
+/.dep

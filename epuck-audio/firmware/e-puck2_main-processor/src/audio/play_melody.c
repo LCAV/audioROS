@@ -14,6 +14,7 @@ taken at https://www.princetronics.com/supermariothemesong/
 
 #include "play_melody.h"
 #include "audio_thread.h"
+#include "play_sound_file.h"
 
 
 //conditional variable
@@ -789,6 +790,10 @@ void playMelody(song_selection_t choice, play_melody_option_t option, melody_t* 
   else{
     return;
   }
+
+  //stops a eventual file being played to avoid conflict
+  stopCurrentSoundFile();
+  waitSoundFileHasFinished();
 
   //SIMPLE_PLAY case
   if(option == ML_SIMPLE_PLAY){
