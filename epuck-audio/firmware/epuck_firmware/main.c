@@ -27,10 +27,13 @@
 #define SPEED 200
 
 typedef enum states_enum_t {
-	WAIT_START, RECORD, SEND, MOVE, MOVE_WAIT, NEXT_NOTE, WAIT_ACK,
+	WAIT_START, RECORD, SEND, MOVE, MOVE_WAIT, MOVE_CONTINUOUS, NEXT_NOTE, WAIT_ACK,
 } state_t;
 
 state_t state = WAIT_START;
+
+uint8_t move_started = 0;
+uint8_t recording_on = 0;
 
 uint16_t buzzerFreq = BUZZER_FMIN;
 
@@ -80,7 +83,6 @@ int main(void) {
 	static float send_tab[DATA_SIZE];
 	uint32_t timestamp = 0;
 	uint32_t tickstart = 0;
-	uint32_t tick = 0;
 
 	//starts the microphones processing thread.
 	//it calls the callback given in parameter when samples are ready
@@ -91,6 +93,21 @@ int main(void) {
 
 	/* Infinite loop. */
 	while (1) {
+		// Detect end of move started in the state machine
+
+		// update timer
+		timestamp += GPTD12.tim->CNT;
+		GPTD12.tim->CNT = 0;
+
+		// Stop motors if needed
+		if(move_started){
+			if(timestamp > (tickstart + 200000)){
+				left_motor_set_speed(0);
+				right_motor_set_speed(0);
+				move_started = 0;
+			}
+		}
+
 		switch (state) {
 		case WAIT_START:
 			// heart beat like function to detect the active port on the computer
@@ -99,7 +116,7 @@ int main(void) {
 			// Detect start sequence
 			c_in = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
-
+			// command from 0 to 9 sets the playing frequency and start recording
 			if ((c_in < 9) && (c_in > 0)) {
 				buzzer_idx = c_in;// - '0';
 				if (buzzer_idx == 1) {
@@ -110,6 +127,7 @@ int main(void) {
 					right_motor_set_speed(SPEED);
 				}
 				state = RECORD;
+			// other caracter stops the motor and sound
 			} else{
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
@@ -117,6 +135,9 @@ int main(void) {
 			}
 			 if (c_in == 'm'){
 				state = MOVE;
+			 }
+			 if (c_in == 'o'){
+				state = MOVE_CONTINUOUS;
 			 }
 
 /*
@@ -136,9 +157,6 @@ int main(void) {
 
 			//we copy the buffer to avoid conflicts
 			arm_copy_f32(get_audio_buffer_ptr(ALL_OUTPUTS), send_tab, DATA_SIZE);
-			//add time to the  element of our data
-			timestamp += GPTD12.tim->CNT;
-			GPTD12.tim->CNT = 0;
 
 			state = SEND;
 			break;
@@ -165,6 +183,12 @@ int main(void) {
 				state = WAIT_START;
 				buzzerFreq = BUZZER_FMIN;
 				break;
+			case 'm':
+				state = MOVE;
+				break;
+			case 'o':
+				state = MOVE_CONTINUOUS;
+				break;
 			}
 
 			break;
@@ -174,18 +198,22 @@ int main(void) {
 			left_motor_set_speed(SPEED);
 			right_motor_set_speed(SPEED);
 			state = MOVE_WAIT;
-			timestamp += GPTD12.tim->CNT;
-			GPTD12.tim->CNT = 0;
 			tickstart = timestamp;
 			break;
 		case MOVE_WAIT:
-			timestamp += GPTD12.tim->CNT;
-			GPTD12.tim->CNT = 0;
 			if(timestamp > (tickstart + 200000)){
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
 				state = WAIT_START;
 			}
+			break;
+		case MOVE_CONTINUOUS:
+			left_motor_set_speed(SPEED);
+			right_motor_set_speed(SPEED);
+			state = RECORD;
+			tickstart = timestamp;
+			move_started = 1;
+
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
