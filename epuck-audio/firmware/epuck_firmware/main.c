@@ -101,15 +101,6 @@ int main(void) {
 		timestamp += GPTD12.tim->CNT;
 		GPTD12.tim->CNT = 0;
 
-		// Stop motors if needed
-		if(move_started){
-			if(timestamp > (tickstart + 200000)){
-				left_motor_set_speed(0);
-				right_motor_set_speed(0);
-				move_started = 0;
-			}
-		}
-
 		switch (state) {
 		case WAIT_START:
 			// heart beat like function to detect the active port on the computer
@@ -140,23 +131,13 @@ int main(void) {
 				right_motor_set_speed(0);
 				dac_stop();
 			}
-			 if (c_in == 'm'){
+			if (c_in == 'm'){
 				state = MOVE;
-			 }
-			 if (c_in == 'o'){
-				state = MOVE_CONTINUOUS;
-			 }
-
-/*
-			if (c_in == 's') {
-				state = RECORD;
-				dac_play(buzzerFreq);
-			}else{
-				left_motor_set_speed(0);
-				right_motor_set_speed(0);
-				dac_stop();
 			}
-*/
+			if (c_in == 'o'){
+				state = MOVE_CONTINUOUS;
+			}
+
 			break;
 		case RECORD:
 			//waits until a result must be sent to the computer
@@ -218,9 +199,6 @@ int main(void) {
 			left_motor_set_speed(SPEED);
 			right_motor_set_speed(SPEED);
 			state = RECORD;
-			tickstart = timestamp;
-			move_started = 1;
-
 			break;
 		case NEXT_NOTE:
 			if (buzzerFreq <= BUZZER_FMAX) { //every second
@@ -232,8 +210,6 @@ int main(void) {
 				dac_stop();
 				state = WAIT_START;
 			}
-
-
 			break;
 		}
 	}
