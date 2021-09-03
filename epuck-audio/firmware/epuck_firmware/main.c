@@ -18,6 +18,8 @@
 
 #include <audio/audio_thread.h>
 
+#define SCREEN_DEBUG 1
+
 #define WHEEL_DISTANCE      5.35f    //cm TO ADJUST IF NECESSARY. NOT ALL THE E-PUCK2 HAVE EXACTLY THE SAME WHEEL DISTANCE
 #define PERIMETER_EPUCK     (PI * WHEEL_DISTANCE)
 
@@ -117,8 +119,13 @@ int main(void) {
 			c_in = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
 			// command from 0 to 9 sets the playing frequency and start recording
-			if ((c_in < 9) && (c_in > 0)) {
+#if SCREEN_DEBUG
+			if ((c_in < '9') && (c_in > '0')) {
+				buzzer_idx = c_in - '0';
+#else
+			if ((c_in < '9') && (c_in > '0')) {
 				buzzer_idx = c_in;// - '0';
+#endif
 				if (buzzer_idx == 1) {
 					dac_play(buzzerFreq);
 				} else {
