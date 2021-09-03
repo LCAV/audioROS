@@ -307,6 +307,10 @@ class Gateway(NodeWithParams):
         #print(f"Moving {self.sweep_index}")
         self.port.write(b"m")
 
+    def send_move_nonstop(self):
+        #print(f"Moving {self.sweep_index}")
+        self.port.write(b"o")
+
     # function to rearange the interleaving of the epuck to the actual interleaving we want
     def data_rearrange(self, data, bin_number):
         mics = N_MICS
