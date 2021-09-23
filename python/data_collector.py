@@ -255,8 +255,6 @@ def remove_spurious_freqs(df, n_spurious, verbose=False, dryrun=False):
     remove_names = []
     for (freq, mic, distance), df_here in df.groupby(["frequency", "mic", "distance"]):
         if len(df) < n_spurious:
-            # if verbose:
-            #   print('removing', df)
             remove_rows += list(df_here.index.values)
             remove_names += [(freq, mic, distance)]
     if verbose:
@@ -300,7 +298,7 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
 def remove_bad_measurements(df, mag_thresh, verbose=False):
     index_remove = df[df.magnitude < mag_thresh].index
     if verbose:
-        print(f"removing {len(index_remove)} rows")
+        print(f"removing bad {len(index_remove)} rows")
     df.drop(index=index_remove, inplace=True)
 
 
@@ -327,12 +325,10 @@ def remove_outliers(df, factor=FACTOR_OUTLIERS, normalize=False, verbose=False):
 
 def remove_nan_rows(df, verbose=False):
     if verbose:
-        print(f"dropping {len(df.loc[df.magnitude.isnull()])} rows")
+        print(f"remove_nan_rows: dropping {len(df.loc[df.magnitude.isnull()])} rows")
     len_before = len(df)
     df.dropna(axis=0, subset=["magnitude"], inplace=True)
     len_after = len(df)
-    if verbose:
-        print("dropped", len_before - len_after)
 
 
 def to_numeric(df):
@@ -449,16 +445,20 @@ class DataCollector(object):
     def get_frequencies(self):
         return sorted_and_unique(self.df, "frequency").astype(np.float)
 
-    def next_fslice_ready(self, signals_f, frequencies):
+    def next_fslice_ready(self, signals_f, frequencies, verbose=False):
         """ find big frequency jump, meaning end of sweep. """
         fslice_ready = False
 
         f, magnitude = get_peak_freq(signals_f, frequencies)
 
         if len(self.df) == 0:
+            if verbose:
+                print("empty df")
             return False
 
         latest_frequency = self.df.loc[len(self.df) - 1, "frequency"]
+        if verbose:
+            print(f"{f} ?< {latest_frequency - SWEEP_DELTA}")
 
         if (magnitude > self.params.get("mag_thresh", MAG_THRESH)) and (
             f < latest_frequency - SWEEP_DELTA
@@ -530,7 +530,9 @@ class DataCollector(object):
             return False  # True
         return False
 
-    def fill_from_signal(self, signals_f, frequencies, distance_cm=0, angle=0, time=0):
+    def fill_from_signal(
+        self, signals_f, frequencies, distance_cm=0, angle=0, time=0, mode="maximum"
+    ):
         """
         :param signals_f: shape (n_mics, n_freqs), complex
         :param frequencies: shape (n_freqs,)
@@ -538,27 +540,55 @@ class DataCollector(object):
         """
         sweep_complete = False
         for i_mic in range(signals_f.shape[0]):
-            idx = np.argmax(np.abs(signals_f[i_mic, :]))
-            f = frequencies[idx]
-            counter = len(
-                self.df.loc[
-                    (self.df.mic == i_mic)
-                    & (self.df.distance == distance_cm)
-                    & (self.df.angle == angle)
-                    & (self.df.frequency == f)
-                ]
-            )
-            magnitude = np.abs(signals_f[i_mic, idx])
+            if mode == "maximum":
+                i_f = np.argmax(np.abs(signals_f[i_mic, :]))
+                f = frequencies[i_f]
+                counter = len(
+                    self.df.loc[
+                        (self.df.mic == i_mic)
+                        & (self.df.distance == distance_cm)
+                        & (self.df.angle == angle)
+                        & (self.df.frequency == f)
+                    ]
+                )
+                magnitude = np.abs(signals_f[i_mic, i_f])
 
-            self.df.loc[len(self.df), :] = {
-                "time": time,
-                "counter": counter,
-                "mic": i_mic,
-                "frequency": f,
-                "distance": distance_cm,
-                "angle": angle,
-                "magnitude": magnitude,
-            }
+                update_dict = {
+                    "time": time,
+                    "counter": counter,
+                    "mic": i_mic,
+                    "frequency": f,
+                    "distance": distance_cm,
+                    "angle": angle,
+                    "magnitude": magnitude,
+                }
+                self.df.loc[len(self.df), list(update_dict.keys())] = list(
+                    update_dict.values()
+                )
+            elif mode == "all":
+                for i_f in range(signals_f.shape[1]):
+                    f = frequencies[i_f]
+                    magnitude_estimate = np.abs(signals_f[i_mic, i_f])
+                    counter = len(
+                        self.df.loc[
+                            (self.df.mic == i_mic)
+                            & (self.df.distance == distance_cm)
+                            & (self.df.angle == angle)
+                            & (self.df.frequency == f)
+                        ]
+                    )
+                    update_dict = {
+                        "time": time,
+                        "counter": counter,
+                        "mic": i_mic,
+                        "frequency": f,
+                        "distance": distance_cm,
+                        "angle": angle,
+                        "magnitude": magnitude_estimate,
+                    }
+                    self.df.loc[len(self.df), list(update_dict.keys())] = list(
+                        update_dict.values()
+                    )
 
     def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
         """ 
@@ -677,7 +707,8 @@ class DataCollector(object):
             gains_f = normalize_method(freqs)
 
             valid = np.all(gains_f > 0, axis=0)
-            gains_f = gains_f[m_indices, valid]
+            gains_f = gains_f[m_indices, :]
+            gains_f = gains_f[:, valid]
             slice_f[:, valid] /= gains_f  # n_mics x n_freqs
 
             stds = np.nanstd(slice_f, axis=1)
@@ -692,7 +723,7 @@ class DataCollector(object):
             if verbose:
                 print("set latest time to", self.latest_fslice_time)
 
-        latest_df = self.df[self.df.time > self.latest_fslice_time]
+        latest_df = self.df[self.df.time >= self.latest_fslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
 
         f_slice, freqs, stds, d_slice = get_frequency_slice(latest_df_clean)
@@ -710,8 +741,7 @@ class DataCollector(object):
     def get_current_distance_slice(self, verbose=False):
         if self.latest_dslice_time is None:
             self.latest_dslice_time = self.df.iloc[0].time
-            if verbose:
-                print("set latest time to", self.latest_dslice_time)
+            print("set latest time to", self.latest_dslice_time)
 
         latest_df = self.df[self.df.time > self.latest_dslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
@@ -759,6 +789,8 @@ class DataCollector(object):
 
     def remove_bad_measurements(self, verbose=False):
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
+        if verbose:
+            print("mag_thresh:", mag_thresh)
         remove_bad_measurements(self.df, mag_thresh, verbose)
 
     def remove_outliers(self, normalize=True, verbose=False):

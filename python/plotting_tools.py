@@ -6,8 +6,9 @@ import pandas as pd
 labels = {
     "fft": "FFT method",
     "cost": "optimization method",
-    "sigmadelta": "delta noise $\sigma_\\Delta$ [cm]",
-    "sigmay": "amplitude noise $\sigma_y$ [-]",
+    "sigmadelta": "delta noise $\,\sigma_\\Delta$ [cm]",
+    "sigmay": "amplitude noise $\,\sigma_y$ [-]",
+    "sigmaf": "frequency noise $\,\sigma_f$ [Hz]",
     "distance": "distance $d$ [cm]",
     np.nanstd: "error std",
     np.nanmedian: "median error",
@@ -21,6 +22,8 @@ titles = {
 }
 linestyles = {"cost": ":", "bayes": "-"}
 all_linestyles = ["-", "-.", ":", "--"]
+
+FIGSIZE = 5
 
 
 def make_dirs(fname):
@@ -176,13 +179,13 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     markers = [m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]]
 
     i = 0
-    fig, axs = plt.subplots(1, 2, squeeze=False)
-    fig.set_size_inches(10, 5)
+    fig, axs = plt.subplots(1, 2)
+    fig.set_size_inches(2 * FIGSIZE, FIGSIZE)
     max_abs = 0
     for method, err_list in err_dict.items():
         markersize = 8 - i
 
-        axs[0, 0].plot(
+        axs[0].plot(
             xs,
             err_list,
             label=method,
@@ -193,7 +196,7 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
 
         xvals = sorted(np.abs(err_list))
         yvals = np.linspace(0, 1, len(xvals))
-        axs[0, 1].plot(
+        axs[1].plot(
             xvals,
             yvals,
             label=method,
@@ -205,16 +208,15 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
 
         max_abs = max(max_abs, max(xvals))
 
-    # axs[0, 0].set_yscale('log')
-    axs[0, 0].set_ylim(-max_abs, max_abs)
-    axs[0, 0].set_ylabel(ylabel)
-    axs[0, 0].set_xlabel(xlabel)
-    axs[0, 0].legend(loc="upper right")
+    axs[0].set_ylim(-max_abs, max_abs)
+    axs[0].set_ylabel(ylabel)
+    axs[0].set_xlabel(xlabel)
+    axs[0].legend(loc="upper right")
 
-    axs[0, 1].set_ylabel("cdf")
-    axs[0, 1].set_xlabel("absolute " + ylabel)
-    axs[0, 1].grid(which="both")
-    axs[0, 1].legend(loc="lower right")
+    axs[1].set_ylabel("cdf")
+    axs[1].set_xlabel("absolute " + ylabel)
+    axs[1].grid(which="both")
+    axs[1].legend(loc="lower right")
     return fig, axs
 
 
@@ -259,8 +261,12 @@ def pcolorfast_custom(
     ax.set_xticklabels(np.round(xs[:: len(xs) // n_xticks]).astype(int))
     if len(yticks) // n_yticks == 0:
         return im
-    ax.set_yticks(yticks[:: len(yticks) // n_yticks])
-    ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
+    if ys.dtype == np.float:
+        ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+        ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks], 1))
+    else:
+        ax.set_yticks(yticks[:: len(yticks) // n_yticks])
+        ax.set_yticklabels(np.round(ys[:: len(ys) // n_yticks]).astype(int))
     return im
 
 
@@ -281,7 +287,7 @@ def plot_error_distance(
         vmax = np.max(nonzero_values)
 
     fig, axs = plt.subplots(1, len(sub_df.method.unique()), sharey=True, squeeze=False)
-    fig.set_size_inches(5 * len(sub_df.method.unique()), 5)
+    fig.set_size_inches(FIGSIZE * len(sub_df.method.unique()), FIGSIZE)
     for i, (method, df) in enumerate(table.groupby("method")):
         index = df.index.get_level_values(column).values
         distances = df.columns.values
@@ -308,12 +314,12 @@ def plot_error_distance(
                 n_yticks=5,
             )
         axs[0, i].set_xlabel("distance $d$ [cm]")
-        axs[0, i].set_title(labels[method])
+        # axs[0, i].set_title(labels[method])
 
         # axs[0, i].set_xticks(distances[::len(distances)// 3]
     # axs[0, 0].set_yticks(index[::len(index)// 3]
     add_colorbar(fig, axs[0, -1], im, title=f"{labels[aggfunc]} [cm]")
-    axs[0, 0].set_ylabel(name.replace("_", " "))
+    axs[0, 0].set_ylabel(labels[column])
     return fig, axs
 
 
@@ -345,7 +351,7 @@ def plot_error_gamma(
 
     if ax is None:
         fig, ax = plt.subplots()
-        fig.set_size_inches(5, 5)
+        fig.set_size_inches(FIGSIZE, FIGSIZE)
 
     ys = table.index.get_level_values(column).values
     # print(column, ys)
@@ -367,8 +373,8 @@ def plot_error_gamma(
         im = pcolorfast_custom(
             ax, gammas, ys, table.values, vmin=vmin, vmax=vmax, n_xticks=5, n_yticks=4
         )
-    ax.set_xlabel("approach angle $\\gamma$ [deg]")
+    ax.set_xlabel("approach angle $\\gamma$ [$^\\circ$]")
     if colorbar:
-        add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [deg]")
+        add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [$^\\circ$]")
     ax.set_ylabel(name.replace("_", " "))
     return fig, ax

@@ -10,12 +10,14 @@ import numpy as np
 
 from audio_stack.beam_former import rotate_mics
 
+from constants import PLATFORM
+
 DIM = 2
 
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
-    context = Context.get_crazyflie_setup()
+    context = Context.get_platform_setup()
     delta = (
         context.get_delta(
             azimuth_deg=azimuth_deg, distances_cm=distances_cm, mic_idx=mic_idx
@@ -27,7 +29,7 @@ def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
 
 
 def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None):
-    context = Context.get_crazyflie_setup()
+    context = Context.get_platform_setup()
     distances_cm = context.get_distance(deltas_cm, azimuth_deg, mic_idx)
     return distances_cm
 
@@ -136,8 +138,25 @@ class Context(object):
         self.source = source
 
     @staticmethod
+    def get_platform_setup(platform=PLATFORM):
+        if platform == "crazyflie":
+            return Context.get_crazyflie_setup()
+        elif platform == "epuck":
+            return Context.get_epuck_setup()
+        else:
+            raise ValueError(platform)
+
+    @staticmethod
     def get_crazyflie_setup(dim=DIM):
         from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
+
+        mics = np.array(MIC_POSITIONS)[:, :dim]
+        source = np.array(BUZZER_POSITION)[0, :dim]
+        return Context(dim, mics, source)
+
+    @staticmethod
+    def get_epuck_setup(dim=DIM):
+        from epuck_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
         source = np.array(BUZZER_POSITION)[0, :dim]

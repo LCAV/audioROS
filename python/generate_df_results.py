@@ -6,10 +6,14 @@ import progressbar
 from data_collector import DataCollector
 from pandas_utils import filter_by_dict
 
-OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
+from constants import PLATFORM
 
-# this corresponds to the setup in BC325 with stepper motor:
-D_OFFSET = 0.08  # actual distance at zero-distance, in meters
+if PLATFORM == "epuck":
+    from epuck_description_py.experiments import DISTANCES_CM
+elif PLATFORM == "crazyflie":
+    from crazyflie_description_py.experiments import WALL_DISTANCE_CM_STEPPER
+
+OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
 
 
 def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection=""):
@@ -39,7 +43,11 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection="")
                 # otherwise, we take the maximum per package.
                 mode = "maximum" if row.bin_selection < 5 else "all"
 
-                row.distance += D_OFFSET * 100
+                if PLATFORM == "epuck":
+                    row.distance = DISTANCES_CM[i_row]
+                else:
+                    row.distance += WALL_DISTANCE_CM_STEPPER
+
                 data_collector.fill_from_row(row, mode=mode)
                 p.update(i_row)
         data_collector.backup(
@@ -49,25 +57,25 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection="")
 
 
 if __name__ == "__main__":
-
     ## choose for which data we want to generate results
     DEGREE = 0
     mic_types = ["audio_deck"]  # , "measurement"]
     motors_types = [0, "all45000"]
-    bin_selection_types = [5, 6]
+    bin_selection_types = [3, 5, 6]
     exp_names = [
-        # "2021_02_23_wall",
-        # "2021_02_25_wall"
-        # "2021_04_30_stepper"
-        # "2021_06_09_stepper"
-        # "2021_06_17_stepper"
-        # "2021_06_19_stepper"
-        # "2021_07_07_stepper"
-        # "2021_07_08_stepper"
-        "2021_07_08_stepper_fast",
-        "2021_07_08_stepper_slow"
-        # "2021_07_07_rotating"
+        # "2021_07_08_stepper_fast",
+        # "2021_07_27_manual",
+        "2021_04_30_stepper",
+        # "2021_07_08_stepper_slow",
     ]
+
+    # epuck
+    # motors_types = ["sweep_and_move"]
+    # bin_selection_types = [0]
+    # mic_types = ["audio_deck"]
+    # exp_names = [
+    #     "2021_07_27_epuck_wall",
+    # ]
 
     # exp_name = '2021_02_09_wall_tukey';
     # exp_name = '2021_02_09_wall';
@@ -82,6 +90,8 @@ if __name__ == "__main__":
         except Exception as e:
             print("Error: run wall_analysis.py to parse experiments.")
             sys.exit()
+
+        print("done", df_all)
 
         for mic_type, motors, bin_selection in itertools.product(
             mic_types, motors_types, bin_selection_types
