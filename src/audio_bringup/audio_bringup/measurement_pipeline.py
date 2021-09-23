@@ -35,49 +35,13 @@ from audio_bringup.helpers import (
     TOPICS_TO_RECORD,
 )
 
-DEFAULT_PARAMS = {
-    "min_freq": 0,
-    "max_freq": FS / 2,
-    "window_type": 0,
-    "bin_selection": 0,
-    "props": 0,
-    "distance": 0,
-    "degree": 0,
-    "motors": 0,
-    "source": None,
-    "appendix": "",
-}
-# TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
-PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
+PLATFORM = "epuck"
+USER_INPUT = False
 
 START_DISTANCE = 0
 START_ANGLE = 0
 
-# EXTRA_DIRNAME = '2021_02_09_wall'
-# EXTRA_DIRNAME = '2021_02_19_windows'
-# EXTRA_DIRNAME = '2021_02_23_wall'
-# EXTRA_DIRNAME = "2021_03_01_flying"
-# EXTRA_DIRNAME = "2021_04_30_hover"
-# EXTRA_DIRNAME = "2021_04_30_stepper"
-# EXTRA_DIRNAME = "2021_05_04_flying"
-# EXTRA_DIRNAME = "2021_05_04_linear"
-# EXTRA_DIRNAME = "2021_06_09_stepper"
-# EXTRA_DIRNAME = "2021_06_17_stepper"
-# EXTRA_DIRNAME = "2021_06_19_stepper"
-# EXTRA_DIRNAME = "2021_06_19_stepper_linear"
-# EXTRA_DIRNAME = "2021_06_22_stepper"
-# EXTRA_DIRNAME = "2021_07_08_stepper"
-# EXTRA_DIRNAME = "2021_07_08_rotating"
-# EXTRA_DIRNAME = "2021_07_08_stepper_fast"
-# EXTRA_DIRNAME = "2021_07_08_stepper_slow"
-# EXTRA_DIRNAME = "2021_07_14_propsweep"
-# EXTRA_DIRNAME = "2021_07_14_flying"
-# EXTRA_DIRNAME = "2021_07_14_flying_hover"
-# EXTRA_DIRNAME = "2021_07_27_manual"
-EXTRA_DIRNAME = "2021_07_27_hover"
-
-EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = True
+EXTRA_DIRNAME = "2021_07_27_epuck_wall"
 
 bag_pid = None
 SerialIn = None
@@ -389,8 +353,9 @@ def main(args=None):
 
     # motors check
     SerialIn = None
-    if any([p.get("distance", None) is not None for p in params_list]) or any(
-        [p.get("angle", None) is not None for p in params_list]
+    if (PLATFORM == "crazyflie") and (
+        any([p.get("distance", None) is not None for p in params_list])
+        or any([p.get("angle", None) is not None for p in params_list])
     ):
         SerialIn = SerialMotors(
             verbose=False, current_distance=START_DISTANCE, current_angle=START_ANGLE,
@@ -444,12 +409,9 @@ def main(args=None):
         distance = params.get("distance", None)
         angle = params.get("degree", None)
 
-        print("checking for blocking movements...")
-        if (distance is not None) and (abs(distance) != 51):
-            print("moving to", distance)
+        if (SerialIn is not None) and (distance is not None) and (abs(distance) != 51):
             SerialIn.move_to(distance, blocking=True)
-        if (angle is not None) and (abs(angle) != 360):
-            print("moving to", angle)
+        if (SerialIn is not None) and (angle is not None) and (abs(angle) != 360):
             SerialIn.move_to(angle, blocking=True)
         print("...done")
 

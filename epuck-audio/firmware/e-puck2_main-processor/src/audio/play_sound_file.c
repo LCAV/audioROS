@@ -13,6 +13,7 @@ Functions and defines to play sounds from the sd card in the uncompressed WAV fo
 #include <fat.h>
 #include <audio/play_sound_file.h>
 #include <audio/audio_thread.h>
+#include "play_melody.h"
 
 #include <chprintf.h>
 
@@ -222,6 +223,10 @@ void playSoundFile(char* pathToFile, playSoundFileOption_t option){
     if(pathToFile == NULL){
         return;
     }
+
+    //stops a eventual melody being played to avoid conflict
+    stopCurrentMelody();
+    waitMelodyHasFinished();
 
     //SIMPLE_PLAY case
     if(option == SF_SIMPLE_PLAY){

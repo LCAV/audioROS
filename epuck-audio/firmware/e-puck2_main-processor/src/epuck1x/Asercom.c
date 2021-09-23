@@ -47,7 +47,7 @@ char buffer[BUFFER_SIZE]; // 52x39 + 3(header)
 //int e_mic_scan[3][MIC_SAMP_NB];
 extern unsigned int e_last_mic_scan_id;
 int selector;
-char buffer_in;
+char c;
 int e_ambient_ir[10];						// ambient light measurement
 int e_ambient_and_reflected_ir[10];		// light when led is on
 
@@ -131,7 +131,7 @@ int run_asercom(void) {
 
     while (1) {
         if (use_bt) {
-            while (e_getchar_uart1(&buffer_in) == 0)
+            while (e_getchar_uart1(&c) == 0)
 #ifdef IR_RECEIVER
             {
                 ir_move = e_get_data();
@@ -193,7 +193,7 @@ int run_asercom(void) {
                 ;
 #endif
         } else {
-            while (e_getchar_uart2(&buffer_in) == 0)
+            while (e_getchar_uart2(&c) == 0)
 #ifdef IR_RECEIVER
             {
                 ir_move = e_get_data();
@@ -256,10 +256,10 @@ int run_asercom(void) {
 #endif
         }
 
-        if ((int8_t)buffer_in < 0) { // binary mode (big endian)
+        if ((int8_t)c < 0) { // binary mode (big endian)
             i = 0;
             do {
-                switch ((int8_t)-buffer_in) {
+                switch ((int8_t)-c) {
                     case 'a': // Read acceleration sensors in a non filtered way, same as ASCII
                         if(use_bt) {
                             accx = e_get_acc_filtered(0, 1);
@@ -572,11 +572,11 @@ int run_asercom(void) {
                         break;
                 }
                 if (use_bt) {
-                    while (e_getchar_uart1(&buffer_in) == 0); // get next command
+                    while (e_getchar_uart1(&c) == 0); // get next command
                 } else {
-                    while (e_getchar_uart2(&buffer_in) == 0); // get next command
+                    while (e_getchar_uart2(&c) == 0); // get next command
                 }
-            } while (buffer_in);
+            } while (c);
             if (i != 0) {
                 if (use_bt) {
                     if (wait_cam) {
@@ -595,20 +595,20 @@ int run_asercom(void) {
                 }
             }
             // **** ascii mode ****
-        } else if (buffer_in > 0) { // ascii mode
+        } else if (c > 0) { // ascii mode
             if (use_bt) {
-                while (buffer_in == '\n' || buffer_in == '\r') e_getchar_uart1(&buffer_in);
+                while (c == '\n' || c == '\r') e_getchar_uart1(&c);
             } else {
-                while (buffer_in == '\n' || buffer_in == '\r') e_getchar_uart2(&buffer_in);
+                while (c == '\n' || c == '\r') e_getchar_uart2(&c);
             }
-            buffer[0] = buffer_in;
+            buffer[0] = c;
             i = 1;
             if (use_bt) {
-                do if (e_getchar_uart1(&buffer_in)) buffer[i++] = buffer_in;
-                    while (buffer_in != '\n' && buffer_in != '\r');
+                do if (e_getchar_uart1(&c)) buffer[i++] = c;
+                    while (c != '\n' && c != '\r');
             } else {
-                do if (e_getchar_uart2(&buffer_in)) buffer[i++] = buffer_in;
-                    while (buffer_in != '\n' && buffer_in != '\r');
+                do if (e_getchar_uart2(&c)) buffer[i++] = c;
+                    while (c != '\n' && c != '\r');
             }
             buffer[i++] = '\0';
 

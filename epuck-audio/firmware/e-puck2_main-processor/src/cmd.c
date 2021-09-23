@@ -406,7 +406,7 @@ static void cmd_readclock(BaseSequentialStream *chp, int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
-    chprintf(chp, "SYSCLK: %i \n HCLK: %i \n PCLK1  %i \n PCLK2 %i \n",
+    chprintf(chp, "SYSCLK: %i \r\n HCLK: %i \r\n PCLK1  %i \r\n PCLK2 %i \r\n",
              STM32_SYSCLK, STM32_HCLK, STM32_PCLK1, STM32_PCLK2);
 }
 
@@ -1255,8 +1255,6 @@ const ShellCommand shell_commands[] = {
     {"sf_volume",cmd_sound_file_volume},
     {"ml_play",cmd_melody_play},
     {"ml_stop",cmd_melody_stop},
-    {"mem", cmd_mem},
-    {"threads", cmd_threads},
     {"mem", cmd_mem},
     {"threads", cmd_threads},
     {"test", cmd_test},

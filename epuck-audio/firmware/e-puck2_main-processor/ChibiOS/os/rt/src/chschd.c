@@ -327,8 +327,6 @@ static void wakeup(void *p) {
  *
  * @sclass
  */
-
-
 msg_t chSchGoSleepTimeoutS(tstate_t newstate, systime_t time) {
 
   chDbgCheckClassS();

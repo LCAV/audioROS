@@ -22,7 +22,7 @@
 #define PERIMETER_EPUCK     (PI * WHEEL_DISTANCE)
 
 #define BUZZER_FMIN 1000
-#define BUZZER_FMAX 3000
+#define BUZZER_FMAX 5000
 #define BUZZER_DF 125
 #define SPEED 200
 
@@ -34,7 +34,7 @@ state_t state = WAIT_START;
 
 uint16_t buzzerFreq = BUZZER_FMIN;
 
-uint8_t c;
+uint8_t c_in;
 
 uint8_t buzzer_idx;
 
@@ -97,30 +97,30 @@ int main(void) {
 			SendStart((BaseSequentialStream *) &SD3);
 
 			// Detect start sequence
-			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
+			c_in = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
-			if(c != 'x'){
-				if ((c < 9) && (c > 0)) {
-					buzzer_idx = c;// - '0';
-					if (buzzer_idx == 1) {
-						dac_play(buzzerFreq);
-					} else {
-						dac_play(buzzer_idx * 1000);
-						left_motor_set_speed(SPEED);
-						right_motor_set_speed(SPEED);
-					}
-					state = RECORD;
+
+			if ((c_in < 9) && (c_in > 0)) {
+				buzzer_idx = c_in;// - '0';
+				if (buzzer_idx == 1) {
+					dac_play(buzzerFreq);
+				} else {
+					dac_play(buzzer_idx * 1000);
+					left_motor_set_speed(SPEED);
+					right_motor_set_speed(SPEED);
 				}
-			}else if (c == 'm'){
-				state = MOVE;
+				state = RECORD;
 			} else{
 				left_motor_set_speed(0);
 				right_motor_set_speed(0);
 				dac_stop();
 			}
+			 if (c_in == 'm'){
+				state = MOVE;
+			 }
 
 /*
-			if (c == 's') {
+			if (c_in == 's') {
 				state = RECORD;
 				dac_play(buzzerFreq);
 			}else{
@@ -148,9 +148,9 @@ int main(void) {
 			state = WAIT_ACK;
 			break;
 		case WAIT_ACK:
-			c = chSequentialStreamGet((BaseSequentialStream *) &SD3);
+			c_in = chSequentialStreamGet((BaseSequentialStream *) &SD3);
 
-			switch(c){
+			switch(c_in){
 			case 'a':
 				if(buzzer_idx == 1){
 					state = NEXT_NOTE;
