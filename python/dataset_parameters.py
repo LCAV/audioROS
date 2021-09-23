@@ -116,11 +116,13 @@ kwargs_datasets = {
         "audio_deck": {
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
+        "appendix": [f"_{i}" for i in range(22, 25)],
     },
     "2021_05_04_linear": {
         "audio_deck": {
             "n_spurious": 1,  # important, because only one measurement per frequency.
         },
+        "appendix": [f"_{i}" for i in range(1, 6)] + [f"_fast{i}" for i in range(1, 6)],
     },
     "2021_06_09_stepper": {
         "audio_deck": {

@@ -92,8 +92,6 @@ class Inference(object):
     def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
         """
         Perform inference.
-
-
         """
         if calibrate and not self.is_calibrated:
             self.calibrate()

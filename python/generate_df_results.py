@@ -38,7 +38,6 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection="")
         max_index = df_filtered.iloc[-1].name
         with progressbar.ProgressBar(max_value=max_index) as p:
             for i_row, row in df_filtered.iterrows():
-                print(row)
 
                 # for bin_selection=5 and 6, we have a full sweep in each package, so we want to use all of the values.
                 # otherwise, we take the maximum per package.
@@ -62,11 +61,11 @@ if __name__ == "__main__":
     DEGREE = 0
     mic_types = ["audio_deck"]  # , "measurement"]
     motors_types = [0, "all45000"]
-    bin_selection_types = [5, 6]
+    bin_selection_types = [3, 5, 6]
     exp_names = [
         # "2021_07_08_stepper_fast",
         # "2021_07_27_manual",
-        "2021_07_27_manual",
+        "2021_04_30_stepper",
         # "2021_07_08_stepper_slow",
     ]
 
@@ -92,7 +91,7 @@ if __name__ == "__main__":
             print("Error: run wall_analysis.py to parse experiments.")
             sys.exit()
 
-        print(df_all)
+        print("done", df_all)
 
         for mic_type, motors, bin_selection in itertools.product(
             mic_types, motors_types, bin_selection_types
