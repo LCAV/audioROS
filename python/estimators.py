@@ -88,17 +88,17 @@ class DistanceEstimator(object):
         if distances_m is None:
             distances_m = self.DISTANCES_M
             # get points for interpolation.
-            distances_all = []
-            for mic_idx, (deltas_m, delta_probs) in self.data.items():
-                for azimuth_deg in azimuths_deg:
-                    ds_m = (
-                        self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
-                        * 1e-2
-                    )
-                    distances_all += list(ds_m)
-            distances_m = np.linspace(
-                min(distances_all), max(distances_all), len(distances_all)
-            )
+            # distances_all = []
+            # for mic_idx, (deltas_m, delta_probs) in self.data.items():
+            #    for azimuth_deg in azimuths_deg:
+            #        ds_m = (
+            #            self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
+            #            * 1e-2
+            #        )
+            #        distances_all += list(ds_m)
+            # distances_m = np.linspace(
+            #    min(distances_all), max(distances_all), len(distances_all)
+            # )
         distribution = {d: [] for d in distances_m}
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
@@ -136,7 +136,12 @@ class DistanceEstimator(object):
         return extract_pdf(distribution, method)
 
     def get_angle_distribution(
-        self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
+        self,
+        distance_estimate_m,
+        chosen_mics=None,
+        method=METHOD,
+        azimuths_deg=None,
+        verbose=False,
     ):
         if distance_estimate_m is None:
             distances_m = self.context.get_possible_distances()
@@ -195,7 +200,7 @@ class DistanceEstimator(object):
                 probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
-                probs_interp[probs_interp < 0] = EPS
+                probs_interp[probs_interp <= 0] = EPS
                 [
                     distribution[a].append(prob)
                     for a, prob in zip(azimuths_deg, probs_interp)
