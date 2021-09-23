@@ -1,6 +1,5 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 experiments.py: Some experiment variables
 """
@@ -21,6 +20,7 @@ WALL_DISTANCE_M = 0.2  # distance of wall in meters, at start of experiment
 # corresponds to the setup in BC325 with stepper motor:
 WALL_OFFSET_M_STEPPER = 0.08  # actual distance at zero-distance, in meters
 WALL_ANGLE_DEG_STEPPER = 132  # angle of wall in degrees, at start of experiment
+WALL_DISTANCE_CM_STEPPER = 8  # angle of wall in degrees, at start of experiment
 
 # corresponds to flying experiments:
 WALL_ANGLE_DEG = 90  # angle of wall in degrees, at start of experiment

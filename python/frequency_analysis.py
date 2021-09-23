@@ -172,7 +172,9 @@ def add_spectrogram(row):
     assert row.stft.shape[2] in (32, 1025, 1412), row.stft.shape
 
     spectrogram, freqs = get_spectrogram_raw(row.frequencies_matrix, row.stft)
-    row.spectrogram = spectrogram
+    mask = np.any(np.any(spectrogram > 0, axis=-1), axis=-1)
+    row.spectrogram = spectrogram[mask, :, :]
+    row.freqs = freqs[mask]
     return row
 
 
@@ -246,20 +248,27 @@ def apply_box_mask(
 
 
 def psd_df_from_spec(
-    spec, freqs, min_t=0, max_t=None, interpolation="", verbose=False, times=None,
+    spec,
+    freqs,
+    min_t=0,
+    max_t=None,
+    interpolation="",
+    verbose=False,
+    times=None,
+    mode="maximum",
 ):
     """
     Extract distance-frequency information from spectrogram.
 
     :param spec: spectrogram (n_freqs x n_mics x n_times)
     :param freqs: frequencies (n_freqs,)
+    :param mode: "maximum" or "all". 
 
     structure of output: 
     | mic | frequency | distance | time | magnitude
 
     :param return: psd_df
     """
-
     n_mics = spec.shape[1]
     n_times = spec.shape[2]
     upper_bound = n_mics * n_times
@@ -281,42 +290,61 @@ def psd_df_from_spec(
     counter_dict = {}
     for i_t in range(min_t, max_t):
         for i_mic in range(n_mics):
-            spec_slice = spec[:, i_mic, i_t]
-            i_f = np.argmax(np.abs(spec_slice))
-            counter_dict[i_f] = counter_dict.get(i_f, 0) + 1
+            signals_f = spec[:, i_mic, i_t]
 
-            max_amp = np.abs(spec_slice[i_f])
-            max_f = freqs[i_f]
-            if interpolation == "lagrange":
-                magnitude_estimate, frequency = interpolate_peak(spec_slice, freqs)
-                if verbose and (frequency != 0):
-                    print(
-                        f"peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}"
+            if mode == "maximum":
+                i_f = np.argmax(np.abs(signals_f))
+                counter_dict[i_f] = counter_dict.get(i_f, 0) + 1
+                max_amp = np.abs(signals_f[i_f])
+                max_f = freqs[i_f]
+                if interpolation == "lagrange":
+                    magnitude_estimate, frequency = interpolate_peak(signals_f, freqs)
+                    if verbose and (frequency != 0):
+                        print(
+                            f"peak estimate {frequency}:{magnitude_estimate} instead of {max_f}:{max_amp}"
+                        )
+                elif interpolation == "quadratic":
+                    magnitude_estimate, p = fit_peak(np.abs(signals_f))
+                    # TODO(FD) not exactly correct, should be using p from above.
+                    # to be changed if we decide to use fit_peak.
+                    frequency = max_f
+                else:
+                    magnitude_estimate = max_amp
+                    frequency = max_f
+                if times is not None:
+                    time = times[i_t]
+                else:
+                    time = i_t
+                update_dict = {
+                    "mic": i_mic,
+                    "time": time,
+                    "counter": counter_dict[i_f],
+                    "frequency": frequency,
+                    "magnitude": magnitude_estimate,
+                }
+                psd_df.loc[len(psd_df), list(update_dict.keys())] = list(
+                    update_dict.values()
+                )
+            elif mode == "all":
+                for i_f in range(len(signals_f)):
+                    counter_dict[i_f] = counter_dict.get(i_f, 0) + 1
+                    magnitude_estimate = np.abs(signals_f[i_f])
+                    frequency = freqs[i_f]
+                    if times is not None:
+                        time = times[i_t]
+                    else:
+                        time = i_t
+                    update_dict = {
+                        "mic": i_mic,
+                        "time": time,
+                        "counter": counter_dict[i_f],
+                        "frequency": frequency,
+                        "magnitude": magnitude_estimate,
+                    }
+                    psd_df.loc[len(psd_df), list(update_dict.keys())] = list(
+                        update_dict.values()
                     )
-            elif interpolation == "quadratic":
-                magnitude_estimate, p = fit_peak(np.abs(spec_slice))
-                # TODO(FD) not exactly correct, should be using p from above.
-                # to be changed if we decide to use fit_peak.
-                frequency = max_f
-            else:
-                magnitude_estimate = max_amp
-                frequency = max_f
 
-            if times is not None:
-                time = times[i_t]
-            else:
-                time = i_t
-
-            update_dict = {
-                "mic": i_mic,
-                "time": time,
-                "counter": counter_dict[i_f],
-                "frequency": frequency,
-                "magnitude": magnitude_estimate,
-            }
-            psd_df.loc[len(psd_df), list(update_dict.keys())] = list(
-                update_dict.values()
-            )
     psd_df.dropna(axis=1, inplace=True, how="all")
     psd_df = psd_df.apply(pd.to_numeric, axis=0, downcast="integer", errors="ignore")
     return psd_df

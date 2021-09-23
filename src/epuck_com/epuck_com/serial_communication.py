@@ -17,7 +17,7 @@ from epuck_description_py.parameters import (
     FS,
     N_MICS,
     WHEEL_DIAMETER,
-    SWEEP_LENGTH
+    SWEEP_LENGTH,
 )
 from audio_interfaces_py.messages import create_signals_freq_message
 from audio_interfaces.msg import SignalsFreq
@@ -221,7 +221,6 @@ class Gateway(NodeWithParams):
             f"{msg.timestamp}: Published audio data with fbins {fbins[[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
         )
 
-
     # reads the FFT in float32 from the serial
     def read_float_serial(self):
         self.timestamp_old
@@ -232,20 +231,20 @@ class Gateway(NodeWithParams):
         elif not start_detected:
             print(f"timeout in read_float_serial")
             return None
-        
+
         print("start detected")
         # normally this should unpack as an unsigned int of size 32 bits
         # reads the size
         # converts as short int in little endian the two bytes read
         res = self.port.read(2)
-        if(len(res) > 0):
+        if len(res) > 0:
             size = struct.unpack("<H", res)[0]  # H for unsigned short
             timestamp = struct.unpack("<I", self.port.read(4))[0]  # I for unsigned int
         else:
-            print(f'size of data not recieved')
+            print(f"size of data not recieved")
             return None
 
-        if( timestamp == self.timestamp_old ):
+        if timestamp == self.timestamp_old:
             self.send_non_acknowledge()
             print("Discarding because of same timestamp")
             return None
@@ -265,25 +264,27 @@ class Gateway(NodeWithParams):
                 data.append(struct.unpack_from("<f", rcv_buffer, i * 4)[0])
                 i = i + 1
 
-            #print(f"Data is: {data}")
+            # print(f"Data is: {data}")
 
             # for 0 to 15, we tell it to play next note
-            #if (self.sweep_index < SWEEP_LENGTH):
-                #self.send_acknowledge()
+            # if (self.sweep_index < SWEEP_LENGTH):
+            # self.send_acknowledge()
 
-                #new_bins = data[-FFTSIZE]                
-                #if(new_bins != self.old_bins):
-                #    self.sweep_index += 1
-                #self.old_bins = new_bins
-        
+            # new_bins = data[-FFTSIZE]
+            # if(new_bins != self.old_bins):
+            #    self.sweep_index += 1
+            # self.old_bins = new_bins
+
             # for 16, we move and start again
             # else:
-                #self.sweep_index = 0
-                #self.send_move()
+            # self.sweep_index = 0
+            # self.send_move()
             self.send_acknowledge()
             return data, size, timestamp
         else:
-            print(f"wrong buffer size, recieved only {len(rcv_buffer)} instead of {4*size}")
+            print(
+                f"wrong buffer size, recieved only {len(rcv_buffer)} instead of {4*size}"
+            )
             self.send_non_acknowledge()
             return None
 
@@ -299,7 +300,7 @@ class Gateway(NodeWithParams):
         self.port.write(b"xx")
 
     def send_start(self, idx):
-        byte = bytes([idx])# + b'\x48'
+        byte = bytes([idx])  # + b'\x48'
         print("writing", byte)
         self.port.write(byte)
 
@@ -319,7 +320,7 @@ class Gateway(NodeWithParams):
         signals_f = np.zeros((mics, bin_number), dtype=np.complex128)
 
         pos = 1
-        # TODO(FD): can replace these for loops 
+        # TODO(FD): can replace these for loops
         for i in range(bin_number):
             for j in range(mics):
                 signals_f.real[j, i] = data[pos]
@@ -373,7 +374,7 @@ class Gateway(NodeWithParams):
         current_params = {param.name: param.value for param in params}
         for param_name, param_value in current_params.items():
             # move by given angle, blocking
-            #if param_name == "turn_angle":
+            # if param_name == "turn_angle":
             #    if param_value not in [0, None]:
             #        self.turn_angle(param_value)
             # move by given velocity, non-blocking
@@ -390,6 +391,7 @@ class Gateway(NodeWithParams):
             else:
                 self.get_logger().warn(f"setting unused parameter {param_name}")
         return SetParametersResult(successful=True)
+
 
 def main(args=None):
     rclpy.init(args=args)

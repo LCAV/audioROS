@@ -7,12 +7,17 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-# from crazyflie_description_py.experiments import WALL_ANGLE_DEG
-WALL_ANGLE_DEG = None
-
+from constants import PLATFORM
 from simulation import get_deltas_from_global
 
 EPS = 1e-30
+WALL_ANGLE_DEG = None
+
+if PLATFORM == "crazyflie":
+    BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+else:
+    BAD_FREQ_RANGES = [[0, 2500]]
+INTERPOLATE = True
 
 
 def eps_normalize(proba, eps=EPS):
@@ -20,45 +25,74 @@ def eps_normalize(proba, eps=EPS):
     return proba_norm
 
 
+def standardize_vec(d_slice):
+    d_slice_norm = d_slice - np.nanmean(d_slice)
+    std = np.nanstd(d_slice_norm)
+    if std > 0:
+        d_slice_norm /= std
+    return d_slice_norm
+
+
 class Inference(object):
     def __init__(self):
         self.slices = None  # mics x n_data
         self.values = None  # n_data
         self.stds = None  # n_data
-        self.distance_range = None
+        self.distance_range = None  # [min, max]
         self.is_calibrated = False
+        self.calibration_function = None
 
-    def add_data(self, slices, values, stds=None, distances=None):
+    def add_data(self, slices, values, stds=None, distances=None, mics=range(4)):
+        """
+        :param slices: interference slices of shape (n_mics, n_values)
+        :param values: values of shape (n_values, )
+        :param stds: standard deviations (n_mics, )
+        """
+        assert slices.shape[1] == len(values), slices.shape
         self.slices = slices
         self.values = values
         self.stds = stds
         self.distances = distances
         self.valid_idx = np.ones(len(values), dtype=bool)
         self.is_calibrated = False
+        self.mics = mics
 
     def add_geometry(self, distance_range, azimuth_deg):
         self.distance_range = distance_range
         self.azimuth_deg = azimuth_deg
 
     def add_calibration_function(self, calibration_function):
-        self.calibration_function = calibration_function
+        if calibration_function in [""]:
+            self.calibration_function = None
+        else:
+            self.calibration_function = calibration_function
 
     def calibrate(self):
+        if self.calibration_function is None:
+            return
         valid_idx = (self.values >= min(self.calibration_function.x)) & (
             self.values <= max(self.calibration_function.x)
         )
         self.valid_idx &= valid_idx
 
         f_calib = self.calibration_function(self.values[self.valid_idx])
-        self.slices[:, self.valid_idx] /= f_calib
+        f_calib_mics = f_calib[self.mics, :]
+        self.slices[:, self.valid_idx] /= f_calib_mics
         self.is_calibrated = True
 
-    def filter_out_freqs(self, freq_range):
-        valid_idx = (freq_range[1] <= self.values) | (self.values <= freq_range[0])
-        self.valid_idx &= valid_idx
+    def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES):
+        """
+        :param freq_ranges: list of frequency ranges to filter out
+        """
+        for freq_range in freq_ranges:
+            self.valid_idx &= (freq_range[1] <= self.values) | (
+                self.values <= freq_range[0]
+            )
 
     def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
-
+        """
+        Perform inference.
+        """
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
@@ -79,7 +113,7 @@ class Inference(object):
 
             # make sure we use a reasonable distance range (need to add d0 to not
             # "go inside wall")
-            __, d0 = get_deltas_from_global(self.azimuth_deg, [100], mic_idx)
+            __, d0 = get_deltas_from_global(self.azimuth_deg, np.array([100]), mic_idx)
             d0_cm = round(d0 * 1e2)
             dists = np.arange(self.distance_range[0] + d0_cm, self.distance_range[-1])
             diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists, mic_idx)
@@ -100,13 +134,12 @@ class Inference(object):
             proba = eps_normalize(proba)
         return dists, proba, diffs
 
-    def plot(self, i_mic, ax, label=None, normalize=False, **kwargs):
+    def plot(self, i_mic, ax, label=None, standardize=False, **kwargs):
         from copy import deepcopy
 
         slice_mic = deepcopy(self.slices[i_mic, self.valid_idx])
-        if normalize:
-            slice_mic -= np.mean(slice_mic)
-            slice_mic /= np.std(slice_mic)
+        if standardize:
+            slice_mic = standardize_vec(slice_mic)
 
         ax.plot(
             self.values[self.valid_idx], slice_mic, label=label, **kwargs,
@@ -126,52 +159,18 @@ def get_differences(frequencies, n_max=1000):
     from constants import SPEED_OF_SOUND
 
     n = max(len(frequencies), n_max)
-    df = np.mean(frequencies[1:] - frequencies[:-1])
+    df = np.median(frequencies[1:] - frequencies[:-1])
     deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
     return deltas_cm
 
 
-def convert_differences_to_distances(
-    differences_cm, mic_idx, distance_range, azimuth_deg
-):
+def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
     from geometry import get_orthogonal_distance_from_global
 
     distances = get_orthogonal_distance_from_global(
         azimuth_deg=azimuth_deg, deltas_cm=differences_cm, mic_idx=mic_idx
     )
-    mask = None
-    if distance_range is not None:
-        mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
-        distances = distances[mask]
-    return distances, mask
-
-
-def get_probability_fft(
-    f_slice,
-    frequencies,
-    mic_idx=1,
-    distance_range=None,
-    n_max=1000,
-    azimuth_deg=WALL_ANGLE_DEG,
-):
-
-    if azimuth_deg is None:
-        print("Warning: give azimuth_deg argument to avoid errors")
-
-    print("Deprecation warning: do not use this function anymore")
-    assert f_slice.ndim == 1
-    abs_fft = get_abs_fft(f_slice, n_max)
-    differences = get_differences(frequencies, n_max=n_max)
-
-    distances, mask = convert_differences_to_distances(
-        differences, mic_idx, distance_range, azimuth_deg=azimuth_deg
-    )
-    if mask is not None:
-        abs_fft = abs_fft[mask]
-        differences = differences[mask]
-
-    prob = abs_fft / np.sum(abs_fft)
-    return distances, prob, differences
+    return distances
 
 
 def get_posterior(abs_fft, sigma=None, data=None):
@@ -197,7 +196,9 @@ def get_posterior(abs_fft, sigma=None, data=None):
         # arg may not be negative.
         if np.any(arg <= 0):
             valid = np.where(arg > 0)[0]
-            print("Warning, arg is non-positive at", arg[arg <= 0])
+            print(
+                "Warning, arg is non-positive at", arg[arg <= 0], np.where(arg <= 0)[0]
+            )
             arg[arg <= 0] = np.min(arg[arg > 0])
 
         posterior = (arg) ** ((2 - N) / 2)
@@ -213,19 +214,43 @@ def get_probability_bayes(
     n_max=1000,
     sigma=None,
     azimuth_deg=WALL_ANGLE_DEG,
+    interpolate=INTERPOLATE,
 ):
-    if azimuth_deg is None:
-        print("Warning: give azimuth_deg argument to avoid errors")
     assert f_slice.ndim == 1
-    abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
-    differences = get_differences(frequencies, n_max=n_max)
-    posterior = get_posterior(abs_fft, sigma, data=f_slice)
-    distances, mask = convert_differences_to_distances(
-        differences, mic_idx, distance_range, azimuth_deg=azimuth_deg
+
+    if interpolate:
+        import scipy.interpolate
+
+        diff = frequencies[1:] - frequencies[:-1]
+        spacing = np.median(diff)
+        frequencies_grid = np.arange(min(frequencies), max(frequencies), step=spacing)
+
+        interpolator = scipy.interpolate.interp1d(frequencies, f_slice)
+        f_slice_grid = interpolator(frequencies_grid)
+
+        abs_fft = get_abs_fft(f_slice_grid, n_max=n_max, norm=True)
+        differences = get_differences(frequencies_grid, n_max=n_max)
+        posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
+    else:
+        abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
+
+        # get path interference differences corresponding to used frequencies
+        differences = get_differences(frequencies, n_max=n_max)
+
+        # convert absolute fft to posterior (no correction yet!)
+        posterior = get_posterior(abs_fft, sigma, data=f_slice)
+
+    # convert differences to distances, for immediate evaluations.
+    distances = convert_differences_to_distances(
+        differences, mic_idx, azimuth_deg=azimuth_deg
     )
-    if mask is not None:
+
+    if distance_range is not None:
+        mask = (distances >= distance_range[0]) & (distances <= distance_range[1])
+        distances = distances[mask]
         posterior = posterior[mask]
         differences = differences[mask]
+
     posterior /= np.sum(posterior)
     return distances, posterior, differences
 
@@ -240,8 +265,6 @@ def get_probability_cost(
     absolute_yaws=None,
     ax=None,
 ):
-    if azimuth_deg is None:
-        print("Warning: give azimuth_deg argument to avoid errors")
     if np.any(distances < 1):
         raise ValueError("Reminder to change the distance input to include offset!")
     from simulation import get_freq_slice_theory
@@ -279,14 +302,16 @@ def get_periods_fft(
     n = max(len(d_slice), n_max)
 
     # periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
-    periods_m = (np.arange(0, n // 2 + 1)) / (d_m * n)  # 1/m in terms of orthogonal
+    periods_m = np.arange(0, n // 2 + 1) / (d_m * n)  # 1/m in terms of orthogonal
 
     abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
     if bayes:
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
     else:
-        # print("Deprecation warning: do not use this function anymore")
+        print(
+            "Deprecation warning: do not use this function without bayes option anymore"
+        )
         prob = abs_fft / np.sum(abs_fft)
     return periods_m, prob
 
@@ -299,14 +324,41 @@ def get_approach_angle_fft(
     bayes=False,
     sigma=None,
     reduced=False,
+    interpolate=INTERPOLATE,
+    factor=2,
 ):
+    """ 
+    Get probabilities over approach angles.
+
+    :param d_slice: amplitude measurements along distance
+    :param frequency: operating frequency
+    :param relative_distances_cm: relative distance measurements
+    :param interpolate: interpolate measurements on 1cm-grid before inference.
+    """
     from constants import SPEED_OF_SOUND
 
-    period_theoretical = frequency / SPEED_OF_SOUND  # 1/m in terms of delta
-    periods_m, probs = get_periods_fft(
-        d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
-    )
-    ratios = periods_m / period_theoretical
+    # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
+    period_theoretical = (
+        factor * frequency / SPEED_OF_SOUND
+    )  # 1/m in terms of orthogonal distance
+
+    if interpolate:
+        import scipy.interpolate
+
+        relative_distances_cm_grid = np.arange(
+            min(relative_distances_cm), max(relative_distances_cm), step=1.0
+        )
+        interpolator = scipy.interpolate.interp1d(relative_distances_cm, d_slice)
+        d_slice_grid = interpolator(relative_distances_cm_grid)
+        periods_m, probs = get_periods_fft(
+            d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma
+        )
+    else:
+        periods_m, probs = get_periods_fft(
+            d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
+        )
+
+    ratios = periods_m / period_theoretical  # arcsin(ratio) will be the angle estimate
     if not reduced:
         return ratios, probs
     else:
@@ -323,12 +375,9 @@ def get_approach_angle_cost(
     ax=None,
     azimuth_deg=WALL_ANGLE_DEG,
 ):
-    if azimuth_deg is None:
-        print("Warning: give azimuth_deg argument to avoid errors")
     from simulation import get_dist_slice_theory
 
-    d_slice_norm = d_slice - np.mean(d_slice)
-    d_slice_norm /= np.std(d_slice_norm)
+    d_slice_norm = standardize_vec(d_slice)
 
     probs = np.zeros((len(start_distances_grid_cm), len(gammas_grid_deg)))
     for i, start_distance_cm in enumerate(start_distances_grid_cm):
@@ -340,10 +389,9 @@ def get_approach_angle_cost(
             d_slice_theory = get_dist_slice_theory(
                 frequency, distances_cm, azimuth_deg
             )[:, mic_idx]
-            d_slice_theory -= np.nanmean(d_slice_theory)
-            std = np.nanstd(d_slice_theory)
-            if std > 0:
-                d_slice_theory /= std
+
+            d_slice_theory = standardize_vec(d_slice_theory)
+
             assert d_slice_theory.shape == d_slice_norm.shape
             loss = np.linalg.norm(d_slice_theory - d_slice_norm)
             probs[i, j] = np.exp(-loss)
@@ -359,9 +407,18 @@ def get_approach_angle_cost(
     return probs_angle
 
 
-def get_gamma_distribution(ratios, probs, factor=2, eps=1e-1):
-    ratios /= factor
+def get_gamma_distribution(ratios, probs, eps=1e-3):
     valid = ratios <= 1 + eps
+    # set all ratios between 1 and 1 + eps to 1.0
     ratios[valid & (ratios > 1)] = 1.0
-    probs[~valid] = 0
-    return np.arcsin(ratios[valid]) * 180 / np.pi, probs[valid]
+
+    # angles
+    gammas = np.arcsin(ratios[valid])
+
+    # accumulate probabilities over duplicate gammas (at 90, for instance)
+    gammas_unique, index = np.unique(gammas, return_inverse=True)
+    probs_unique = np.bincount(index, probs[valid])
+
+    # correction factor
+    # probs[valid] *= np.abs(np.cos(gammas))
+    return gammas_unique * 180 / np.pi, probs_unique

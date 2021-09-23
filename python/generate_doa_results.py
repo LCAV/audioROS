@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+from copy import deepcopy
+import itertools
 import os
 import sys
-from copy import deepcopy
 
 import numpy as np
 
@@ -14,10 +15,16 @@ from algos_basics import get_mic_delays_near
 from signals import generate_signal_mono
 from constants import SPEED_OF_SOUND
 
-FS = 44100  # Hz, sampling frequency
+from audio_stack.beam_former import rotate_mics
+from audio_stack.beam_former import BeamFormer
+from crazyflie_description_py.parameters import N_BUFFER, FS
+
 DURATION = 7  # seconds, should be long enough to account for delays
-COMBINATION_METHOD = "product"
-NORMALIZATION_METHOD = "none"
+COMBINATION_METHOD = "sum"  # can be sum or product
+NORMALIZATION_METHOD = "none"  # zero_to_one, zero_to_one_all, sum_to_one
+USE_MVDR = True  # use MVDR (otherwise use DAS)
+
+GT_ANGLE_DEG = 90  # angle of ground truth
 
 
 def generate_signals_pyroom(
@@ -112,7 +119,7 @@ def inner_loop(
     ## multi-mic spectrum
     beam_former = BeamFormer(mic_positions=mics_array_theoretical)
     R_multimic = beam_former.get_correlation(signals_f_multimic)
-    if use_mvdr:
+    if USE_MVDR:
         spectrum_multimic = beam_former.get_mvdr_spectrum(R_multimic, frequencies)
     else:
         spectrum_multimic = beam_former.get_das_spectrum(R_multimic, frequencies)
@@ -127,7 +134,7 @@ def inner_loop(
     )
     for sig_f, degree in zip(signals_f_list, degrees):
         R = beam_former.get_correlation(sig_f)
-        if use_mvdr:
+        if USE_MVDR:
             spectrum = beam_former.get_mvdr_spectrum(R, frequencies)
         else:
             spectrum = beam_former.get_das_spectrum(R, frequencies)
@@ -140,7 +147,7 @@ def inner_loop(
     for i, (sig_f, time) in enumerate(zip(signals_f_list, times_noisy)):
         beam_former.add_to_multi_estimate(sig_f, frequencies, time, degrees[i])
     Rtot = beam_former.get_correlation(beam_former.signals_f_aligned)
-    if use_mvdr:
+    if USE_MVDR:
         spectrum_delayed = beam_former.get_mvdr_spectrum(
             Rtot, beam_former.frequencies_multi, beam_former.multi_mic_positions
         )
@@ -151,49 +158,21 @@ def inner_loop(
     return spectrum_dynamic, spectrum_delayed, spectrum_multimic
 
 
-if __name__ == "__main__":
+def simulate_doa(
+    degree_noise_list,
+    signal_noise_list,
+    time_noise_list,
+    frequency_list,
+    n_it,
+    saveas="",
+):
+    """
+    :param degree_noise_list:  noise added to each degree position, in degrees
+    :param signal_noise_list:  noise added to microphone signal
+    :param time_noise_list:  noise added to recording times, in seconds
+    """
     from mic_array import get_square_array
-    from audio_stack.beam_former import rotate_mics
-    from audio_stack.beam_former import BeamFormer
-    import pandas as pd
-
-    np.random.seed(1)
-    # saveas = 'results/first_test.pkl'
-    # saveas = 'results/square_test.pkl'
-    saveas = "results/new_square_test.pkl"
-
-    ##################### constants
-    use_mvdr = True  # use MVDR (otherwise use DAS)
-    baseline = 0.108  # meters, square side of mic array
-    gt_distance = 10  # meters, distance of source
-    gt_angle_deg = 90  # angle of ground truth
-    mics_drone = get_square_array(baseline=baseline, delta=0)  # 4 x 2
-    # mics_drone = get_uniform_array(2, baseline=baseline) # 4 x 2
-    mics_drone -= np.mean(mics_drone, axis=0)  # center the drone
-    gt_angle_rad = gt_angle_deg * np.pi / 180.0
-    source = gt_distance * np.array([np.cos(gt_angle_rad), np.sin(gt_angle_rad)])
-
-    ##################### parameters
-    n_buffer = 2048
-    angular_velocity_deg = 20  # deg/sec, velocity of drone
-    time_index = (
-        1000  # idx where signal is non-zero for all positions, found heuristically
-    )
-    sampling_time = 0.3  # sampling time
-    n_samples = 3
-    frequency_desired = 600  # Hz
-    n_it = 10
-
-    # do not change for now:
-    signal_noise = 1e-3  # noise added to signals
-    mics_noise = 1e-5  # noise added to mic positions (rigid)
-    time_quantization = 6  # number of decimal places to keep
-    time_noise = 0  # noise added to recording times
-
-    # variables
-    degree_noise_list = np.arange(
-        0, 22, step=2
-    )  # noise added to each degree position, in degrees
+    from geometry import Context
 
     df = pd.DataFrame(
         columns=[
@@ -203,20 +182,49 @@ if __name__ == "__main__":
             "spectrum_dynamic",
             "spectrum_delayed",
             "degree_noise",
+            "signal_noise",
+            "time_noise",
+            "frequency",
         ]
     )
 
+    # fixed quantitites
+    frequencies_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
+    mics_noise = 1e-5  # noise added to mic positions (rigid)
+    time_quantization = 6  # number of decimal places to keep
+
+    # geometry setup
+    gt_distance = 1  # meters, distance of source
+    angular_velocity_deg = 20  # deg/sec, velocity of drone
+    n_samples = 3
+    sampling_time = 0.3  # sampling time
+
+    context = Context.get_crazyflie_setup()
+    mics_drone = context.mics
+    mics_drone -= np.mean(mics_drone, axis=0)
+    # mics_drone = get_uniform_array(2, baseline=baseline) # 4 x 2
+
+    gt_angle_rad = GT_ANGLE_DEG * np.pi / 180.0
+    source = gt_distance * np.array([np.cos(gt_angle_rad), np.sin(gt_angle_rad)])
+    time_index = int((2 * gt_distance) / SPEED_OF_SOUND * FS)
+    times = np.arange(n_samples) * sampling_time
+    degrees = times * angular_velocity_deg  # orientations
+    assert DURATION > max(times)
+
     seed = 0
-    for degree_noise in degree_noise_list:
-        print(f"{degree_noise} of {degree_noise_list}")
+    for degree_noise, time_noise, signal_noise, frequency in itertools.product(
+        degree_noise_list, time_noise_list, signal_noise_list, frequency_list
+    ):
+        print(f"degree noise {degree_noise} of {degree_noise_list}")
+        print(f"time noise {time_noise} of {time_noise_list}")
+        print(f"signal noise {signal_noise} of {signal_noise_list}")
+        print(f"frequency {frequency} of {frequency_list}")
+
         for it in range(n_it):
-            print(f"{it + 1}/{n_it}")
+            print(f"iteration {it + 1}/{n_it}")
             np.random.seed(seed)
             seed += 1
             ##################### generate signals
-            times = np.arange(n_samples) * sampling_time
-            degrees = times * angular_velocity_deg  # orientations
-            assert DURATION > max(times)
 
             # create noisy versions
             mics_drone_noisy = deepcopy(mics_drone)
@@ -236,10 +244,11 @@ if __name__ == "__main__":
                 )
 
             # choose frequency bin (for now we make sure that the source signal is one of the available bins)
-            frequencies_all = np.fft.rfftfreq(n_buffer, 1 / FS)
-            indices = [np.argmin(np.abs(frequencies_all - frequency_desired))]
-            frequencies = frequencies_all[indices]
-            frequency_hz = frequencies[0]
+            f_idx = np.argmin(np.abs(frequencies_all - frequency))
+            frequency_hz = frequencies_all[f_idx]
+            frequencies = np.array(
+                [frequency_hz]
+            )  # because algorithms expect multiple frequencies
 
             ### generate signals at different positions
             signals_f_list = []
@@ -252,9 +261,9 @@ if __name__ == "__main__":
                     source, mics, frequency_hz, time, noise=signal_noise
                 )
                 # signals_received = generate_signals_pyroom(source, mics, frequency_hz, time, noise=signal_noise)
-                buffer_ = signals_received[:, time_index : time_index + n_buffer]
+                buffer_ = signals_received[:, time_index : time_index + N_BUFFER]
                 signals_f = np.fft.rfft(buffer_).T
-                signals_f_list.append(signals_f[indices, :])
+                signals_f_list.append(signals_f[[f_idx], :])
 
             ### generate "real" multi-mic signals
             mics_array_noisy = np.concatenate([*mics_list_noisy])
@@ -262,8 +271,8 @@ if __name__ == "__main__":
                 source, mics_array_noisy, frequency_hz, time=0, noise=signal_noise
             )
             # signals_multimic = generate_signals_pyroom(source, mics_array.T, frequency_hz, time=0, noise=signal_noise)
-            buffer_multimic = signals_multimic[:, time_index : time_index + n_buffer]
-            signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[indices, :]
+            buffer_multimic = signals_multimic[:, time_index : time_index + N_BUFFER]
+            signals_f_multimic = (np.fft.rfft(buffer_multimic).T)[[f_idx], :]
 
             spectrum_dynamic, spectrum_delayed, spectrum_multimic = inner_loop(
                 mics_drone,
@@ -281,8 +290,42 @@ if __name__ == "__main__":
                 spectrum_delayed=spectrum_delayed,
                 spectrum_multimic=spectrum_multimic,
                 degree_noise=degree_noise,
+                time_noise=time_noise,
+                frequency=frequency_hz,
             )
 
         if saveas != "":
             df.to_pickle(saveas)
-        print(f"saved intermediate to {saveas}")
+            print(f"saved intermediate to {saveas}")
+    return df
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    n_it = 10
+    signal_noise_list = [1e-3]  # np.logspace(-5, -1, 5)
+    frequency_list = [4000]
+
+    degree_noise_list = np.arange(0, 22, step=2)
+    time_noise_list = [0]
+    saveas = "results/degree_noise.pkl"
+    # simulate_doa(degree_noise_list, signal_noise_list, time_noise_list, frequency_list, n_it, saveas)
+
+    degree_noise_list = [0]
+    time_noise_list = np.logspace(-6, -2, 10)
+    saveas = "results/time_noise.pkl"
+    # simulate_doa( degree_noise_list, signal_noise_list, time_noise_list, frequency_list, n_it, saveas,)
+
+    frequency_list = np.arange(1000, 5000, step=500)
+    degree_noise_list = np.arange(0, 22, step=2)
+    time_noise_list = np.logspace(-6, -2, 10)
+    saveas = "results/joint_noise.pkl"
+    simulate_doa(
+        degree_noise_list,
+        signal_noise_list,
+        time_noise_list,
+        frequency_list,
+        n_it,
+        saveas,
+    )

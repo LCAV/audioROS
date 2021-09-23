@@ -17,14 +17,10 @@ STARTING_YAW_DEG = 0  # starting absoltue yaw angle in degrees
 
 WALL_DISTANCE_M = 0.5  # distance of wall in meters, at start of experiment
 
-# corresponds to the setup in BC325 with stepper motor:
-WALL_OFFSET_M_STEPPER = (
-    0.08  # actual distance of buzzer at zero-distance measurement, in meters
-)
-WALL_ANGLE_DEG_STEPPER = 132  # angle of wall in degrees, at start of experiment
+DISTANCES_CM = np.linspace(17.6, 60, 30)
 
-# corresponds to flying experiments:
-WALL_ANGLE_DEG = 90  # angle of wall in degrees, at start of experiment
+# corresponds to moving
+WALL_ANGLE_DEG = 270  # angle of wall in degrees, at start of experiment
 
 
 def get_starting_pose_msg(timestamp=None):

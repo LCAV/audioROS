@@ -3,9 +3,15 @@ import sys
 import numpy as np
 import pyroomacoustics as pra
 from audio_stack.beam_former import rotate_mics
-from constants import SPEED_OF_SOUND
-from crazyflie_description_py.parameters import N_BUFFER, FS
-from crazyflie_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
+from constants import SPEED_OF_SOUND, PLATFORM
+
+if PLATFORM == "epuck":
+    from crazyflie_description_py.parameters import N_BUFFER, FS
+    from crazyflie_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
+else:
+    from epuck_description_py.parameters import N_BUFFER, FS
+    from epuck_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
+
 from frequency_analysis import get_bin
 from geometry import *
 
@@ -17,7 +23,6 @@ WALL_ABSORPTION = 0.2
 GAIN = 1.0  # default amplitude for input signals
 WIDEBAND_FILE = "results/wideband.npy"
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
-PLATFORM = "epuck"  # "crazyflie"
 
 
 def simulate_distance_estimator(
@@ -36,7 +41,7 @@ def simulate_distance_estimator(
     for i, mic_idx in enumerate(chosen_mics):
         slice_f = slices_f[:, i]
         d_bayes, p_bayes, diff_cm = get_probability_bayes(
-            slice_f, frequencies, n_max=n_max
+            slice_f, frequencies, n_max=n_max, azimuth_deg=azimuth_deg
         )
         distance_estimator.add_distribution(diff_cm * 1e-2, p_bayes, mic_idx)
         if ax is not None:
@@ -72,15 +77,10 @@ def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS
     return room
 
 
-def get_setup(
-    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True, platform=PLATFORM
-):
+def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True):
     """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
-    if platform == "crazyflie":
-        print("Warning: using crazyflie parameters, get_setup")
-        context = Context.get_crazyflie_setup()
-    else:
-        context = Context.get_epuck_setup()
+
+    context = Context.get_platform_setup()
 
     d_wall_m = distance_cm * 1e-2  # distance of wall
     offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of drone

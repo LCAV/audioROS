@@ -1,9 +1,7 @@
 from epuck_description_py.parameters import SOUND_EFFECTS
 
 motor_command_lists = {
-    "sweep_and_move": [
-        ("/gateway", "buzzer_idx", 1, 0.0),
-    ],
+    "sweep_and_move": [("/gateway", "buzzer_idx", 1, 0.0),],
     "multi_sweep": [
         ("/gateway", "hover_height", 0.4, 0),  # start at 50
         ("/gateway", "buzzer_idx", 1, 0),

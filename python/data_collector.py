@@ -21,7 +21,7 @@ MAG_THRESH = 1e-3  # minimum magnitude
 STD_THRESH = 0.5  # maximum normalized std deviation
 DELTA_MERGE_FREQ = 50  # frequencies spaced by less are merged. sweep spacing: ca. 125
 RATIO_MISSING_ALLOWED = 0.2
-OUTLIER_FACTOR = 3
+FACTOR_OUTLIERS = 3
 
 SWEEP_DELTA = 1000  # jumps by more than this downwards are detected as end of sweep.
 F_DELTA = 100  # jumps by more than this in frequency mark end of mono
@@ -165,14 +165,16 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
 
 def find_indices(values_here, values):
     """ find the indices of an array (values_here) inside another array (values) """
+    assert values_here.ndim == 1
+    assert values.ndim == 1
     values_here = np.array(values_here)
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
-        d_indices = np.where((values[:, None] == values_here[None, :]))[0]
+        d_indices = np.where(values_here[:, None] == values[None, :])[1]
         try:
             np.testing.assert_allclose(values[d_indices], values_here)
         except:
-            print("error in find_indices.")
+            print("error in find_indices:", values[d_indices], values_here, d_indices)
             return np.arange(len(values))
     else:
         d_indices = np.arange(len(values))
@@ -253,8 +255,6 @@ def remove_spurious_freqs(df, n_spurious, verbose=False, dryrun=False):
     remove_names = []
     for (freq, mic, distance), df_here in df.groupby(["frequency", "mic", "distance"]):
         if len(df) < n_spurious:
-            # if verbose:
-            #   print('removing', df)
             remove_rows += list(df_here.index.values)
             remove_names += [(freq, mic, distance)]
     if verbose:
@@ -278,7 +278,7 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
             remove_rows += list(df_here.index.values)
         elif normalized_std(vals) > std_thresh:
             if verbose:
-                print(f"removing {freq} with std {normalized_std(vals)}")
+                print(f"removing {freq} with std {normalized_std(vals)}>{std_thresh}")
             remove_rows += list(df_here.index.values)
         elif verbose:
             print(
@@ -297,19 +297,12 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
 
 def remove_bad_measurements(df, mag_thresh, verbose=False):
     index_remove = df[df.magnitude < mag_thresh].index
-    if len(index_remove) == len(df):
-        print(
-            f"Warning: want to remove all measurements! min:{np.min(df.magnitude)}, max:{np.max(df.magnitude)}, median:{np.median(df.magnitude)}, threshold:{mag_thresh}"
-        )
-        print("Exiting without doing anything")
-        return
-
     if verbose:
-        print(f"removing {len(index_remove)}/{len(df)} rows")
+        print(f"removing bad {len(index_remove)} rows")
     df.drop(index=index_remove, inplace=True)
 
 
-def remove_outliers(df, factor=OUTLIER_FACTOR, normalize=False, verbose=False):
+def remove_outliers(df, factor=FACTOR_OUTLIERS, normalize=False, verbose=False):
     index_remove = []
     for (mic, d, f), df_dist in df.groupby(["mic", "distance", "frequency"]):
         median_magnitude = df_dist.magnitude.median()
@@ -332,12 +325,10 @@ def remove_outliers(df, factor=OUTLIER_FACTOR, normalize=False, verbose=False):
 
 def remove_nan_rows(df, verbose=False):
     if verbose:
-        print(f"dropping {len(df.loc[df.magnitude.isnull()])} rows")
+        print(f"remove_nan_rows: dropping {len(df.loc[df.magnitude.isnull()])} rows")
     len_before = len(df)
     df.dropna(axis=0, subset=["magnitude"], inplace=True)
     len_after = len(df)
-    if verbose:
-        print("dropped", len_before - len_after)
 
 
 def to_numeric(df):
@@ -358,7 +349,7 @@ def cleanup(df, params, verbose=False):
     remove_bad_measurements(df, mag_thresh, verbose)
     remove_bad_freqs(df, mag_thresh, std_thresh, verbose=verbose)
     merge_close_freqs(df, verbose=verbose)
-    # remove_outliers(df, verbose)
+    # remove_outliers(df, verbose=verbose)
     remove_spurious_freqs(df, n_spurious, verbose=verbose)
     remove_nan_rows(df, verbose)
 
@@ -394,7 +385,7 @@ class DataCollector(object):
 
         self.params = {}
         if exp_name is not None:
-            self.params.update(kwargs_datasets[exp_name][mic_type])
+            self.params.update(kwargs_datasets[exp_name].get(mic_type, {}))
 
     @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
@@ -446,24 +437,28 @@ class DataCollector(object):
             return kwargs
 
     def get_mics(self):
-        return sorted_and_unique(self.df, "mic")
+        return sorted_and_unique(self.df, "mic").astype(np.int)
 
     def get_distances(self):
-        return sorted_and_unique(self.df, "distance")
+        return sorted_and_unique(self.df, "distance").astype(np.float)
 
     def get_frequencies(self):
-        return sorted_and_unique(self.df, "frequency")
+        return sorted_and_unique(self.df, "frequency").astype(np.float)
 
-    def next_fslice_ready(self, signals_f, frequencies):
+    def next_fslice_ready(self, signals_f, frequencies, verbose=False):
         """ find big frequency jump, meaning end of sweep. """
         fslice_ready = False
 
         f, magnitude = get_peak_freq(signals_f, frequencies)
 
         if len(self.df) == 0:
+            if verbose:
+                print("empty df")
             return False
 
         latest_frequency = self.df.loc[len(self.df) - 1, "frequency"]
+        if verbose:
+            print(f"{f} ?< {latest_frequency - SWEEP_DELTA}")
 
         if (magnitude > self.params.get("mag_thresh", MAG_THRESH)) and (
             f < latest_frequency - SWEEP_DELTA
@@ -535,7 +530,9 @@ class DataCollector(object):
             return False  # True
         return False
 
-    def fill_from_signal(self, signals_f, frequencies, distance_cm=0, angle=0, time=0):
+    def fill_from_signal(
+        self, signals_f, frequencies, distance_cm=0, angle=0, time=0, mode="maximum"
+    ):
         """
         :param signals_f: shape (n_mics, n_freqs), complex
         :param frequencies: shape (n_freqs,)
@@ -543,29 +540,61 @@ class DataCollector(object):
         """
         sweep_complete = False
         for i_mic in range(signals_f.shape[0]):
-            idx = np.argmax(np.abs(signals_f[i_mic, :]))
-            f = frequencies[idx]
-            counter = len(
-                self.df.loc[
-                    (self.df.mic == i_mic)
-                    & (self.df.distance == distance_cm)
-                    & (self.df.angle == angle)
-                    & (self.df.frequency == f)
-                ]
-            )
-            magnitude = np.abs(signals_f[i_mic, idx])
+            if mode == "maximum":
+                i_f = np.argmax(np.abs(signals_f[i_mic, :]))
+                f = frequencies[i_f]
+                counter = len(
+                    self.df.loc[
+                        (self.df.mic == i_mic)
+                        & (self.df.distance == distance_cm)
+                        & (self.df.angle == angle)
+                        & (self.df.frequency == f)
+                    ]
+                )
+                magnitude = np.abs(signals_f[i_mic, i_f])
 
-            self.df.loc[len(self.df), :] = {
-                "time": time,
-                "counter": counter,
-                "mic": i_mic,
-                "frequency": f,
-                "distance": distance_cm,
-                "angle": angle,
-                "magnitude": magnitude,
-            }
+                update_dict = {
+                    "time": time,
+                    "counter": counter,
+                    "mic": i_mic,
+                    "frequency": f,
+                    "distance": distance_cm,
+                    "angle": angle,
+                    "magnitude": magnitude,
+                }
+                self.df.loc[len(self.df), list(update_dict.keys())] = list(
+                    update_dict.values()
+                )
+            elif mode == "all":
+                for i_f in range(signals_f.shape[1]):
+                    f = frequencies[i_f]
+                    magnitude_estimate = np.abs(signals_f[i_mic, i_f])
+                    counter = len(
+                        self.df.loc[
+                            (self.df.mic == i_mic)
+                            & (self.df.distance == distance_cm)
+                            & (self.df.angle == angle)
+                            & (self.df.frequency == f)
+                        ]
+                    )
+                    update_dict = {
+                        "time": time,
+                        "counter": counter,
+                        "mic": i_mic,
+                        "frequency": f,
+                        "distance": distance_cm,
+                        "angle": angle,
+                        "magnitude": magnitude_estimate,
+                    }
+                    self.df.loc[len(self.df), list(update_dict.keys())] = list(
+                        update_dict.values()
+                    )
 
-    def fill_from_row(self, row, verbose=False, mask=True):
+    def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
+        """ 
+        Fill dataset from row containing the spectral contents. 
+        :param mode: "maximum" or "all"
+        """
         distance = row.get("distance", DISTANCE)
         if distance is None:  # otherwise these rows get excluded in groupby operations
             distance = DISTANCE
@@ -578,6 +607,7 @@ class DataCollector(object):
             times=row.seconds,
             verbose=verbose,
             mask=mask,
+            mode=mode,
         )
 
     def fill_from_data(
@@ -589,6 +619,7 @@ class DataCollector(object):
         times=None,
         verbose=False,
         mask=True,
+        mode="maximum",
     ):
         spec, freqs = get_spectrogram_raw(frequencies_matrix, stft)
 
@@ -602,22 +633,21 @@ class DataCollector(object):
             if box_kwargs is not None:
                 spec, freqs = apply_box_mask(spec, freqs, times=times, **box_kwargs)
 
-        self.fill_from_spec(spec, freqs, distance, angle, verbose, times=times)
         self.current_spectrogram = spec
         self.current_freqs = freqs
-        return spec, freqs
 
-    def fill_from_spec(
-        self, spec, freqs, distance=DISTANCE, angle=ANGLE, verbose=False, times=None
-    ):
         df = psd_df_from_spec(
-            spec, freqs, interpolation=self.interpolation, verbose=verbose, times=times,
+            spec,
+            freqs,
+            interpolation=self.interpolation,
+            verbose=verbose,
+            times=times,
+            mode=mode,
         )
-        assert np.all(df.magnitude.values[~np.isnan(df.magnitude.values)] >= 0)
         df.loc[:, "distance"] = distance
         df.loc[:, "angle"] = angle
-        # need ignore_index here to make sure that the final index is unique.
         self.df = pd.concat([self.df, df], ignore_index=True)
+        return spec, freqs
 
     def get_frequency_slice(self, distance=None, mics=None):
         """ 
@@ -670,14 +700,15 @@ class DataCollector(object):
         freqs = freqs_here[f_indices]
 
         if normalize_method != "":
-            all_mics = self.get_mics()
+            mics_all = self.get_mics()
             mics_here = pt.index.values
-            m_indices = find_indices(all_mics, mics_here)
+            m_indices = find_indices(mics_here, mics_all)
 
             gains_f = normalize_method(freqs)
 
             valid = np.all(gains_f > 0, axis=0)
-            gains_f = gains_f[m_indices, valid]
+            gains_f = gains_f[m_indices, :]
+            gains_f = gains_f[:, valid]
             slice_f[:, valid] /= gains_f  # n_mics x n_freqs
 
             stds = np.nanstd(slice_f, axis=1)
@@ -692,7 +723,7 @@ class DataCollector(object):
             if verbose:
                 print("set latest time to", self.latest_fslice_time)
 
-        latest_df = self.df[self.df.time > self.latest_fslice_time]
+        latest_df = self.df[self.df.time >= self.latest_fslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
 
         f_slice, freqs, stds, d_slice = get_frequency_slice(latest_df_clean)
@@ -710,8 +741,7 @@ class DataCollector(object):
     def get_current_distance_slice(self, verbose=False):
         if self.latest_dslice_time is None:
             self.latest_dslice_time = self.df.iloc[0].time
-            if verbose:
-                print("set latest time to", self.latest_dslice_time)
+            print("set latest time to", self.latest_dslice_time)
 
         latest_df = self.df[self.df.time > self.latest_dslice_time]
         latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
@@ -722,9 +752,9 @@ class DataCollector(object):
         return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):
-        mics = sorted_and_unique(self.df, "mic").astype(np.int)
-        frequencies = sorted_and_unique(self.df, "frequency").astype(np.float)
-        distances = sorted_and_unique(self.df, "distance").astype(np.float)
+        mics = self.get_mics()
+        frequencies = self.get_frequencies()
+        distances = self.get_distances()
         n_mics = len(mics)
 
         df_matrix = np.full((n_mics, len(frequencies), len(distances)), np.nan)
@@ -733,7 +763,8 @@ class DataCollector(object):
             distance_slice, distances_here, freqs, stds = get_distance_slice(df)
             mics_here = df.mic.unique()
             d_indices = find_indices(distances_here, distances)
-            mic_indices = find_indices(mics, mics_here)
+            mic_indices = find_indices(mics_here, mics)
+            np.testing.assert_equal(mics[mic_indices], mics_here)
             df_matrix[mic_indices[:, None], i_f, d_indices[None, :]] = distance_slice
         return df_matrix, distances, frequencies
 
@@ -758,9 +789,12 @@ class DataCollector(object):
 
     def remove_bad_measurements(self, verbose=False):
         mag_thresh = self.params.get("mag_thresh", MAG_THRESH)
+        if verbose:
+            print("mag_thresh:", mag_thresh)
         remove_bad_measurements(self.df, mag_thresh, verbose)
 
-    def remove_outliers(self, factor=OUTLIER_FACTOR, normalize=True, verbose=False):
+    def remove_outliers(self, normalize=True, verbose=False):
+        factor = self.params.get("factor_outliers", FACTOR_OUTLIERS)
         return remove_outliers(self.df, factor, normalize, verbose)
 
     def cleanup(self, verbose=False):
@@ -774,9 +808,11 @@ class DataCollector(object):
         self.to_numeric()
 
     def fill_from_backup(
-        self, exp_name, mic_type="audio_deck", motors="0", appendix=""
+        self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""
     ):
-        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{appendix}.pkl"
+        fname = (
+            f"../experiments/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
+        )
         try:
             self.df = pd.read_pickle(fname)
             print("read", fname)
@@ -785,8 +821,10 @@ class DataCollector(object):
             print(f"did not find {fname}")
             return False
 
-    def backup(self, exp_name, mic_type="audio_deck", motors="0", appendix=""):
-        fname = f"results/backup_{exp_name}_{mic_type}_{motors}{appendix}.pkl"
+    def backup(self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""):
+        fname = (
+            f"../experiments/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
+        )
         pd.to_pickle(self.df, fname)
         print("saved", fname)
 
@@ -842,13 +880,22 @@ class DataCollector(object):
         return calib_function
 
     def fit_to_raw(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to raw measurements at given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
         from calibration import fit_distance_slice
 
         df_here = self.filter_by_column(frequency, "frequency")
         frequency_here = df_here.frequency.unique()[0]
         if mic_idx is not None:
-            df_here = df_here.loc[df_here.mic == mic_idx]
-            chosen_mics = [mic_idx]
+            df_here = df_here.loc[df_here.mic.isin(mic_idx)]
+            chosen_mics = mic_idx
         else:
             chosen_mics = sorted_and_unique(df_here, "mic")
 
@@ -885,25 +932,35 @@ class DataCollector(object):
         return coeffs_raw, distances_raw, d_slice_raw, cost_raw
 
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to the median measurements (per distance) and given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
         from calibration import fit_distance_slice
 
-        df_here = self.filter_by_column(frequency, "frequency")
-        frequency_here = df_here.frequency.unique()[0]
-
-        (distance_slices, distances_median, mics_here, *_,) = self.get_distance_slice(
-            frequency, mics=[mic_idx]
+        distance_slices, distances_median, *_ = self.get_distance_slice(
+            frequency, mics=mic_idx
         )
+        if mic_idx is None:
+            mics_here = self.df.mic.unique()
+        else:
+            mics_here = mic_idx
         coeffs_median, d_slice_median, cost_median = fit_distance_slice(
             distance_slices.T,
             distances_median,
             method="minimize",
             azimuth_deg=YAW_DEG,
-            frequency=frequency_here,
+            frequency=frequency,
             chosen_mics=mics_here,
             optimize_absorption=True,
             fit_one_gain=fit_one_gain,
         )
-        return coeffs_median, d_slice_median, distances_median, cost_median
+        return coeffs_median, distances_median, d_slice_median, cost_median
 
     def get_df_matrix_old(self):
         df = self.df

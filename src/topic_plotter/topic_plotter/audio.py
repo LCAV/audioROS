@@ -20,7 +20,12 @@ FIG_SIZE = (15, 10)
 
 
 class AudioPlotter(NodeWithParams):
-    PARAMS_DICT = {"min_freq": XMIN_FREQ, "max_freq": XMAX_FREQ}
+    PARAMS_DICT = {
+        "min_freq": XMIN_FREQ,
+        "max_freq": XMAX_FREQ,
+        "min_amp": YMIN_FREQ,
+        "max_amp": YMAX_FREQ,
+    }
 
     def __init__(self):
         self.fig, ax = plt.subplots()
@@ -119,8 +124,9 @@ class AudioPlotter(NodeWithParams):
         self.plotter_dict["signals frequency"].ax.set_xlim(
             self.current_params["min_freq"], self.current_params["max_freq"]
         )
-
-        # [ax.axis('tight') for ax in self.axs.values()]
+        self.plotter_dict["signals frequency"].ax.set_ylim(
+            self.current_params["min_amp"], self.current_params["max_amp"]
+        )
         self.plotter_dict["signals frequency"].ax.legend(loc="lower left")
         self.fig.canvas.draw()
 
@@ -146,20 +152,23 @@ class AudioPlotter(NodeWithParams):
     def custom_set_params(self):
         xmin = self.current_params["min_freq"]
         xmax = self.current_params["max_freq"]
+        ymin = self.current_params["min_amp"]
+        ymax = self.current_params["max_amp"]
         if "signals frequency" in self.plotter_dict.keys():
             self.plotter_dict["signals frequency"].ax.set_xlim(xmin, xmax)
+            self.plotter_dict["signals frequency"].ax.set_ylim(ymin, ymax)
             self.get_logger().info(f"Set limits to {xmin, xmax}")
         else:
             self.init_plotter(
                 "signals frequency",
                 xlabel="frequency [Hz]",
                 ylabel="magnitude [-]",
-                ymin=YMIN_FREQ,
-                ymax=YMAX_FREQ,
-                xmin=self.current_params["min_freq"],
-                xmax=self.current_params["max_freq"],
+                ymin=ymin,
+                ymax=ymax,
+                xmin=xmin,
+                xmax=xmax,
             )
-            self.get_logger().info(f"Init limits to {xmin, xmax}")
+            self.get_logger().info(f"Init limits to x:{xmin, xmax}, y:{ymin, ymax}")
 
 
 def main(args=None):
