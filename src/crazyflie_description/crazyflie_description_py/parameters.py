@@ -21,7 +21,7 @@ BUZZER_POSITION = [[0.0, 0.0]]  # relative buzzer position (in meters)
 HEIGHT_BUZZER = 0.01  # height of buzzer with resepect to drone center (in meters)
 
 N_MICS = 4  # number of mics
-FS = 64000  # sampling frequency [Hz]
+FS = 48000  # sampling frequency [Hz]
 N_BUFFER = 1024  # number of samples in audio buffer
 FFTSIZE = 32  # number of frequency bins that are sent.
 
