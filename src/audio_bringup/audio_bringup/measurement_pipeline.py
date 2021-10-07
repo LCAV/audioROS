@@ -68,14 +68,15 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_07_08_rotating"
 # EXTRA_DIRNAME = "2021_07_08_stepper_fast"
 # EXTRA_DIRNAME = "2021_07_08_stepper_slow"
-#EXTRA_DIRNAME = "2021_07_14_propsweep"
-#EXTRA_DIRNAME = "2021_07_14_flying"
-#EXTRA_DIRNAME = "2021_07_14_flying_hover"
-#EXTRA_DIRNAME = "2021_07_27_manual"
-#EXTRA_DIRNAME = "2021_07_27_hover"
-#EXTRA_DIRNAME = "2021_09_23_polar_measurement"
-#EXTRA_DIRNAME = "2021_09_30_polar_measurement"
-EXTRA_DIRNAME = "2021_10_05_polar_measurement"
+# EXTRA_DIRNAME = "2021_07_14_propsweep"
+# EXTRA_DIRNAME = "2021_07_14_flying"
+# EXTRA_DIRNAME = "2021_07_14_flying_hover"
+# EXTRA_DIRNAME = "2021_07_27_manual"
+# EXTRA_DIRNAME = "2021_07_27_hover"
+# EXTRA_DIRNAME = "2021_09_23_polar_measurement"
+# EXTRA_DIRNAME = "2021_09_30_polar_measurement"
+# EXTRA_DIRNAME = "2021_10_05_polar_measurement"
+EXTRA_DIRNAME = "2021_10_07_stepper"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
 USER_INPUT = True
@@ -87,15 +88,15 @@ SerialIn = None
 def execute_commands(command_name, source_type=None):
     if "mono" in command_name:
         freq = int(command_name.replace("mono", ""))
-        if source_type == 'buzzer-onboard':
+        if source_type == "buzzer-onboard":
             # play the sounds
             command_list = [
-                ("/gateway", "buzzer_idx", freq, 0), # e.g. mono3000
+                ("/gateway", "buzzer_idx", freq, 0),  # e.g. mono3000
             ]
         else:
             # do not play sound but choose correct frequency window
             command_list = [
-                ("/gateway", "buzzer_idx", freq + 10000, 0), # e.g. monoBLANK3000
+                ("/gateway", "buzzer_idx", freq + 10000, 0),  # e.g. monoBLANK3000
             ]
     elif "all" in command_name:
         thrust = int(command_name.replace("all", ""))
@@ -263,7 +264,6 @@ def main(args=None):
                 f'make sure external buzzer plays {params["source"]}! Enter to continue'
             )
 
-
         if (source_type == "soundcard") and (global_params["n_meas_mics"] > 0):
             recording = sd.playrec(out_signal, blocking=False)
         elif source_type == "soundcard":
@@ -345,7 +345,6 @@ def main(args=None):
 
         start_bag_recording(bag_filename)
         return perform_experiment(source_type)
-
 
     rclpy.init(args=args)
 
@@ -459,10 +458,10 @@ def main(args=None):
 
         #### perform experiment ###
         # recording = measure_wall_flying(params)
-        # recording = measure_wall(params)
+        recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
-        recording = measure_polar_patern(params,source_params)
+        # recording = measure_polar_patern(params,source_params)
 
         #### wrap up ####
         execute_commands("stop_motors")

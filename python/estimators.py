@@ -22,7 +22,7 @@ def get_estimate(values, probs):
     return values[np.argmax(probs)]
 
 
-def extract_pdf(distribution, method=METHOD):
+def extract_pdf(distribution, method=METHOD, verbose=False):
     """
     Extract pdf from distribution. 
     Distribution is of form:
@@ -30,6 +30,9 @@ def extract_pdf(distribution, method=METHOD):
         x1: [p_1(x1), p_2(x1), ...]
         x2: [p_1(x2), p_2(x2), ...]
     }
+
+    For example
+    distance 1: [p_mic1(distance 1), p_mic2(distance 2), ...]
 
     """
     values = np.fromiter(distribution.keys(), dtype=float)
@@ -65,12 +68,12 @@ class DistanceEstimator(object):
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
             print("Warning: make sure path_differences_m is in meters!")
-        self.data[mic_idx] = (path_differences_m, probabilities)
-        # current_data = self.data.get(mic_idx, ([], []))
-        # self.data[mic_idx] = (
-        #    np.r_[current_data[0], path_differences_m],
-        #    np.r_[current_data[1], probabilities],
-        # )
+
+        current_data = self.data.get(mic_idx, ([], []))
+        self.data[mic_idx] = (
+            np.r_[current_data[0], path_differences_m],
+            np.r_[current_data[1], probabilities],
+        )
 
     def get_distance_distribution(
         self,
@@ -87,20 +90,15 @@ class DistanceEstimator(object):
 
         if distances_m is None:
             distances_m = self.DISTANCES_M
-            # get points for interpolation.
-            # distances_all = []
-            # for mic_idx, (deltas_m, delta_probs) in self.data.items():
-            #    for azimuth_deg in azimuths_deg:
-            #        ds_m = (
-            #            self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
-            #            * 1e-2
-            #        )
-            #        distances_all += list(ds_m)
-            # distances_m = np.linspace(
-            #    min(distances_all), max(distances_all), len(distances_all)
-            # )
+
         distribution = {d: [] for d in distances_m}
 
+        if verbose:
+            import matplotlib.pylab as plt
+
+            plt.figure()
+
+        # go over all data saved.
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
 
             deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
@@ -109,6 +107,7 @@ class DistanceEstimator(object):
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
+            # "integral" over possible angles
             for azimuth_deg in azimuths_deg:
                 ds_m = (
                     self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
@@ -116,6 +115,22 @@ class DistanceEstimator(object):
                 )
 
                 # interpolate (ds_m, delta_probs) at fixed distances.
+                if verbose:
+                    np.set_printoptions(precision=2)
+                    print(
+                        "interpolating",
+                        min(ds_m),
+                        max(ds_m),
+                        np.mean(ds_m[1:] - ds_m[:-1]),
+                    )
+                    print(
+                        "on",
+                        min(distances_m),
+                        max(distances_m),
+                        np.mean(distances_m[1:] - distances_m[:-1]),
+                    )
+                    np.set_printoptions(precision=None)
+
                 interp1d_func = interp1d(
                     ds_m, delta_probs, kind="linear", fill_value="extrapolate"
                 )
@@ -133,15 +148,13 @@ class DistanceEstimator(object):
                     distribution[d].append(prob)
                     for d, prob in zip(distances_m, delta_probs_interp)
                 ]
-        return extract_pdf(distribution, method)
+                if verbose:
+                    plt.plot(ds_m, delta_probs)
+                    plt.scatter(distances_m, delta_probs_interp)
+        return extract_pdf(distribution, method, verbose)
 
     def get_angle_distribution(
-        self,
-        distance_estimate_m,
-        chosen_mics=None,
-        method=METHOD,
-        azimuths_deg=None,
-        verbose=False,
+        self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
     ):
         if distance_estimate_m is None:
             distances_m = self.context.get_possible_distances()
@@ -200,7 +213,7 @@ class DistanceEstimator(object):
                 probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
-                probs_interp[probs_interp <= 0] = EPS
+                probs_interp[probs_interp < 0] = EPS
                 [
                     distribution[a].append(prob)
                     for a, prob in zip(azimuths_deg, probs_interp)
@@ -247,25 +260,18 @@ class AngleEstimator(object):
             score_left = 0
             score_right = 0
             for mic_left in mics_left_right[0]:
-
-                # get probability of the best gamma for this data.
-                arg = np.argmin(abs(self.data[mic_left][0]) - gamma)
-
-                # might not always have the maximum at the same place.
+                arg = np.argmin(abs(gamma - self.data[mic_left][0]))
                 score_left += self.data[mic_left][1][arg]
-                # score_left += np.max(self.data[mic_left][1])
             for mic_right in mics_left_right[1]:
-
-                arg = np.argmin(abs(self.data[mic_right][0]) - gamma)
+                arg = np.argmin(abs(gamma - self.data[mic_right][0]))
                 score_right += self.data[mic_right][1][arg]
-                # score_right += np.max(self.data[mic_right][1])
 
             if score_right > score_left:
-                pass
                 # print("wall is on the right")
-            else:
                 gammas = 180 - gammas
+            else:
                 # print("wall is on the left")
+                pass
         # TODO(FD): maybe recalculate the distribution using
         # only the correct mics?
         return gammas, probs
