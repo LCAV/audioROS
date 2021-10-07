@@ -14,7 +14,8 @@ EPS = 1e-30
 WALL_ANGLE_DEG = None
 
 if PLATFORM == "crazyflie":
-    BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+    # BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+    BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
 INTERPOLATE = True

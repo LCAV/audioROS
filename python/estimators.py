@@ -157,7 +157,7 @@ class DistanceEstimator(object):
         self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
     ):
         if distance_estimate_m is None:
-            distances_m = self.context.get_possible_distances()
+            distances_m = self.DISTANCES_M
         else:
             distances_m = [distance_estimate_m]
 
@@ -166,7 +166,8 @@ class DistanceEstimator(object):
         ), "function only works for source at origin!"
 
         if azimuths_deg is None:
-            azimuths_deg = np.arange(-180, 180)
+            azimuths_deg = self.AZIMUTHS_DEG
+            # azimuths_deg = np.arange(-180, 180)
 
         distribution = {a: [] for a in azimuths_deg}
 
@@ -185,6 +186,7 @@ class DistanceEstimator(object):
 
                 thetas_deg = []
                 probs = []
+
                 # each delta and probability corresponds to one or two angles.
                 for delta_m, prob in zip(deltas_m[mask], delta_probs[mask]):
                     theta_deg = self.context.get_angles(
@@ -195,6 +197,7 @@ class DistanceEstimator(object):
                     if theta_deg is None:
                         warnings.warn("no theta")
                         continue
+
                     thetas_deg += list(theta_deg)
                     probs += [prob] * len(theta_deg)
 
@@ -207,10 +210,11 @@ class DistanceEstimator(object):
                 )
                 probs_interp = interp1d_func(azimuths_deg)
 
-                correction_factor = self.context.get_delta_gradient_angle(
-                    distance_estimate_m, azimuths_deg, mic_idx
-                )
-                probs_interp *= correction_factor
+                # TODO(FD) understand why below works better without correction.
+                # correction_factor = self.context.get_delta_gradient_angle(
+                #    distance_estimate_m, azimuths_deg, mic_idx
+                # )
+                # probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
                 probs_interp[probs_interp < 0] = EPS

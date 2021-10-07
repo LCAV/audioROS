@@ -19,7 +19,7 @@ YAW_DEG = 0  # drone angle used for when nothing else is given.
 N_SPURIOUS = 2  # number of samples per frequency
 MAG_THRESH = 1e-3  # minimum magnitude
 STD_THRESH = 0.5  # maximum normalized std deviation
-DELTA_MERGE_FREQ = 50  # frequencies spaced by less are merged. sweep spacing: ca. 125
+DELTA_MERGE_FREQ = 20  # frequencies spaced by less are merged. sweep spacing: ca. 125
 RATIO_MISSING_ALLOWED = 0.2
 FACTOR_OUTLIERS = 3
 

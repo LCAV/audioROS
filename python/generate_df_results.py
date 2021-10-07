@@ -65,7 +65,8 @@ if __name__ == "__main__":
     exp_names = [
         # "2021_07_08_stepper_fast",
         # "2021_07_27_manual",
-        "2021_04_30_stepper",
+        # "2021_04_30_stepper",
+        "2021_10_07_stepper",
         # "2021_07_08_stepper_slow",
     ]
 
