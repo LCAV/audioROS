@@ -172,6 +172,7 @@ class Gateway(Node):
         self.publisher_motors.publish(msg)
 
     def publish_audio_dict(self):
+        self.get_logger().info("publish audio dict")
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
@@ -312,6 +313,7 @@ class Gateway(Node):
                 self.get_logger().info(f"set {param.name} to {param.value}")
                 success = self.reader_crtp.send_thrust_command(param.value, param.name)
             elif param.name == "send_audio_enable":
+                self.get_logger().info(f"set {param.name} to {param.value}")
                 self.reader_crtp.send_audio_enable(param.value)
             else:
                 self.set_audio_param(param)
