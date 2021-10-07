@@ -267,4 +267,15 @@ kwargs_datasets = {
         },
         "appendix": [""],
     },
+    "2021_10_07_stepper": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 0,
+            "std_thresh": 1e10,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 100,
+            "max_freq": 6000,
+        },
+        "appendix": [""],
+    },
 }
