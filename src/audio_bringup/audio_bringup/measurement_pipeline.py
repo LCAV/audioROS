@@ -76,10 +76,12 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_09_23_polar_measurement"
 # EXTRA_DIRNAME = "2021_09_30_polar_measurement"
 # EXTRA_DIRNAME = "2021_10_05_polar_measurement"
-EXTRA_DIRNAME = "2021_10_07_stepper"
+# EXTRA_DIRNAME = "2021_10_07_stepper"
+# EXTRA_DIRNAME = "2021_10_07_stepper_new_f"
+EXTRA_DIRNAME = "2021_10_12_flying"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
-USER_INPUT = True
+USER_INPUT = False
 
 bag_pid = None
 SerialIn = None
