@@ -76,7 +76,13 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_09_23_polar_measurement"
 # EXTRA_DIRNAME = "2021_09_30_polar_measurement"
 # EXTRA_DIRNAME = "2021_10_05_polar_measurement"
-EXTRA_DIRNAME = "2021_10_07_stepper"
+# EXTRA_DIRNAME = "2021_10_07_stepper"
+# EXTRA_DIRNAME = "2021_10_07_stepper_new_f"
+#EXTRA_DIRNAME = "2021_10_12_flying"
+#EXTRA_DIRNAME = "2021_10_12_hover"
+#EXTRA_DIRNAME = "2021_10_12_linear"
+#EXTRA_DIRNAME = "2021_10_12_doa_stepper"
+EXTRA_DIRNAME = "2021_10_12_doa_flying"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
 USER_INPUT = True
@@ -273,14 +279,22 @@ def main(args=None):
             n_frames = int((duration + EXTRA_REC_TIME) * global_params["fs_soundcard"])
             recording = sd.rec(n_frames, blocking=False)
 
-        # execute motor commands
-        if params["motors"] != 0:
-            print(f"executing motor commands", params["motors"])
-            execute_commands(params["motors"])
-
-        # play onboard sound
-        if params["source"] is not None:
-            execute_commands(params["source"], source_type=source_type)
+        if source_type == "soundcard":
+            # make sure we measure at correct bins
+            if params["source"] is not None:
+                execute_commands(params["source"], source_type=source_type)
+            # execute motor commands
+            if params["motors"] != 0:
+                print(f"executing motor commands", params["motors"])
+                execute_commands(params["motors"])
+        else:
+            # start motor commands
+            if params["motors"] != 0:
+                print(f"executing motor commands", params["motors"])
+                execute_commands(params["motors"])
+            # play onboard sound
+            if params["source"] is not None:
+                execute_commands(params["source"], source_type=source_type)
 
         # wait for extra time
         extra_idle_time = duration - (time.time() - start_time)
@@ -365,6 +379,8 @@ def main(args=None):
     sys.path.append(exp_dirname)
     from params import global_params, params_list
 
+    source_type = global_params["source_type"]
+
     if source_type == "soundcard":
         from params import source_params
 
@@ -431,7 +447,7 @@ def main(args=None):
                 input(
                     f"Path {filename} exists, append something? (default:{timestamp}, n to skip)"
                 )
-                or timestamp
+                or str(timestamp)
             )
             if answer == "n":
                 continue
@@ -461,11 +477,12 @@ def main(args=None):
         set_audio_parameters(params, params_old)
 
         #### perform experiment ###
-        # recording = measure_wall_flying(params)
-        recording = measure_wall(params)
+        #recording = measure_wall_flying(params)
+        # recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
-        # recording = measure_doa(params, source_params)
+        recording = measure_doa(params, source_params)
+        #recording = measure_doa_flying(params, source_params)
         # recording = measure_polar_patern(params, source_params)
 
         #### wrap up ####

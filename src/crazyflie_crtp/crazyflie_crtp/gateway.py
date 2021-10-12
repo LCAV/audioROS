@@ -39,7 +39,7 @@ from crazyflie_description_py.experiments import (
 )
 
 logging.basicConfig(level=logging.ERROR)
-cf_id = "E7E7E7E7E8"
+cf_id = "E7E7E7E7E7"
 id = f"radio://0/80/2M/{cf_id}"
 
 # cf_id = "E7E7E7E7E7"
@@ -54,8 +54,8 @@ MIN_YLIM = 1e-13  # set to -inf for no effect.
 # ros2 run crazyflie_crtp gateway --ros-args --params-file params/default.yaml
 PARAMS_DICT = {
     "send_audio_enable": (rclpy.Parameter.Type.INTEGER, 1),
-    "min_freq": (rclpy.Parameter.Type.INTEGER, 4000),
-    "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
+    "min_freq": (rclpy.Parameter.Type.INTEGER, 1000),
+    "max_freq": (rclpy.Parameter.Type.INTEGER, 6000),
     "delta_freq": (rclpy.Parameter.Type.INTEGER, 100),  # not used without prop
     "n_average": (rclpy.Parameter.Type.INTEGER, 5),  # not used without snr
     "bin_selection": (rclpy.Parameter.Type.INTEGER, 3),
