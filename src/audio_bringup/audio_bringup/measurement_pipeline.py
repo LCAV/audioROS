@@ -129,7 +129,7 @@ def get_total_time(command_name):
     return time
 
 
-def adjust_freq_lims(params, source_params):
+def adjust_freq_lims(params):
     min_freq = params.get("min_freq", None)
     max_freq = params.get("max_freq", None)
 
@@ -236,7 +236,7 @@ def main(args=None):
         wavfile.write(wav_filename, global_params["fs_soundcard"], recording_float32)
         print("wrote wav file as", wav_filename)
 
-    def perform_experiment(source_type):
+    def perform_experiment(source_type, source_params=None):
         recording = None
         start_time = time.time()
 
@@ -284,7 +284,7 @@ def main(args=None):
         if params["source"] is not None:
             execute_commands(params["source"], source_type=source_type)
 
-        # wait for exxtra time
+        # wait for extra time
         extra_idle_time = duration - (time.time() - start_time)
         if extra_idle_time > 0:
             print(f"Waiting for {extra_idle_time:.2f} seconds...")
@@ -295,7 +295,7 @@ def main(args=None):
             )
         return recording
 
-    def measure_doa(params):
+    def measure_doa(params, source_params):
         """ setup: 
         - soundcard or external buzzer
         - stepper motor
@@ -303,9 +303,9 @@ def main(args=None):
         assert source_type in ["buzzer", "soundcard"]
 
         start_bag_recording(bag_filename)
-        start_turning(distance, angle)
+        start_moving(distance, angle)
 
-        return perform_experiment(source_type)
+        return perform_experiment(source_type, source_params)
 
     def measure_polar_patern(params, source_params):
         """ setup: 
@@ -317,7 +317,7 @@ def main(args=None):
         start_bag_recording(bag_filename)
         start_moving(distance, angle)
 
-        return perform_experiment(source_type)
+        return perform_experiment(source_type, source_params)
 
     def measure_wall(params):
         """ setup: 
@@ -365,7 +365,10 @@ def main(args=None):
     wav_dirname = os.path.join(exp_dirname, WAV_DIRNAME)
 
     sys.path.append(exp_dirname)
-    from params import global_params, params_list, source_params
+    from params import global_params, params_list
+
+    if source_type == "soundcard":
+        from params import source_params
 
     print(f"loaded parameters from {exp_dirname}/params.py")
 
@@ -455,7 +458,7 @@ def main(args=None):
 
         #### set parameters ###
         duration = adjust_duration(global_params.get("duration", 30), params)
-        adjust_freq_lims(params, source_params)
+        adjust_freq_lims(params)
         set_audio_parameters(params, params_old)
 
         #### perform experiment ###
@@ -463,7 +466,8 @@ def main(args=None):
         recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
-        # recording = measure_polar_patern(params,source_params)
+        # recording = measure_doa(params, source_params)
+        # recording = measure_polar_patern(params, source_params)
 
         #### wrap up ####
         execute_commands("stop_motors")
