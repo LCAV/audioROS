@@ -435,6 +435,7 @@ def main(args=None):
             )
             if answer == "n":
                 continue
+            answer = answer[1:] if answer[0] == "_" else answer
             filename = f"{filename}_{answer}"
             bag_filename = os.path.join(exp_dirname, filename)
 
