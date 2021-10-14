@@ -18,7 +18,7 @@ from scipy.io import wavfile
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
-from serial_motors import SerialMotors, DURATION_50, DURATION_360
+from serial_motors import SerialMotors, DURATION_30, DURATION_360
 
 from crazyflie_description_py.commands import all_commands_lists
 from crazyflie_description_py.parameters import SOUND_EFFECTS, FS
@@ -48,7 +48,7 @@ DEFAULT_PARAMS = {
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
 
-START_DISTANCE = 0
+START_DISTANCE = 15
 START_ANGLE = 0
 
 # EXTRA_DIRNAME = '2021_02_09_wall'
@@ -81,8 +81,8 @@ START_ANGLE = 0
 #EXTRA_DIRNAME = "2021_10_12_flying"
 #EXTRA_DIRNAME = "2021_10_12_hover"
 #EXTRA_DIRNAME = "2021_10_12_linear"
-#EXTRA_DIRNAME = "2021_10_12_doa_stepper"
-EXTRA_DIRNAME = "2021_10_12_doa_flying"
+EXTRA_DIRNAME = "2021_10_12_doa_stepper"
+#EXTRA_DIRNAME = "2021_10_12_doa_flying"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
 USER_INPUT = True
@@ -161,14 +161,13 @@ def adjust_duration(duration, params):
     angle = params.get("degree", None)
     print(angle)
 
-    if (distance is not None) and (abs(distance) == 51):
-        if DURATION_50 > duration:
+    if (distance is not None) and (abs(distance) == 300):
+        if DURATION_30 > duration:
             print(
-                f"ignoring global duration {duration} and using move command duration {DURATION_50}"
+                f"ignoring global duration {duration} and using move command duration {DURATION_30}"
             )
-            duration = DURATION_50
+            duration = DURATION_30
     if (angle is not None) and (abs(angle) == 360):
-        print(angle)
         if DURATION_360 > duration:
             print(
                 f"ignoring global duration {duration} and using turn command duration {DURATION_360}"
@@ -221,12 +220,12 @@ def start_moving(distance, angle):
     if (angle is not None) and abs(angle) == 360:
         print(f"starting turning by {angle}")
         SerialIn.turn(angle, blocking=False)
-    if distance == 51:
-        print("start moving by 50")
-        SerialIn.move(50, blocking=False)
-    if distance == -51:
-        print("start moving back by 50")
-        SerialIn.move(-50, blocking=False)
+    if distance == 300:
+        print("start moving by 30")
+        SerialIn.move(30, blocking=False)
+    if distance == -300:
+        print("start moving back by 30")
+        SerialIn.move(-30, blocking=False)
 
 
 def save_bag_recording(csv_filename):
@@ -463,7 +462,7 @@ def main(args=None):
         angle = params.get("degree", None)
 
         print("checking for blocking movements...")
-        if (distance is not None) and (abs(distance) != 51):
+        if (distance is not None) and (abs(distance) != 300):
             print("moving to distance: ", distance)
             SerialIn.move_to(distance, blocking=True)
         if (angle is not None) and (abs(angle) != 360):
