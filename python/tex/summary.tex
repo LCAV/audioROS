@@ -11,13 +11,12 @@
 \usepackage{indentfirst}
 \usepackage[boxed]{algorithm2e}
 \usepackage{mwe, tikz}
-\geometry{
-  a4paper,
-  top=20mm,
-  left=15mm,
-  right=15mm,
-  bottom=20mm
-}
+
+%\geometry{a4paper, top=20mm, left=15mm, right=15mm, bottom=20mm} 
+
+%infinite page
+\geometry{paperwidth=200mm,textwidth=200mm,paperheight=400mm,textheight=400mm,top=20mm,left=15mm,right=15mm,bottom=20mm}
+\setcounter{totalnumber}{100}
 \usepackage{epstopdf}
 \usepackage{units}
 \usepackage{todonotes}
@@ -25,7 +24,7 @@
 
 % set figure path (such that it works for eps files too. 
 % \newcommand{\figurepath}{figures/Dynamic/}
-\newcommand{\figurepath}{../plots/}
+\newcommand{\figurepath}{../plots/experiments/}
 \graphicspath{\figurepath}
 \epstopdfsetup{outdir=\figurepath}
 
@@ -58,6 +57,7 @@
 % \begin{abstract}
 % \end{abstract}
 
-\input{window_study.tex}
+%\input{window_study.tex}
+\input{flying_study.tex}
 
 \end{document}
