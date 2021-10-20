@@ -32,7 +32,13 @@ class MovingEstimator(object):
         self.filled = False
 
     def add_distributions(
-        self, angle_deg, angle_p, dist_cm, dist_p, position_cm, rot_deg
+        self,
+        angle_deg=None,
+        angle_p=None,
+        dist_cm=None,
+        dist_p=None,
+        position_cm=[0, 0],
+        rot_deg=0,
     ):
         self.index += 1
         if self.index == self.n_window - 1:
@@ -42,12 +48,21 @@ class MovingEstimator(object):
         self.positions[self.index] = np.array(position_cm)
         self.rotations[self.index] = rot_deg
 
-        self.angle_p[self.index] = scipy.interpolate.interp1d(
-            angle_deg, angle_p, fill_value=0, bounds_error=False
-        )
-        self.dist_p[self.index] = scipy.interpolate.interp1d(
-            dist_cm, dist_p, fill_value=0, bounds_error=False
-        )
+        if (angle_deg is not None) and (angle_p is not None):
+            self.angle_p[self.index] = scipy.interpolate.interp1d(
+                angle_deg, angle_p, fill_value=0, bounds_error=False
+            )
+        else:
+            # uniform distribution
+            self.angle_p[self.index] = lambda x: 1
+
+        if (dist_cm is not None) and (dist_p is not None):
+            self.dist_p[self.index] = scipy.interpolate.interp1d(
+                dist_cm, dist_p, fill_value=0, bounds_error=False
+            )
+        else:
+            # uniform distribution
+            self.dist_p[self.index] = lambda x: 1
 
     def _get_distribution(self, distances_cm=None, angles_deg=None, verbose=False):
 
@@ -66,13 +81,18 @@ class MovingEstimator(object):
         def translate_angle(angle):
             return from_0_to_360(angle + delta_rot)
 
+        current = self.index
+
         probs_dist = probs_angle = None
         if distances_cm is not None:
-            probs_dist = np.ones(len(distances_cm))
+            probs_dist = [
+                self.dist_p[current](d) for d in distances_cm
+            ]  # np.ones(len(distances_cm))
         if angles_deg is not None:
-            probs_angle = np.ones(len(angles_deg))
+            probs_angle = [
+                self.angle_p[current](a) for a in angles_deg
+            ]  # np.ones(len(angles_deg))
 
-        current = self.index
         if not self.filled:
             # if we are at 2, use [0, 1] (n_window=5)
             others = list(range(self.index))
@@ -95,12 +115,9 @@ class MovingEstimator(object):
                     # calculate p(distance) by integrating over angles
                     p = 0
                     for angle in self.ANGLES_DEG:
-                        angle_p1 = self.angle_p[current](angle)
                         angle_p0 = self.angle_p[previous](translate_angle(angle))
-
-                        dist_p1 = self.dist_p[current](d)
                         dist_p0 = self.dist_p[previous](translate_dist(d, angle))
-                        p += angle_p0 * angle_p1 * dist_p0 * dist_p1
+                        p += angle_p0 * dist_p0
 
                     # multiply with previous distances
                     probs_dist[i] *= p
@@ -110,21 +127,23 @@ class MovingEstimator(object):
                 for i, angle in enumerate(angles_deg):
                     p = 0
                     for d in self.DISTANCES_CM:
-                        angle_p1 = self.angle_p[current](angle)
                         angle_p0 = self.angle_p[previous](translate_angle(angle))
-
-                        dist_p1 = self.dist_p[current](d)
                         dist_p0 = self.dist_p[previous](translate_dist(d, angle))
-                        p += angle_p0 * angle_p1 * dist_p0 * dist_p1
+                        p += angle_p0 * dist_p0
+
                     probs_angle[i] *= p
 
-        for probs in [probs_dist, probs_angle]:
-            if probs is None:
-                continue
-            elif np.sum(probs) > 0:
-                probs /= np.sum(probs)
+        if probs_dist is not None:
+            if np.sum(probs_dist) > 0:
+                probs_dist /= np.sum(probs_dist)
             else:
-                print("Warning: all-zero")
+                print("Warning: distance proba all-zero")
+
+        if probs_angle is not None:
+            if np.sum(probs_angle) > 0:
+                probs_angle /= np.sum(probs_angle)
+            else:
+                print("Warning: angle proba all-zero")
         return distances_cm, probs_dist, angles_deg, probs_angle
 
     def get_distance_distribution(self, distances_cm=None, verbose=False):

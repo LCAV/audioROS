@@ -169,11 +169,12 @@ def plot_raw_signals(spec_masked_all, freqs_masked, mic_idx=0, delta=50):
     return fig, ax
 
 
-def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
-    """ Plot error evolution over xs and as cdf. """
-    if xs is None:
-        xs = range(len(err_dict.values()[0]))
+def plot_performance(err_dict, xs=None, xs_dict={}, xlabel="", ylabel="error"):
+    """ Plot error evolution over xs and as cdf. 
 
+    err_dict: {method, err_dict}
+
+    """
     from matplotlib.lines import Line2D
 
     markers = [m for m in list(Line2D.markers.keys()) if m not in [".", "", ","]]
@@ -183,10 +184,14 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
     fig.set_size_inches(2 * FIGSIZE, FIGSIZE)
     max_abs = 0
     for method, err_list in err_dict.items():
-        markersize = 8 - i
+        if xs is None:
+            xs_here = xs_dict.get(method, np.arange(len(err_list)))
+        else:
+            xs_here = xs
 
+        markersize = 8 - i
         axs[0].plot(
-            xs,
+            xs_here,
             err_list,
             label=method,
             marker=markers[i],
@@ -194,7 +199,7 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
             markersize=markersize,
         )
 
-        xvals = sorted(np.abs(err_list))
+        xvals = sorted(np.abs(err_list[~np.isnan(err_list)]))
         yvals = np.linspace(0, 1, len(xvals))
         axs[1].plot(
             xvals,
@@ -206,7 +211,7 @@ def plot_performance(err_dict, xs=None, xlabel="", ylabel="error"):
         )
         i += 1
 
-        max_abs = max(max_abs, max(xvals))
+        max_abs = max(max_abs, np.nanmax(xvals))
 
     axs[0].set_ylim(-max_abs, max_abs)
     axs[0].set_ylabel(ylabel)
