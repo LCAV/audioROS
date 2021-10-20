@@ -58,7 +58,7 @@ def extract_pdf(distribution, method=METHOD, verbose=False):
 
 
 class DistanceEstimator(object):
-    DISTANCES_M = np.arange(7, 100) * 1e-2
+    DISTANCES_M = np.arange(7, 101) * 1e-2
     AZIMUTHS_DEG = np.arange(-180, 180, step=10)
 
     def __init__(self):
@@ -96,13 +96,21 @@ class DistanceEstimator(object):
         if verbose:
             import matplotlib.pylab as plt
 
-            plt.figure()
+            fig, axs = plt.subplots(1, 2)
+            fig.set_size_inches(10, 3)
 
         # go over all data saved.
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
 
             deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
+            if verbose:
+                axs[0].scatter(deltas_m, delta_probs, label=mic_idx)
+            if len(np.unique(inverse)) != len(inverse):
+                print("found non-unique deltas!")
             delta_probs = np.bincount(inverse, delta_probs)
+            if verbose:
+                axs[0].plot(deltas_m, delta_probs, label=mic_idx)
+                axs[0].set_xlabel("delta [m]")
 
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
@@ -114,22 +122,14 @@ class DistanceEstimator(object):
                     * 1e-2
                 )
 
-                # interpolate (ds_m, delta_probs) at fixed distances.
+                # interpolate (ds_m, delta_probs) at fixed distances distances_m
                 if verbose:
-                    np.set_printoptions(precision=2)
                     print(
-                        "interpolating",
-                        min(ds_m),
-                        max(ds_m),
-                        np.mean(ds_m[1:] - ds_m[:-1]),
+                        f"interpolating {min(ds_m):.2f}:{np.mean(ds_m[1:] - ds_m[:-1]):.2f}:{max(ds_m):.2f}"
                     )
                     print(
-                        "on",
-                        min(distances_m),
-                        max(distances_m),
-                        np.mean(distances_m[1:] - distances_m[:-1]),
+                        f"on            {min(distances_m):.2f}:{np.mean(distances_m[1:] - distances_m[:-1]):.2f}:{max(distances_m):.2f}"
                     )
-                    np.set_printoptions(precision=None)
 
                 interp1d_func = interp1d(
                     ds_m, delta_probs, kind="linear", fill_value="extrapolate"
@@ -137,20 +137,25 @@ class DistanceEstimator(object):
                 delta_probs_interp = interp1d_func(distances_m)
 
                 # gradient due to change of variables.
-                correction_factor = self.context.get_delta_gradient(
-                    azimuth_deg, distances_m * 1e2, mic_idx
-                )
-                delta_probs_interp *= correction_factor
+                # TODO(FD) removed to be consistent with angle inference,
+                # since it had negligible effect anyways.
+                # correction_factor = self.context.get_delta_gradient(
+                #    azimuth_deg, distances_m * 1e2, mic_idx
+                # )
+                # print('correction factors:', correction_factor)
+                # delta_probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
-                delta_probs_interp[delta_probs_interp < 0] = EPS
+                delta_probs_interp[delta_probs_interp <= 0] = EPS
                 [
                     distribution[d].append(prob)
                     for d, prob in zip(distances_m, delta_probs_interp)
                 ]
                 if verbose:
-                    plt.plot(ds_m, delta_probs)
-                    plt.scatter(distances_m, delta_probs_interp)
+                    axs[1].plot(ds_m, delta_probs)
+                    axs[1].scatter(distances_m, delta_probs_interp)
+                    axs[1].set_xlabel("distance [m]")
+                    axs[1].legend()
         return extract_pdf(distribution, method, verbose)
 
     def get_angle_distribution(

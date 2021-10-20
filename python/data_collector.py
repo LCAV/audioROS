@@ -385,7 +385,7 @@ class DataCollector(object):
 
         self.params = {}
         if exp_name is not None:
-            self.params.update(kwargs_datasets[exp_name].get(mic_type, {}))
+            self.params.update(kwargs_datasets.get(exp_name, {}).get(mic_type, {}))
 
     @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
