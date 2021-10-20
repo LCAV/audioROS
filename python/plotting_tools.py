@@ -169,7 +169,9 @@ def plot_raw_signals(spec_masked_all, freqs_masked, mic_idx=0, delta=50):
     return fig, ax
 
 
-def plot_performance(err_dict, xs=None, xs_dict={}, xlabel="", ylabel="error"):
+def plot_performance(
+    err_dict, xs=None, xs_dict={}, xlabel="", ylabel="error", marker_flag=True
+):
     """ Plot error evolution over xs and as cdf. 
 
     err_dict: {method, err_dict}
@@ -190,24 +192,21 @@ def plot_performance(err_dict, xs=None, xs_dict={}, xlabel="", ylabel="error"):
             xs_here = xs
 
         markersize = 8 - i
+        marker = markers[i] if marker_flag else None
+        ls = ":" if marker_flag else "-"
         axs[0].plot(
             xs_here,
             err_list,
             label=method,
-            marker=markers[i],
-            ls=":",
+            marker=marker,
+            ls=ls,
             markersize=markersize,
         )
 
         xvals = sorted(np.abs(err_list[~np.isnan(err_list)]))
         yvals = np.linspace(0, 1, len(xvals))
         axs[1].plot(
-            xvals,
-            yvals,
-            label=method,
-            marker=markers[i],
-            ls=":",
-            markersize=markersize,
+            xvals, yvals, label=method, marker=marker, ls=ls, markersize=markersize,
         )
         i += 1
 

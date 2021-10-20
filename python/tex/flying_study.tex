@@ -1,7 +1,7 @@
 \centering
 \section{Calibration studies}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
@@ -41,7 +41,7 @@
 
 \section{Individual mics}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
@@ -82,7 +82,7 @@
   \caption{Cost, on-the-fly}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
@@ -125,13 +125,19 @@
 
 \section{Mic combinations}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
+  dataset 1 \\
   \includegraphics[width=.8\linewidth]{2021_10_12_flying_1_on_the_fly.pdf}
+  dataset 2 \\
   \includegraphics[width=.8\linewidth]{2021_10_12_flying_2_on_the_fly.pdf}
+  dataset 3 \\
   \includegraphics[width=.8\linewidth]{2021_10_12_flying_3_on_the_fly.pdf}
+  dataset 4 \\
   \includegraphics[width=.8\linewidth]{2021_10_12_flying_4_on_the_fly.pdf}
+  dataset 5 \\
   \includegraphics[width=.8\linewidth]{2021_10_12_flying_5_on_the_fly.pdf}
+  dataset 6 \\
   \includegraphics[width=.8\linewidth]{2021_10_12_flying_6_on_the_fly.pdf}
   \caption{Calibrations}
   \label{fig:calib}
@@ -139,7 +145,7 @@
 
 \subsection{On the fly calibration}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
@@ -180,7 +186,7 @@
   \caption{Cost, on-the-fly}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
@@ -221,86 +227,163 @@
   \caption{Bayes, on-the-fly}
 \end{figure}
 
-\subsection{Stepper motor calibration}
+\section{Moving window study}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
   \begin{tabular}{c c c c}
     mics 0 and 2 & mics 1 and 3 & mics 0, 1 and 3 & all mics \\
-   \multicolumn{4}{c}{dataset 1} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_stepper_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 1, single} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 1, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_cost_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 2} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 2, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_cost_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 3} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 3, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_cost_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 4} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 4, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_cost_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 5} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 5, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_cost_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 6} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 6, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_cost_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
   \end{tabular}
   \end{minipage}
-  \caption{Cost, stepper}
+  \caption{Cost, on-the-fly, with and without window}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \begin{minipage}{\textwidth}
   \centering
   \begin{tabular}{c c c c}
-   mics 0 and 2 & mics 1 and 3 & mics 0, 1 and 3 & all mics \\
-   \multicolumn{4}{c}{dataset 1} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_stepper_[0,1,2,3]_probabilities.pdf} \\
+    mics 0 and 2 & mics 1 and 3 & mics 0, 1 and 3 & all mics \\
+    \multicolumn{4}{c}{dataset 1, single} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 1, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_1_bayes_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 2} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 2, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_2_bayes_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 3} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 3, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_3_bayes_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 4} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 4, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_4_bayes_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 5} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 5, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_5_bayes_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
    \multicolumn{4}{c}{dataset 6} \\
-   \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_stepper_[0,2]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_stepper_[1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_stepper_[0,1,3]_probabilities.pdf}
-   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_stepper_[0,1,2,3]_probabilities.pdf} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[0,2]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[0,1,3]_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[0,1,2,3]_probabilities.pdf} \\
+    \multicolumn{4}{c}{dataset 6, window} \\
+   \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[0,2]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[0,1,3]_win3_probabilities.pdf}
+   & \includegraphics[width=.2\linewidth]{2021_10_12_flying_6_bayes_on_the_fly_[0,1,2,3]_win3_probabilities.pdf} \\
   \end{tabular}
   \end{minipage}
-  \caption{Bayes, stepper}
+  \caption{Bayes, on-the-fly, with and without window}
 \end{figure}
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=.8\linewidth]{2021_10_12_flying_[0,1,2,3]_cost_cdf.pdf}
+  \includegraphics[width=.8\linewidth]{2021_10_12_flying_[0,1,2,3]_bayes_cdf.pdf}
+  \includegraphics[width=.8\linewidth]{2021_10_12_flying_[0,1,2,3]_cost_win3_cdf.pdf}
+  \includegraphics[width=.8\linewidth]{2021_10_12_flying_[0,1,2,3]_bayes_win3_cdf.pdf}
+  \caption{Performance per dataset}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=.8\linewidth]{2021_10_12_flying_[0,1,2,3]_cdf.pdf}
+  \caption{Performance}
+\end{figure}
+
+
