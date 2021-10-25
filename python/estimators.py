@@ -239,6 +239,8 @@ class DistanceEstimator(object):
 
 
 class AngleEstimator(object):
+    ANGLES_DEG = np.arange(1, 91)
+
     def __init__(self):
         self.data = {}  # structure: mic: (gammas, probabilities, frequency)
         self.context = Context.get_platform_setup()
@@ -249,8 +251,7 @@ class AngleEstimator(object):
     def get_angle_distribution(
         self, chosen_mics=None, method=METHOD, mics_left_right=None
     ):
-        gammas_deg = np.arange(1, 91)
-        distribution = {g: [] for g in gammas_deg}
+        distribution = {g: [] for g in self.ANGLES_DEG}
         for mic_idx, (gammas_deg_here, probs, frequency) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
@@ -258,8 +259,11 @@ class AngleEstimator(object):
             interp1d_func = interp1d(
                 gammas_deg_here, probs, kind="linear", fill_value="extrapolate"
             )
-            probs_interp = interp1d_func(gammas_deg)
-            [distribution[g].append(prob) for g, prob in zip(gammas_deg, probs_interp)]
+            probs_interp = interp1d_func(self.ANGLES_DEG)
+            [
+                distribution[g].append(prob)
+                for g, prob in zip(self.ANGLES_DEG, probs_interp)
+            ]
 
         gammas, probs = extract_pdf(distribution, method)
         argmax = np.argmax(probs)
