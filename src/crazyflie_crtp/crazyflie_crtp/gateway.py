@@ -105,6 +105,11 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
+        # TODO(FD) should be an action service!
+        self.subsription_commands = self.create_subscription(
+            CrazyflieCommands, "crazyflie/commands", self.listener_callback_commands, 10
+        )
+
         self.ground_truth_published = False
         self.starting_pose = None
 
@@ -119,8 +124,16 @@ class Gateway(Node):
 
         # choose high publish rate so that we introduce as little
         # waiting time as possible
-        self.desired_rate = 1000  # Hz
-        self.create_timer(1 / self.desired_rate, self.publish_current_data)
+        desired_rate = 1000  # Hz
+        self.create_timer(1 / desired_rate, self.publish_current_data)
+
+    def listener_callback_commands(self, msg):
+        self.get_logger().info(
+            f"Command received: {msg.timestamp, msg.command_name, msg.command_value}."
+        )
+        found_command = self.send_command(msg.command_name, msg.command_value)
+        if not found_command:
+            self.get_logger().warn(f"Unknown command!")
 
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:
@@ -270,58 +283,59 @@ class Gateway(Node):
 
             # we need this in case this parameter
             # was not set yet at startup.
-            # then we use the default values.
+            # in that case we use the default values.
             if param.type_ == param.Type.NOT_SET:
                 param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
 
-            # send motor commands
-            if param.name == "hover_height":
-                if param.value > 0:
-                    success = self.reader_crtp.send_hover_command(param.value)
-            elif param.name == "turn_angle":
-                if param.value != 0:
-                    success = self.reader_crtp.send_turn_command(param.value)
-            elif param.name == "land_velocity":
-                if param.value > 0:
-                    success = self.reader_crtp.send_land_command()
-            elif param.name == "move_distance":
-                # move by given distance, blocking
-                if param.value != 0:
-                    self.reader_crtp.send_move_command(param.value)
-                # move by given velocity, non-blocking
-            elif param.name == "move_forward":
-                if param.value != 0:
-                    self.get_logger().warn(f"send forward command {param.value}")
-                    self.reader_crtp.send_forward_command(param.value)
-
-            # send buzzer commands
-            elif param.name == "buzzer_idx":
-                if param.value >= 0:
-                    self.get_logger().info(f"set {param.name} to {param.value}")
-                    self.reader_crtp.send_buzzer_idx(param.value)
-            elif param.name == "buzzer_effect":
-                if param.value >= 0:
-                    self.reader_crtp.send_buzzer_effect(param.value)
-            elif param.name == "buzzer_freq":
-                if param.value >= 0:
-                    self.reader_crtp.send_buzzer_freq(param.value)
-
-            elif param.name == "all":
-                self.get_logger().info(f"set all motors to {param.value}")
-                success = self.reader_crtp.send_thrust_command(param.value)
-            elif param.name in [f"m{i}" for i in range(1, 5)]:
+            if param.name == "send_audio_enable":
                 self.get_logger().info(f"set {param.name} to {param.value}")
-                success = self.reader_crtp.send_thrust_command(param.value, param.name)
-            elif param.name == "send_audio_enable":
-                self.get_logger().info(f"set {param.name} to {param.value}")
+                # needs to also reset the arrays.
                 self.reader_crtp.send_audio_enable(param.value)
-            else:
-                self.set_audio_param(param)
 
-        if success:
-            return SetParametersResult(successful=True)
-        else:
-            return SetParametersResult(successful=False)
+            else:
+                param_is_command = self.send_command(param.name, param.value)
+                if not param_is_command:
+                    self.set_audio_param(param)
+        return SetParametersResult(successful=True)
+
+    def send_command(self, param_name, param_value):
+        if param_name == "hover_height":
+            if param_value > 0:
+                self.reader_crtp.send_hover_command(param_value)
+            return True
+        elif param_name == "turn_angle":
+            if param_value != 0:
+                self.reader_crtp.send_turn_command(param_value)
+            return True
+        elif param_name == "land_velocity":
+            if param_value > 0:
+                self.reader_crtp.send_land_command()
+            return True
+        elif param_name == "move_distance":
+            # move by given distance, blocking
+            if param_value != 0:
+                self.reader_crtp.send_move_command(param_value)
+            return True
+        elif param_name == "move_forward":
+            # move by given velocity, non-blocking
+            if param_value != 0:
+                self.get_logger().warn(f"send forward command {param_value}")
+                self.reader_crtp.send_forward_command(param_value)
+            return True
+        elif param_name == "buzzer_idx":
+            if param_value >= 0:
+                self.get_logger().info(f"set {param_name} to {param_value}")
+                self.reader_crtp.send_buzzer_idx(param_value)
+            return True
+        elif param_name == "all":
+            self.get_logger().info(f"set all motors to {param_value}")
+            self.reader_crtp.send_thrust_command(param_value)
+            return True
+        elif param_name in [f"m{i}" for i in range(1, 5)]:
+            self.get_logger().info(f"set {param_name} to {param_value}")
+            self.reader_crtp.send_thrust_command(param_value, param_name)
+            return True
+        return False
 
     def set_audio_param(self, param):
         old_value = self.get_parameter(param.name).value
@@ -350,34 +364,20 @@ def main(args=None):
         reader_crtp = ReaderCRTP(
             cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors
         )
-        publisher = Gateway(reader_crtp)
-        print("done initializing")
+        node = Gateway(reader_crtp)
 
         try:
-            rclpy.spin(publisher)
-            print("done spinning")
-
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("node interrupted")
+            rclpy.spin(node)
+        except Exception as e:
+            print("Node interrupted: Exception", e)
             reader_crtp.send_audio_enable(0)
             cf.param.set_value("motorPowerSet.enable", 0)
             reader_crtp.send_buzzer_freq(0)
             reader_crtp.send_buzzer_idx(0)
-            print("stop buzzer, motors, and audio sending, wait for 1s...")
+            print("Stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
-        except Exception:
-            print("error occured")
-            reader_crtp.send_audio_enable(0)
-            cf.param.set_value("motorPowerSet.enable", 0)
-            reader_crtp.send_buzzer_freq(0)
-            reader_crtp.send_buzzer_idx(0)
-            print("stop buzzer, motors, and audio sending, wait for 1s...")
-            time.sleep(1)
-            raise
 
-    publisher.destroy_node()
+    node.destroy_node()
     rclpy.shutdown()
 
 
