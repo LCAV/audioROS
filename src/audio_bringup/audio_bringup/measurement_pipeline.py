@@ -78,10 +78,10 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_10_05_polar_measurement"
 # EXTRA_DIRNAME = "2021_10_07_stepper"
 # EXTRA_DIRNAME = "2021_10_07_stepper_new_f"
-#EXTRA_DIRNAME = "2021_10_12_flying"
+EXTRA_DIRNAME = "2021_10_12_flying"
 #EXTRA_DIRNAME = "2021_10_12_hover"
 #EXTRA_DIRNAME = "2021_10_12_linear"
-EXTRA_DIRNAME = "2021_10_12_doa_stepper"
+#EXTRA_DIRNAME = "2021_10_12_doa_stepper"
 #EXTRA_DIRNAME = "2021_10_12_doa_flying"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
@@ -476,11 +476,11 @@ def main(args=None):
         set_audio_parameters(params, params_old)
 
         #### perform experiment ###
-        #recording = measure_wall_flying(params)
+        recording = measure_wall_flying(params)
         # recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
-        recording = measure_doa(params, source_params)
+        #recording = measure_doa(params, source_params)
         #recording = measure_doa_flying(params, source_params)
         # recording = measure_polar_patern(params, source_params)
 
