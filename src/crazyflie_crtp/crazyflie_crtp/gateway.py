@@ -7,6 +7,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.action import ActionServer
 from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import PoseStamped
 
@@ -23,6 +24,7 @@ from audio_interfaces_py.messages import (
     create_signals_freq_message,
     create_ground_truth_message,
 )
+from audio_interfaces.action import CrazyflieCommands
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import (
@@ -105,9 +107,8 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
-        # TODO(FD) should be an action service!
-        self.subsription_commands = self.create_subscription(
-            CrazyflieCommands, "crazyflie/commands", self.listener_callback_commands, 10
+        self.commands_action_server = ActionServer(
+            self, CrazyflieCommands, "commands", self.commands_callback,
         )
 
         self.ground_truth_published = False
@@ -127,13 +128,27 @@ class Gateway(Node):
         desired_rate = 1000  # Hz
         self.create_timer(1 / desired_rate, self.publish_current_data)
 
-    def listener_callback_commands(self, msg):
+    def commands_callback(self, goal_handle):
+        msg = goal_handle.request
         self.get_logger().info(
             f"Command received: {msg.timestamp, msg.command_name, msg.command_value}."
         )
         found_command = self.send_command(msg.command_name, msg.command_value)
+
+        result = CrazyflieCommands.Result()
+        feedback_msg = CrazyflieCommands.Feedback()
         if not found_command:
             self.get_logger().warn(f"Unknown command!")
+            feedback_msg.message = f"Unknown command: {msg.command_name}!"
+            feedback_msg.value = 0
+            goal_handle.publish_feedback(feedback_msg)
+            result.message = "Failure"
+            return result
+
+        result.message = "Success"
+        result.value = 1
+        goal_handle.succeed()
+        return result
 
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:

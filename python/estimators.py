@@ -105,8 +105,8 @@ class DistanceEstimator(object):
             deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
             if verbose:
                 axs[0].scatter(deltas_m, delta_probs, label=mic_idx)
-            if len(np.unique(inverse)) != len(inverse):
-                print("found non-unique deltas!")
+            # if len(np.unique(inverse)) != len(inverse):
+            # print("found non-unique deltas", deltas_m)
             delta_probs = np.bincount(inverse, delta_probs)
             if verbose:
                 axs[0].plot(deltas_m, delta_probs, label=mic_idx)

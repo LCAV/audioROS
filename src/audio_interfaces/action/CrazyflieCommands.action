@@ -1,0 +1,13 @@
+## Goal request:
+# ROS timestamp in miliseconds
+uint32 timestamp
+string command_name
+float32 command_value 0.0
+---
+# Result 
+float32 value 0
+string message ""
+---
+# Feedback
+float32 value 0 
+string message ""
