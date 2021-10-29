@@ -36,6 +36,9 @@ ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
 FLYING_HEIGHT_CM = 30
 
+# TODO(FD) in the future, this should be done in gateway depending on the window chosen.
+WINDOW_CORRECTION = 0.215579  #  flattop
+
 
 class states(Enum):
     CALIBRATE = 0
@@ -70,7 +73,6 @@ class WallDetection(NodeWithParams):
         # initialize wall detection stuff
         self.data_collector = DataCollector()
         self.inf_machine = Inference()
-        self.distance_estimator = DistanceEstimator()
         self.inf_machine.add_geometry(DIST_RANGE_CM, WALL_ANGLE_DEG)
         self.moving_estimator = MovingEstimator(n_window=N_WINDOW)
 
@@ -80,6 +82,7 @@ class WallDetection(NodeWithParams):
         self.distributions = {}
 
     def listener_callback(self, msg_signals):
+
         timestamp = msg_signals.timestamp
         msg_pose = self.pose_synch.get_latest_message(timestamp, self.get_logger())
         if msg_pose is not None:
@@ -92,17 +95,20 @@ class WallDetection(NodeWithParams):
             )
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
-            magnitudes = np.abs(signals_f)
+            magnitudes = np.abs(signals_f).T / WINDOW_CORRECTION  # 4 x 20
 
             if self.calibration_count == 0:
                 self.calibration = magnitudes[:, :, None]
                 self.calibration_count += 1
                 return
-            elif self.calibration_count <= N_CALIBRATION:
+            elif self.calibration_count < N_CALIBRATION:
                 self.calibration = np.concatenate(
                     [self.calibration, magnitudes[:, :, None]], axis=2
                 )
                 self.calibration_count += 1
+
+            # if self.calibration_count == N_CALIBRATION:
+            # self.get_logger().warn(f"calibration: {self.calibration}")
 
             calibration = np.median(self.calibration, axis=2)
             magnitudes_calib = magnitudes
@@ -110,12 +116,13 @@ class WallDetection(NodeWithParams):
 
             # calibrate
             self.inf_machine.add_data(
-                magnitudes_calib.T,  # 4 x 32
+                magnitudes_calib,  # 4 x 32
                 freqs,
                 # distances
             )
 
-            for mic_i in range(magnitudes_calib.shape[1]):
+            self.distance_estimator = DistanceEstimator()
+            for mic_i in range(magnitudes_calib.shape[0]):
                 __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
                 self.distance_estimator.add_distribution(diff * 1e-2, prob_mic, mic_i)
 

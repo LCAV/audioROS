@@ -142,8 +142,8 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        # "2021_10_12_flying",
-        "2021_10_12_linear",
+        "2021_10_12_flying",
+        # "2021_10_12_linear",
         # "2021_10_12_hover",
         # "2021_10_07_stepper_new_f",
         # "2021_10_07_stepper",

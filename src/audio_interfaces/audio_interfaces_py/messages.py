@@ -266,7 +266,7 @@ def read_signals_freq_message(msg):
     signals_f = np.array(msg.signals_real_vect) + 1j * np.array(msg.signals_imag_vect)
     signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
     freqs = np.array(msg.frequencies)
-    return mic_positions, signals_f, freqs
+    return mic_positions, signals_f[freqs > 0, :], freqs[freqs > 0]
 
 
 def read_correlations_message(msg):
