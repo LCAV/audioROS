@@ -1,30 +1,28 @@
 """
 Create an image from video where moving parts are overlaid. 
 
-Code from: 
-https://linuxize.com/post/how-to-install-opencv-on-ubuntu-18-04/
-
 """
-import cv2
-import os
-import math
-import av
 import argparse
-import numpy as np
-from get_background import get_background, cancel_roi
-import signal
+import math
+import os
+
+import av
+import cv2
 import matplotlib.pyplot as plt
+import numpy as np
+import signal
 
 from constants import THRESHOLD, RADIUS, SAVE_EVERY_K, CONSECUTIVE_FRAMES
+from get_background import get_background, cancel_roi
 
 MARGIN_NEXT_FRAME = 1.6
-DEBUG = 1
-DEBUG_PLOT_IMAGE = 1
-DEBUG_BACKGROUND = 0
-DEBUG_IMAGE_FRAMES = 0
-DEBUG_last_snapshot_position_FILTER = 0
+DEBUG = True
+DEBUG_PLOT_IMAGE = True
+DEBUG_BACKGROUND = False
+DEBUG_IMAGE_FRAMES = False
+DEBUG_LAST = False
 
-EPUCK = 0
+EPUCK = False
 
 
 class main:
@@ -193,7 +191,7 @@ class main:
                     dist = np.linalg.norm(
                         np.array(circle_center) - np.array(last_snapshot_position[-1])
                     )
-                    if DEBUG_last_snapshot_position_FILTER:
+                    if DEBUG_LAST:
                         print(
                             f"radius is : {radius}, last position {last_snapshot_position[-1]}, current position {circle_center}"
                         )
