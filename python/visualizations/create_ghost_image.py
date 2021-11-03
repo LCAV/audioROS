@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import signal
 
-from constants import THRESHOLD, RADIUS, SAVE_EVERY_K, CONSECUTIVE_FRAMES
 from get_background import get_background, cancel_roi
 
 MARGIN_NEXT_FRAME = 1.6

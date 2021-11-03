@@ -1,12 +1,10 @@
 """
-Code from: 
-
-https://linuxize.com/post/how-to-install-opencv-on-ubuntu-18-04/
+Detect moving objects in video and trace trajectory in red. 
 
 """
 import cv2
 import argparse
-from get_background import get_background, extract_roi
+from get_background_cv import get_background, extract_roi
 import signal
 
 from constants import THRESHOLD, RADIUS, SAVE_EVERY_K, CONSECUTIVE_FRAMES
@@ -103,7 +101,7 @@ class main:
                     # self.debug_image("sum_frames", frame_diff)
 
                     # find the contours around the white segmented areas
-                    contours, hierarchy = cv2.findContours(
+                    __, contours, hierarchy = cv2.findContours(
                         sum_frames, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                     )
 
@@ -161,12 +159,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", help="path to the input video", required=True)
     args = vars(parser.parse_args())
-    try:
-        main = main(args["input"])
-        main.run()
 
-    except Exception as e:
-        print(e)
-        main.cap.release()
-        cv2.destroyAllWindows()
-        print("all released after Exception.")
+    main = main(args["input"])
+    main.run()
+
+    main.cap.release()
+    cv2.destroyAllWindows()
+    print("all released after Exception.")
