@@ -1,6 +1,7 @@
 """
-Code from: 
+Create an image from video where moving parts are overlaid. 
 
+Code from: 
 https://linuxize.com/post/how-to-install-opencv-on-ubuntu-18-04/
 
 """
