@@ -182,6 +182,7 @@ def get_calibration_function_moving(
 
     valid_stfts = []
     for i, row in rows.iterrows():
+        print(i)
         valid = np.ones(row.positions.shape[0], dtype=bool)
         if check_height:
             valid &= row.positions[:, 2] > 0.3
@@ -192,9 +193,15 @@ def get_calibration_function_moving(
             magnitudes = np.sum(np.mean(np.abs(row.stft), axis=1), axis=-1)  # dist
             crash = np.where(
                 (magnitudes - np.mean(magnitudes)) > (2 * np.std(magnitudes))
-            )[0][0]
-            if verbose:
-                print(f"{np.sum(nocrash)} / {row.positions.shape[0]} without crash")
+            )[0]
+            if len(crash) > 0:
+                crash = crash[0]
+                if verbose:
+                    print(f"crash at {crash}")
+            else:
+                crash = 0
+                if verbose:
+                    print("no crash")
             valid[crash:] = 0
         stft = row.stft[valid, ...]  # dist, mic, freq
         valid_stfts.append(stft)

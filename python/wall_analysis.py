@@ -169,3 +169,4 @@ if __name__ == "__main__":
 
         df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
+        print("saved as", fname)
