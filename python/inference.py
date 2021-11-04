@@ -18,7 +18,7 @@ if PLATFORM == "crazyflie":
     BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
-INTERPOLATE = False  # True
+INTERPOLATE = True
 N_MAX = 200
 
 
@@ -293,7 +293,9 @@ def get_probability_bayes(
     assert f_slice.ndim == 1
 
     if interpolate:
-        frequencies_grid, f_slice_grid = interpolate_parts(frequencies, f_slice)
+        frequencies_grid, f_slice_grid = interpolate_parts(
+            frequencies, f_slice, step=20
+        )
 
         abs_fft = get_abs_fft(f_slice_grid, n_max=n_max, norm=True)
         differences = get_differences(frequencies_grid, n_max=n_max)
@@ -403,7 +405,7 @@ def get_periods_fft(
     # periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
     periods_m = np.arange(0, n // 2 + 1) / (d_m * n)  # 1/m in terms of orthogonal
 
-    abs_fft = get_abs_fft(d_slice, n_max=N_MAX, norm=True)
+    abs_fft = get_abs_fft(d_slice, n_max=n_max, norm=True)
     if bayes:
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
@@ -445,13 +447,16 @@ def get_approach_angle_fft(
         relative_distances_cm_grid, d_slice_grid = interpolate_parts(
             relative_distances_cm, d_slice, step=1.0
         )
+        assert len(relative_distances_cm_grid) == len(d_slice_grid)
         periods_m, probs = get_periods_fft(
             d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma
         )
+        assert len(periods_m) == len(probs)
     else:
         periods_m, probs = get_periods_fft(
             d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
         )
+        assert len(periods_m) == len(probs)
 
     ratios = periods_m / period_theoretical  # arcsin(ratio) will be the angle estimate
     if not reduced:
@@ -502,8 +507,8 @@ def get_approach_angle_cost(
     return probs_angle
 
 
-def get_gamma_distribution(ratios, probs, eps=1e-3):
-    valid = ratios <= 1 + eps
+def get_gamma_distribution(ratios, probs, eps=1e-2):
+    valid = ratios <= (1 + eps)
     # set all ratios between 1 and 1 + eps to 1.0
     ratios[valid & (ratios > 1)] = 1.0
 
@@ -515,5 +520,6 @@ def get_gamma_distribution(ratios, probs, eps=1e-3):
     probs_unique = np.bincount(index, probs[valid])
 
     # correction factor
-    # probs[valid] *= np.abs(np.cos(gammas))
+    # TODO(FD) need to figure out how to multiply without having zero-prob at 90.
+    # probs_unique *= np.abs(np.cos(gammas_unique))
     return gammas_unique * 180 / np.pi, probs_unique
