@@ -14,8 +14,8 @@ EPS = 1e-30
 WALL_ANGLE_DEG = None
 
 if PLATFORM == "crazyflie":
-    # BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
-    BAD_FREQ_RANGES = [[0, 2995]]
+    BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+    # BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
 INTERPOLATE = True
@@ -40,7 +40,7 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
     if verbose:
         print(f"interpolating at {np.sum(valid)} points")
     xvalues_grid = xvalues_grid[valid]
-    assert np.median(np.diff(xvalues_grid)) == step, (
+    assert np.abs(np.median(np.diff(xvalues_grid)) - step) < 1e-10, (
         np.median(np.diff(xvalues_grid)),
         step,
     )
@@ -220,11 +220,8 @@ class Inference(object):
         )
 
 
-def get_abs_fft(f_slice, n_max=N_MAX, norm=True):
-    if norm:
-        f_slice_norm = f_slice - np.nanmean(f_slice)
-    else:
-        f_slice_norm = f_slice
+def get_abs_fft(f_slice, n_max=N_MAX):
+    f_slice_norm = f_slice - np.nanmean(f_slice)
     n = max(len(f_slice), n_max)
     return np.abs(np.fft.rfft(f_slice_norm, n=n))
 
@@ -297,11 +294,11 @@ def get_probability_bayes(
             frequencies, f_slice, step=20
         )
 
-        abs_fft = get_abs_fft(f_slice_grid, n_max=n_max, norm=True)
+        abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
         posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
     else:
-        abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
+        abs_fft = get_abs_fft(f_slice, n_max=n_max)
 
         # get path interference differences corresponding to used frequencies
         differences = get_differences(frequencies, n_max=n_max)
@@ -403,9 +400,11 @@ def get_periods_fft(
     n = max(len(d_slice), n_max)
 
     # periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
-    periods_m = np.arange(0, n // 2 + 1) / (d_m * n)  # 1/m in terms of orthogonal
+    periods_m = np.arange(0, n // 2 + 1) / (
+        d_m * n
+    )  # 1/m in terms of orthogonal distance
 
-    abs_fft = get_abs_fft(d_slice, n_max=n_max, norm=True)
+    abs_fft = get_abs_fft(d_slice, n_max=n_max)
     if bayes:
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
@@ -422,7 +421,7 @@ def get_approach_angle_fft(
     frequency,
     relative_distances_cm,
     n_max=N_MAX,
-    bayes=False,
+    bayes=True,
     sigma=None,
     reduced=False,
     interpolate=INTERPOLATE,
@@ -439,26 +438,31 @@ def get_approach_angle_fft(
     from constants import SPEED_OF_SOUND
 
     # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
-    period_theoretical = (
-        factor * frequency / SPEED_OF_SOUND
-    )  # 1/m in terms of orthogonal distance
+    period_theoretical = SPEED_OF_SOUND / (
+        factor * frequency
+    )  # m in terms of orthogonal distance
 
     if interpolate:
+        # important to choose small enough step size to insure
+        # to capture interference!
+        step = period_theoretical * 1e2 / 20
         relative_distances_cm_grid, d_slice_grid = interpolate_parts(
-            relative_distances_cm, d_slice, step=1.0
+            relative_distances_cm, d_slice, step=step
         )
-        assert len(relative_distances_cm_grid) == len(d_slice_grid)
-        periods_m, probs = get_periods_fft(
+        freqs_m, probs = get_periods_fft(
             d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma
         )
-        assert len(periods_m) == len(probs)
     else:
-        periods_m, probs = get_periods_fft(
+        freqs_m, probs = get_periods_fft(
             d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
         )
-        assert len(periods_m) == len(probs)
 
-    ratios = periods_m / period_theoretical  # arcsin(ratio) will be the angle estimate
+    periods_m = 1 / freqs_m[freqs_m > 0]
+    probs = probs[freqs_m > 0]
+
+    # print("periods in cm", np.min(periods_m) * 1e2, np.max(periods_m) * 1e2)
+    probs *= 1 / periods_m ** 2
+    ratios = period_theoretical / periods_m  # arcsin(ratio) will be the angle estimate
     if not reduced:
         return ratios, probs
     else:
@@ -507,19 +511,24 @@ def get_approach_angle_cost(
     return probs_angle
 
 
-def get_gamma_distribution(ratios, probs, eps=1e-2):
+def get_gamma_distribution(ratios, probs, eps=1e-3):
     valid = ratios <= (1 + eps)
     # set all ratios between 1 and 1 + eps to 1.0
     ratios[valid & (ratios > 1)] = 1.0
 
     # angles
     gammas = np.arcsin(ratios[valid])
+    # print('last three angles', gammas[-3:] * 180 / np.pi)
 
     # accumulate probabilities over duplicate gammas (at 90, for instance)
     gammas_unique, index = np.unique(gammas, return_inverse=True)
     probs_unique = np.bincount(index, probs[valid])
 
+    probs_unique = probs_unique[gammas_unique > 0]
+    gammas_unique = gammas_unique[gammas_unique > 0]
+
     # correction factor
     # TODO(FD) need to figure out how to multiply without having zero-prob at 90.
-    # probs_unique *= np.abs(np.cos(gammas_unique))
+    probs_unique *= np.abs(np.cos(gammas_unique) / (np.sin(gammas_unique) ** 2))
+    # probs_unique /= np.sum(probs_unique)
     return gammas_unique * 180 / np.pi, probs_unique
