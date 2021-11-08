@@ -19,7 +19,7 @@ if PLATFORM == "crazyflie":
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
 INTERPOLATE = True
-N_MAX = 200
+N_MAX = 1000
 
 
 def interpolate_parts(xvalues, values, step=None, verbose=False):
@@ -291,9 +291,8 @@ def get_probability_bayes(
 
     if interpolate:
         frequencies_grid, f_slice_grid = interpolate_parts(
-            frequencies, f_slice, step=20
+            frequencies, f_slice,  # step=20
         )
-
         abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
         posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)

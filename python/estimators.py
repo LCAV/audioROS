@@ -13,8 +13,8 @@ from scipy.interpolate import interp1d
 from geometry import Context
 
 # method to combine probability distributions
-METHOD = "product"  # TODO(FD) not working yet
-# METHOD = "sum"
+# TODO(FD): understand why sum gives better resuls than product.
+METHOD = "sum"
 EPS = 1e-30  # smallest value for probability distribution
 
 
@@ -206,11 +206,10 @@ class DistanceEstimator(object):
                 )
                 probs_interp = interp1d_func(azimuths_deg)
 
-                # TODO(FD) understand why below works better without correction.
-                # correction_factor = self.context.get_delta_gradient_angle(
-                #    distance_estimate_m, azimuths_deg, mic_idx
-                # )
-                # probs_interp *= correction_factor
+                correction_factor = self.context.get_delta_gradient_angle(
+                    distance_estimate_m, azimuths_deg, mic_idx
+                )
+                probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
                 probs_interp[probs_interp < 0] = EPS
