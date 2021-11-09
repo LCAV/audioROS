@@ -445,6 +445,7 @@ def get_approach_angle_fft(
         # important to choose small enough step size to insure
         # to capture interference!
         step = period_theoretical * 1e2 / 20
+        # print("step size", step)
         relative_distances_cm_grid, d_slice_grid = interpolate_parts(
             relative_distances_cm, d_slice, step=step
         )

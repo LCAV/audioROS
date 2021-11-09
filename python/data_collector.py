@@ -730,6 +730,9 @@ class DataCollector(object):
         df = self.filter_by_column(frequency, "frequency")
         return get_distance_slice(df, mics=mics)
 
+    def get_n_measurement_times(self):
+        return len(self.df.time.unique())
+
     def get_current_distance_slice(self, verbose=False, n_max=30):
         times = self.df.time.unique()
         if len(times) < 2:

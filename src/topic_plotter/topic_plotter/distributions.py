@@ -19,6 +19,8 @@ from .live_plotter import LivePlotter
 N_TIMES = 30
 LOG = False
 N_LABELS = 10
+# YLABEL = "distance [cm]"
+YLABEL = "angle [deg]"
 
 
 class DistributionsPlotter(Node):
@@ -55,7 +57,7 @@ class DistributionsPlotter(Node):
             self.x_labels[name] = np.zeros(N_TIMES)
             self.y_labels[name] = None
             self.axs[i].set_xlabel("timestamp [s]")
-            self.axs[i].set_ylabel("distance [cm]")
+            self.axs[i].set_ylabel(YLABEL)
             self.axs[i].set_title(name)
 
     def listener_callback_distribution_raw(self, msg_dist):

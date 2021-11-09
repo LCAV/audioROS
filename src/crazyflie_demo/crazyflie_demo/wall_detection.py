@@ -59,12 +59,12 @@ class WallDetection(NodeWithParams):
 
         self._action_client = ActionClient(self, CrazyflieCommands, "commands")
 
-        self.subscription_signals = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback_fslice, 10
-        )
         # self.subscription_signals = self.create_subscription(
-        #    SignalsFreq, "audio/signals_f", self.listener_callback_dslice, 10
+        #    SignalsFreq, "audio/signals_f", self.listener_callback_fslice, 10
         # )
+        self.subscription_signals = self.create_subscription(
+            SignalsFreq, "audio/signals_f", self.listener_callback_dslice, 10
+        )
         self.pose_synch = TopicSynchronizer(10)
         self.subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
@@ -176,12 +176,18 @@ class WallDetection(NodeWithParams):
             magnitudes = np.abs(signals_f).T ** 2 / WINDOW_CORRECTION  # 4 x 20
 
             position_cm = r_world * 1e2
+            self.get_logger().info(
+                f"Filling with signals at time and distance: {timestamp} {position_cm[1]}"
+            )
             self.data_collector.fill_from_signal(
-                signals_f,
+                signals_f.T,
                 freqs,
                 distance_cm=position_cm[1],
-                time=timestamp * 1e-3,
+                time=timestamp,
                 mode=FREQ,
+            )
+            self.get_logger().info(
+                f"Number of measurements: {self.data_collector.get_n_measurement_times()}"
             )
 
             data = self.data_collector.get_current_distance_slice(n_max=N_MAX)
@@ -191,15 +197,20 @@ class WallDetection(NodeWithParams):
                 self.get_logger().info("no measurements yet")
                 return
 
+            if len(rel_distances_cm) < N_MAX:
+                self.get_logger().info(f"not ready yet: {len(rel_distances_cm)}")
+                return
+
             angle_estimator = AngleEstimator()
+            # d_slices is of shape 4x20, rel_distances_cm of shape 20
             for mic_idx in range(N_MICS):
-                self.get_logger().info(
-                    f"shape {d_slices.shape}, {rel_distances_cm.shape}"
-                )
                 angles, proba = get_approach_angle_fft(
-                    d_slice=d_slices[mic_idx],
+                    d_slice=d_slices[mic_idx],  # shape 4 x 20
                     frequency=FREQ,
                     relative_distances_cm=rel_distances_cm,
+                    bayes=True,
+                    interpolate=True,
+                    reduced=True,
                 )
                 angle_estimator.add_distribution(angles, proba, mic_idx, FREQ)
 
@@ -219,7 +230,7 @@ class WallDetection(NodeWithParams):
                 )
 
             angle_estimate = angles[np.argmax(prob)]
-            self.get_logger().info(f"Current angle estimate: {angle_estimate:.1f}deg")
+            # self.get_logger().info(f"Current angle estimate: {angle_estimate:.1f}deg")
             self.new_sample_to_treat = True
 
     def sleep(self, time_s):
@@ -369,14 +380,14 @@ class WallDetection(NodeWithParams):
         return
 
     # detect wall using mono frequency
-    def do_dslice(self):
+    def do_dslices(self):
         self.get_logger().info("taking off...")
         future = self.send_command("hover_height", 0.4)
         rclpy.spin_until_future_complete(self, future)
         self.get_logger().info("done")
 
         self.get_logger().info("buzzer...")
-        future = self.send_command("buzzer_idx", 13000)
+        future = self.send_command("buzzer_idx", 3000)
         rclpy.spin_until_future_complete(self, future)
         self.get_logger().info("done")
 
@@ -385,9 +396,12 @@ class WallDetection(NodeWithParams):
         rclpy.spin_until_future_complete(self, future)
         self.get_logger().info("done")
         # wait until calibration is done
+
+        t1 = time.time()
         while 1:
-            if time.time() - t1 > 30:
+            if time.time() - t1 > 20:
                 self.get_logger().info("wall detection timeout")
+                break
 
             rclpy.spin_once(self)
             if not self.new_sample_to_treat:
@@ -398,17 +412,14 @@ class WallDetection(NodeWithParams):
             curr_dist = self.distributions.get("wall_approach", None)
             if curr_dist is not None:
                 angles, prob = curr_dist
-                angle_estimate = dist[np.argmax(prob)]
-                self.get_logger().info(f"wall at {angle_estimate}, continuing.")
-            else:
-                self.get_logger().info("no distribution yet")
-                continue
+                angle_estimate = angles[np.argmax(prob)]
+                self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
 
-        self.get_logger().info("landing...")
+        future = self.send_command("buzzer_idx", 0)
+        rclpy.spin_until_future_complete(self, future)
+
         future = self.send_command("land_velocity", 0.2)  # 50.0)
         rclpy.spin_until_future_complete(self, future)
-        self.get_logger().info("done")
-        self.get_logger().warn("exiting...")
         return
 
     def send_command(self, command_name, command_value=0.0):
@@ -451,8 +462,8 @@ def main(args=None):
     rclpy.init(args=args)
     action_client = WallDetection()
     # action_client.do_fslices()
-    action_client.do_fslices_hover()
-    # action_client.do_dslices()
+    # action_client.do_fslices_hover()
+    action_client.do_dslices()
     rclpy.shutdown()
 
 
