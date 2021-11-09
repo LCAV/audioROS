@@ -216,7 +216,10 @@ class ReaderCRTP(object):
         self.cf = crazyflie
         self.verbose = verbose
 
-        self.mc = MotionCommander(self.cf)
+        if self.cf is not None:
+            self.mc = MotionCommander(self.cf)
+        else:
+            self.mc = None
 
         self.logging_dicts = {
             key: {"timestamp": None, "data": None, "published": True}
@@ -229,8 +232,9 @@ class ReaderCRTP(object):
         if log_motors:
             self.init_log_config("motors")
 
-        self.cf.add_port_callback(CRTP_PORT_AUDIO, self.callback_audio)
-        self.cf.add_port_callback(CRTPPort.CONSOLE, self.callback_console)
+        if self.cf is not None:
+            self.cf.add_port_callback(CRTP_PORT_AUDIO, self.callback_audio)
+            self.cf.add_port_callback(CRTPPort.CONSOLE, self.callback_console)
 
         # this data can be read and published by ROS nodes
         self.audio_dict = {
@@ -250,17 +254,28 @@ class ReaderCRTP(object):
         self.last_packet_time = 0
 
         # start sending audio data
-        self.cf.param.set_value("audio.send_audio_enable", 1)
-        if self.verbose:
-            print("ReaderCRTP: set audio.send_audio_enable")
+        if self.cf is not None:
+            self.cf.param.set_value("audio.send_audio_enable", 1)
+            if self.verbose:
+                print("ReaderCRTP: set audio.send_audio_enable")
+
+    def set_audio_param(self, param):
+        if self.cf is not None:
+            self.cf.param.set_value(f"audio.{param.name}", param.value)
+
+    def send_disable_motors():
+        if self.cf is not None:
+            self.cf.param.set_value("motorPowerSet.enable", 0)
 
     def init_log_config(self, name):
         lg_config = LogConfig(name=name, period_in_ms=LOGGING_PERIODS_MS[name])
         for log_value in CHOSEN_LOGGERS[name].values():
             lg_config.add_variable(log_value[0], log_value[1])
-        self.cf.log.add_config(lg_config)
-        lg_config.data_received_cb.add_callback(self.callback_logging)
-        lg_config.start()
+
+        if self.cf is not None:
+            self.cf.log.add_config(lg_config)
+            lg_config.data_received_cb.add_callback(self.callback_logging)
+            lg_config.start()
 
     def get_time_ms(self):
         return int((time.time() - self.start_time) * 1000)
@@ -345,7 +360,9 @@ class ReaderCRTP(object):
         return True
 
     def send_thrust_command(self, value, motor="all"):
-        # current_value = np.mean([self.cf.param.values['motorPowerSet.m{i}'] for i in range(1, 5)])
+        if self.cf is None:
+            return True
+
         if (value > 0) and not self.battery_ok():
             return False
 
@@ -359,12 +376,16 @@ class ReaderCRTP(object):
         return True
 
     def send_hover_command(self, height):
+        if self.mc is None:
+            return True
         if not self.battery_ok():
             return False
         self.mc.take_off(height)
         return True
 
     def send_turn_command(self, angle_deg):
+        if self.mc is None:
+            return True
         if angle_deg > 0:
             self.mc.turn_left(angle_deg)
         else:
@@ -374,6 +395,8 @@ class ReaderCRTP(object):
         # time.sleep(1)
 
     def send_move_command(self, distance_m):
+        if self.mc is None:
+            return True
         if distance_m > 0:
             self.mc.forward(distance_m, velocity=self.VELOCITY)
         else:
@@ -381,6 +404,8 @@ class ReaderCRTP(object):
         return True
 
     def send_forward_command(self, velocity=None):
+        if self.mc is None:
+            return True
         if velocity is None:
             print("warning: using default", self.VELOCITY)
             self.mc.start_forward(self.VELOCITY)
@@ -390,6 +415,8 @@ class ReaderCRTP(object):
         return True
 
     def send_land_command(self, velocity=0):
+        if self.mc is None:
+            return True
         if velocity > 0:
             self.mc.land(velocity)
         else:
@@ -397,20 +424,24 @@ class ReaderCRTP(object):
         return True
 
     def send_buzzer_idx(self, idx):
-        self.cf.param.set_value("audio.buzzer_idx", idx)
+        if self.cf is not None:
+            self.cf.param.set_value("audio.buzzer_idx", idx)
 
     # uses Crazyflie buzzer deck
     def send_buzzer_effect(self, effect):
-        self.cf.param.set_value("sound.effect", effect)
+        if self.cf is not None:
+            self.cf.param.set_value("sound.effect", effect)
 
     # uses Crazyflie buzzer deck
     def send_buzzer_freq(self, freq):
-        self.cf.param.set_value("sound.freq", freq)
+        if self.cf is not None:
+            self.cf.param.set_value("sound.freq", freq)
 
     def send_audio_enable(self, value):
         self.audio_array.reset_array()
         self.fbins_array.reset_array()
-        self.cf.param.set_value("audio.send_audio_enable", value)
+        if self.cf is not None:
+            self.cf.param.set_value("audio.send_audio_enable", value)
 
 
 if __name__ == "__main__":

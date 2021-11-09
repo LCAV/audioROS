@@ -25,7 +25,7 @@ class NodeWithParams(Node, ABC):
         super().__init__(
             *args,
             automatically_declare_parameters_from_overrides=True,
-            allow_undeclared_parameters=True
+            allow_undeclared_parameters=True,
         )
 
         self.set_parameters_callback(self.set_params)
@@ -54,8 +54,9 @@ class NodeWithParams(Node, ABC):
             # was not set at startup.
             # then we use the default values.
             if param.type_ == param.Type.NOT_SET:
-                value = self.PARAMS_DICT[param.name]
-                param = rclpy.parameter.Parameter(param.name, value=value)
+                param = rclpy.parameter.Parameter(
+                    param.name, value=self.PARAMS_DICT[param.name]
+                )
             new_params[param.name] = param.value
 
         if self.verify_validity(new_params):

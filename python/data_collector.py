@@ -72,7 +72,7 @@ def get_distance_slice(df, mics=None):
     freqs = pt_frequency.values[0, :]
 
     distances = pt.columns.values
-    slice_d = pt.values
+    slice_d = pt.values ** 2
     stds = df.groupby("mic").magnitude.std().values
     return slice_d, distances, stds, freqs
 
@@ -683,7 +683,7 @@ class DataCollector(object):
             )
             print("difference:", diff)
             f_indices = f_indices[np.abs(diff) < allowed_delta]
-        slice_f = slice_f[:, f_indices]
+        slice_f = slice_f[:, f_indices] ** 2
         freqs = freqs_here[f_indices]
 
         if normalize_method != "":
