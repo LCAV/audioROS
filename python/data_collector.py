@@ -9,6 +9,8 @@ import scipy.interpolate
 from dataset_parameters import kwargs_datasets
 from frequency_analysis import *
 
+N_MAX = 30  # default number of distances to consider
+
 ANGLE = 0
 DISTANCE = 0
 METHOD = np.nanmedian
@@ -72,7 +74,7 @@ def get_distance_slice(df, mics=None):
     freqs = pt_frequency.values[0, :]
 
     distances = pt.columns.values
-    slice_d = pt.values ** 2
+    slice_d = pt.values
     stds = df.groupby("mic").magnitude.std().values
     return slice_d, distances, stds, freqs
 
@@ -331,9 +333,7 @@ def remove_outliers(df, factor=FACTOR_OUTLIERS, normalize=False, verbose=False):
 def remove_nan_rows(df, verbose=False):
     if verbose:
         print(f"remove_nan_rows: dropping {len(df.loc[df.magnitude.isnull()])} rows")
-    len_before = len(df)
     df.dropna(axis=0, subset=["magnitude"], inplace=True)
-    len_after = len(df)
 
 
 def to_numeric(df):
@@ -672,7 +672,7 @@ class DataCollector(object):
         pt = df.pivot_table(
             index="mic", columns="frequency", values="magnitude", aggfunc=METHOD
         )
-        slice_f = pt.values
+        magnitudes = pt.values
         freqs_here = pt.columns.values
         f_indices = find_closest_indices(frequencies, freqs_here)
 
@@ -683,7 +683,7 @@ class DataCollector(object):
             )
             print("difference:", diff)
             f_indices = f_indices[np.abs(diff) < allowed_delta]
-        slice_f = slice_f[:, f_indices] ** 2
+        slice_f = magnitudes[:, f_indices] ** 2
         freqs = freqs_here[f_indices]
 
         if normalize_method != "":
@@ -733,16 +733,18 @@ class DataCollector(object):
     def get_n_measurement_times(self):
         return len(self.df.time.unique())
 
-    def get_current_distance_slice(self, verbose=False, n_max=30):
-        times = self.df.time.unique()
+    def get_current_distance_slice(self, verbose=False, n_max=N_MAX):
+
+        df = cleanup_conservative(self.df, verbose=verbose)
+        times = df.time.unique()
         if len(times) < 2:
             return None
         elif len(times) < n_max:
             self.latest_dslice_time = -1
         else:
             self.latest_dslice_time = times[-n_max]
-        latest_df = self.df[self.df.time >= self.latest_dslice_time]
 
+        latest_df = df[df.time >= self.latest_dslice_time]
         latest_df_clean = cleanup_conservative(latest_df, verbose=verbose)
 
         d_slice, distances, stds, freqs = get_distance_slice(latest_df_clean)

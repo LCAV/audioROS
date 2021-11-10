@@ -1,4 +1,3 @@
-from enum import Enum
 import sys
 import time
 
@@ -26,9 +25,11 @@ from moving_estimators import MovingEstimator
 
 DRYRUN = False
 
-FREQ = 3000
-N_MAX = 20
+# dslice
+FREQ = 3000  # mono frequency signal
+N_MAX = 14  # how many distances to use
 
+# flsice
 N_WINDOW = 5
 WALL_ANGLE_DEG = 90
 DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
@@ -42,10 +43,10 @@ FLYING_HEIGHT_CM = 30
 # TODO(FD) in the future, this should be done in gateway depending on the window chosen.
 WINDOW_CORRECTION = 0.215579  #  flattop
 
-
-class states(Enum):
-    CALIBRATE = 0
-    INFERENCE = 1
+SCHEME = "dslice_debug"
+# SCHEME = "fslice"
+# SCHEME = "fslice_hover"
+# SCHEME = "fslice_debug"
 
 
 class WallDetection(NodeWithParams):
@@ -59,15 +60,25 @@ class WallDetection(NodeWithParams):
 
         self._action_client = ActionClient(self, CrazyflieCommands, "commands")
 
-        # self.subscription_signals = self.create_subscription(
-        #    SignalsFreq, "audio/signals_f", self.listener_callback_fslice, 10
-        # )
-        self.subscription_signals = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback_dslice, 10
-        )
-        self.pose_synch = TopicSynchronizer(10)
+        if "fslice" in SCHEME:
+            self.subscription_signals = self.create_subscription(
+                SignalsFreq, "audio/signals_f", self.listener_callback_fslice, 10
+            )
+        else:
+            self.subscription_signals = self.create_subscription(
+                SignalsFreq, "audio/signals_f", self.listener_callback_dslice, 10
+            )
+
+        self.pose_synch = TopicSynchronizer(10, self.get_logger())
         self.subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
+        )
+        self.dist_raw_synch = TopicSynchronizer(10, self.get_logger())
+        self.subscription_dist_raw = self.create_subscription(
+            Distribution,
+            "results/distribution_raw",
+            self.dist_raw_synch.listener_callback,
+            10,
         )
         self.publisher_distribution_raw = self.create_publisher(
             Distribution, "results/distribution_raw", 10
@@ -76,7 +87,11 @@ class WallDetection(NodeWithParams):
             Distribution, "results/distribution_moving", 10
         )
 
+        # self.start_time = None # use relative time since start
+        self.start_time = 0  # use absolute time
+
         # initialize wall detection stuff
+
         self.data_collector = DataCollector()
         self.inf_machine = Inference()
         self.inf_machine.add_geometry(DIST_RANGE_CM, WALL_ANGLE_DEG)
@@ -89,9 +104,10 @@ class WallDetection(NodeWithParams):
         self.distributions = {}
 
     def listener_callback_fslice(self, msg_signals):
-        timestamp = msg_signals.timestamp
-        msg_pose = self.pose_synch.get_latest_message(timestamp, self.get_logger())
+        msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
         if msg_pose is not None:
+
+            timestamp = self.get_timestamp()
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
@@ -111,6 +127,7 @@ class WallDetection(NodeWithParams):
             calibration = np.median(self.calibration, axis=2)
             magnitudes_calib = magnitudes
 
+            # sometimes there can be a sample missing from the end of the signal...
             if len(calibration) != len(magnitudes_calib):
                 self.get_logger().warn("length mismatch! {len(magnitudes_calib)}")
                 calibration_here = calibration[:, : len(magnitudes_calib)]
@@ -156,7 +173,11 @@ class WallDetection(NodeWithParams):
             # self.get_logger().info("Published moving-average distribution")
 
             if np.any(prob_moving > 0):
-                self.distributions["wall_distance"] = (DISTANCES_CM, prob_moving)
+                self.distributions["wall_distance"] = (
+                    DISTANCES_CM,
+                    prob_moving,
+                    timestamp,
+                )
             else:
                 self.get_logger().warn(f"not adding cause all-zero")
 
@@ -167,18 +188,18 @@ class WallDetection(NodeWithParams):
             self.new_sample_to_treat = True
 
     def listener_callback_dslice(self, msg_signals):
-        timestamp = msg_signals.timestamp
-        msg_pose = self.pose_synch.get_latest_message(timestamp, self.get_logger())
+        msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
         if msg_pose is not None:
+            timestamp = self.get_timestamp()
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
-            magnitudes = np.abs(signals_f).T ** 2 / WINDOW_CORRECTION  # 4 x 20
+            signals_f = signals_f / WINDOW_CORRECTION  # 4 x 20
 
             position_cm = r_world * 1e2
-            self.get_logger().info(
-                f"Filling with signals at time and distance: {timestamp} {position_cm[1]}"
-            )
+            # self.get_logger().info(
+            #        f"Filling {position_cm[1]} {np.abs(signals_f[15:19, 0])} {freqs[15:19]}"
+            # )
             self.data_collector.fill_from_signal(
                 signals_f.T,
                 freqs,
@@ -186,9 +207,9 @@ class WallDetection(NodeWithParams):
                 time=timestamp,
                 mode=FREQ,
             )
-            self.get_logger().info(
-                f"Number of measurements: {self.data_collector.get_n_measurement_times()}"
-            )
+            # self.get_logger().info(
+            #    f"Number of measurements: {self.data_collector.get_n_measurement_times()}"
+            # )
 
             data = self.data_collector.get_current_distance_slice(n_max=N_MAX)
             if data is not None:
@@ -198,7 +219,7 @@ class WallDetection(NodeWithParams):
                 return
 
             if len(rel_distances_cm) < N_MAX:
-                self.get_logger().info(f"not ready yet: {len(rel_distances_cm)}")
+                self.get_logger().info(f"Not ready yet: {len(rel_distances_cm)}")
                 return
 
             angle_estimator = AngleEstimator()
@@ -209,7 +230,6 @@ class WallDetection(NodeWithParams):
                     frequency=FREQ,
                     relative_distances_cm=rel_distances_cm,
                     bayes=True,
-                    interpolate=True,
                     reduced=True,
                 )
                 angle_estimator.add_distribution(angles, proba, mic_idx, FREQ)
@@ -220,24 +240,12 @@ class WallDetection(NodeWithParams):
             msg = create_distribution_message(
                 angle_estimator.ANGLES_DEG, np.array(prob), timestamp
             )
+            self.get_logger().info("Published raw distribution")
             self.publisher_distribution_raw.publish(msg)
-            # self.get_logger().info("Published raw distribution")
-
-            if np.any(prob > 0):
-                self.distributions["wall_approach"] = (
-                    angle_estimator.ANGLES_DEG,
-                    prob,
-                )
 
             angle_estimate = angles[np.argmax(prob)]
-            # self.get_logger().info(f"Current angle estimate: {angle_estimate:.1f}deg")
-            self.new_sample_to_treat = True
+            self.get_logger().info(f"Current angle estimate: {angle_estimate:.1f}deg")
 
-    def sleep(self, time_s):
-        self.get_logger().info(f"sleeping for {time_s}...")
-        time.sleep(time_s)
-
-    # detect wall using continuous sweeps
     def do_fslices(self):
         self.get_logger().info("taking off...")
         future = self.send_command("hover_height", 0.4)
@@ -278,9 +286,13 @@ class WallDetection(NodeWithParams):
                 continue
             self.new_sample_to_treat = False
 
-            curr_dist = self.distributions.get("wall_distance", None)
-            if curr_dist is not None:
-                dist, prob = curr_dist
+            timestamp = self.get_timestamp()
+            # curr_dist = self.distributions.get("wall_distance", None)
+            curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
+            if curr_dist_message is not None:
+                dist = curr_dist_message.values
+                prob = curr_dist_message.probabilities
+                timestamp = curr_dist_message.timestamp
                 distance_estimate = dist[np.argmax(prob)]
                 if distance_estimate < DISTANCE_THRESHOLD_CM:
                     self.get_logger().info(
@@ -291,7 +303,6 @@ class WallDetection(NodeWithParams):
                     self.get_logger().info(f"wall at {distance_estimate}, continuing.")
             else:
                 self.get_logger().info("no distribution yet")
-                continue
 
         self.get_logger().info("buzzer...")
         future = self.send_command("buzzer_idx", 0)
@@ -304,6 +315,44 @@ class WallDetection(NodeWithParams):
         self.get_logger().info("done")
         self.get_logger().warn("exiting...")
         return
+
+    def sleep(self, time_s):
+        self.get_logger().info(f"sleeping for {time_s}...")
+        time.sleep(time_s)
+
+    def get_timestamp(self):
+        curr_time = int(time.process_time() * 1e3)  # ms
+        if self.start_time is None:
+            self.start_time = curr_time
+        return curr_time - self.start_time
+
+    def do_fslices_process(self):
+        while 1:
+            rclpy.spin_once(self)
+            if not self.new_sample_to_treat:
+                continue
+            self.new_sample_to_treat = False
+
+            timestamp = self.get_timestamp()
+            curr_dist = self.distributions.get("wall_distance", None)
+            curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
+            if curr_dist_message is not None:
+                dist = curr_dist_message.values
+                prob = curr_dist_message.probabilities
+                self.get_logger()
+                dist2, prob2, timestamp2 = curr_dist
+                self.get_logger().info(
+                    f"from message:{timestamp}, from variable:{timestamp2}"
+                )
+                distance_estimate = dist[np.argmax(prob)]
+                if distance_estimate < DISTANCE_THRESHOLD_CM:
+                    self.get_logger().info(
+                        f"WALL AT {distance_estimate}, TURNING AROUND!"
+                    )
+                else:
+                    self.get_logger().info(f"wall at {distance_estimate}, continuing.")
+            else:
+                self.get_logger().info("no distribution yet")
 
     def do_fslices_hover(self):
         self.get_logger().info("taking off...")
@@ -422,6 +471,28 @@ class WallDetection(NodeWithParams):
         rclpy.spin_until_future_complete(self, future)
         return
 
+    def do_dslices_process(self):
+        while 1:
+            rclpy.spin_once(self)
+            if not self.new_sample_to_treat:
+                continue
+
+            self.new_sample_to_treat = False
+
+            curr_dist = self.distributions.get("wall_approach", None)
+            curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
+            if curr_dist_message is not None:
+                angles, prob, timestamp = curr_dist
+                angle_estimate = angles[np.argmax(prob)]
+                self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
+
+        future = self.send_command("buzzer_idx", 0)
+        rclpy.spin_until_future_complete(self, future)
+
+        future = self.send_command("land_velocity", 0.2)  # 50.0)
+        rclpy.spin_until_future_complete(self, future)
+        return
+
     def send_command(self, command_name, command_value=0.0):
         goal_msg = CrazyflieCommands.Goal()
         goal_msg.command_name = command_name
@@ -461,9 +532,12 @@ class WallDetection(NodeWithParams):
 def main(args=None):
     rclpy.init(args=args)
     action_client = WallDetection()
+    if SCHEME == "fslice_debug":
+        action_client.do_fslices_process()
+    elif SCHEME == "dslice_debug":
+        action_client.do_dslices_process()
     # action_client.do_fslices()
     # action_client.do_fslices_hover()
-    action_client.do_dslices()
     rclpy.shutdown()
 
 
