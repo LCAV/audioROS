@@ -735,6 +735,7 @@ class DataCollector(object):
 
     def get_current_distance_slice(self, verbose=False, n_max=N_MAX):
 
+        # TODO(FD) need to do distance-unique before extracting time
         df = cleanup_conservative(self.df, verbose=verbose)
         times = df.time.unique()
         if len(times) < 2:
@@ -744,10 +745,15 @@ class DataCollector(object):
         else:
             self.latest_dslice_time = times[-n_max]
 
-        latest_df = df[df.time >= self.latest_dslice_time]
-        latest_df_clean = cleanup_conservative(latest_df, verbose=verbose)
-
+        latest_df_clean = df[df.time >= self.latest_dslice_time]
+        if verbose:
+            print(
+                f"length of current df {len(latest_df_clean[latest_df_clean.mic==0])}"
+            )
         d_slice, distances, stds, freqs = get_distance_slice(latest_df_clean)
+        if verbose:
+            print(f"length of unique distances {len(distances)}")
+
         return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):

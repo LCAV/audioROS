@@ -43,10 +43,11 @@ FLYING_HEIGHT_CM = 30
 # TODO(FD) in the future, this should be done in gateway depending on the window chosen.
 WINDOW_CORRECTION = 0.215579  #  flattop
 
-SCHEME = "dslice_debug"
-# SCHEME = "fslice"
-# SCHEME = "fslice_hover"
-# SCHEME = "fslice_debug"
+SCHEME = "dslices"
+# SCHEME = "dslices_process"
+# SCHEME = "fslices"
+# SCHEME = "fslices_hover"
+# SCHEME = "fslices_process"
 
 
 class WallDetection(NodeWithParams):
@@ -60,14 +61,17 @@ class WallDetection(NodeWithParams):
 
         self._action_client = ActionClient(self, CrazyflieCommands, "commands")
 
-        if "fslice" in SCHEME:
+        # TODO(FD) do automatic switch based on current buzzer idx, in generic listener function.
+        if "fslices" in SCHEME:
             self.subscription_signals = self.create_subscription(
                 SignalsFreq, "audio/signals_f", self.listener_callback_fslice, 10
             )
-        else:
+        elif "dslices" in SCHEME:
             self.subscription_signals = self.create_subscription(
                 SignalsFreq, "audio/signals_f", self.listener_callback_dslice, 10
             )
+        else:
+            raise ValueError(SCHEME)
 
         self.pose_synch = TopicSynchronizer(10, self.get_logger())
         self.subscription_pose = self.create_subscription(
@@ -211,7 +215,9 @@ class WallDetection(NodeWithParams):
             #    f"Number of measurements: {self.data_collector.get_n_measurement_times()}"
             # )
 
-            data = self.data_collector.get_current_distance_slice(n_max=N_MAX)
+            data = self.data_collector.get_current_distance_slice(
+                n_max=N_MAX, verbose=True
+            )
             if data is not None:
                 d_slices, rel_distances_cm, *_ = data
             else:
@@ -220,7 +226,7 @@ class WallDetection(NodeWithParams):
 
             if len(rel_distances_cm) < N_MAX:
                 self.get_logger().info(f"Not ready yet: {len(rel_distances_cm)}")
-                return
+                # return
 
             angle_estimator = AngleEstimator()
             # d_slices is of shape 4x20, rel_distances_cm of shape 20
@@ -370,7 +376,7 @@ class WallDetection(NodeWithParams):
         self.n_samples = 0
         t1 = time.time()
         while self.n_samples < (N_CALIBRATION + N_WINDOW):
-            if time.time() - t1 > 30:
+            if time.time() - t1 > 40:
                 self.get_logger().info("calibration timeout")
                 break
             rclpy.spin_once(self)
@@ -448,7 +454,7 @@ class WallDetection(NodeWithParams):
 
         t1 = time.time()
         while 1:
-            if time.time() - t1 > 20:
+            if time.time() - t1 > 40:
                 self.get_logger().info("wall detection timeout")
                 break
 
@@ -459,8 +465,11 @@ class WallDetection(NodeWithParams):
             self.new_sample_to_treat = False
 
             curr_dist = self.distributions.get("wall_approach", None)
+
+            # curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
+            # if curr_dist_message is not None:
             if curr_dist is not None:
-                angles, prob = curr_dist
+                angles, prob, timestamp = curr_dist
                 angle_estimate = angles[np.argmax(prob)]
                 self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
 
@@ -480,8 +489,9 @@ class WallDetection(NodeWithParams):
             self.new_sample_to_treat = False
 
             curr_dist = self.distributions.get("wall_approach", None)
-            curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
-            if curr_dist_message is not None:
+            # curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
+            # if curr_dist_message is not None:
+            if curr_dist is not None:
                 angles, prob, timestamp = curr_dist
                 angle_estimate = angles[np.argmax(prob)]
                 self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
@@ -532,12 +542,18 @@ class WallDetection(NodeWithParams):
 def main(args=None):
     rclpy.init(args=args)
     action_client = WallDetection()
-    if SCHEME == "fslice_debug":
+    if SCHEME == "fslices_process":
         action_client.do_fslices_process()
-    elif SCHEME == "dslice_debug":
+    elif SCHEME == "dslices_process":
         action_client.do_dslices_process()
-    # action_client.do_fslices()
-    # action_client.do_fslices_hover()
+    elif SCHEME == "dslices":
+        action_client.do_dslices()
+    elif SCHEME == "fslices":
+        action_client.do_fslices()
+    elif SCHEME == "fslices_hover":
+        action_client.do_fslices_hover()
+    else:
+        raise ValueError(SCHEME)
     rclpy.shutdown()
 
 
