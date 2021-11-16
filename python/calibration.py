@@ -170,6 +170,8 @@ def get_calibration_function_moving(
     fit_one_gain=False,
     appendix_list=[""],
     check_height=True,
+    check_crash=True,
+    verbose=False,
 ):
     from scipy.interpolate import interp1d
 
@@ -180,11 +182,28 @@ def get_calibration_function_moving(
 
     valid_stfts = []
     for i, row in rows.iterrows():
+        print(i)
+        valid = np.ones(row.positions.shape[0], dtype=bool)
         if check_height:
-            stft = row.stft[row.positions[:, 2] > 0.3, ...]
+            valid &= row.positions[:, 2] > 0.3
             # print(f'using {stft.shape[0]} out of {row.stft.shape[0]}')
-        else:
-            stft = row.stft
+            if verbose:
+                print(f"{np.sum(valid)} / {row.positions.shape[0]} flying")
+        if check_crash:
+            magnitudes = np.sum(np.mean(np.abs(row.stft), axis=1), axis=-1)  # dist
+            crash = np.where(
+                (magnitudes - np.mean(magnitudes)) > (2 * np.std(magnitudes))
+            )[0]
+            if len(crash) > 0:
+                crash = crash[0]
+                if verbose:
+                    print(f"crash at {crash}")
+            else:
+                crash = 0
+                if verbose:
+                    print("no crash")
+            valid[crash:] = 0
+        stft = row.stft[valid, ...]  # dist, mic, freq
         valid_stfts.append(stft)
     matrix = np.abs(np.concatenate(valid_stfts, axis=0))
     if fit_one_gain:

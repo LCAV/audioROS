@@ -7,6 +7,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.action import ActionServer
 from rcl_interfaces.msg import SetParametersResult
 from geometry_msgs.msg import PoseStamped
 
@@ -23,6 +24,7 @@ from audio_interfaces_py.messages import (
     create_signals_freq_message,
     create_ground_truth_message,
 )
+from audio_interfaces.action import CrazyflieCommands
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import (
@@ -39,7 +41,7 @@ from crazyflie_description_py.experiments import (
 )
 
 logging.basicConfig(level=logging.ERROR)
-cf_id = "E7E7E7E7E8"
+cf_id = "E7E7E7E7E7"
 id = f"radio://0/80/2M/{cf_id}"
 
 # cf_id = "E7E7E7E7E7"
@@ -49,34 +51,33 @@ MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
 
-# parameter default values, will be overwritten by
-# parameter yaml file, given by:
-# ros2 run crazyflie_crtp gateway --ros-args --params-file params/default.yaml
-PARAMS_DICT = {
-    "send_audio_enable": (rclpy.Parameter.Type.INTEGER, 1),
-    "min_freq": (rclpy.Parameter.Type.INTEGER, 4000),
-    "max_freq": (rclpy.Parameter.Type.INTEGER, 4200),
-    "delta_freq": (rclpy.Parameter.Type.INTEGER, 100),  # not used without prop
-    "n_average": (rclpy.Parameter.Type.INTEGER, 5),  # not used without snr
-    "bin_selection": (rclpy.Parameter.Type.INTEGER, 3),
-    "filter_prop_enable": (rclpy.Parameter.Type.INTEGER, 0),
-    "window_type": (rclpy.Parameter.Type.INTEGER, 1),
-    "all": (rclpy.Parameter.Type.INTEGER, 0),
-    "m1": (rclpy.Parameter.Type.INTEGER, 0),
-    "m2": (rclpy.Parameter.Type.INTEGER, 0),
-    "m3": (rclpy.Parameter.Type.INTEGER, 0),
-    "m4": (rclpy.Parameter.Type.INTEGER, 0),
-    "hover_height": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "turn_angle": (rclpy.Parameter.Type.INTEGER, 0),
-    "land_velocity": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "move_distance": (rclpy.Parameter.Type.DOUBLE, 0.0),
-    "buzzer_idx": (rclpy.Parameter.Type.INTEGER, 0),
-    # "buzzer_effect": (rclpy.Parameter.Type.INTEGER, -1),
-    # "buzzer_freq": (rclpy.Parameter.Type.INTEGER, 0),
-}
-
-
 class Gateway(Node):
+    # parameter default values, will be overwritten by
+    # parameter yaml file, given by:
+    # ros2 run crazyflie_crtp gateway --ros-args --params-file params/default.yaml
+    PARAMS_DICT = {
+        "send_audio_enable": 1,
+        "min_freq": 1000,
+        "max_freq": 6000,
+        "delta_freq": 100,  # not used without prop
+        "n_average": 5,  # not used without snr
+        "bin_selection": 5,
+        "filter_prop_enable": 0,
+        "window_type": 1,
+        "all": 0,
+        "m1": 0,
+        "m2": 0,
+        "m3": 0,
+        "m4": 0,
+        "hover_height": 0.0,
+        "turn_angle": 0,
+        "land_velocity": 0.0,
+        "move_distance": 0.0,
+        "buzzer_idx": 0,
+        # "buzzer_effect": -1,
+        # "buzzer_freq": 0,
+    }
+
     def __init__(self, reader_crtp):
         super().__init__(
             "gateway",
@@ -105,6 +106,10 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
+        self.commands_action_server = ActionServer(
+            self, CrazyflieCommands, "commands", self.commands_callback,
+        )
+
         self.ground_truth_published = False
         self.starting_pose = None
 
@@ -114,13 +119,36 @@ class Gateway(Node):
 
         # need to do this to send initial parameters
         # over to Crazyflie.
-        parameters = self.get_parameters(PARAMS_DICT.keys())
+        parameters = self.get_parameters(self.PARAMS_DICT.keys())
         self.set_parameters(parameters)
 
         # choose high publish rate so that we introduce as little
         # waiting time as possible
-        self.desired_rate = 1000  # Hz
-        self.create_timer(1 / self.desired_rate, self.publish_current_data)
+        desired_rate = 1000  # Hz
+        self.create_timer(1 / desired_rate, self.publish_current_data)
+
+    def commands_callback(self, goal_handle):
+        msg = goal_handle.request
+        self.get_logger().info(
+            f"Command received: {msg.timestamp, msg.command_name, msg.command_value}."
+        )
+        found_command = self.send_command(msg.command_name, msg.command_value)
+
+        result = CrazyflieCommands.Result()
+        feedback_msg = CrazyflieCommands.Feedback()
+        if not found_command:
+            self.get_logger().warn(f"Unknown command!")
+            feedback_msg.message = f"Unknown command: {msg.command_name}!"
+            feedback_msg.value = 0.0
+            goal_handle.publish_feedback(feedback_msg)
+            result.message = "Failure"
+            return result
+
+        self.get_logger().info("Done sending command")
+        result.message = "Success"
+        result.value = 1.0
+        goal_handle.succeed()
+        return result
 
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:
@@ -264,74 +292,77 @@ class Gateway(Node):
         """ Overwrite the function set_params by NodeWithParams. 
         We need this so we commute new parameters directly to the Crazyflie drone.
         """
-        success = True
-
         for param in params:
-
             # we need this in case this parameter
             # was not set yet at startup.
-            # then we use the default values.
+            # in that case we use the default values.
             if param.type_ == param.Type.NOT_SET:
-                param = rclpy.parameter.Parameter(param.name, *PARAMS_DICT[param.name])
+                param = rclpy.parameter.Parameter(
+                    param.name, value=self.PARAMS_DICT[param.name]
+                )
 
-            # send motor commands
-            if param.name == "hover_height":
-                if param.value > 0:
-                    success = self.reader_crtp.send_hover_command(param.value)
-            elif param.name == "turn_angle":
-                if param.value != 0:
-                    success = self.reader_crtp.send_turn_command(param.value)
-            elif param.name == "land_velocity":
-                if param.value > 0:
-                    success = self.reader_crtp.send_land_command()
-            elif param.name == "move_distance":
-                # move by given distance, blocking
-                if param.value != 0:
-                    self.reader_crtp.send_move_command(param.value)
-                # move by given velocity, non-blocking
-            elif param.name == "move_forward":
-                if param.value != 0:
-                    self.get_logger().warn(f"send forward command {param.value}")
-                    self.reader_crtp.send_forward_command(param.value)
-
-            # send buzzer commands
-            elif param.name == "buzzer_idx":
-                if param.value >= 0:
-                    self.get_logger().info(f"set {param.name} to {param.value}")
-                    self.reader_crtp.send_buzzer_idx(param.value)
-            elif param.name == "buzzer_effect":
-                if param.value >= 0:
-                    self.reader_crtp.send_buzzer_effect(param.value)
-            elif param.name == "buzzer_freq":
-                if param.value >= 0:
-                    self.reader_crtp.send_buzzer_freq(param.value)
-
-            elif param.name == "all":
-                self.get_logger().info(f"set all motors to {param.value}")
-                success = self.reader_crtp.send_thrust_command(param.value)
-            elif param.name in [f"m{i}" for i in range(1, 5)]:
+            if param.name == "send_audio_enable":
                 self.get_logger().info(f"set {param.name} to {param.value}")
-                success = self.reader_crtp.send_thrust_command(param.value, param.name)
-            elif param.name == "send_audio_enable":
-                self.get_logger().info(f"set {param.name} to {param.value}")
-                self.reader_crtp.send_audio_enable(param.value)
+                # needs to also reset the arrays.
+                if self.reader_crtp is not None:
+                    self.reader_crtp.send_audio_enable(param.value)
+
             else:
-                self.set_audio_param(param)
+                param_is_command = self.send_command(param.name, param.value)
+                if not param_is_command:
+                    print("param is audio")
+                    self.set_audio_param(param)
+        return SetParametersResult(successful=True)
 
-        if success:
-            return SetParametersResult(successful=True)
-        else:
-            return SetParametersResult(successful=False)
+    def send_command(self, param_name, param_value):
+        param_value = float(param_value)
+        if param_name == "hover_height":
+            if param_value > 0:
+                self.reader_crtp.send_hover_command(param_value)
+            return True
+        elif param_name == "turn_angle":
+            if param_value != 0:
+                self.reader_crtp.send_turn_command(param_value)
+            return True
+        elif param_name == "land_velocity":
+            if param_value > 0:
+                self.reader_crtp.send_land_command()
+            return True
+        elif param_name == "move_distance":
+            # move by given distance, blocking
+            if param_value != 0:
+                self.reader_crtp.send_move_command(param_value)
+            return True
+        elif param_name == "move_forward":
+            # move by given velocity, non-blocking
+            if param_value != 0:
+                self.get_logger().warn(f"send forward command {param_value}")
+                self.reader_crtp.send_forward_command(param_value)
+            return True
+        elif param_name == "buzzer_idx":
+            if param_value >= 0:
+                self.get_logger().info(f"set {param_name} to {param_value}")
+                self.reader_crtp.send_buzzer_idx(int(param_value))
+            return True
+        elif param_name == "all":
+            self.get_logger().info(f"set all motors to {param_value}")
+            self.reader_crtp.send_thrust_command(int(param_value))
+            return True
+        elif param_name in [f"m{i}" for i in range(1, 5)]:
+            self.get_logger().info(f"set {param_name} to {param_value}")
+            self.reader_crtp.send_thrust_command(int(param_value), param_name)
+            return True
+        return False
 
     def set_audio_param(self, param):
         old_value = self.get_parameter(param.name).value
         try:
-            self.reader_crtp.cf.param.set_value(f"audio.{param.name}", param.value)
+            self.reader_crtp.set_audio_param(param)
             self.get_logger().info(
                 f"changed {param.name} from {old_value} to {param.value}"
             )
-        except:
-            self.get_logger().warn(f"error when trying to set {param.name}")
+        except Exception as e:
+            self.get_logger().warn(f"error when trying to set {param.name}: {e}")
 
 
 def main(args=None):
@@ -347,37 +378,24 @@ def main(args=None):
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
+        # while 1:
+        # cf = None
         reader_crtp = ReaderCRTP(
-            cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors
+            crazyflie=cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors
         )
-        publisher = Gateway(reader_crtp)
-        print("done initializing")
+        node = Gateway(reader_crtp)
 
         try:
-            rclpy.spin(publisher)
-            print("done spinning")
-
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("node interrupted")
+            rclpy.spin(node)
+        except Exception as e:
+            print("Node interrupted: Exception", e)
             reader_crtp.send_audio_enable(0)
-            cf.param.set_value("motorPowerSet.enable", 0)
-            reader_crtp.send_buzzer_freq(0)
+            reader_crtp.send_disable_motors()
             reader_crtp.send_buzzer_idx(0)
-            print("stop buzzer, motors, and audio sending, wait for 1s...")
+            print("Stop buzzer, motors, and audio sending, wait for 1s...")
             time.sleep(1)
-        except Exception:
-            print("error occured")
-            reader_crtp.send_audio_enable(0)
-            cf.param.set_value("motorPowerSet.enable", 0)
-            reader_crtp.send_buzzer_freq(0)
-            reader_crtp.send_buzzer_idx(0)
-            print("stop buzzer, motors, and audio sending, wait for 1s...")
-            time.sleep(1)
-            raise
 
-    publisher.destroy_node()
+    node.destroy_node()
     rclpy.shutdown()
 
 

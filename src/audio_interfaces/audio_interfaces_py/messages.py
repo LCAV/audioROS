@@ -9,12 +9,13 @@ import numpy as np
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 
 from audio_interfaces.msg import (
-    Signals,
-    SignalsFreq,
     Correlations,
-    Spectrum,
+    Distribution,
     DoaEstimates,
     GroundTruth,
+    Signals,
+    SignalsFreq,
+    Spectrum,
 )
 from audio_interfaces.msg import PoseRaw
 
@@ -48,6 +49,15 @@ def convert_sec_nanosec_to_ms(sec, nanosec):
 
 def convert_stamp_to_ms(stamp):
     return convert_sec_nanosec_to_ms(stamp.sec, stamp.nanosec)
+
+
+def create_distribution_message(values, probs, timestamp):
+    msg = Distribution()
+    msg.timestamp = int(timestamp)
+    msg.values = list(values.flatten().astype(float))
+    msg.probabilities = list(probs.flatten().astype(float))
+    msg.n = len(probs)
+    return msg
 
 
 def create_pose_message(x, y, z, yaw_deg, timestamp_ms=None, **dump):
@@ -203,6 +213,14 @@ def create_ground_truth_message(
     return msg
 
 
+def read_distribution_message(msg):
+    distances = np.array(msg.values)
+    probs = np.array(msg.probabilities)
+    assert msg.n == len(probs)
+    assert msg.n == len(distances)
+    return distances, probs
+
+
 def read_pose_message(msg):
     """ Read Pose message.  """
     from scipy.spatial.transform import Rotation
@@ -248,7 +266,7 @@ def read_signals_freq_message(msg):
     signals_f = np.array(msg.signals_real_vect) + 1j * np.array(msg.signals_imag_vect)
     signals_f = signals_f.reshape((msg.n_mics, msg.n_frequencies)).T
     freqs = np.array(msg.frequencies)
-    return mic_positions, signals_f, freqs
+    return mic_positions, signals_f[freqs > 0, :], freqs[freqs > 0]
 
 
 def read_correlations_message(msg):

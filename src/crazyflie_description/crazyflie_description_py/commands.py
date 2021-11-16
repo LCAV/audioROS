@@ -20,9 +20,9 @@ motor_command_lists = {
     ]
     + [("/gateway", "buzzer_idx", 0, 0), ("/gateway", "all", 0, 0)],
     "hover": [
-        ("/gateway", "hover_height", 0.5, 0),
-        ("/gateway", "move_forward", 0, 20,),  # stay in place, but wait for 20 seconds.
-        ("/gateway", "land_velocity", 0.2, 3),
+        ("/gateway", "hover_height", 0.4, 0),
+        ("", "", "", 10),  # time delay only
+        ("/gateway", "land_velocity", 0.2, 0),
     ],
     "hover_sweep": [
         ("/gateway", "hover_height", 0.4, 0),

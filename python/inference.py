@@ -15,9 +15,41 @@ WALL_ANGLE_DEG = None
 
 if PLATFORM == "crazyflie":
     BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
+    # BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
 INTERPOLATE = True
+N_MAX = 1000
+
+
+def interpolate_parts(xvalues, values, step=None, verbose=False):
+    """ Smart interpolation scheme. 
+
+    Interpolate at uniform grid, leaving out points that are further
+    from recorded data than two times the average or given spacing. 
+
+    """
+    import scipy.interpolate
+
+    if step is None:
+        step = np.median(np.diff(xvalues))
+
+    xvalues_grid = np.arange(min(xvalues), max(xvalues) + step, step=step)
+    # valid points are no more than 2*step from actual data.
+    valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) <= 2 * step, axis=1)
+    if verbose:
+        print(f"interpolating at {np.sum(valid)} points")
+    xvalues_grid = xvalues_grid[valid]
+    assert np.abs(np.median(np.diff(xvalues_grid)) - step) < 1e-10, (
+        np.median(np.diff(xvalues_grid)),
+        step,
+    )
+
+    interpolator = scipy.interpolate.interp1d(
+        xvalues, values, kind="linear", fill_value="extrapolate"
+    )
+    values_grid = interpolator(xvalues_grid)
+    return xvalues_grid, values_grid
 
 
 def eps_normalize(proba, eps=EPS):
@@ -38,7 +70,7 @@ class Inference(object):
         self.slices = None  # mics x n_data
         self.values = None  # n_data
         self.stds = None  # n_data
-        self.distance_range = None  # [min, max]
+        self.distance_range_cm = None  # [min, max]
         self.is_calibrated = False
         self.calibration_function = None
 
@@ -52,13 +84,13 @@ class Inference(object):
         self.slices = slices
         self.values = values
         self.stds = stds
-        self.distances = distances
+        self.distances_cm = distances
         self.valid_idx = np.ones(len(values), dtype=bool)
         self.is_calibrated = False
         self.mics = mics
 
     def add_geometry(self, distance_range, azimuth_deg):
-        self.distance_range = distance_range
+        self.distance_range_cm = distance_range
         self.azimuth_deg = azimuth_deg
 
     def add_calibration_function(self, calibration_function):
@@ -89,7 +121,7 @@ class Inference(object):
                 self.values <= freq_range[0]
             )
 
-    def do_inference(self, algorithm="", mic_idx=0, calibrate=True, normalize=True):
+    def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None):
         """
         Perform inference.
         """
@@ -100,39 +132,81 @@ class Inference(object):
 
         if algorithm == "bayes":
             sigma = self.stds[mic_idx] if self.stds is not None else None
-            dists, proba, diffs = get_probability_bayes(
+            dists_cm, proba, diffs_cm = get_probability_bayes(
                 self.slices[mic_idx, valid],
                 self.values[valid],
                 mic_idx=mic_idx,
-                distance_range=self.distance_range,
+                distance_range=self.distance_range_cm,
                 sigma=sigma,
                 azimuth_deg=self.azimuth_deg,
             )
         elif algorithm == "cost":
-            distances = self.distances[valid] if self.distances is not None else None
+            distances_cm = (
+                self.distances_cm[valid] if self.distances_cm is not None else None
+            )
 
-            # make sure we use a reasonable distance range (need to add d0 to not
-            # "go inside wall")
-            __, d0 = get_deltas_from_global(self.azimuth_deg, np.array([100]), mic_idx)
-            d0_cm = round(d0 * 1e2)
-            dists = np.arange(self.distance_range[0] + d0_cm, self.distance_range[-1])
-            diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists, mic_idx)
-            diffs = diffs_m * 1e2
+            dists_cm = np.arange(
+                self.distance_range_cm[0], self.distance_range_cm[-1] + 1
+            )
+            diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists_cm, mic_idx)
+            diffs_cm = diffs_m * 1e2
             proba = get_probability_cost(
                 self.slices[mic_idx, valid],
                 self.values[valid],
-                dists,
+                dists_cm,
                 mic_idx=mic_idx,
-                relative_ds=distances,
+                relative_ds=distances_cm,
                 absolute_yaws=None,
                 azimuth_deg=self.azimuth_deg,
+                ax=ax,
             )
+        elif algorithm == "cost_2d":
+            distances_cm = (
+                self.distances_cm[valid] if self.distances_cm is not None else None
+            )
+
+            dists_cm = np.arange(
+                self.distance_range_cm[0], self.distance_range_cm[-1] + 1
+            )
+            diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists_cm, mic_idx)
+            diffs_cm = diffs_m * 1e2
+            azimuth_degs = np.arange(360, step=10)
+            proba_2d = get_probability_cost_2d(
+                self.slices[mic_idx, valid],
+                self.values[valid],
+                dists_cm,
+                mic_idx=mic_idx,
+                relative_ds=distances_cm,
+                absolute_yaws=None,
+                azimuth_degs=azimuth_degs,
+                ax=ax,
+            )
+
+            proba = np.sum(proba_2d, axis=0)
+
+            # import matplotlib.pylab as plt
+            # fig, axs = plt.subplots(2)
+            # fig.set_size_inches(10, 10)
+            # axs[0].pcolorfast(dists_cm, azimuth_degs, proba_2d[:-1, :-1])
+            # axs[1].plot(dists_cm, proba)
+
+            # axs[1].plot(dists_cm, proba)
+            # from scipy.signal import hilbert,
+            # envelope = np.abs(hilbert(proba))
+            # axs[1].plot(dists_cm, envelope)
         else:
-            raise ValueError(algo_name)
+            raise ValueError(algorithm)
+
+        if "cost" in algorithm:
+            # remove high frequency components
+            proba_fft = np.fft.rfft(proba)
+            freq = np.fft.rfftfreq(len(proba))
+            proba_fft[len(proba_fft) // 5 :] = 0  # freq > 0.1 pi
+            proba = np.fft.irfft(proba_fft)
 
         if normalize:
             proba = eps_normalize(proba)
-        return dists, proba, diffs
+        return dists_cm, proba, diffs_cm
 
     def plot(self, i_mic, ax, label=None, standardize=False, **kwargs):
         from copy import deepcopy
@@ -146,20 +220,17 @@ class Inference(object):
         )
 
 
-def get_abs_fft(f_slice, n_max=1000, norm=True):
-    if norm:
-        f_slice_norm = f_slice - np.nanmean(f_slice)
-    else:
-        f_slice_norm = f_slice
+def get_abs_fft(f_slice, n_max=N_MAX):
+    f_slice_norm = f_slice - np.nanmean(f_slice)
     n = max(len(f_slice), n_max)
     return np.abs(np.fft.rfft(f_slice_norm, n=n))
 
 
-def get_differences(frequencies, n_max=1000):
+def get_differences(frequencies, n_max=N_MAX):
     from constants import SPEED_OF_SOUND
 
     n = max(len(frequencies), n_max)
-    df = np.median(frequencies[1:] - frequencies[:-1])
+    df = np.median(np.diff(frequencies))
     deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
     return deltas_cm
 
@@ -211,7 +282,7 @@ def get_probability_bayes(
     frequencies,
     mic_idx=1,
     distance_range=None,
-    n_max=1000,
+    n_max=N_MAX,
     sigma=None,
     azimuth_deg=WALL_ANGLE_DEG,
     interpolate=INTERPOLATE,
@@ -219,20 +290,14 @@ def get_probability_bayes(
     assert f_slice.ndim == 1
 
     if interpolate:
-        import scipy.interpolate
-
-        diff = frequencies[1:] - frequencies[:-1]
-        spacing = np.median(diff)
-        frequencies_grid = np.arange(min(frequencies), max(frequencies), step=spacing)
-
-        interpolator = scipy.interpolate.interp1d(frequencies, f_slice)
-        f_slice_grid = interpolator(frequencies_grid)
-
-        abs_fft = get_abs_fft(f_slice_grid, n_max=n_max, norm=True)
+        frequencies_grid, f_slice_grid = interpolate_parts(
+            frequencies, f_slice,  # step=20
+        )
+        abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
         posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
     else:
-        abs_fft = get_abs_fft(f_slice, n_max=n_max, norm=True)
+        abs_fft = get_abs_fft(f_slice, n_max=n_max)
 
         # get path interference differences corresponding to used frequencies
         differences = get_differences(frequencies, n_max=n_max)
@@ -255,6 +320,31 @@ def get_probability_bayes(
     return distances, posterior, differences
 
 
+def get_probability_cost_2d(
+    f_slice,
+    frequencies,
+    distances,
+    mic_idx=1,
+    azimuth_degs=WALL_ANGLE_DEG,
+    relative_ds=None,
+    absolute_yaws=None,
+    ax=None,
+):
+    costs = np.empty((len(azimuth_degs), len(distances)))
+    for i, azimuth_deg in enumerate(azimuth_degs):
+        costs[i] = get_probability_cost(
+            f_slice,
+            frequencies,
+            distances,
+            mic_idx,
+            azimuth_deg,
+            relative_ds,
+            absolute_yaws,
+            ax,
+        )
+    return costs
+
+
 def get_probability_cost(
     f_slice,
     frequencies,
@@ -275,36 +365,45 @@ def get_probability_cost(
     f_slice_norm = f_slice - np.mean(f_slice)
     f_slice_norm /= np.std(f_slice_norm)
 
-    probs = []
-    for d in distances:
+    probs = np.empty(len(distances))
+    theory = np.empty((len(distances), len(frequencies)))
+    for i, d in enumerate(distances):
         if relative_ds is not None:
             d += relative_ds
-        f_slice_theory = get_freq_slice_theory(frequencies, d, azimuth_deg)[:, mic_idx]
+        f_slice_theory = get_freq_slice_theory(
+            frequencies, d, azimuth_deg=azimuth_deg, chosen_mics=[mic_idx]
+        ).flatten()
         f_slice_theory -= np.mean(f_slice_theory)
         f_slice_theory /= np.std(f_slice_theory)
-        probs.append(np.exp(-np.linalg.norm(f_slice_theory - f_slice_norm)))
-
-        if ax is not None:
-            ax.plot(frequencies, f_slice_theory, color="black")
+        probs[i] = np.exp(-np.linalg.norm(f_slice_theory - f_slice_norm))
+        theory[i, :] = f_slice_theory
 
     if ax is not None:
-        ax.plot(frequencies, f_slice_norm, color="green")
+        ax.plot(frequencies, f_slice_norm, color="black", marker="o")
+
+        indices = np.argsort(probs)[::-1]  # biggest first
+        assert probs[indices[0]] >= probs[indices[1]]
+        for i in indices[:3]:
+            ax.plot(frequencies, theory[i], label=f"p{i}: distance {distances[i]}")
+        ax.legend()
 
     probs /= np.sum(probs)
     return probs
 
 
 def get_periods_fft(
-    d_slice, frequency, relative_distances_cm, n_max=1000, bayes=False, sigma=None,
+    d_slice, frequency, relative_distances_cm, n_max=N_MAX, bayes=False, sigma=None,
 ):
     # the distribution over measured period.
-    d_m = np.mean(relative_distances_cm[1:] - relative_distances_cm[:-1]) * 1e-2
+    d_m = np.mean(np.diff(relative_distances_cm)) * 1e-2
     n = max(len(d_slice), n_max)
 
     # periods_m = np.fft.rfftfreq(n=n, d=d_m) # equivalent to below
-    periods_m = np.arange(0, n // 2 + 1) / (d_m * n)  # 1/m in terms of orthogonal
+    periods_m = np.arange(0, n // 2 + 1) / (
+        d_m * n
+    )  # 1/m in terms of orthogonal distance
 
-    abs_fft = get_abs_fft(d_slice, n_max=1000, norm=True)
+    abs_fft = get_abs_fft(d_slice, n_max=n_max)
     if bayes:
         prob = get_posterior(abs_fft, sigma, d_slice)
         prob /= np.sum(prob)
@@ -320,8 +419,8 @@ def get_approach_angle_fft(
     d_slice,
     frequency,
     relative_distances_cm,
-    n_max=1000,
-    bayes=False,
+    n_max=N_MAX,
+    bayes=True,
     sigma=None,
     reduced=False,
     interpolate=INTERPOLATE,
@@ -338,27 +437,32 @@ def get_approach_angle_fft(
     from constants import SPEED_OF_SOUND
 
     # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
-    period_theoretical = (
-        factor * frequency / SPEED_OF_SOUND
-    )  # 1/m in terms of orthogonal distance
+    period_theoretical = SPEED_OF_SOUND / (
+        factor * frequency
+    )  # m in terms of orthogonal distance
 
     if interpolate:
-        import scipy.interpolate
-
-        relative_distances_cm_grid = np.arange(
-            min(relative_distances_cm), max(relative_distances_cm), step=1.0
+        # important to choose small enough step size to insure
+        # to capture interference!
+        step = period_theoretical * 1e2 / 20
+        # print("step size", step)
+        relative_distances_cm_grid, d_slice_grid = interpolate_parts(
+            relative_distances_cm, d_slice, step=step
         )
-        interpolator = scipy.interpolate.interp1d(relative_distances_cm, d_slice)
-        d_slice_grid = interpolator(relative_distances_cm_grid)
-        periods_m, probs = get_periods_fft(
+        freqs_m, probs = get_periods_fft(
             d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma
         )
     else:
-        periods_m, probs = get_periods_fft(
+        freqs_m, probs = get_periods_fft(
             d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
         )
 
-    ratios = periods_m / period_theoretical  # arcsin(ratio) will be the angle estimate
+    periods_m = 1 / freqs_m[freqs_m > 0]
+    probs = probs[freqs_m > 0]
+
+    # print("periods in cm", np.min(periods_m) * 1e2, np.max(periods_m) * 1e2)
+    probs *= 1 / periods_m ** 2
+    ratios = period_theoretical / periods_m  # arcsin(ratio) will be the angle estimate
     if not reduced:
         return ratios, probs
     else:
@@ -408,17 +512,23 @@ def get_approach_angle_cost(
 
 
 def get_gamma_distribution(ratios, probs, eps=1e-3):
-    valid = ratios <= 1 + eps
+    valid = ratios <= (1 + eps)
     # set all ratios between 1 and 1 + eps to 1.0
     ratios[valid & (ratios > 1)] = 1.0
 
     # angles
     gammas = np.arcsin(ratios[valid])
+    # print('last three angles', gammas[-3:] * 180 / np.pi)
 
     # accumulate probabilities over duplicate gammas (at 90, for instance)
     gammas_unique, index = np.unique(gammas, return_inverse=True)
     probs_unique = np.bincount(index, probs[valid])
 
+    probs_unique = probs_unique[gammas_unique > 0]
+    gammas_unique = gammas_unique[gammas_unique > 0]
+
     # correction factor
-    # probs[valid] *= np.abs(np.cos(gammas))
+    # TODO(FD) need to figure out how to multiply without having zero-prob at 90.
+    probs_unique *= np.abs(np.cos(gammas_unique) / (np.sin(gammas_unique) ** 2))
+    # probs_unique /= np.sum(probs_unique)
     return gammas_unique * 180 / np.pi, probs_unique
