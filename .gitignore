@@ -69,7 +69,7 @@ stash/
 # evaluation
 *.pk
 *.pkl
-python/.ipynb_checkpoints
+.ipynb_checkpoints
 python/results/
 python/plots/
 python/plots_doa/

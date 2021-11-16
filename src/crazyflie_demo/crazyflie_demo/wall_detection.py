@@ -49,12 +49,25 @@ SCHEME = "dslices"
 # SCHEME = "fslices_hover"
 # SCHEME = "fslices_process"
 
+class sm(Enum):
+    GROUND = 0
+    HOVER = 0
+    WAIT_DISTANCE = 0
+    WAIT_GAMMA = 0
+    AVOID_DISTANCE = 0
+    AVOID_GAMMA = 0
+
+class mode(Enum):
+    FSLICE = 0
+    DSLICE = 1
+
+MODE = mode.FSLICE
 
 class WallDetection(NodeWithParams):
-    PARAMS_DICT = {}
-    #    "mode": "user-input"  #
-    # "mode": "automatic"
-    # }
+    PARAMS_DICT = {
+        "mode": "fslice"
+        "drone": False
+    }
 
     def __init__(self):
         super().__init__("wall_detection")
@@ -62,11 +75,11 @@ class WallDetection(NodeWithParams):
         self._action_client = ActionClient(self, CrazyflieCommands, "commands")
 
         # TODO(FD) do automatic switch based on current buzzer idx, in generic listener function.
-        if "fslices" in SCHEME:
+        if "fslice" in SCHEME:
             self.subscription_signals = self.create_subscription(
                 SignalsFreq, "audio/signals_f", self.listener_callback_fslice, 10
             )
-        elif "dslices" in SCHEME:
+        elif "dslice" in SCHEME:
             self.subscription_signals = self.create_subscription(
                 SignalsFreq, "audio/signals_f", self.listener_callback_dslice, 10
             )
