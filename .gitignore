@@ -76,3 +76,5 @@ python/plots_doa/
 backup/
 epuck-audio/
 
+lost+found/
+.Trash*
