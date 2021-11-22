@@ -45,7 +45,7 @@ FLYING_HEIGHT_CM = 30
 WINDOW_CORRECTION = 0.215579  #  flattop
 
 SCHEME = "generic"
-#SCHEME = "dslices"
+# SCHEME = "dslices"
 # SCHEME = "dslices_process"
 # SCHEME = "fslices"
 # SCHEME = "fslices_hover"
@@ -53,12 +53,13 @@ SCHEME = "generic"
 
 class sm(Enum):
     GROUND = 0
-    HOVER = 0
-    WAIT_DISTANCE = 0
-    WAIT_GAMMA = 0
-    WAIT_CALIB = 0
-    AVOID_DISTANCE = 0
-    AVOID_GAMMA = 0
+    HOVER = 1
+    WAIT_DISTANCE = 2
+    WAIT_ANGLE = 3
+    WAIT_CALIB = 4
+    AVOID_DISTANCE = 5
+    AVOID_ANGLE = 6
+    ABORT = 7
 
 class mode(Enum):
     FSLICE = 0
@@ -69,8 +70,8 @@ DRONE = False
 
 class WallDetection(NodeWithParams):
     PARAMS_DICT = {
-        "mode": mode.FSLICE
-        "drone": DRONE
+        "mode": mode.FSLICE.value,
+        "drone": int(DRONE)
     }
 
     def __init__(self):
@@ -337,7 +338,7 @@ class WallDetection(NodeWithParams):
             self.get_logger().info(f"Current angle estimate: {angle_estimate:.1f}deg")
 
     def listener_callback(self, msg_signals):
-        if not self.state not in [sm.WAIT_DISTANCE, sm.WAIT_GAMMA, sm.WAIT_CALIB]:
+        if not self.state in [sm.WAIT_DISTANCE, sm.WAIT_ANGLE, sm.WAIT_CALIB]:
             return
 
         msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
@@ -394,7 +395,7 @@ class WallDetection(NodeWithParams):
                 self.get_logger().info(
                     f"Current distance estimate: {distance_estimate:.1f}cm"
                 )
-            elif self.state == sm.WAIT_GAMMA:
+            elif self.state == sm.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
                     n_max=N_MAX, verbose=True
                 )
@@ -456,15 +457,19 @@ class WallDetection(NodeWithParams):
             return sm.HOVER
 
         elif self.state == sm.HOVER:
-            if self.current_params["mode"] == mode.FSLICE:
+            if self.current_params["mode"] == mode.FSLICE.value:
                 self.set_buzzer(1)
                 self.get_logger().info("calibrating...")
                 self.calibration_count = 0
                 return sm.WAIT_CALIB
 
-            elif self.current_params["mode"] == mode.DSLICE:
+            elif self.current_params["mode"] == mode.DSLICE.value:
                 self.set_buzzer(3000)
                 return sm.WAIT_ANGLE
+
+            else:
+                raise ValueError(self.current_params["mode"])
+
 
         elif self.state == sm.WAIT_ANGLE:
             self.start_forward(0.04)
@@ -490,8 +495,6 @@ class WallDetection(NodeWithParams):
             self.calibration = np.median(self.calibration_data, axis=2)
             self.get_logger().info("done calibrating")
             return sm.WAIT_DISTANCE
-
-        selif 
 
         elif self.state == sm.WAIT_DISTANCE:
             #rclpy.spin_once(self)
@@ -528,14 +531,13 @@ class WallDetection(NodeWithParams):
             return sm.WAIT_DISTANCE
 
         elif self.state == sm.AVOID_ANGLE:
-
             return sm.WAIT_ANGLE
-
-        else raise ValueError(self.state)
+        else:
+            raise ValueError(self.state)
 
     def main(self):
         while self.state != sm.ABORT:
-            self.state = self.exeucte_sm()
+            self.state = self.execute_sm()
 
             # check if in the meantime the server was called
             if self.state_by_server is not None: 

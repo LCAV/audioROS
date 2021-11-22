@@ -37,7 +37,6 @@ def generate_launch_description():
         if not os.path.exists(bag_file):
             break
     print(f"recording bag file at {bag_file}")
-
     return get_launch_description(
         node_config, log_level=LOG_LEVEL, bag_filename=bag_file
     )
