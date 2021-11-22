@@ -68,7 +68,6 @@ class MovingEstimator(object):
         return self.filled
 
     def _get_distribution(self, distances_cm=None, angles_deg=None, verbose=False):
-
         if not self.filled:
             print("Warning: not enough measurements yet.")
 

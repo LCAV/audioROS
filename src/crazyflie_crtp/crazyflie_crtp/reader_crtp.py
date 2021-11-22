@@ -409,9 +409,15 @@ class ReaderCRTP(object):
         if velocity is None:
             print("warning: using default", self.VELOCITY)
             self.mc.start_forward(self.VELOCITY)
-        else:
+        elif velocity > 0:
             print("velocity in reader_crtp:", velocity)
             self.mc.start_forward(velocity)
+        elif velocity < 0:
+            print("velocity in reader_crtp:", velocity)
+            self.mc.start_back(-velocity)
+        else:
+            print("zero-velocity")
+            self.mc.stop()
         return True
 
     def send_land_command(self, velocity=0):
