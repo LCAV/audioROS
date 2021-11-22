@@ -113,6 +113,7 @@ def plot_pose2_on_axes(
     axis_length: float = 0.1,
     cov_scale: float = 0.1,
     covariance: np.ndarray = None,
+    ls = "-"
 ) -> None:
     """
     Plot a 2D pose on given axis `axes` with given `axis_length`.
@@ -132,11 +133,11 @@ def plot_pose2_on_axes(
     # draw the camera axes
     x_axis = origin + gRp[:, 0] * axis_length
     line = np.append(origin[np.newaxis], x_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], "r-")
+    axes.plot(line[:, 0], line[:, 1], "r"+ls)
 
     y_axis = origin + gRp[:, 1] * axis_length
     line = np.append(origin[np.newaxis], y_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], "g-")
+    axes.plot(line[:, 0], line[:, 1], "g"+ls)
 
     if covariance is not None:
         pPp = covariance[0:2, 0:2]
@@ -161,6 +162,7 @@ def plot_pose2(
     cov_scale: float = 0.1,
     covariance: np.ndarray = None,
     axis_labels=("X axis", "Y axis", "Z axis"),
+    ls = "-"
 ) -> plt.Figure:
     """
     Plot a 2D pose on given figure with given `axis_length`.
@@ -177,9 +179,8 @@ def plot_pose2(
     fig = plt.figure(fignum)
     axes = fig.gca()
     plot_pose2_on_axes(
-        axes, pose, axis_length=axis_length, cov_scale=cov_scale, covariance=covariance
+        axes, pose, axis_length=axis_length, cov_scale=cov_scale, covariance=covariance, ls=ls
     )
-
     axes.set_xlabel(axis_labels[0])
     axes.set_ylabel(axis_labels[1])
 
@@ -293,15 +294,15 @@ def plot_3d_points(
     fig.canvas.set_window_title(title.lower())
 
 
-def plot_plane3_on_axes(axes, plane):
+def plot_plane3_on_axes(axes, plane, ls="-"):
     wall_vector = plane.normal().point3() * plane.distance()
     axes.plot(
-        [0, wall_vector[0]], [0, wall_vector[1]], [0, wall_vector[2]], color="k", ls=":"
+        [0, wall_vector[0]], [0, wall_vector[1]], [0, wall_vector[2]], color="k", ls=ls
     )
     axes.scatter(wall_vector[0], wall_vector[1], wall_vector[2], color="k")
 
 
-def plot_pose3_on_axes(axes, pose, axis_length=0.1, P=None, cov_scale=1):
+def plot_pose3_on_axes(axes, pose, axis_length=0.1, P=None, cov_scale=1, ls="-"):
     """
     Plot a 3D pose on given axis `axes` with given `axis_length`.
 
@@ -318,15 +319,15 @@ def plot_pose3_on_axes(axes, pose, axis_length=0.1, P=None, cov_scale=1):
     # draw the camera axes
     x_axis = origin + gRp[:, 0] * axis_length
     line = np.append(origin[np.newaxis], x_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], line[:, 2], "r-")
+    axes.plot(line[:, 0], line[:, 1], line[:, 2], "r"+ls)
 
     y_axis = origin + gRp[:, 1] * axis_length
     line = np.append(origin[np.newaxis], y_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], line[:, 2], "g-")
+    axes.plot(line[:, 0], line[:, 1], line[:, 2], "g"+ls)
 
     z_axis = origin + gRp[:, 2] * axis_length
     line = np.append(origin[np.newaxis], z_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], line[:, 2], "b-")
+    axes.plot(line[:, 0], line[:, 1], line[:, 2], "b"+ls)
 
     # plot the covariance
     if P is not None:
@@ -382,6 +383,7 @@ def plot_trajectory(
     marginals: Marginals = None,
     title: str = "Plot Trajectory",
     axis_labels: Iterable[str] = ("X axis", "Y axis", "Z axis"),
+    ls="-"
 ) -> None:
     """
     Plot a complete 2D/3D trajectory using poses in `values`.
@@ -417,6 +419,7 @@ def plot_trajectory(
             covariance=covariance,
             axis_length=axis_length,
             cov_scale=cov_scale,
+            ls=ls
         )
 
     # Then 3D poses, if any
@@ -429,14 +432,14 @@ def plot_trajectory(
             covariance = None
 
         plot_pose3_on_axes(
-            axes, pose, P=covariance, axis_length=axis_length, cov_scale=cov_scale
+            axes, pose, P=covariance, axis_length=axis_length, cov_scale=cov_scale, ls=ls
         )
 
     # Then planes, if any
     planes = gtsam.utilities.allOrientedPlane3s(values)
     for key in planes.keys():
         plane = planes.atOrientedPlane3(key)
-        plot_plane3_on_axes(axes, plane)
+        plot_plane3_on_axes(axes, plane, ls=ls)
 
     fig.suptitle(title)
     fig.canvas.set_window_title(title.lower())
