@@ -351,6 +351,9 @@ class ReaderCRTP(object):
         #    print(f'ReaderCRTP {logconf.name} callback: {dict_to_fill["data"]}')
 
     def battery_ok(self):
+        if self.logging_dicts["status"]["data"] is None:
+            return True
+
         battery = self.logging_dicts["status"]["data"]["vbat"]
         if battery is None:
             return True

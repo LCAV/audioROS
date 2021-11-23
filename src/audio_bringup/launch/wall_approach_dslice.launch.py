@@ -28,8 +28,8 @@ node_config = {
 with open(PARAMS_FILE) as f:
     config_dict = yaml.load(f, Loader=yaml.FullLoader)
     for key, values in config_dict.items():
-        node_config[key].update(values)
-
+        if key in node_config.keys():
+            node_config[key].update(values)
 
 def generate_launch_description():
     for counter in range(100):

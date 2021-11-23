@@ -200,7 +200,6 @@ class Gateway(Node):
         self.publisher_motors.publish(msg)
 
     def publish_audio_dict(self):
-        self.get_logger().info("publish audio dict")
         # read audio
         signals_f_vect = self.reader_crtp.audio_dict["signals_f_vect"]
         if signals_f_vect is None:
@@ -310,7 +309,6 @@ class Gateway(Node):
             else:
                 param_is_command = self.send_command(param.name, param.value)
                 if not param_is_command:
-                    print("param is audio")
                     self.set_audio_param(param)
         return SetParametersResult(successful=True)
 
@@ -318,7 +316,9 @@ class Gateway(Node):
         param_value = float(param_value)
         if param_name == "hover_height":
             if param_value > 0:
-                self.reader_crtp.send_hover_command(param_value)
+                success = self.reader_crtp.send_hover_command(param_value)
+               	if not success:
+                    self.get_logger().warn(f"no battery, or not monitoring.")
             return True
         elif param_name == "turn_angle":
             if param_value != 0:
@@ -336,7 +336,7 @@ class Gateway(Node):
         elif param_name == "move_forward":
             # move by given velocity, non-blocking
             if param_value != 0:
-                self.get_logger().warn(f"send forward command {param_value}")
+                self.get_logger().warn(f"send forward command {param_value:.2f}")
                 self.reader_crtp.send_forward_command(param_value)
             return True
         elif param_name == "buzzer_idx":
@@ -363,6 +363,7 @@ class Gateway(Node):
             )
         except Exception as e:
             self.get_logger().warn(f"error when trying to set {param.name}: {e}")
+        return True
 
 
 def main(args=None):

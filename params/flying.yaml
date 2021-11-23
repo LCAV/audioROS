@@ -1,3 +1,7 @@
 gateway:
   ros__parameters:
-    bin_selection: 3
+    bin_selection: 5 # 5 for FSLICE, 3 for DSLICE
+wall_detection:
+  ros__parameters:
+    mode: 0 # 0: FSLICE, 1: DSLICE
+    drone: 1 #
