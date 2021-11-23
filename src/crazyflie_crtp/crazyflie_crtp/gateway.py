@@ -129,7 +129,7 @@ class Gateway(Node):
 
     def commands_callback(self, goal_handle):
         msg = goal_handle.request
-        self.get_logger().warn(
+        self.get_logger().info(
                 f"Command received at time {msg.timestamp}, {msg.command_name}, {msg.command_value:.2f}."
         )
         found_command = self.send_command(msg.command_name, msg.command_value)

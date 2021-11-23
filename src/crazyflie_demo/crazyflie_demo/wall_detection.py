@@ -34,13 +34,13 @@ N_WINDOW = 5
 WALL_ANGLE_DEG = 90
 DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 DIST_RANGE_CM = [min(DISTANCES_CM), max(DISTANCES_CM)]
-N_CALIBRATION = 5
+N_CALIBRATION = 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
 FLYING_HEIGHT_CM = 30
 VELOCITY_CMS = 5 # cm
-TIME_BLIND_FLIGHT = 5 # seconds
+TIME_BLIND_FLIGHT = 10 # seconds
 
 # TODO(FD) in the future, this should be done in gateway depending on the window chosen.
 WINDOW_CORRECTION = 0.215579  #  flattop
@@ -183,7 +183,7 @@ class WallDetection(NodeWithParams):
 
     def listener_callback(self, msg_signals):
         if not self.state in [state.WAIT_DISTANCE, state.WAIT_ANGLE, state.WAIT_CALIB]:
-            self.get_logger().warn("ignoring signal because state is {self.state}")
+            self.get_logger().warn(f"ignoring signal because state is {self.state}")
             return
 
         msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
@@ -258,7 +258,6 @@ class WallDetection(NodeWithParams):
 
                 angles, prob = self.get_angle_distribution(dslices)
 
-
                 # ANGLES_DEG is between 0 and 90, angles between 0 and 180. 
                 msg = create_distribution_message(
                     angle_estimator.ANGLES_DEG, np.array(prob), timestamp
@@ -267,7 +266,7 @@ class WallDetection(NodeWithParams):
                 self.publisher_distribution_raw.publish(msg)
 
                 angle_estimate = angles[np.argmax(prob)]
-                self.get_logger().info(f"Current angle estimate: {angle_estimate:.1f}deg")
+                self.get_logger().warn(f"Current angle estimate: {angle_estimate:.1f}deg, probability:{np.max(prob)}")
 
     def server_callback(self, goal_handle):
         msg = goal_handle.request

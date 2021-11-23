@@ -31,13 +31,13 @@ class TopicSynchronizer(object):
 
         if latest_time >= (timestamp - self.allowed_lag_ms):
             return self.latest_message
-
         # happens when we had a timestamp overflow, for instance.
         elif latest_time < timestamp:
             if logger is not None:
-                logger.warn(
-                    f"Latest time {latest_time} smaller than requested {timestamp}."
-                )
+                pass
+                #logger.warn(
+                #    f"Latest time {latest_time} smaller than requested {timestamp}."
+                #)
             return self.latest_message
         elif latest_time == timestamp:
             if logger is not None:
