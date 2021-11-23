@@ -129,22 +129,21 @@ class Gateway(Node):
 
     def commands_callback(self, goal_handle):
         msg = goal_handle.request
-        self.get_logger().info(
-            f"Command received: {msg.timestamp, msg.command_name, msg.command_value}."
+        self.get_logger().warn(
+                f"Command received at time {msg.timestamp}, {msg.command_name}, {msg.command_value:.2f}."
         )
         found_command = self.send_command(msg.command_name, msg.command_value)
 
         result = CrazyflieCommands.Result()
-        feedback_msg = CrazyflieCommands.Feedback()
+        #feedback_msg = CrazyflieCommands.Feedback()
         if not found_command:
             self.get_logger().warn(f"Unknown command!")
-            feedback_msg.message = f"Unknown command: {msg.command_name}!"
-            feedback_msg.value = 0.0
-            goal_handle.publish_feedback(feedback_msg)
-            result.message = "Failure"
-            return result
+            #feedback_msg.message = f"Unknown command: {msg.command_name}!"
+            #feedback_msg.value = 0.0
+            #goal_handle.publish_feedback(feedback_msg)
+            #result.message = "Failure"
+            #return result
 
-        self.get_logger().info("Done sending command")
         result.message = "Success"
         result.value = 1.0
         goal_handle.succeed()
@@ -253,7 +252,7 @@ class Gateway(Node):
         )
         self.publisher_signals.publish(msg)
 
-        self.get_logger().warn(
+        self.get_logger().info(
             # f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0][[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
             f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0]} and timestamp {msg.audio_timestamp}"
         )
@@ -316,7 +315,9 @@ class Gateway(Node):
         param_value = float(param_value)
         if param_name == "hover_height":
             if param_value > 0:
+                self.get_logger().info(f"sending hover command...")
                 success = self.reader_crtp.send_hover_command(param_value)
+                self.get_logger().warn(f"...done.")
                	if not success:
                     self.get_logger().warn(f"no battery, or not monitoring.")
             return True
@@ -336,7 +337,7 @@ class Gateway(Node):
         elif param_name == "move_forward":
             # move by given velocity, non-blocking
             if param_value != 0:
-                self.get_logger().warn(f"send forward command {param_value:.2f}")
+                #self.get_logger().warn(f"send forward command {param_value:.2f}")
                 self.reader_crtp.send_forward_command(param_value)
             return True
         elif param_name == "buzzer_idx":
@@ -371,18 +372,18 @@ def main(args=None):
     import cflib.crtp
 
     verbose = False
-    log_motion = True  # get position logging from Crazyflie.
+    log_motion = True
     log_motors = True
+    log_status = True
 
     cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
 
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
-        # while 1:
-        # cf = None
         reader_crtp = ReaderCRTP(
-            crazyflie=cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors
+            crazyflie=cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors,
+            log_status=log_status
         )
         node = Gateway(reader_crtp)
 
@@ -398,7 +399,6 @@ def main(args=None):
 
     node.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()

@@ -13,15 +13,15 @@ import os
 import yaml
 
 LOG_LEVEL = "warn"
-BAG_FILE_ROOT = "experiments/2021_11_11_test/linear"
+BAG_FILE_ROOT = "experiments/2021_11_23_demo/hover"
 PARAMS_FILE = "params/flying.yaml"
 
 node_config = {
     "gateway": {"pkg": "crazyflie_crtp"},
     "wall_detection": {"pkg": "crazyflie_demo"},
-    "geometry": {"pkg": "topic_plotter"},
-    "distribution": {"pkg": "topic_plotter"},
-    "status": {"pkg": "topic_plotter"},
+    #"geometry": {"pkg": "topic_plotter"},
+    #"distribution": {"pkg": "topic_plotter"},
+    #"status": {"pkg": "topic_plotter"},
 }
 
 # add parameters from file to node_config
@@ -35,11 +35,14 @@ with open(PARAMS_FILE) as f:
             LOG_LEVEL = values
 
 def generate_launch_description():
-    for counter in range(100):
-        bag_file = f"{BAG_FILE_ROOT}{counter}"
-        if not os.path.exists(bag_file):
-            break
-    print(f"recording bag file at {bag_file}")
+    if BAG_FILE_ROOT != "":
+        for counter in range(100):
+            bag_file = f"{BAG_FILE_ROOT}{counter}"
+            if not os.path.exists(bag_file):
+                break
+        print(f"recording bag file at {bag_file}")
+    else:
+        bag_file = ""
     return get_launch_description(
         node_config, log_level=LOG_LEVEL, bag_filename=bag_file
     )

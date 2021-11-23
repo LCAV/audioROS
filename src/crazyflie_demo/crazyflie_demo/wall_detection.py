@@ -40,6 +40,7 @@ ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
 FLYING_HEIGHT_CM = 30
 VELOCITY_CMS = 5 # cm
+TIME_BLIND_FLIGHT = 5 # seconds
 
 # TODO(FD) in the future, this should be done in gateway depending on the window chosen.
 WINDOW_CORRECTION = 0.215579  #  flattop
@@ -53,6 +54,7 @@ class state(Enum):
     AVOID_DISTANCE = 5
     AVOID_ANGLE = 6
     ABORT = 7
+    BLIND_FLIGHT = 8
 
 class mode(Enum):
     FSLICE = 0
@@ -116,7 +118,6 @@ class WallDetection(NodeWithParams):
 
         # movement stuff
         self.velocity_ms = VELOCITY_CMS * 1e-2
-        self.get_logger().info("Init okay")
 
 
     def add_to_calib(self, magnitudes):
@@ -287,8 +288,7 @@ class WallDetection(NodeWithParams):
     def set_buzzer(self, buzzer_idx):
         if self.current_params["drone"] > 0:
             self.get_logger().warn("setting buzzer...")
-            future = self.send_command("buzzer_idx", buzzer_idx)
-            rclpy.spin_until_future_complete(self, future)
+            self.send_command("buzzer_idx", buzzer_idx)
             self.get_logger().warn("done")
         else:
             self.get_logger().warn("simulating buzzer")
@@ -296,10 +296,9 @@ class WallDetection(NodeWithParams):
 
     def take_off(self, height_m=0.4):
         if self.current_params["drone"] > 1:
-            self.get_logger().info("taking off...")
-            future = self.send_command("hover_height", height_m)
-            rclpy.spin_until_future_complete(self, future)
-            self.get_logger().info("done")
+            self.get_logger().warn("taking off...")
+            self.send_command("hover_height", height_m)
+            self.get_logger().warn("done")
         else:
             self.get_logger().info(f"simulating takeoff")
             rclpy.spin_once(self)
@@ -308,7 +307,6 @@ class WallDetection(NodeWithParams):
         if self.current_params["drone"] > 1:
             self.get_logger().info("landing...")
             future = self.send_command("land_velocity", 0.2)  # 50.0)
-            rclpy.spin_until_future_complete(self, future)
             self.get_logger().info("done")
             self.get_logger().warn("exiting...")
         else:
@@ -319,7 +317,6 @@ class WallDetection(NodeWithParams):
         if self.current_params["drone"] > 1:
             self.get_logger().info(f"moving with {self.velocity_ms:.2f}m/s...")
             future = self.send_command("move_forward", self.velocity_ms)
-            rclpy.spin_until_future_complete(self, future)
             self.get_logger().info("done")
         else:
             self.get_logger().info(f"simulating moving with {self.velocity_ms:.2f}m/s")
@@ -329,6 +326,8 @@ class WallDetection(NodeWithParams):
         if self.state == state.GROUND:
             self.take_off()
             return state.HOVER
+            #self.get_logger().warn("abort")
+            #return state.ABORT
 
         elif self.state == state.HOVER:
             if self.current_params["mode"] == mode.FSLICE.value:
@@ -385,7 +384,7 @@ class WallDetection(NodeWithParams):
                 timestamp = curr_dist_message.timestamp
                 distance_estimate = dist[np.argmax(prob)]
                 if distance_estimate < DISTANCE_THRESHOLD_CM:
-                    self.get_logger().info(
+                    self.get_logger().warn(
                         f"WALL AT {distance_estimate}, TURNING AROUND!"
                     )
                     return state.AVOID_DISTANCE
@@ -398,6 +397,17 @@ class WallDetection(NodeWithParams):
         elif self.state == state.AVOID_DISTANCE:
             # invert velocity
             self.velocity_ms = -self.velocity_ms
+
+            # start a few seconds of blind flight to not retrigger
+            self.get_logger().warn("start blind flight")
+            self.start_blind = time.time()
+            return state.BLIND_FLIGHT
+
+        elif self.state == state.BLIND_FLIGHT:
+            self.move_linear()
+            if time.time() - self.start_blind < TIME_BLIND_FLIGHT:
+                return state.BLIND_FLIGHT
+            self.get_logger().warn("stop blind flight")
             return state.WAIT_DISTANCE
 
         elif self.state == state.AVOID_ANGLE:
@@ -436,18 +446,21 @@ class WallDetection(NodeWithParams):
         goal_msg = CrazyflieCommands.Goal()
         goal_msg.command_name = command_name
         goal_msg.command_value = float(command_value)
-        timestamp = int(time.time() * 1e-3)
+        timestamp = self.get_timestamp()
         goal_msg.timestamp = timestamp
 
         if self.current_params["drone"] > 0:
-            self._action_client.wait_for_server(timeout_sec=5)
+            self._action_client.wait_for_server() #timeout_sec=0.5)
 
-        self._send_goal_future = self._action_client.send_goal_async(
-            goal_msg, feedback_callback=self.feedback_callback
-        )
+        future = self._action_client.send_goal_async(goal_msg)
+        rclpy.spin_until_future_complete(self, future)
+        return future
 
-        self._send_goal_future.add_done_callback(self.goal_response_callback)
-        return self._send_goal_future
+        #self._send_goal_future = self._action_client.send_goal_async(
+        #    goal_msg, feedback_callback=self.feedback_callback
+        #)
+        #self._send_goal_future.add_done_callback(self.goal_response_callback)
+        #return self._send_goal_future
 
     def goal_response_callback(self, future):
         goal_handle = future.result()

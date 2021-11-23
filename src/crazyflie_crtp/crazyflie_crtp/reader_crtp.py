@@ -108,7 +108,7 @@ class ArrayCRTP(object):
         self.n_frames = n_frames
         self.n_bytes = n_frames * np.dtype(dtype).itemsize + extra_bytes
         self.n_packets_full, self.n_bytes_last = divmod(self.n_bytes, CRTP_PAYLOAD)
-        print(f"{name}: waiting for {self.n_bytes} bytes.")
+        #print(f"{name}: waiting for {self.n_bytes} bytes.")
         self.packet_counter = 0
         self.dtype = dtype
         self.packet_start_time = time.time()
@@ -413,13 +413,10 @@ class ReaderCRTP(object):
             print("warning: using default", self.VELOCITY)
             self.mc.start_forward(self.VELOCITY)
         elif velocity > 0:
-            print("velocity in reader_crtp:", velocity)
             self.mc.start_forward(velocity)
         elif velocity < 0:
-            print("velocity in reader_crtp:", velocity)
             self.mc.start_back(-velocity)
         else:
-            print("zero-velocity")
             self.mc.stop()
         return True
 
