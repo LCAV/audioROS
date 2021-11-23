@@ -188,8 +188,7 @@ class WallDetection(NodeWithParams):
 
         msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
         if msg_pose is not None:
-
-            self.get_logger().info(f"treating new signal at time {msg_signals.timestamp}")
+            self.get_logger().warn(f"treating new signal at time {msg_signals.timestamp}")
             timestamp = self.get_timestamp()
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
 
@@ -199,7 +198,6 @@ class WallDetection(NodeWithParams):
             if self.state == state.WAIT_CALIB:
                 self.add_to_calib(magnitudes)
                 return None
-
             elif self.state == state.WAIT_DISTANCE:
                 magnitudes_calib = self.calibrate(magnitudes)
                 assert magnitudes.shape == magnitudes_calib.shape
@@ -244,16 +242,16 @@ class WallDetection(NodeWithParams):
                 )
             elif self.state == state.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
-                    n_max=N_MAX, verbose=True
+                    n_max=N_MAX, verbose=False
                 )
                 if data is not None:
                     d_slices, rel_distances_cm, *_ = data
                 else:
-                    self.get_logger().info("no measurements yet")
+                    self.get_logger().warn("No measurements yet")
                     return
 
                 if len(rel_distances_cm) < N_MAX:
-                    self.get_logger().info(f"Not ready yet: {len(rel_distances_cm)}")
+                    self.get_logger().warn(f"Not ready yet: {len(rel_distances_cm)}")
                     # return
 
                 angles, prob = self.get_angle_distribution(dslices)
@@ -345,6 +343,7 @@ class WallDetection(NodeWithParams):
         elif self.state == state.WAIT_ANGLE:
             self.move_linear()
             #if curr_dist is not None:
+            timestamp = self.get_timestamp()
             curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
             if curr_dist_message is not None:
                 #angles, prob, timestamp = curr_dist
@@ -354,8 +353,8 @@ class WallDetection(NodeWithParams):
                 self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
 
                 #TODO(FD): implement stopping criterion
-                return state.WAIT_ANGLE
-            return state.AVOID_ANGLE
+                # return state.AVOID_ANGLE
+            return state.WAIT_ANGLE
 
         elif self.state == state.WAIT_CALIB:
             # wait until calibration is done
@@ -485,7 +484,8 @@ def main(args=None):
     action_client = WallDetection()
     try:
         action_client.main()
-    except:
+    except Exception as e :
+        print(e)
         action_client.set_buzzer(0)
         action_client.land()
         rclpy.shutdown()
