@@ -30,6 +30,9 @@ with open(PARAMS_FILE) as f:
     for key, values in config_dict.items():
         if key in node_config.keys():
             node_config[key].update(values)
+        elif key == "logging":
+            print("setting log level to", values)
+            LOG_LEVEL = values
 
 def generate_launch_description():
     for counter in range(100):

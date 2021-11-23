@@ -4,4 +4,5 @@ gateway:
 wall_detection:
   ros__parameters:
     mode: 0 # 0: FSLICE, 1: DSLICE
-    drone: 1 #
+    drone: 1 # 0: none, 1: buzzer, 2: flying
+logging: "info"
