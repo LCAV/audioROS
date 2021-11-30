@@ -290,16 +290,18 @@ def plot_3d_points(
             continue
 
     fig = plt.figure(fignum)
-    fig.suptitle(title)
+    #fig.suptitle(title)
     fig.canvas.set_window_title(title.lower())
 
 
-def plot_plane3_on_axes(axes, plane, ls="-"):
-    wall_vector = plane.normal().point3() * plane.distance()
+def plot_plane3_on_axes(axes, plane, ls="-", axis_length=0.2):
+    wall_vector = -plane.normal().point3() * plane.distance()
+    origin = wall_vector * (1-axis_length)
     axes.plot(
-        [0, wall_vector[0]], [0, wall_vector[1]], [0, wall_vector[2]], color="k", ls=ls
+        [origin[0], wall_vector[0]], [origin[1], wall_vector[1]], [origin[2], wall_vector[2]], color="k", ls=ls
     )
-    axes.scatter(wall_vector[0], wall_vector[1], wall_vector[2], color="k")
+    axes.scatter(*origin, color="k", marker='x')
+    axes.scatter(*wall_vector, color="k", marker='o')
 
 
 def plot_pose3_on_axes(axes, pose, axis_length=0.1, P=None, cov_scale=1, ls="-"):
@@ -439,9 +441,9 @@ def plot_trajectory(
     planes = gtsam.utilities.allOrientedPlane3s(values)
     for key in planes.keys():
         plane = planes.atOrientedPlane3(key)
-        plot_plane3_on_axes(axes, plane, ls=ls)
+        plot_plane3_on_axes(axes, plane, ls=ls, axis_length=axis_length)
 
-    fig.suptitle(title)
+    #fig.suptitle(title)
     fig.canvas.set_window_title(title.lower())
 
 
