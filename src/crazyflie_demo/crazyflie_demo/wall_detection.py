@@ -40,7 +40,7 @@ ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
 FLYING_HEIGHT_CM = 30
 VELOCITY_CMS = 5 # cm
-TIME_BLIND_FLIGHT = 10 # seconds
+TIME_BLIND_FLIGHT = 0 #10 # seconds
 
 # TODO(FD) in the future, this should be done in gateway depending on the window chosen.
 WINDOW_CORRECTION = 0.215579  #  flattop

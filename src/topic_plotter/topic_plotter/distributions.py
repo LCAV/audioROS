@@ -38,11 +38,11 @@ class DistributionsPlotter(Node):
 
         self._subscription_distribution = []
 
-        topic = f"results/distribution_raw"
-        self._subscription_distribution_raw = self.create_subscription(
-            Distribution, topic, self.listener_callback_distribution_raw, 10
-        )
-        self.get_logger().info(f"subscribed to {topic}")
+        #topic = f"results/distribution_raw"
+        #self._subscription_distribution_raw = self.create_subscription(
+        #    Distribution, topic, self.listener_callback_distribution_raw, 10
+        #)
+        #self.get_logger().info(f"subscribed to {topic}")
 
         topic = f"results/distribution_moving"
         self._subscription_distribution_moving = self.create_subscription(
