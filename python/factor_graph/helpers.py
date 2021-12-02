@@ -31,12 +31,13 @@ def print_plane(label, plane):
     #print(f"{label} normal:", normal)
     get_angles(normal, verbose=True)
 
-def plot_all(estimate, axis_length=0.2, top=True, side=True):
+def plot_all(estimate, axis_length=0.2, perspective=True, top=True, side=True):
     import plot
-    fig = plt.figure(0)
-    fig.set_size_inches(10, 10)
-    plot.plot_trajectory(0, estimate, axis_length=axis_length)
-    plot.set_axes_equal(0)
+    if perspective:
+        fig = plt.figure(0)
+        fig.set_size_inches(10, 10)
+        plot.plot_trajectory(0, estimate, axis_length=axis_length)
+        plot.set_axes_equal(0)
 
     if side:
         fig = plt.figure(1)
@@ -80,7 +81,13 @@ class WallSimulation(object):
         # distance, azimuth, elevation
         self.noise_plane = gtsam.noiseModel.Diagonal.Sigmas([0.1, rad(10), rad(1)])
         self.seed = 0
-        
+
+    def set_velocities(self, linear_m_s=0.1, yaw_deg_s=0, noise_linear=1e-3, noise_yaw=1):
+        self.v = np.array([0, linear_m_s, 0])
+        self.w = np.array([rad(yaw_deg_s), 0, 0])
+        self.noise_v = gtsam.noiseModel.Isotropic.Sigma(3, noise_linear) 
+        self.noise_w = gtsam.noiseModel.Isotropic.Sigma(3, rad(noise_yaw)) 
+
     def initialize(self, plane, pose_0):
         self.plane = plane
         self.pose_0 = pose_0

@@ -40,7 +40,12 @@ class WallBackend(object):
 
         self.verbose=verbose
 
-    def add_plane(self, distance, azimuth, elevation):
+    def add_plane(self, distance, azimuth, elevation=0.0, plane_noise=None):
+        if plane_noise is None:
+            plane_noise = self.plane_noise
+        else:
+            plane_noise = gtsam.noiseModel.Diagonal.Sigmas(plane_noise)
+
         new_factors = gtsam.NonlinearFactorGraph()
         initial_estimates = gtsam.Values()
 
@@ -55,7 +60,7 @@ class WallBackend(object):
         if self.verbose:
             print("plane factor", current_plane.planeCoefficients())
         factor = gtsam.OrientedPlane3Factor(current_plane.planeCoefficients(), 
-                                            self.plane_noise, 
+                                            plane_noise, 
                                             X(self.pose_index), P(self.plane_index))
         new_factors.push_back(factor)
         self.isam.update(new_factors, initial_estimates)
