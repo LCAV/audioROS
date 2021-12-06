@@ -202,7 +202,7 @@ def plot_performance(
             ls=ls,
             markersize=markersize,
         )
-
+        err_list = np.array(err_list)
         xvals = sorted(np.abs(err_list[~np.isnan(err_list)]))
         yvals = np.linspace(0, 1, len(xvals))
         axs[1].plot(

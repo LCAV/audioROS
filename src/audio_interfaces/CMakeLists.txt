@@ -36,12 +36,14 @@ set(msg_files
   "msg/Correlations.msg"
   "msg/CrazyflieMotors.msg"
   "msg/CrazyflieStatus.msg"
+  "msg/Distribution.msg"
   "msg/DoaEstimates.msg"
   "msg/GroundTruth.msg"
   "msg/PoseRaw.msg"
   "msg/Spectrum.msg"
   "msg/Signals.msg"
   "msg/SignalsFreq.msg"
+  "action/CrazyflieCommands.action"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

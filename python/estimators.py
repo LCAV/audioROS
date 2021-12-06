@@ -13,8 +13,8 @@ from scipy.interpolate import interp1d
 from geometry import Context
 
 # method to combine probability distributions
-METHOD = "product"  # TODO(FD) not working yet
-# METHOD = "sum"
+# TODO(FD): understand why sum gives better resuls than product.
+METHOD = "sum"
 EPS = 1e-30  # smallest value for probability distribution
 
 
@@ -105,8 +105,8 @@ class DistanceEstimator(object):
             deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
             if verbose:
                 axs[0].scatter(deltas_m, delta_probs, label=mic_idx)
-            if len(np.unique(inverse)) != len(inverse):
-                print("found non-unique deltas!")
+            # if len(np.unique(inverse)) != len(inverse):
+            # print("found non-unique deltas", deltas_m)
             delta_probs = np.bincount(inverse, delta_probs)
             if verbose:
                 axs[0].plot(deltas_m, delta_probs, label=mic_idx)
@@ -123,27 +123,18 @@ class DistanceEstimator(object):
                 )
 
                 # interpolate (ds_m, delta_probs) at fixed distances distances_m
-                if verbose:
-                    print(
-                        f"interpolating {min(ds_m):.2f}:{np.mean(ds_m[1:] - ds_m[:-1]):.2f}:{max(ds_m):.2f}"
-                    )
-                    print(
-                        f"on            {min(distances_m):.2f}:{np.mean(distances_m[1:] - distances_m[:-1]):.2f}:{max(distances_m):.2f}"
-                    )
-
                 interp1d_func = interp1d(
                     ds_m, delta_probs, kind="linear", fill_value="extrapolate"
                 )
                 delta_probs_interp = interp1d_func(distances_m)
 
-                # gradient due to change of variables.
-                # TODO(FD) removed to be consistent with angle inference,
+                # correcton due to change of variables from deltas to distances
+                # TODO(FD) maybe to be removed to be consistent with angle inference,
                 # since it had negligible effect anyways.
-                # correction_factor = self.context.get_delta_gradient(
-                #    azimuth_deg, distances_m * 1e2, mic_idx
-                # )
-                # print('correction factors:', correction_factor)
-                # delta_probs_interp *= correction_factor
+                correction_factor = self.context.get_delta_gradient(
+                    azimuth_deg, distances_m * 1e2, mic_idx
+                )
+                delta_probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
                 delta_probs_interp[delta_probs_interp <= 0] = EPS
@@ -215,11 +206,10 @@ class DistanceEstimator(object):
                 )
                 probs_interp = interp1d_func(azimuths_deg)
 
-                # TODO(FD) understand why below works better without correction.
-                # correction_factor = self.context.get_delta_gradient_angle(
-                #    distance_estimate_m, azimuths_deg, mic_idx
-                # )
-                # probs_interp *= correction_factor
+                correction_factor = self.context.get_delta_gradient_angle(
+                    distance_estimate_m, azimuths_deg, mic_idx
+                )
+                probs_interp *= correction_factor
 
                 # make sure probabiliy is positive.
                 probs_interp[probs_interp < 0] = EPS

@@ -12,10 +12,10 @@ ROOM_DIM = np.array([10.0, 7.0, 5.0])  # room dimensions [m].
 SPEAKER_POSITION = np.array(
     [10.0, 3.0, 1.0]
 )  # external source position [m], None for no external source.
-STARTING_POS = np.array([5.0, 0.2, 1.0])  # epuck starting position [m]
-STARTING_YAW_DEG = 0  # starting absoltue yaw angle in degrees
+# STARTING_POS = np.array([5.0, 0.2, 1.0])  # epuck starting position [m]
+# STARTING_YAW_DEG = 0  # starting absoltue yaw angle in degrees
 
-WALL_DISTANCE_M = 0.5  # distance of wall in meters, at start of experiment
+WALL_DISTANCE_M = 0.6  # distance of wall in meters, at start of experiment
 
 # corresponds to the setup in BC325 with stepper motor:
 WALL_ANGLE_DEG_STEPPER = 270  # angle of wall in degrees, at start of experiment
