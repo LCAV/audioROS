@@ -19,18 +19,19 @@ YAW_DEG = 0  # drone angle used for when nothing else is given.
 N_SPURIOUS = 2  # number of samples per frequency
 MAG_THRESH = 1e-3  # minimum magnitude
 STD_THRESH = 0.5  # maximum normalized std deviation
-DELTA_MERGE_FREQ = 50  # frequencies spaced by less are merged. sweep spacing: ca. 125
+DELTA_MERGE_FREQ = 20  # frequencies spaced by less are merged. sweep spacing: ca. 125
 RATIO_MISSING_ALLOWED = 0.2
 FACTOR_OUTLIERS = 3
 
 SWEEP_DELTA = 1000  # jumps by more than this downwards are detected as end of sweep.
 F_DELTA = 100  # jumps by more than this in frequency mark end of mono
 D_DELTA_MAX = 3  # jumps by more than this in cm mark endf mono
-D_DELTA_MIN = 1  # need at least movement by this to register meas.
+D_DELTA_MIN = 0.1  # need at least movement by this to register meas.
 MONO_FREQ = 3000  # mono frequency.
 
 
 def get_peak_freq(signals_f, frequencies):
+    """ Get highest frequency over all mics """
     avg_magnitude = np.nanmedian(np.abs(signals_f), axis=0)
     idx = np.argmax(avg_magnitude)
     magnitude = avg_magnitude[idx]
@@ -212,6 +213,9 @@ def prune_df_matrix(
 
 def merge_close_freqs(df, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False):
     """ Merge frequency bins that are closer than delta. """
+    if verbose:
+        print("merge frequencies closer than", delta_merge_freq)
+        print("frequency diff:", np.diff(df.frequency.dropna().unique()))
     curr_unique = df.frequency.dropna().min()
     merge_dict = {curr_unique: []}
     for f, df_here in df.groupby("frequency", sort=True):
@@ -219,15 +223,20 @@ def merge_close_freqs(df, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False):
         if f - curr_unique < delta_merge_freq:
             merge_dict[curr_unique] += list(df_here.index)
         else:
+
+            # print current merge
             if verbose:
-                print(
-                    f"will be merged to {curr_unique}: {df.loc[merge_dict[curr_unique]].frequency.unique()}"
-                )
+                for freq in df.loc[merge_dict[curr_unique]].frequency.unique():
+                    if freq != curr_unique:
+                        print(f"will obtain label {curr_unique}: {freq}")
+            # initalize new merge
             curr_unique = f
             merge_dict[curr_unique] = list(df_here.index)
 
-    if verbose:
+    if verbose and (len(df.frequency.unique()) > len(merge_dict)):
         print(f"merging {len(df.frequency.unique())} frequencies to {len(merge_dict)}")
+    elif verbose:
+        print("nothing to merge")
     for start_f, index in merge_dict.items():
         average_f = np.round(df.loc[index].frequency.mean())
         df.loc[index, "frequency"] = average_f
@@ -280,10 +289,6 @@ def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
             if verbose:
                 print(f"removing {freq} with std {normalized_std(vals)}>{std_thresh}")
             remove_rows += list(df_here.index.values)
-        elif verbose:
-            print(
-                f"keeping {freq}: {np.nanmedian(vals):.2e}, {normalized_std(vals):.2e}"
-            )
     if verbose:
         print(f"remove_bad_freqs: removing {len(remove_rows)} rows.")
     if not dryrun:
@@ -335,6 +340,12 @@ def to_numeric(df):
     return df.apply(pd.to_numeric, axis=0, downcast="integer")
 
 
+def cleanup_conservative(df, verbose=False):
+    df = to_numeric(df)
+    remove_nan_rows(df, verbose)
+    return df
+
+
 def cleanup(df, params, verbose=False):
     """ cleanup df inplace. """
 
@@ -370,22 +381,14 @@ class DataCollector(object):
         self.latest_fslice_time = None
         self.latest_dslice_time = None
         self.df = pd.DataFrame(
-            columns=[
-                "time",
-                "counter",
-                "mic",
-                "frequency",
-                "distance",
-                "angle",
-                "magnitude",
-            ]
+            columns=["time", "mic", "frequency", "distance", "angle", "magnitude",]
         )
         self.current_spectrogram = self.current_freqs = None
         self.interpolation = interpolation
 
         self.params = {}
         if exp_name is not None:
-            self.params.update(kwargs_datasets[exp_name].get(mic_type, {}))
+            self.params.update(kwargs_datasets.get(exp_name, {}).get(mic_type, {}))
 
     @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
@@ -466,13 +469,19 @@ class DataCollector(object):
             return True
         return False
 
-    def valid_dslice_measurement(self, position_cm, signals_f, frequencies):
+    def valid_dslice_measurement(
+        self, position_cm, signals_f, frequencies, mono_freq=None, verbose=False
+    ):
         if position_cm[2] < 35:
+            if verbose:
+                print("not flying")
             return False
 
-        if MONO_FREQ is not None:
+        if mono_freq is not None:
             f, magnitude = get_peak_freq(signals_f, frequencies)
-            if abs(MONO_FREQ - f) > F_DELTA:
+            if abs(mono_freq - f) > F_DELTA:
+                if verbose:
+                    print("not correct frequency:", f)
                 return False
 
         if len(self.df) == 0:
@@ -481,14 +490,21 @@ class DataCollector(object):
         # detect too small distance change
         new_d = position_cm[1]
         latest_d = self.df.iloc[-1].distance
+        if new_d < latest_d:
+            if verbose:
+                print(f"going backwards: {new_d:.1f}, {latest_d:.1f}")
+            return False
         if new_d - latest_d < D_DELTA_MIN:
+            if verbose:
+                print(f"too small distance change {new_d:.1f}, {latest_d:.1f}")
             return False
 
         return True
 
-    def next_dslice_ready(self, signals_f, frequencies, position_cm, n_max=100):
-        """ find if we have a new dslice ready, if either:
-            - we have more than n_slice values, or
+    def next_dslice_ready(
+        self, signals_f, frequencies, position_cm, n_max=100, verbose=False
+    ):
+        """ find if we need to start a new dslice, if:
             - we have a jump in relative_distance measurements.
             - if we changed frequency significantly since last time.
         """
@@ -499,17 +515,12 @@ class DataCollector(object):
         else:
             df_current = self.df
 
-        if len(df_current) == 0:
+        distances = df_current.distance.unique()
+        if len(distances) < 2:
             return False
 
-        # detect more than n_max values
-        if len(df_current) >= n_max:
-            print(f"more than {n_max} values since last")
-            return True
-
         # detect distance change
-        df_mic = df_current.loc[df_current.mic == 0]
-        average_delta_d = df_mic.distance.diff().mean()
+        average_delta_d = np.mean(np.diff(distances))
         new_d = position_cm[1]
         latest_d = df_current.iloc[-1].distance
         predicted_d = latest_d + average_delta_d
@@ -526,8 +537,9 @@ class DataCollector(object):
             np.abs(f - latest_frequency) > F_DELTA
         ):
 
-            print(f"big frequency change: {f}, {latest_frequency}")
-            return False  # True
+            if verbose:
+                print(f"big frequency change: new{f}, old{latest_frequency}")
+            return True
         return False
 
     def fill_from_signal(
@@ -538,57 +550,32 @@ class DataCollector(object):
         :param frequencies: shape (n_freqs,)
 
         """
-        sweep_complete = False
         for i_mic in range(signals_f.shape[0]):
+            # use only highest magnitude of all bins
             if mode == "maximum":
-                i_f = np.argmax(np.abs(signals_f[i_mic, :]))
-                f = frequencies[i_f]
-                counter = len(
-                    self.df.loc[
-                        (self.df.mic == i_mic)
-                        & (self.df.distance == distance_cm)
-                        & (self.df.angle == angle)
-                        & (self.df.frequency == f)
-                    ]
-                )
-                magnitude = np.abs(signals_f[i_mic, i_f])
+                i_fs = [np.argmax(np.abs(signals_f[i_mic, :]))]
+            # use all bins
+            elif mode == "all":
+                i_fs = range(signals_f.shape[1])
 
+            # use fixed frequency
+            elif type(mode) == int:
+                i_fs = [np.argmin(np.abs(frequencies - mode))]
+
+            for i_f in i_fs:
+                f = frequencies[i_f]
+                magnitude_estimate = np.abs(signals_f[i_mic, i_f])
                 update_dict = {
                     "time": time,
-                    "counter": counter,
                     "mic": i_mic,
                     "frequency": f,
                     "distance": distance_cm,
                     "angle": angle,
-                    "magnitude": magnitude,
+                    "magnitude": magnitude_estimate,
                 }
                 self.df.loc[len(self.df), list(update_dict.keys())] = list(
                     update_dict.values()
                 )
-            elif mode == "all":
-                for i_f in range(signals_f.shape[1]):
-                    f = frequencies[i_f]
-                    magnitude_estimate = np.abs(signals_f[i_mic, i_f])
-                    counter = len(
-                        self.df.loc[
-                            (self.df.mic == i_mic)
-                            & (self.df.distance == distance_cm)
-                            & (self.df.angle == angle)
-                            & (self.df.frequency == f)
-                        ]
-                    )
-                    update_dict = {
-                        "time": time,
-                        "counter": counter,
-                        "mic": i_mic,
-                        "frequency": f,
-                        "distance": distance_cm,
-                        "angle": angle,
-                        "magnitude": magnitude_estimate,
-                    }
-                    self.df.loc[len(self.df), list(update_dict.keys())] = list(
-                        update_dict.values()
-                    )
 
     def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
         """ 
@@ -717,14 +704,19 @@ class DataCollector(object):
             stds = df.groupby("mic").magnitude.std().values
             return slice_f, freqs, stds
 
-    def get_current_frequency_slice(self, verbose=False):
+    def get_current_frequency_slice(self, verbose=False, df_cleanup=True):
         if self.latest_fslice_time is None:
-            self.latest_fslice_time = self.df.iloc[0].time
-            if verbose:
-                print("set latest time to", self.latest_fslice_time)
+            self.latest_fslice_time = -1  # self.df.iloc[0].time
 
-        latest_df = self.df[self.df.time >= self.latest_fslice_time]
-        latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
+        latest_df = self.df[self.df.time > self.latest_fslice_time]
+
+        if df_cleanup:
+            latest_df_clean = cleanup(latest_df, self.params, verbose=False)
+        else:
+            latest_df_clean = cleanup_conservative(latest_df, verbose=False)
+
+        if verbose:
+            print("using dataset of length", len(latest_df_clean))
 
         f_slice, freqs, stds, d_slice = get_frequency_slice(latest_df_clean)
 
@@ -738,17 +730,19 @@ class DataCollector(object):
         df = self.filter_by_column(frequency, "frequency")
         return get_distance_slice(df, mics=mics)
 
-    def get_current_distance_slice(self, verbose=False):
-        if self.latest_dslice_time is None:
-            self.latest_dslice_time = self.df.iloc[0].time
-            print("set latest time to", self.latest_dslice_time)
+    def get_current_distance_slice(self, verbose=False, n_max=30):
+        times = self.df.time.unique()
+        if len(times) < 2:
+            return None
+        elif len(times) < n_max:
+            self.latest_dslice_time = -1
+        else:
+            self.latest_dslice_time = times[-n_max]
+        latest_df = self.df[self.df.time >= self.latest_dslice_time]
 
-        latest_df = self.df[self.df.time > self.latest_dslice_time]
-        latest_df_clean = cleanup(latest_df, self.params, verbose=verbose)
+        latest_df_clean = cleanup_conservative(latest_df, verbose=verbose)
 
         d_slice, distances, stds, freqs = get_distance_slice(latest_df_clean)
-
-        self.latest_dslice_time = latest_df.iloc[-1].time
         return d_slice, distances, stds, freqs
 
     def get_df_matrix(self):

@@ -51,7 +51,6 @@ class LivePlotter(object):
         self.axvlines = {}
         self.arrows = {}
         self.scatter = {}
-        self.meshes = {}
 
         self.fig.canvas.mpl_connect("close_event", self.handle_close)
         self.fig.canvas.mpl_connect("resize_event", self.handle_resize)
@@ -141,32 +140,30 @@ class LivePlotter(object):
         self.reset_xlim()
         self.reset_ylim()
 
-    def update_mesh(self, data_matrix, y_labels=None, name="standard", log=False):
+    def update_mesh(
+        self, data_matrix, y_labels=None, x_labels=None, log=False, n_labels=5
+    ):
         """ Plot each row of data_matrix in an image. """
-        if name in self.meshes.keys():
-            if log:
-                self.meshes[name].set_array(np.log10(data_matrix.flatten()))
-            else:
-                self.meshes[name].set_array(data_matrix.flatten())
+        mesh = self.ax.pcolorfast(data_matrix)
 
-        else:
-            if log:
-                mesh = self.ax.pcolormesh(np.log10(data_matrix))
-            else:
-                mesh = self.ax.pcolormesh(data_matrix)
-            self.meshes[name] = mesh
-            angles = np.linspace(0, 360, data_matrix.shape[1], dtype=str)
-            xticks = self.ax.get_xticks()
-
-            # for some reason, xticks has an extra element which is not shown on the plot
-            # so we need to exclude that from the indices.
-            new_xticks = angles[xticks[:-1].astype(int)]
-
-            self.ax.set_xticklabels(new_xticks)
         if y_labels is not None:
-            yticks = self.ax.get_yticks()
-            new_yticks = np.array(y_labels)[yticks[:-1].astype(int)]
-            self.ax.set_yticklabels(new_yticks)
+            if n_labels is None:
+                step = 1
+            else:
+                step = max(len(y_labels) // n_labels, 1)
+            self.ax.set_yticks(step / 2 + np.arange(len(y_labels), step=step))
+            self.ax.set_yticklabels(y_labels[::step])
+        if x_labels is not None:
+            if n_labels is None:
+                step = 1
+            else:
+                step = max(len(x_labels) // n_labels, 1)
+            self.ax.set_xticks(step / 2 + np.arange(len(x_labels), step=step))
+            self.ax.set_xticklabels(x_labels[::step])
+            # xticks = self.ax.get_xticks()
+            # new_xticks = np.array(x_labels)[xticks[:-1].astype(int)]
+            # self.ax.set_xticks(xticks.astype(int))
+            # self.ax.set_xticklabels(new_xticks)
 
     def update_axvlines(self, data_vector, **kwargs):
         for i, xcoord in enumerate(data_vector):

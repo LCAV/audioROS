@@ -382,10 +382,10 @@ class ReaderCRTP(object):
 
     def send_forward_command(self, velocity=None):
         if velocity is None:
-            print('warning: using default', self.VELOCITY)
+            print("warning: using default", self.VELOCITY)
             self.mc.start_forward(self.VELOCITY)
         else:
-            print('velocity in reader_crtp:', velocity)
+            print("velocity in reader_crtp:", velocity)
             self.mc.start_forward(velocity)
         return True
 
@@ -394,15 +394,16 @@ class ReaderCRTP(object):
             self.mc.land(velocity)
         else:
             self.mc.land()
-        # wait one more second after landing
         return True
 
     def send_buzzer_idx(self, idx):
         self.cf.param.set_value("audio.buzzer_idx", idx)
 
+    # uses Crazyflie buzzer deck
     def send_buzzer_effect(self, effect):
         self.cf.param.set_value("sound.effect", effect)
 
+    # uses Crazyflie buzzer deck
     def send_buzzer_freq(self, freq):
         self.cf.param.set_value("sound.freq", freq)
 
