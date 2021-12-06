@@ -18,7 +18,7 @@ from scipy.io import wavfile
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
 from play_and_record import get_usb_soundcard_ubuntu
 from signals import generate_signal
-from serial_motors import SerialMotors, DURATION_50, DURATION_360
+from serial_motors import SerialMotors, DURATION_30, DURATION_360
 
 from crazyflie_description_py.commands import all_commands_lists
 from crazyflie_description_py.parameters import SOUND_EFFECTS, FS
@@ -48,7 +48,7 @@ DEFAULT_PARAMS = {
 # TODO(FD) to be removed once we have used better names for this in Crazyflie firmware
 PARAM_NAMES = {"bin_selection": "bin_selection", "props": "filter_props_enable"}
 
-START_DISTANCE = 0
+START_DISTANCE = 15
 START_ANGLE = 0
 
 # EXTRA_DIRNAME = '2021_02_09_wall'
@@ -68,11 +68,21 @@ START_ANGLE = 0
 # EXTRA_DIRNAME = "2021_07_08_rotating"
 # EXTRA_DIRNAME = "2021_07_08_stepper_fast"
 # EXTRA_DIRNAME = "2021_07_08_stepper_slow"
-#EXTRA_DIRNAME = "2021_07_14_propsweep"
-#EXTRA_DIRNAME = "2021_07_14_flying"
-#EXTRA_DIRNAME = "2021_07_14_flying_hover"
-#EXTRA_DIRNAME = "2021_07_27_manual"
-EXTRA_DIRNAME = "2021_07_27_hover"
+# EXTRA_DIRNAME = "2021_07_14_propsweep"
+# EXTRA_DIRNAME = "2021_07_14_flying"
+# EXTRA_DIRNAME = "2021_07_14_flying_hover"
+# EXTRA_DIRNAME = "2021_07_27_manual"
+# EXTRA_DIRNAME = "2021_07_27_hover"
+# EXTRA_DIRNAME = "2021_09_23_polar_measurement"
+# EXTRA_DIRNAME = "2021_09_30_polar_measurement"
+# EXTRA_DIRNAME = "2021_10_05_polar_measurement"
+# EXTRA_DIRNAME = "2021_10_07_stepper"
+# EXTRA_DIRNAME = "2021_10_07_stepper_new_f"
+#EXTRA_DIRNAME = "2021_10_12_flying"
+#EXTRA_DIRNAME = "2021_10_12_hover"
+#EXTRA_DIRNAME = "2021_10_12_linear"
+EXTRA_DIRNAME = "2021_10_12_doa_stepper"
+#EXTRA_DIRNAME = "2021_10_12_doa_flying"
 
 EXTRA_REC_TIME = 2  # extra duration for recording time.
 USER_INPUT = True
@@ -81,12 +91,19 @@ bag_pid = None
 SerialIn = None
 
 
-def execute_commands(command_name):
+def execute_commands(command_name, source_type=None):
     if "mono" in command_name:
         freq = int(command_name.replace("mono", ""))
-        command_list = [
-            ("/gateway", "buzzer_idx", freq, 0),
-        ]
+        if source_type == "buzzer-onboard":
+            # play the sounds
+            command_list = [
+                ("/gateway", "buzzer_idx", freq, 0),  # e.g. mono3000
+            ]
+        else:
+            # do not play sound but choose correct frequency window
+            command_list = [
+                ("/gateway", "buzzer_idx", freq + 10000, 0),  # e.g. monoBLANK3000
+            ]
     elif "all" in command_name:
         thrust = int(command_name.replace("all", ""))
         command_list = [("/gateway", "all", thrust, 0)]
@@ -144,14 +161,13 @@ def adjust_duration(duration, params):
     angle = params.get("degree", None)
     print(angle)
 
-    if (distance is not None) and (abs(distance) == 51):
-        if DURATION_50 > duration:
+    if (distance is not None) and (abs(distance) == 300):
+        if DURATION_30 > duration:
             print(
-                f"ignoring global duration {duration} and using move command duration {DURATION_50}"
+                f"ignoring global duration {duration} and using move command duration {DURATION_30}"
             )
-            duration = DURATION_50
+            duration = DURATION_30
     if (angle is not None) and (abs(angle) == 360):
-        print(angle)
         if DURATION_360 > duration:
             print(
                 f"ignoring global duration {duration} and using turn command duration {DURATION_360}"
@@ -204,12 +220,12 @@ def start_moving(distance, angle):
     if (angle is not None) and abs(angle) == 360:
         print(f"starting turning by {angle}")
         SerialIn.turn(angle, blocking=False)
-    if distance == 51:
-        print("start moving by 50")
-        SerialIn.move(50, blocking=False)
-    if distance == -51:
-        print("start moving back by 50")
-        SerialIn.move(-50, blocking=False)
+    if distance == 300:
+        print("start moving by 30")
+        SerialIn.move(30, blocking=False)
+    if distance == -300:
+        print("start moving back by 30")
+        SerialIn.move(-30, blocking=False)
 
 
 def save_bag_recording(csv_filename):
@@ -223,9 +239,36 @@ def main(args=None):
         wavfile.write(wav_filename, global_params["fs_soundcard"], recording_float32)
         print("wrote wav file as", wav_filename)
 
-    def perform_experiment(out_signal=None):
+    def perform_experiment(source_type, source_params=None):
         recording = None
         start_time = time.time()
+
+        out_signal = None
+        if source_type == "soundcard":
+            if "mono" in params["source"]:
+                freq = int(params["source"].replace("mono", ""))
+                out_signal = generate_signal(
+                    global_params["fs_soundcard"],
+                    duration,
+                    signal_type="mono",
+                    frequency_hz=freq,
+                    min_dB=source_params["min_dB"],
+                    max_dB=source_params["max_dB"],
+                )
+            else:
+                out_signal = generate_signal(
+                    global_params["fs_soundcard"],
+                    duration,
+                    signal_type=params["source"],
+                    min_dB=source_params["min_dB"],
+                    max_dB=source_params["max_dB"],
+                )
+
+        if source_type == "buzzer":
+            input(
+                f'make sure external buzzer plays {params["source"]}! Enter to continue'
+            )
+
         if (source_type == "soundcard") and (global_params["n_meas_mics"] > 0):
             recording = sd.playrec(out_signal, blocking=False)
         elif source_type == "soundcard":
@@ -235,16 +278,24 @@ def main(args=None):
             n_frames = int((duration + EXTRA_REC_TIME) * global_params["fs_soundcard"])
             recording = sd.rec(n_frames, blocking=False)
 
-        # execute motor commands
-        if params["motors"] != 0:
-            print(f"executing motor commands", params["motors"])
-            execute_commands(params["motors"])
+        if source_type == "soundcard":
+            # make sure we measure at correct bins
+            if params["source"] is not None:
+                execute_commands(params["source"], source_type=source_type)
+            # execute motor commands
+            if params["motors"] != 0:
+                print(f"executing motor commands", params["motors"])
+                execute_commands(params["motors"])
+        else:
+            # start motor commands
+            if params["motors"] != 0:
+                print(f"executing motor commands", params["motors"])
+                execute_commands(params["motors"])
+            # play onboard sound
+            if params["source"] is not None:
+                execute_commands(params["source"], source_type=source_type)
 
-        # play onboard sound
-        if params["source"] is not None:
-            execute_commands(params["source"])
-
-        # wait for exxtra time
+        # wait for extra time
         extra_idle_time = duration - (time.time() - start_time)
         if extra_idle_time > 0:
             print(f"Waiting for {extra_idle_time:.2f} seconds...")
@@ -255,30 +306,29 @@ def main(args=None):
             )
         return recording
 
-    def measure_doa(params):
+    def measure_doa(params, source_params):
         """ setup: 
         - soundcard or external buzzer
         - stepper motor
         """
         assert source_type in ["buzzer", "soundcard"]
-        if source_type == "soundcard":
-            out_signal = generate_signal(
-                global_params["fs_soundcard"],
-                duration,
-                signal_type=params["source"],
-                frequency_hz=source_params["freq_source"],
-                min_dB=source_params["min_dB"],
-                max_dB=source_params["max_dB"],
-            )
-        if source_type == "buzzer":
-            input(
-                f'make sure external buzzer plays {params["source"]}! Enter to continue'
-            )
 
         start_bag_recording(bag_filename)
-        start_turning(distance, angle)
+        start_moving(distance, angle)
 
-        return perform_experiment(out_signal=out_signal)
+        return perform_experiment(source_type, source_params)
+
+    def measure_polar_patern(params, source_params):
+        """ setup: 
+        - soundcard
+        - stepper motor
+        """
+        assert source_type == "soundcard"
+
+        start_bag_recording(bag_filename)
+        start_moving(distance, angle)
+
+        return perform_experiment(source_type, source_params)
 
     def measure_wall(params):
         """ setup: 
@@ -291,12 +341,12 @@ def main(args=None):
         print("measure_wall: start moving")
         start_moving(distance, angle)
 
-        return perform_experiment()
+        return perform_experiment(source_type)
 
     def measure_wall_flying(params):
         """ 
         setup: 
-        - onboard buzzer
+        - onboard buzzer or external source
         - drone flying
         """
         assert source_type == "buzzer-onboard"
@@ -307,42 +357,7 @@ def main(args=None):
             execute_commands(params["source"])
 
         start_bag_recording(bag_filename)
-        return perform_experiment()
-
-    def measure_snr(params):
-        """ 
-        setup: 
-        - external buzzer
-        - static, no stepper motor or flying
-        """
-
-        # we set the frequency even though this drone
-        # is not playing, so that snr>=2 works.
-        if params["source"] is not None and ("mono" in params["source"]):
-            freq = int(params["source"].strip("mono"))
-            set_param("/gateway", "buzzer_freq", freq)
-            set_param("/gateway", "buzzer_effect", 0)
-
-        input(f'make sure external buzzer plays {params["source"]}! Enter to continue')
-
-        start_bag_recording(bag_filename)
-        return perform_experiment()
-
-    def measure_snr_onboard(params):
-        """ 
-        setup: 
-        - onboard buzzer
-        - static, no stepper motor or flying
-        """
-
-        # order of bag recording vs. buzzer sound is intentionally different!
-        start_bag_recording(bag_filename)
-
-        if params["source"] is not None:
-            print(f"executing buzzer commands")
-            execute_commands(params["source"])
-
-        return perform_experiment()
+        return perform_experiment(source_type)
 
     rclpy.init(args=args)
 
@@ -362,6 +377,11 @@ def main(args=None):
 
     sys.path.append(exp_dirname)
     from params import global_params, params_list
+
+    source_type = global_params["source_type"]
+
+    if source_type == "soundcard":
+        from params import source_params
 
     print(f"loaded parameters from {exp_dirname}/params.py")
 
@@ -385,7 +405,7 @@ def main(args=None):
 
     # motors check
     if any([p.get("distance", None) is not None for p in params_list]) or any(
-        [p.get("angle", None) is not None for p in params_list]
+        [p.get("degree", None) is not None for p in params_list]
     ):
         global SerialIn
         SerialIn = SerialMotors(
@@ -426,10 +446,11 @@ def main(args=None):
                 input(
                     f"Path {filename} exists, append something? (default:{timestamp}, n to skip)"
                 )
-                or timestamp
+                or str(timestamp)
             )
             if answer == "n":
                 continue
+            answer = answer[1:] if answer[0] == "_" else answer
             filename = f"{filename}_{answer}"
             bag_filename = os.path.join(exp_dirname, filename)
 
@@ -441,12 +462,12 @@ def main(args=None):
         angle = params.get("degree", None)
 
         print("checking for blocking movements...")
-        if (distance is not None) and (abs(distance) != 51):
-            print("moving to", distance)
+        if (distance is not None) and (abs(distance) != 300):
+            print("moving to distance: ", distance)
             SerialIn.move_to(distance, blocking=True)
         if (angle is not None) and (abs(angle) != 360):
-            print("moving to", angle)
-            SerialIn.move_to(angle, blocking=True)
+            print("moving to angle: ", angle)
+            SerialIn.turn_to(angle, blocking=True)
         print("...done")
 
         #### set parameters ###
@@ -455,10 +476,13 @@ def main(args=None):
         set_audio_parameters(params, params_old)
 
         #### perform experiment ###
-        recording = measure_wall_flying(params)
+        #recording = measure_wall_flying(params)
         # recording = measure_wall(params)
         # recording = measure_snr(params)
         # recording = measure_snr_onboard(params)
+        recording = measure_doa(params, source_params)
+        #recording = measure_doa_flying(params, source_params)
+        # recording = measure_polar_patern(params, source_params)
 
         #### wrap up ####
         execute_commands("stop_motors")

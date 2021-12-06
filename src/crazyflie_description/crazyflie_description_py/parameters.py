@@ -21,8 +21,8 @@ BUZZER_POSITION = [[0.0, 0.0]]  # relative buzzer position (in meters)
 HEIGHT_BUZZER = 0.01  # height of buzzer with resepect to drone center (in meters)
 
 N_MICS = 4  # number of mics
-FS = 64000  # sampling frequency [Hz]
-N_BUFFER = 1024  # number of samples in audio buffer
+FS = 48000  # sampling frequency [Hz]
+N_BUFFER = 1024  # number of samples in audio buffer (before taking fft)
 FFTSIZE = 32  # number of frequency bins that are sent.
 
 # name: (effect_number, [min_freq_Hz, max_freq_Hz], duration_sec)
@@ -34,6 +34,6 @@ SOUND_EFFECTS = {
     "sweep_buzzer": (20, [0, 16000], 185),
     "sweep_slow": (21, [1000, 5000], 0),  # 0 will be overwritten
     "sweep_fast": (22, [1000, 5000], 0),  # 0 will be overwritten
-    "sweep_new": (3, [2000, 6000], 8),  # was 17, 6
+    "sweep_new": (3, [2000, 6000], 8),  # corresponds to three sweeps.
     "sweep_cont": (1, [2000, 6000], 6),
 }

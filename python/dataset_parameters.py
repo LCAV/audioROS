@@ -234,4 +234,53 @@ kwargs_datasets = {
         },
         "appendix": [""],
     },
+    "2021_09_23_polar_measurement": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 0,
+            "std_thresh": 1e10,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 100,
+            "max_freq": 6000,
+        },
+        "appendix": [""],
+    },
+    "2021_09_30_polar_measurement": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 0,
+            "std_thresh": 1e10,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 100,
+            "max_freq": 6000,
+        },
+        "appendix": ["", "_loud"],
+    },
+    "2021_10_05_polar_measurement": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 0,
+            "std_thresh": 1e10,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 100,
+            "max_freq": 6000,
+        },
+        "appendix": [""],
+    },
+    "2021_10_07_stepper": {
+        "audio_deck": {
+            "factor_outliers": 1e3,
+            "mag_thresh": 1e-5,
+            "std_thresh": 200,
+            "n_spurious": 1,  # important, because only one measurement per frequency.
+            "min_freq": 100,
+            "max_freq": 6000,
+        },
+        "appendix": [""],
+    },
+    "2021_10_12_hover": {"appendix": ["", "_7", "_11", "_12", "_40", "_41", "_42"],},
+    "2021_10_12_flying": {
+        "appendix": ["_new3", "_new4", "_new6", "_new7", "_new8", "_new10"]
+    },  # {"appendix": [f"_{i}" for i in range(1, 7)],},
+    "2021_10_12_linear": {"appendix": ["", "_1", "_2", "_6", "_8", "_9", "_10"],},
 }

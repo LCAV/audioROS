@@ -102,7 +102,7 @@ class AudioPlotter(NodeWithParams):
         x = freqs[indices]
 
         max_freq = x[np.argmax(y, axis=1)]
-        labels = [f"mic {i}" for i in range(y.shape[0])]
+        labels = [f"mic {i+1}" for i in range(y.shape[0])]
         self.plotter_dict["signals frequency"].update_lines(
             y, x, labels, linestyle="-", marker="o"
         )

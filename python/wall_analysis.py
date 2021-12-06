@@ -65,7 +65,7 @@ def clean_stft(stft, max_value=N_BUFFER):
     return stft
 
 
-def parse_experiments(exp_name="2020_12_9_moving"):
+def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
     from dataset_parameters import kwargs_datasets
 
@@ -76,9 +76,8 @@ def parse_experiments(exp_name="2020_12_9_moving"):
     params_all.update(**params_from_file)
 
     params_all["appendix"] = params_all["appendix"].union(
-        kwargs_datasets[exp_name].get("appendix", {""})
+        kwargs_datasets.get(exp_name, {}).get("appendix", {""})
     )
-    print("all:", params_all)
 
     df_total = pd.DataFrame(
         columns=list(params_all.keys())  # categories
@@ -110,11 +109,13 @@ def parse_experiments(exp_name="2020_12_9_moving"):
                     method_window=WINDOW_TYPES[params["window_type"]],
                 )
         except FileNotFoundError as e:
-            print("skipping", e)
+            if verbose:
+                print("skipping", e)
             continue
 
         if not "signals_f" in df.columns:
-            print("error, signals_f is empty. skipping...")
+            if verbose:
+                print("error, signals_f is empty. skipping...")
             continue
 
         df.signals_f /= WINDOW_CORRECTION[WINDOW_TYPES[params["window_type"]]]
@@ -141,8 +142,12 @@ if __name__ == "__main__":
     import os
 
     exp_names = [
-        "2021_05_04_flying",
-        "2021_05_04_linear",
+        "2021_10_12_flying",
+        # "2021_10_12_linear",
+        # "2021_10_12_hover",
+        # "2021_10_07_stepper_new_f",
+        # "2021_10_07_stepper",
+        # "2021_05_04_linear",
         # "2021_07_27_hover",
         # "2021_07_27_manual",
         # "2021_07_27_epuck_wall",
@@ -157,18 +162,11 @@ if __name__ == "__main__":
         # fname = f'results/{exp_name}_real.pkl'
         fname = f"../experiments/{exp_name}/all_data.pkl"
         # fname = f'../experiments/{exp_name}/battery_data.pkl'
-
         dirname = os.path.dirname(fname)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
             print("created directory", dirname)
 
-        print("parsing", exp_name)
-        if (
-            exp_name == "2021_02_09_wall_tukey"
-        ):  # there is an issue with space when trying to read all distances
-            df_total = parse_experiments(exp_name=exp_name, max_distance=30)
-        else:
-            df_total = parse_experiments(exp_name=exp_name)
+        df_total = parse_experiments(exp_name=exp_name)
         pd.to_pickle(df_total, fname)
-        print(f"saved {len(df_total)} lines in", fname)
+        print("saved as", fname)
