@@ -64,10 +64,13 @@ class MovingEstimator(object):
             # uniform distribution
             self.dist_p[self.index] = lambda x: 1
 
+
     def enough_measurements(self):
         return self.filled
 
+
     def _get_distribution(self, distances_cm=None, angles_deg=None, verbose=False):
+
         if not self.filled:
             print("Warning: not enough measurements yet.")
 
