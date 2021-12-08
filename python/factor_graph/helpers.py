@@ -31,18 +31,17 @@ def print_plane(label, plane):
     #print(f"{label} normal:", normal)
     get_angles(normal, verbose=True)
 
-def plot_all(estimate, axis_length=0.2, perspective=True, top=True, side=True):
-    import plot
+def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side=True, ls="-"):
     if perspective:
         fig = plt.figure(0)
         fig.set_size_inches(10, 10)
-        plot.plot_trajectory(0, estimate, axis_length=axis_length)
+        plot.plot_trajectory(0, estimate, axis_length=axis_length, ls=ls)
         plot.set_axes_equal(0)
 
     if side:
         fig = plt.figure(1)
         fig.set_size_inches(10, 10)
-        plot.plot_trajectory(1, estimate, axis_length=axis_length)
+        plot.plot_trajectory(1, estimate, axis_length=axis_length, ls=ls)
         plot.set_axes_equal(1)
         plt.gca().view_init(elev=0., azim=0)
         plt.title("side view")
@@ -50,7 +49,7 @@ def plot_all(estimate, axis_length=0.2, perspective=True, top=True, side=True):
     if top:
         fig = plt.figure(2)
         fig.set_size_inches(10, 10)
-        plot.plot_trajectory(2, estimate, axis_length=axis_length)
+        plot.plot_trajectory(2, estimate, axis_length=axis_length, ls=ls)
         plot.set_axes_equal(2)
         plt.gca().view_init(elev=90., azim=0)
         plt.title("top view")
@@ -135,3 +134,15 @@ class WallSimulation(object):
         normal_vec = get_vector(azimuth, elevation) 
         plane_meas = gtsam.OrientedPlane3(n=gtsam.Unit3(-normal_vec), d=distance)
         return plane_meas, azimuth, elevation, distance
+def get_distribution(estimate, range_=[0, 1], n_outliers=1, std=0.01):
+    import scipy.stats
+    # add noise to distance
+    estimate = np.random.normal(estimate, scale=std)
+    values = np.arange(*range_, step=0.01)
+    prob = np.zeros(len(values))
+    prob += scipy.stats.norm(estimate, std).pdf(values)
+    for _ in range(n_outliers):
+        outlier = np.random.uniform(*range_)
+        prob += scipy.stats.norm(outlier, 3*std).pdf(values)
+    prob /= np.sum(prob)
+    return values, prob

@@ -487,3 +487,26 @@ def plot_incremental_trajectory(
 
     # Pause for a fixed amount of seconds
     plt.pause(time_interval)
+
+def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side=True, ls="-"):
+    if perspective:
+        fig = plt.figure(0)
+        fig.set_size_inches(10, 10)
+        plot_trajectory(0, estimate, axis_length=axis_length, ls=ls)
+        set_axes_equal(0)
+
+    if side:
+        fig = plt.figure(1)
+        fig.set_size_inches(10, 10)
+        plot_trajectory(1, estimate, axis_length=axis_length, ls=ls)
+        set_axes_equal(1)
+        plt.gca().view_init(elev=0., azim=0)
+        plt.title("side view")
+
+    if top:
+        fig = plt.figure(2)
+        fig.set_size_inches(10, 10)
+        plot_trajectory(2, estimate, axis_length=axis_length, ls=ls)
+        set_axes_equal(2)
+        plt.gca().view_init(elev=90., azim=0)
+        plt.title("top view")
