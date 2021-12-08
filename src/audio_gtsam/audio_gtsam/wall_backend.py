@@ -15,9 +15,9 @@ import gtsam
 X = gtsam.symbol_shorthand.X 
 P = gtsam.symbol_shorthand.P 
 
-
-METHOD = "ISAM"
-METHOD = "GN"
+#METHOD = "ISAM"
+#METHOD = "GN"
+EPS = 1e-10
 
 def rad(angle_deg):
     return angle_deg / 180 * np.pi
@@ -60,8 +60,7 @@ class WallBackend(object):
         self.isam = gtsam.ISAM2(params=params)
         self.result = None
 
-        self.plane_noise = gtsam.noiseModel.Diagonal.Sigmas([0.8, 0.8, 5])
-        self.pose_noise = gtsam.noiseModel.Isotropic.Sigma(6, 0.01)
+        self.set_noise()
 
         self.pose_index = -1
         self.plane_index = 0
@@ -69,6 +68,31 @@ class WallBackend(object):
         self.verbose=verbose
         self.all_initial_estimates = gtsam.Values()
 
+    def set_noise(self, 
+            plane_azimuth_deg=EPS,
+            plane_elevation_deg=EPS,
+            plane_distance_cm=2,
+            pose_roll_deg=EPS,
+            pose_pitch_deg=EPS,
+            pose_yaw_deg=EPS,
+            pose_x_cm=EPS,
+            pose_y_cm=EPS,
+            pose_z_cm=EPS,
+            ):
+        # below are verified with unit tests tests/test_NoiseOrder.py
+        self.plane_noise = gtsam.noiseModel.Diagonal.Sigmas([
+            rad(plane_azimuth_deg), 
+            rad(plane_elevation_deg), 
+            plane_distance_cm*1e-2,
+        ])
+        self.pose_noise = gtsam.noiseModel.Diagonal.Sigmas([
+            rad(pose_roll_deg),
+            rad(pose_pitch_deg),
+            rad(pose_yaw_deg),
+            pose_x_cm*1e-2,
+            pose_y_cm*1e-2,
+            pose_z_cm*1e-2,
+        ])
 
     def add_plane(self, distance, azimuth, elevation=0.0, plane_noise=None):
         if plane_noise is None:
@@ -100,7 +124,7 @@ class WallBackend(object):
         # self.plane_index += 1
         return factor
 
-    def add_planes_from_distance_distribution(self, dists_cm, probs, azimuth_deg=90, azimuth_deg_std=10, n_estimates=1):
+    def add_planes_from_distance_distribution(self, dists_cm, probs, azimuth_deg=90, azimuth_deg_std=10, n_estimates=1, verbose=False):
         """ Add plane factor from distance distribution and angle measurement. 
 
         :param dists_cm: distances in centimeters
@@ -112,14 +136,18 @@ class WallBackend(object):
         angle_estimates = [rad(azimuth_deg)] 
         angle_stds = [rad(azimuth_deg_std)]
 
+        if verbose:
+            print("distance estimates:", distance_estimates)
+
         for d_i, a_i in itertools.product(range(len(distance_estimates)), range(len(angle_estimates))):
             distance = distance_estimates[d_i]
             azimuth = angle_estimates[a_i]
-            noise = [distance_stds[d_i], angle_stds[a_i], 0.0]
+            #noise = [distance_stds[d_i], angle_stds[a_i], 0.0]
 
             wall_angle = azimuth - np.pi
             #print(f"INSIDE: add wall estimate at {distance:.1f}cm {deg(wall_angle):.0f}deg")
-            self.add_plane(distance*1e-2, wall_angle, plane_noise=noise)
+            # use the classes plane noise!
+            self.add_plane(distance*1e-2, wall_angle, plane_noise=None)
             self.get_results()
 
     def add_pose(self, r_world, yaw):
