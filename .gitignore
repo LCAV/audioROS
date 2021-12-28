@@ -75,4 +75,4 @@ python/plots/
 python/plots_doa/
 backup/
 epuck-audio/
-
+.ipynb_checkpoints
