@@ -5,12 +5,14 @@ import pyroomacoustics as pra
 from audio_stack.beam_former import rotate_mics
 from .constants import SPEED_OF_SOUND, PLATFORM
 
+from audio_simulation.geometry import ROOM_DIM
+
 if PLATFORM == "epuck":
     from crazyflie_description_py.parameters import N_BUFFER, FS
-    from crazyflie_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
+    from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
 else:
     from epuck_description_py.parameters import N_BUFFER, FS
-    from epuck_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
+    from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
 
 from .frequency_analysis import get_bin
 from .geometry import *
@@ -24,9 +26,8 @@ GAIN = 1.0  # default amplitude for input signals
 WIDEBAND_FILE = "results/wideband.npy"
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
 
-
 def simulate_distance_estimator(
-    chosen_mics=range(4), distance_cm=10, azimuth_deg=WALL_ANGLE_DEG, ax=None
+    chosen_mics=range(4), distance_cm=10, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None
 ):
     from inference import get_probability_bayes
     from estimators import DistanceEstimator
@@ -64,7 +65,7 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
     return signal
 
 
-def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS):
+def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS):
     """ Generate two-dimensional setup using pyroomacoustics. """
     source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
@@ -77,7 +78,7 @@ def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, fs_here=FS
     return room
 
 
-def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True):
+def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, zoom=True):
     """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
 
     context = Context.get_platform_setup()
@@ -112,11 +113,11 @@ def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG, ax=None, zoom=True):
     return source, mic_positions
 
 
-# ## simulation ###
+### simulation ###
 
 
 def get_amplitude_function(
-    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=WALL_ANGLE_DEG
+    distances_cm, gain, wall_absorption, mic_idx, azimuth_deg=WALL_ANGLE_DEG_STEPPER
 ):
     deltas_m, d0 = get_deltas_from_global(azimuth_deg, distances_cm, mic_idx)
     alpha0 = 1 / (4 * np.pi * d0)  #
@@ -125,6 +126,8 @@ def get_amplitude_function(
     return amplitudes
 
 
+# TODO(FD) this slice is squared, but in data_collector the slice is not 
+# squared yet (will be squared in inference again)
 def get_df_theory_simple(
     deltas_m,
     frequencies_hz,
@@ -181,7 +184,7 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
 
 
 def get_df_theory(
-    frequencies, distances, azimuth_deg=WALL_ANGLE_DEG, chosen_mics=range(4)
+    frequencies, distances, azimuth_deg=WALL_ANGLE_DEG_STEPPER, chosen_mics=range(4)
 ):
     H = np.zeros((len(chosen_mics), len(frequencies), len(distances)))
     for i, mic in enumerate(chosen_mics):
@@ -192,7 +195,7 @@ def get_df_theory(
     return H
 
 
-def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG):
+def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG_STEPPER):
     room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
 
     n_times = len(signal) // N_BUFFER
@@ -208,7 +211,7 @@ def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANG
 
 
 def get_dist_slice_pyroom(
-    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG, n_times=100
+    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100
 ):
     from frequency_analysis import get_bin
 
@@ -228,7 +231,7 @@ def get_dist_slice_pyroom(
 
 
 def get_freq_slice_theory(
-    frequencies, distance_cm, azimuth_deg=WALL_ANGLE_DEG, chosen_mics=range(4)
+    frequencies, distance_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, chosen_mics=range(4)
 ):
     """ 
     We can incorporate relative movement by providing
@@ -247,7 +250,7 @@ def get_freq_slice_theory(
 def get_dist_slice_theory(
     frequency,
     distances_cm,
-    azimuth_deg=WALL_ANGLE_DEG,
+    azimuth_deg=WALL_ANGLE_DEG_STEPPER,
     chosen_mics=range(4),
     wall_absorption=WALL_ABSORPTION,
     gains=[GAIN] * 4,

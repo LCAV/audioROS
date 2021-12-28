@@ -45,104 +45,13 @@ def plot_calibration(x, ys, function, ax):
     ax.legend()
 
 
-def get_calibration_function(ax=None):
-
-    calib_df = pd.read_pickle("results/calibration_results.pkl")
-    chosen_dict = {
-        "source": "sweep_buzzer",
-        "method": np.median,
-    }
-    calib_df = filter_by_dict(calib_df, chosen_dict)
-    assert len(calib_df) == 1, calib_df
-    row = calib_df.iloc[0]
-
-    calib_psd = row.psd
-    calib_f = row.frequencies
-    calib_function = interp1d(
-        x=calib_f,
-        y=calib_psd,
-        kind=KIND,
-        fill_value=FILL_VALUE,
-        bounds_error=BOUNDS_ERROR,
-    )
-
-    if ax is not None:
-        plot_calibration(row.frequencies, row.psd, calib_function, ax)
-    return calib_function
-
-
-def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
-    from scipy.interpolate import interp1d
-
-    df_matrix_pruned, df_freq, __ = prune_df_matrix(df_matrix, df_freq)
-    median_values = np.nanmedian(df_matrix_pruned, axis=2)  # n_mics x n_freqs
-    calib_function = interp1d(
-        df_freq,
-        median_values,
-        kind=KIND,
-        fill_value=FILL_VALUE,
-        bounds_error=BOUNDS_ERROR,
-    )
-    if ax is not None:
-        plot_calibration(df_freq, median_values, calib_function, ax=ax)
-    np.testing.assert_allclose(calib_function(df_freq[0]), median_values[:, 0])
-    return calib_function
-
-
-def get_calibration_function_dict(ax=None, **filter_dict):
-    from .pandas_utils import filter_by_dict
-
-    fname = "results/wall_analysis.pkl"
-    results_df = pd.read_pickle(fname)
-    df = filter_by_dict(results_df, filter_dict)
-    assert len(df) == 1, df
-    row = df.iloc[0]
-    return (
-        get_calibration_function_matrix(row.df_matrix, row.df_freq, ax=ax),
-        row.df_freq,
-    )
-
-
-def get_calibration_function_fit(
-    exp_name, mic_type, ax=None, motors=0, fit_one_gain=False
-):
-
-    data_collector = DataCollector()
-    data_collector.fill_from_backup(exp_name, mic_type, motors=motors)
-
-    matrix, distances, frequencies = data_collector.get_df_matrix()
-    matrix, frequencies, *_ = prune_df_matrix(matrix, frequencies)
-
-    mics = data_collector.get_mics()
-    gains = np.zeros((len(mics), len(frequencies)))
-    for i, f in enumerate(frequencies):
-        slices_raw = matrix[:, i, :]
-        coeffs, slices_fit, cost = fit_distance_slice(
-            slices_raw.T,
-            distances,
-            method="minimize",
-            azimuth_deg=YAW_DEG,
-            frequency=f,
-            chosen_mics=mics,
-            optimize_absorption=True,
-            fit_one_gain=fit_one_gain,
-        )
-        gains[:, i] = coeffs[2:]
-
-    calib_function = interp1d(
-        frequencies, gains, kind=KIND, fill_value=FILL_VALUE, bounds_error=BOUNDS_ERROR,
-    )
-    if ax is not None:
-        plot_calibration(frequencies, gains, calib_function, ax=ax)
-    return calib_function
-
-
 def get_calibration_function_median(
     exp_name, mic_type, ax=None, motors=MOTORS, snr="", fit_one_gain=False
 ):
     data_collector = DataCollector()
     data_collector.fill_from_backup(exp_name, mic_type, motors=motors, snr=snr)
 
+    # FYI, matrix has non-squared values.
     matrix, distances, frequencies = data_collector.get_df_matrix()
     matrix, frequencies, *_ = prune_df_matrix(matrix, frequencies)
 

@@ -3,18 +3,17 @@ import sys
 
 import pandas as pd
 import progressbar
-from data_collector import DataCollector
-from pandas_utils import filter_by_dict
-
-from constants import PLATFORM
+from utils.data_collector import DataCollector
+from utils.pandas_utils import filter_by_dict
+from utils.constants import PLATFORM
 
 if PLATFORM == "epuck":
     from epuck_description_py.experiments import DISTANCES_CM
 elif PLATFORM == "crazyflie":
     from crazyflie_description_py.experiments import WALL_DISTANCE_CM_STEPPER
 
+DEGREE = 0 # wall degree to be used for all measurements (doesn't matter for now)
 OVERWRITE_RAW = True  # regenerate raw results instead of reading from backup
-
 
 def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection=""):
     data_collector = DataCollector(exp_name, mic_type)
@@ -55,37 +54,26 @@ def data_collector_from_df(df_all, exp_name, mic_type, motors, bin_selection="")
         )
     return data_collector
 
-
+#exp_names = [
+#        # "2021_07_08_stepper_fast",
+#        # "2021_07_27_manual",
+#        # "2021_04_30_stepper",
+#        # "2021_10_07_stepper",
+#        #"2021_10_07_stepper_new_f",
+#        # "2021_07_08_stepper_slow",
+#]
 if __name__ == "__main__":
-    ## choose for which data we want to generate results
-    DEGREE = 0
+    from utils.custom_argparser import exp_parser
     mic_types = ["audio_deck"]  # , "measurement"]
-    motors_types = [0, "all45000"]
-    bin_selection_types = [3, 5, 6]
-    exp_names = [
-        # "2021_07_08_stepper_fast",
-        # "2021_07_27_manual",
-        # "2021_04_30_stepper",
-        # "2021_10_07_stepper",
-        "2021_10_07_stepper_new_f",
-        # "2021_07_08_stepper_slow",
-    ]
+    motors_types = [0, "all45000", "sweep_and_move"]
+    bin_selection_types = [0, 3, 5, 6]
 
-    # epuck
-    # motors_types = ["sweep_and_move"]
-    # bin_selection_types = [0]
-    # mic_types = ["audio_deck"]
-    # exp_names = [
-    #     "2021_07_27_epuck_wall",
-    # ]
+    ## choose for which data we want to generate results
+    parser = exp_parser(description=__doc__)
+    args = parser.parse_args()
 
-    # exp_name = '2021_02_09_wall_tukey';
-    # exp_name = '2021_02_09_wall';
-    # exp_name = "2021_03_01_flying"
-    # exp_name = '2020_12_9_rotating';
-    # exp_name = '2020_11_26_wall';
-    for exp_name in exp_names:
-        fname = f"../experiments/{exp_name}/all_data.pkl"
+    for exp_name in args.experiment_names:
+        fname = f"{args.experiment_root}/{exp_name}/all_data.pkl"
         try:
             df_all = pd.read_pickle(fname)
             print("read", fname)

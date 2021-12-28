@@ -1,11 +1,16 @@
+"""
+Parse csv or wav files and generate pandas dataframes for convenient data analysis.
+"""
+
 import itertools
 
 import numpy as np
 import pandas as pd
 from audio_bringup.helpers import get_filename
-from .dynamic_analysis import add_pose_to_df
-from .evaluate_data import get_positions_absolute
-from .evaluate_data import read_df, read_df_from_wav
+from utils.dynamic_analysis import add_pose_to_df
+from utils.evaluate_data import get_positions_absolute
+from utils.evaluate_data import read_df, read_df_from_wav
+from utils.constants import PLATFORM
 
 FILENAME = "../experiments/datasets.csv"
 DEFAULT_DICT = {
@@ -17,13 +22,11 @@ DEFAULT_DICT = {
     "window_type": {0},
     "appendix": set(),
 }
-PLATFORM = "crazyflie"
 
 if PLATFORM == "crazyflie":
     from crazyflie_description_py.parameters import N_BUFFER
 else:
     from epuck_description_py.parameters import N_BUFFER
-
 
 def extract_unique(params_list):
     params = {}
@@ -67,7 +70,7 @@ def clean_stft(stft, max_value=N_BUFFER):
 
 def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
-    from .dataset_parameters import kwargs_datasets
+    from utils.dataset_parameters import kwargs_datasets
 
     params_all = DEFAULT_DICT
 
@@ -138,30 +141,33 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
     return df_total
 
 
+#exp_names = [
+#    "2021_10_12_flying",
+#    # "2021_10_12_linear",
+#    # "2021_10_12_hover",
+#    # "2021_10_07_stepper_new_f",
+#    # "2021_10_07_stepper",
+#    # "2021_05_04_linear",
+#    # "2021_07_27_hover",
+#    # "2021_07_27_manual",
+#    # "2021_07_27_epuck_wall",
+#    # "2021_07_14_flying_hover",
+#    # "2021_07_14_flying",
+#    # "2021_07_14_propsweep",
+#    # "2021_07_08_stepper_slow",
+#    # "2021_07_08_stepper_fast",
+#    # "2021_04_30_stepper",
+#]
 if __name__ == "__main__":
     import os
+    from utils.custom_argparser import exp_parser, check_platform
 
-    exp_names = [
-        "2021_10_12_flying",
-        # "2021_10_12_linear",
-        # "2021_10_12_hover",
-        # "2021_10_07_stepper_new_f",
-        # "2021_10_07_stepper",
-        # "2021_05_04_linear",
-        # "2021_07_27_hover",
-        # "2021_07_27_manual",
-        # "2021_07_27_epuck_wall",
-        # "2021_07_14_flying_hover",
-        # "2021_07_14_flying",
-        # "2021_07_14_propsweep",
-        # "2021_07_08_stepper_slow",
-        # "2021_07_08_stepper_fast",
-        # "2021_04_30_stepper",
-    ]
-    for exp_name in exp_names:
-        # fname = f'results/{exp_name}_real.pkl'
-        fname = f"../experiments/{exp_name}/all_data.pkl"
-        # fname = f'../experiments/{exp_name}/battery_data.pkl'
+    parser = exp_parser(description=__doc__)
+    args = parser.parse_args()
+    check_platform(args)
+
+    for exp_name in args.experiment_names:
+        fname = f"{args.experiment_root}/{exp_name}/all_data.pkl"
         dirname = os.path.dirname(fname)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)

@@ -1,10 +1,7 @@
-#! /usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+estimators.py: Combine angle or distance distributions from multiple mics to yield one final distribution.
 
 """
-distance_estimator.py: 
-"""
-
 import warnings
 
 import numpy as np
@@ -12,11 +9,8 @@ from scipy.interpolate import interp1d
 
 from utils.geometry import Context
 
-# method to combine probability distributions
-# TODO(FD): understand why sum gives better resuls than product.
-METHOD = "sum"
+METHOD = "sum" # method used to combine probability distributions
 EPS = 1e-30  # smallest value for probability distribution
-
 
 def get_estimate(values, probs):
     return values[np.argmax(probs)]
@@ -260,7 +254,7 @@ class AngleEstimator(object):
         argmax = np.argmax(probs)
         gamma = gammas[argmax]
 
-        all_gammas = np.arange(180)
+        all_gammas = np.arange(180).astype(int)
         all_probs = np.zeros(180)
         if mics_left_right is not None:
             score_left = 0
@@ -273,7 +267,7 @@ class AngleEstimator(object):
                 score_right += self.data[mic_right][1][arg]
             if score_right > score_left:
                 # below only works if gammas are integer-valued
-                all_probs[180 - gammas] = probs
+                all_probs[(180 - gammas).astype(int)] = probs
             else:
                 # print("wall is on the left")
                 pass

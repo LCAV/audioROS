@@ -1,6 +1,5 @@
 """
 crazyflie.py: Publish simulated audio signals for the Crazyflie drone in a room.  
-
 """
 
 from enum import Enum
@@ -33,9 +32,9 @@ from crazyflie_description_py.parameters import (
     HEIGHT_BUZZER,
 )
 from crazyflie_description_py.experiments import (
-    get_starting_pose_msg,
     SPEAKER_POSITION,
     ROOM_DIM,
+    STARTING_POS, STARTING_YAW_DEG
 )
 
 sys.path.append(os.getcwd() + "/crazyflie-audio/python/")
@@ -54,7 +53,6 @@ class State(Enum):
     PUBLISH = 2
     UPDATE_SIGNALS = 3
     UPDATE_GEOMETRY = 4
-
 
 MAX_TIMESTAMP = 2 ** 32 - 1  # max value of uint32
 NUM_REFLECTIONS = 1  # number of reflections to consider in pyroomacoustis.
@@ -135,7 +133,11 @@ class CrazyflieSimulation(Node):
         self.speaker_signal = None
 
         self.room = None
-        self.current_pose = get_starting_pose_msg().pose
+
+        self.current_pose = create_pose_message(
+            *STARTING_POS, # x, y, z
+            yaw_deg=STARTING_YAW_DEG,
+        ).pose
 
         # parameter stuff
         self.audio_params = {key: val[1] for key, val in PARAMS_DICT.items()}

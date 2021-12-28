@@ -14,16 +14,17 @@ from .simulation import get_dist_slice_theory
 from .simulation import get_freq_slice_theory
 
 EPS = 1e-30
-WALL_ANGLE_DEG = None
 
+#BAD_FREQ_RANGES = []
 if PLATFORM == "crazyflie":
+    # for 2021_07_08_stepper results:
     BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
-    # BAD_FREQ_RANGES = [[0, 2995]]
+    # for later results:
+    #BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
 INTERPOLATE = True
 N_MAX = 1000
-
 
 def interpolate_parts(xvalues, values, step=None, verbose=False):
     """ Smart interpolation scheme. 
@@ -79,7 +80,7 @@ class Inference(object):
 
     def add_data(self, slices, values, stds=None, distances=None, mics=range(4)):
         """
-        :param slices: interference slices of shape (n_mics, n_values)
+        :param slices: interference slices of shape (n_mics, n_values), non-squared.
         :param values: values of shape (n_values, )
         :param stds: standard deviations (n_mics, )
         """
@@ -136,7 +137,7 @@ class Inference(object):
         if algorithm == "bayes":
             sigma = self.stds[mic_idx] if self.stds is not None else None
             dists_cm, proba, diffs_cm = get_probability_bayes(
-                self.slices[mic_idx, valid],
+                self.slices[mic_idx, valid] ** 2,
                 self.values[valid],
                 mic_idx=mic_idx,
                 distance_range=self.distance_range_cm,
@@ -154,7 +155,7 @@ class Inference(object):
             diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists_cm, mic_idx)
             diffs_cm = diffs_m * 1e2
             proba = get_probability_cost(
-                self.slices[mic_idx, valid],
+                self.slices[mic_idx, valid] ** 2,
                 self.values[valid],
                 dists_cm,
                 mic_idx=mic_idx,
@@ -274,7 +275,7 @@ def get_probability_bayes(
     distance_range=None,
     n_max=N_MAX,
     sigma=None,
-    azimuth_deg=WALL_ANGLE_DEG,
+    azimuth_deg=None,
     interpolate=INTERPOLATE,
 ):
     assert f_slice.ndim == 1
@@ -315,7 +316,7 @@ def get_probability_cost_2d(
     frequencies,
     distances,
     mic_idx=1,
-    azimuth_degs=WALL_ANGLE_DEG,
+    azimuth_degs=None,
     relative_ds=None,
     absolute_yaws=None,
     ax=None,
@@ -340,7 +341,7 @@ def get_probability_cost(
     frequencies,
     distances,
     mic_idx=1,
-    azimuth_deg=WALL_ANGLE_DEG,
+    azimuth_deg=None,
     relative_ds=None,
     absolute_yaws=None,
     ax=None,
@@ -464,7 +465,7 @@ def get_approach_angle_cost(
     gammas_grid_deg,
     mic_idx=1,
     ax=None,
-    azimuth_deg=WALL_ANGLE_DEG,
+    azimuth_deg=None,
 ):
 
     d_slice_norm = standardize_vec(d_slice)

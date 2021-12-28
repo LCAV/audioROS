@@ -101,65 +101,6 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
         for i in range(df_matrix.shape[0]):
             df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
 
-    elif method == "calibration-offline":
-        from calibration import get_calibration_function
-
-        calib_function = get_calibration_function()
-        calib_values = calib_function(list(freqs))[:, :, None]
-
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
-
-    elif method == "calibration-online":
-        calib_values = np.nanmedian(df_matrix, axis=2)[:, :, None]
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] / calib_values[i]
-
-        # sanity check
-        medians = np.nanmedian(df_matrix_normalized, axis=2)
-        np.testing.assert_allclose(medians[~np.isnan(medians)], 1.0)
-
-    elif method == "zero_to_one":
-        calib_values = np.nanmin(df_matrix, axis=2)[:, :, None]
-        for i in range(df_matrix.shape[0]):
-            min_ = np.nanmin(df_matrix[i], axis=-1)
-            max_ = np.nanmax(df_matrix[i], axis=-1)
-            df_matrix_normalized[i] = (df_matrix[i] - min_) / (max_ - min_)
-
-        # sanity check
-        np.testing.assert_allclose(np.nanmax(df_matrix_normalized, axis=2), 1.0)
-        np.testing.assert_allclose(np.nanmin(df_matrix_normalized, axis=2), 0.0)
-
-    elif method == "zero_median":
-        calib_values = np.nanmedian(df_matrix, axis=2)[:, :, None]
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] - calib_values[i]
-
-    elif method == "zero_mean":
-        calib_values = np.nanmean(df_matrix, axis=2)[:, :, None]
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] - calib_values[i]
-
-    elif method == "standardize":
-        calib_median = np.nanmedian(df_matrix, axis=2)[:, :, None]
-        calib_std = np.nanstd(df_matrix, axis=2)[:, :, None]
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = (df_matrix[i] - calib_median[i]) / calib_std[i]
-        calib_values = calib_std
-
-        # sanity check
-        new_std = np.nanstd(df_matrix_normalized, axis=2)
-        np.testing.assert_allclose(new_std[~np.isnan(new_std)], 1.0)
-        new_mean = np.nanmedian(df_matrix_normalized, axis=2)
-        np.testing.assert_allclose(
-            new_mean[~np.isnan(new_mean)], 0.0, rtol=1, atol=1e-10
-        )
-
-    elif method == "normalize":
-        # print(calib_values.shape)
-        calib_values = np.sqrt(np.nansum(df_matrix ** 2, axis=2))[:, :, None]
-        for i in range(df_matrix.shape[0]):
-            df_matrix_normalized[i] = df_matrix[i] / calib_values[i] * 3
     else:
         raise ValueError(method)
 
@@ -643,6 +584,7 @@ class DataCollector(object):
         df = self.filter_by_column(distance, "distance")
         return get_frequency_slice(df, mics)[:2]
 
+    # TODO(FD) below is not squared, but theory data is squared.
     def get_frequency_slice_fixed(
         self,
         frequencies,
@@ -683,7 +625,7 @@ class DataCollector(object):
             )
             print("difference:", diff)
             f_indices = f_indices[np.abs(diff) < allowed_delta]
-        slice_f = magnitudes[:, f_indices] ** 2
+        slice_f = magnitudes[:, f_indices]
         freqs = freqs_here[f_indices]
 
         if normalize_method != "":
@@ -833,10 +775,41 @@ class DataCollector(object):
         pd.to_pickle(self.df, fname)
         print("saved", fname)
 
+    def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
+        """ 
+        Fit anlalytical function to the median measurements (per distance) and given frequency. 
+
+        :return: 
+            - coefficients (absorption, offset, gain(s))
+            - distances used
+            - fitted slice(s)
+            - fitting cost
+        """
+        from .calibration import fit_distance_slice
+
+        distance_slices, distances_median, *_ = self.get_distance_slice(
+            frequency, mics=mic_idx
+        )
+        if mic_idx is None:
+            mics_here = self.df.mic.unique()
+        else:
+            mics_here = mic_idx
+        coeffs_median, d_slice_median, cost_median = fit_distance_slice(
+            distance_slices.T,
+            distances_median,
+            method="minimize",
+            azimuth_deg=YAW_DEG,
+            frequency=frequency,
+            chosen_mics=mics_here,
+            optimize_absorption=True,
+            fit_one_gain=fit_one_gain,
+        )
+        return coeffs_median, distances_median, d_slice_median, cost_median
+
     # TODO(FD): below are potentially deprecated.
     def get_calib_function(self, method="median", ax=None):
         from scipy.interpolate import interp1d
-        from calibration import plot_calibration
+        from .calibration import plot_calibration
 
         """ 
         Return calibration function of form
@@ -883,37 +856,6 @@ class DataCollector(object):
         if ax is not None:
             plot_calibration(freqs, gains, calib_function, ax=ax)
         return calib_function
-
-    def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
-        """ 
-        Fit anlalytical function to the median measurements (per distance) and given frequency. 
-
-        :return: 
-            - coefficients (absorption, offset, gain(s))
-            - distances used
-            - fitted slice(s)
-            - fitting cost
-        """
-        from calibration import fit_distance_slice
-
-        distance_slices, distances_median, *_ = self.get_distance_slice(
-            frequency, mics=mic_idx
-        )
-        if mic_idx is None:
-            mics_here = self.df.mic.unique()
-        else:
-            mics_here = mic_idx
-        coeffs_median, d_slice_median, cost_median = fit_distance_slice(
-            distance_slices.T,
-            distances_median,
-            method="minimize",
-            azimuth_deg=YAW_DEG,
-            frequency=frequency,
-            chosen_mics=mics_here,
-            optimize_absorption=True,
-            fit_one_gain=fit_one_gain,
-        )
-        return coeffs_median, distances_median, d_slice_median, cost_median
 
     def get_df_matrix_old(self):
         df = self.df
