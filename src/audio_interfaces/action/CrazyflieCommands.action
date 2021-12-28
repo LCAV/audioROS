@@ -1,6 +1,5 @@
-## Goal request:
-# ROS timestamp in miliseconds
-uint32 timestamp
+# Goal request:
+uint32 timestamp # ROS timestamp in miliseconds
 string command_name
 float32 command_value 0.0
 ---

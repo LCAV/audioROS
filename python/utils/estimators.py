@@ -256,9 +256,12 @@ class AngleEstimator(object):
             ]
 
         gammas, probs = extract_pdf(distribution, method)
+
         argmax = np.argmax(probs)
         gamma = gammas[argmax]
 
+        all_gammas = np.arange(180)
+        all_probs = np.zeros(180)
         if mics_left_right is not None:
             score_left = 0
             score_right = 0
@@ -268,13 +271,14 @@ class AngleEstimator(object):
             for mic_right in mics_left_right[1]:
                 arg = np.argmin(abs(gamma - self.data[mic_right][0]))
                 score_right += self.data[mic_right][1][arg]
-
             if score_right > score_left:
-                # print("wall is on the right")
-                gammas = 180 - gammas
+                # below only works if gammas are integer-valued
+                all_probs[180 - gammas] = probs
             else:
                 # print("wall is on the left")
                 pass
+            return all_gammas, all_probs
+
         # TODO(FD): maybe recalculate the distribution using
         # only the correct mics?
         return gammas, probs

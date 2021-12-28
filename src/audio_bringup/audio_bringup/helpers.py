@@ -55,7 +55,7 @@ def set_param(node_name, param_name, param_value):
         return False
 
 
-def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
+def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename="", bag_playback=""):
     import launch
     import launch.actions
     import launch.substitutions
@@ -75,16 +75,27 @@ def get_launch_description(node_config, log_level=LOG_LEVEL, bag_filename=""):
                 output="screen",
             )
         )
-    launch_arguments += [
-        launch_ros.actions.Node(
-            package=dict_["pkg"],
-            node_executable=executable,
-            output="screen",
-            parameters=dict_.get("params", []),
-            arguments=["--ros-args", "--log-level", logger],
+    if bag_playback != "":
+        launch_arguments.append(
+            launch.actions.ExecuteProcess(
+                cmd=["ros2", "bag", "play", bag_playback], output="screen",
+            )
         )
-        for executable, dict_ in node_config.items()
-    ]
+
+
+    for executable, dict_ in node_config.items():
+        if "params" in dict_.keys():
+            raise DeprecationWarning("Do not use params, but ros__parameters")
+
+        launch_arguments.append(
+            launch_ros.actions.Node(
+                package=dict_["pkg"],
+                node_executable=executable,
+                output="screen",
+                parameters=[dict_.get("ros__parameters", {})],
+                arguments=["--ros-args", "--log-level", logger],
+            )
+        )
     return launch.LaunchDescription(launch_arguments)
 
 

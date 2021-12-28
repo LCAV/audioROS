@@ -128,6 +128,7 @@ class GeometryPlotter(Node):
         """ Plot the latest poses, calculated from the velocity estimates. """
         self.init_plotter("position raw", xlabel=XLABEL, ylabel=YLABEL)
         r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
+        v_world = np.r_[v_world, 0.0]
 
         if self.previous_time is None:
             self.previous_time = msg_pose_raw.timestamp

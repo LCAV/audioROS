@@ -1,11 +1,8 @@
 gateway:
   ros__parameters:
-    send_audio_enable: 1
-    min_freq: 1000
-    max_freq: 5000
-    delta_freq: 100 # not used without prop
-    n_average: 1 # not used without snr
-    bin_selection: 1
-    filter_prop_enable: 1
-    buzzer_effect: 0
-    buzzer_freq: 0
+    bin_selection: 3 # 5 for FSLICE, 3 for DSLICE
+wall_detection:
+  ros__parameters:
+    mode: 1 # 0: FSLICE, 1: DSLICE
+    drone: 2 # 0: none, 1: buzzer, 2: flying
+logging: "warn"

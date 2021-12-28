@@ -19,6 +19,8 @@ from .live_plotter import LivePlotter
 N_TIMES = 30
 LOG = False
 N_LABELS = 10
+# YLABEL = "distance [cm]"
+YLABEL = "angle [deg]"
 
 
 class DistributionsPlotter(Node):
@@ -36,11 +38,11 @@ class DistributionsPlotter(Node):
 
         self._subscription_distribution = []
 
-        topic = f"results/distribution_raw"
-        self._subscription_distribution_raw = self.create_subscription(
-            Distribution, topic, self.listener_callback_distribution_raw, 10
-        )
-        self.get_logger().info(f"subscribed to {topic}")
+        #topic = f"results/distribution_raw"
+        #self._subscription_distribution_raw = self.create_subscription(
+        #    Distribution, topic, self.listener_callback_distribution_raw, 10
+        #)
+        #self.get_logger().info(f"subscribed to {topic}")
 
         topic = f"results/distribution_moving"
         self._subscription_distribution_moving = self.create_subscription(
@@ -55,7 +57,7 @@ class DistributionsPlotter(Node):
             self.x_labels[name] = np.zeros(N_TIMES)
             self.y_labels[name] = None
             self.axs[i].set_xlabel("timestamp [s]")
-            self.axs[i].set_ylabel("distance [cm]")
+            self.axs[i].set_ylabel(YLABEL)
             self.axs[i].set_title(name)
 
     def listener_callback_distribution_raw(self, msg_dist):
