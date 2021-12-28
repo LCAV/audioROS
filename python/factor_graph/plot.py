@@ -441,6 +441,7 @@ def plot_trajectory(
     planes = gtsam.utilities.allOrientedPlane3s(values)
     for key in planes.keys():
         plane = planes.atOrientedPlane3(key)
+        #plane = plane.transform(poses.atPose3(poses.keys()[0]))
         plot_plane3_on_axes(axes, plane, ls=ls, axis_length=axis_length)
 
     #fig.suptitle(title)
@@ -501,7 +502,7 @@ def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side
         plot_trajectory(1, estimate, axis_length=axis_length, ls=ls)
         set_axes_equal(1)
         plt.gca().view_init(elev=0., azim=0)
-        plt.title("side view")
+        plt.title("side view", y=0.9)
 
     if top:
         fig = plt.figure(2)
@@ -509,4 +510,4 @@ def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side
         plot_trajectory(2, estimate, axis_length=axis_length, ls=ls)
         set_axes_equal(2)
         plt.gca().view_init(elev=90., azim=0)
-        plt.title("top view")
+        plt.title("top view", y=0.9)

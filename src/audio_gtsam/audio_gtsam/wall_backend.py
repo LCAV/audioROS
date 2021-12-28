@@ -60,7 +60,7 @@ class WallBackend(object):
         self.isam = gtsam.ISAM2(params=params)
         self.result = None
 
-        self.set_noise()
+        self.set_confidence()
 
         self.pose_index = -1
         self.plane_index = 0
@@ -68,7 +68,7 @@ class WallBackend(object):
         self.verbose=verbose
         self.all_initial_estimates = gtsam.Values()
 
-    def set_noise(self, 
+    def set_confidence(self, 
             plane_azimuth_deg=EPS,
             plane_elevation_deg=EPS,
             plane_distance_cm=2,
