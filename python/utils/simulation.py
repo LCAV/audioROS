@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pyroomacoustics as pra
 from audio_stack.beam_former import rotate_mics
-from constants import SPEED_OF_SOUND, PLATFORM
+from .constants import SPEED_OF_SOUND, PLATFORM
 
 if PLATFORM == "epuck":
     from crazyflie_description_py.parameters import N_BUFFER, FS
@@ -12,10 +12,10 @@ else:
     from epuck_description_py.parameters import N_BUFFER, FS
     from epuck_description_py.experiments import WALL_ANGLE_DEG, ROOM_DIM
 
-from frequency_analysis import get_bin
-from geometry import *
+from .frequency_analysis import get_bin
+from .geometry import *
 
-sys.path.append("../crazyflie-audio/python")
+sys.path.append("../../crazyflie-audio/python")
 from signals import generate_signal
 
 # default wall absorption (percentage of amplitude that is lost in reflection):

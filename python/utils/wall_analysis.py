@@ -3,9 +3,9 @@ import itertools
 import numpy as np
 import pandas as pd
 from audio_bringup.helpers import get_filename
-from dynamic_analysis import add_pose_to_df
-from evaluate_data import get_positions_absolute
-from evaluate_data import read_df, read_df_from_wav
+from .dynamic_analysis import add_pose_to_df
+from .evaluate_data import get_positions_absolute
+from .evaluate_data import read_df, read_df_from_wav
 
 FILENAME = "../experiments/datasets.csv"
 DEFAULT_DICT = {
@@ -67,7 +67,7 @@ def clean_stft(stft, max_value=N_BUFFER):
 
 def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
-    from dataset_parameters import kwargs_datasets
+    from .dataset_parameters import kwargs_datasets
 
     params_all = DEFAULT_DICT
 

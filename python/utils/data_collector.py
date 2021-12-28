@@ -6,8 +6,8 @@ data_collector.py: Collect distance-frequency measurements in one class.
 
 import scipy.interpolate
 
-from dataset_parameters import kwargs_datasets
-from frequency_analysis import *
+from .dataset_parameters import kwargs_datasets
+from .frequency_analysis import *
 
 ANGLE = 0
 DISTANCE = 0

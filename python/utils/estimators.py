@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 from scipy.interpolate import interp1d
 
-from geometry import Context
+from utils.geometry import Context
 
 # method to combine probability distributions
 # TODO(FD): understand why sum gives better resuls than product.

@@ -7,8 +7,11 @@ inference.py: Get probability distributions and estimates of angle or distance f
 
 import numpy as np
 
-from constants import PLATFORM
-from simulation import get_deltas_from_global
+from .constants import PLATFORM, SPEED_OF_SOUND
+from .geometry import get_orthogonal_distance_from_global
+from .simulation import get_deltas_from_global
+from .simulation import get_dist_slice_theory
+from .simulation import get_freq_slice_theory
 
 EPS = 1e-30
 WALL_ANGLE_DEG = None
@@ -183,17 +186,6 @@ class Inference(object):
             )
 
             proba = np.sum(proba_2d, axis=0)
-
-            # import matplotlib.pylab as plt
-            # fig, axs = plt.subplots(2)
-            # fig.set_size_inches(10, 10)
-            # axs[0].pcolorfast(dists_cm, azimuth_degs, proba_2d[:-1, :-1])
-            # axs[1].plot(dists_cm, proba)
-
-            # axs[1].plot(dists_cm, proba)
-            # from scipy.signal import hilbert,
-            # envelope = np.abs(hilbert(proba))
-            # axs[1].plot(dists_cm, envelope)
         else:
             raise ValueError(algorithm)
 
@@ -227,7 +219,6 @@ def get_abs_fft(f_slice, n_max=N_MAX):
 
 
 def get_differences(frequencies, n_max=N_MAX):
-    from constants import SPEED_OF_SOUND
 
     n = max(len(frequencies), n_max)
     df = np.median(np.diff(frequencies))
@@ -236,7 +227,6 @@ def get_differences(frequencies, n_max=N_MAX):
 
 
 def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
-    from geometry import get_orthogonal_distance_from_global
 
     distances = get_orthogonal_distance_from_global(
         azimuth_deg=azimuth_deg, deltas_cm=differences_cm, mic_idx=mic_idx
@@ -357,7 +347,6 @@ def get_probability_cost(
 ):
     if np.any(distances < 1):
         raise ValueError("Reminder to change the distance input to include offset!")
-    from simulation import get_freq_slice_theory
 
     if absolute_yaws is not None:
         azimuth_deg = azimuth_deg - absolute_yaws
@@ -434,7 +423,6 @@ def get_approach_angle_fft(
     :param relative_distances_cm: relative distance measurements
     :param interpolate: interpolate measurements on 1cm-grid before inference.
     """
-    from constants import SPEED_OF_SOUND
 
     # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
     period_theoretical = SPEED_OF_SOUND / (
@@ -478,7 +466,6 @@ def get_approach_angle_cost(
     ax=None,
     azimuth_deg=WALL_ANGLE_DEG,
 ):
-    from simulation import get_dist_slice_theory
 
     d_slice_norm = standardize_vec(d_slice)
 

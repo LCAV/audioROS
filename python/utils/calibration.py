@@ -7,7 +7,13 @@ calibration.py: methods for gain calibration
 
 import numpy as np
 import pandas as pd
-from constants import PLATFORM
+from scipy.interpolate import interp1d
+from scipy.optimize import minimize, brute
+
+from .constants import PLATFORM
+from .data_collector import DataCollector, prune_df_matrix
+from .pandas_utils import filter_by_dict
+from .simulation import get_dist_slice_theory, WALL_ABSORPTION
 
 if PLATFORM == "epuck":
     MOTORS = "sweep_and_move"
@@ -40,8 +46,6 @@ def plot_calibration(x, ys, function, ax):
 
 
 def get_calibration_function(ax=None):
-    from scipy.interpolate import interp1d
-    from pandas_utils import filter_by_dict
 
     calib_df = pd.read_pickle("results/calibration_results.pkl")
     chosen_dict = {
@@ -69,7 +73,6 @@ def get_calibration_function(ax=None):
 
 def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
     from scipy.interpolate import interp1d
-    from data_collector import prune_df_matrix
 
     df_matrix_pruned, df_freq, __ = prune_df_matrix(df_matrix, df_freq)
     median_values = np.nanmedian(df_matrix_pruned, axis=2)  # n_mics x n_freqs
@@ -87,7 +90,7 @@ def get_calibration_function_matrix(df_matrix, df_freq, ax=None):
 
 
 def get_calibration_function_dict(ax=None, **filter_dict):
-    from pandas_utils import filter_by_dict
+    from .pandas_utils import filter_by_dict
 
     fname = "results/wall_analysis.pkl"
     results_df = pd.read_pickle(fname)
@@ -103,8 +106,6 @@ def get_calibration_function_dict(ax=None, **filter_dict):
 def get_calibration_function_fit(
     exp_name, mic_type, ax=None, motors=0, fit_one_gain=False
 ):
-    from data_collector import DataCollector, prune_df_matrix
-    from scipy.interpolate import interp1d
 
     data_collector = DataCollector()
     data_collector.fill_from_backup(exp_name, mic_type, motors=motors)
@@ -139,9 +140,6 @@ def get_calibration_function_fit(
 def get_calibration_function_median(
     exp_name, mic_type, ax=None, motors=MOTORS, snr="", fit_one_gain=False
 ):
-    from data_collector import DataCollector, prune_df_matrix
-    from scipy.interpolate import interp1d
-
     data_collector = DataCollector()
     data_collector.fill_from_backup(exp_name, mic_type, motors=motors, snr=snr)
 
@@ -173,8 +171,6 @@ def get_calibration_function_moving(
     check_crash=True,
     verbose=False,
 ):
-    from scipy.interpolate import interp1d
-
     results_df = pd.read_pickle(f"../experiments/{exp_name}/all_data.pkl")
     rows = results_df.loc[
         (results_df.motors == motors) & (results_df.appendix.isin(appendix_list)), :
@@ -243,8 +239,6 @@ def fit_distance_slice(
     set missing measurements to zero or nan
 
     """
-    from scipy.optimize import minimize, brute
-    from simulation import get_dist_slice_theory, WALL_ABSORPTION
 
     def distance_slice_cost(coeffs, chosen_mics):
         if not optimize_absorption:
