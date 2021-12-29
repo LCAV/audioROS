@@ -382,3 +382,23 @@ def plot_error_gamma(
         add_colorbar(fig, ax, im, title=f"{labels[aggfunc]} [$^\\circ$]")
     ax.set_ylabel(name.replace("_", " "))
     return fig, ax
+
+def plot_df(distance_range, azimuth_deg, freq_range=[2000, 6000], mic_idx=0):
+    from utils.simulation import get_df_theory
+    distances_grid = np.linspace(distance_range[0], distance_range[1],100)
+    freqs_theo = np.linspace(freq_range[0], freq_range[1], 200)
+    df_matrix_theo = get_df_theory(freqs_theo, distances_grid, azimuth_deg=azimuth_deg, 
+                                   chosen_mics=[mic_idx])
+    fig_df, ax_df = plt.subplots()
+    fig_df.set_size_inches(5, 3)
+    xticks = [7] + list(np.arange(10, distance_range[1]+1, step=10))
+    yticks = np.arange(freq_range[0], freq_range[1]+1, step=1000)
+    pcolorfast_custom(
+        ax_df, distances_grid, freqs_theo, np.log10(df_matrix_theo[0]), cmap='Greys',
+        alpha=0.5,
+    )
+    ax_df.set_xticks(xticks); ax_df.set_xticklabels(xticks)
+    ax_df.set_yticks(yticks); ax_df.set_yticklabels(yticks)
+    ax_df.set_xlabel('distance [cm]')
+    ax_df.set_ylabel('frequency [Hz]')
+    return fig_df, ax_df

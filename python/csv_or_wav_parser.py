@@ -140,6 +140,62 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
 
     return df_total
 
+def parse_fslice_experiments(exp_name, verbose=False):
+    from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
+
+    path_root = f"../experiments/{exp_name}/csv_files/"
+    filenames = os.listdir(path_root)
+
+    params = {}
+    params["motors"] = "live"
+    params["bin_selection"] = 5
+    params["appendix"] = filenames
+    params["window_type"] = 2 # flattop
+    params["exp_name"] = exp_name
+
+    df_total = pd.DataFrame(
+        columns=list(params.keys())  # categories
+        + ["seconds", "frequencies_matrix", "stft", "positions"]  # data
+    )
+
+    for filename in filenames:
+        print("treating", filename)
+        params["appendix"] = filename.strip('.csv')
+        positions = None
+        try:
+            df, df_pos = read_df(filename=path_root+filename)
+            add_pose_to_df(
+                df, df_pos
+            )  # synchronize position and audio measurements
+            positions = get_positions_absolute(df)  # get positions as matrix
+        except FileNotFoundError as e:
+            if verbose:
+                print("skipping", e)
+            continue
+
+        if not "signals_f" in df.columns:
+            if verbose:
+                print("error, signals_f is empty. skipping...")
+            continue
+
+        df.signals_f /= WINDOW_CORRECTION[WINDOW_TYPES[params["window_type"]]]
+
+        stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
+        stft = clean_stft(stft)
+
+        seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
+        frequencies_matrix = np.array([*df.loc[:, "frequencies"]])
+
+        all_items = dict(
+            seconds=seconds,
+            frequencies_matrix=frequencies_matrix,
+            stft=stft,
+            positions=positions,
+            **params,
+        )
+        df_total.loc[len(df_total), :] = all_items
+    return df_total
+
 
 #exp_names = [
 #    "2021_10_12_flying",
@@ -163,7 +219,9 @@ if __name__ == "__main__":
     from utils.custom_argparser import exp_parser, check_platform
 
     parser = exp_parser(description=__doc__)
+    parser.add_argument('--demo', action='store_true', help='Use simplified parsing for demo')
     args = parser.parse_args()
+
     check_platform(args)
 
     for exp_name in args.experiment_names:
@@ -173,6 +231,10 @@ if __name__ == "__main__":
             os.makedirs(dirname)
             print("created directory", dirname)
 
-        df_total = parse_experiments(exp_name=exp_name)
+        if args.demo:
+            df_total = parse_fslice_experiments(exp_name=exp_name, verbose=True)
+        else:
+            df_total = parse_experiments(exp_name=exp_name)
+
         pd.to_pickle(df_total, fname)
         print("saved as", fname)

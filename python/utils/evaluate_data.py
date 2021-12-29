@@ -72,6 +72,7 @@ def read_full_df(
 
 
 def read_df(
+    filename=None,
     degree=0,
     props=True,
     bin_selection=True,
@@ -114,16 +115,19 @@ def read_df(
             row["mic_positions"] = mic_positions
         return row
 
-    df = read_full_df(
-        degree=degree,
-        props=props,
-        bin_selection=bin_selection,
-        motors=motors,
-        source=source,
-        exp_name=exp_name,
-        distance=distance,
-        appendix=appendix,
-    )
+    if filename is None:
+        df = read_full_df(
+            degree=degree,
+            props=props,
+            bin_selection=bin_selection,
+            motors=motors,
+            source=source,
+            exp_name=exp_name,
+            distance=distance,
+            appendix=appendix,
+        )
+    else:
+        df = pd.read_csv(filename)
 
     df_audio = df.loc[df.topic == "audio/signals_f"]
     df_audio = df_audio.apply(convert_audio, axis=1)

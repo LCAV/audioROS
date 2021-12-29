@@ -1,8 +1,17 @@
+# Generate pandas dataframes of results for faster processing. 
+
 EXPERIMENT_ROOT=../experiments
 
 .PHONY: stepper_results
 
 all: stepper_results epuck_results
+
+crazyflie_demo:
+	python csv_or_wav_parser.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2021_11_23_demo --demo
+
+crazyflie_flying:
+	python csv_or_wav_parser.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2021_10_12_flying
+	python csv_or_wav_parser.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2021_11_23_demo
 
 crazyflie_stepper_paper:
 	python csv_or_wav_parser.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2021_10_07_stepper

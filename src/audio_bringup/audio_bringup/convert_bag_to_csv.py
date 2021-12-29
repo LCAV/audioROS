@@ -15,12 +15,11 @@ import rclpy
 
 from audio_bringup.helpers import get_active_nodes, set_param, EXP_DIRNAME, CSV_DIRNAME
 
-EXPERIMENT = "2021_10_12_hover"
+#EXPERIMENT = "2021_10_12_hover"
+EXPERIMENT = "2021_11_23_demo"
 
-# FILENAMES = None # set to None to loop through all.
-FILENAMES = [
-    "motors_binsel5_noprops_None_11",
-]
+FILENAMES = None # set to None to loop through all.
+#FILENAMES = [ "motors_binsel5_noprops_None_11", ]
 
 
 def main(args=None):

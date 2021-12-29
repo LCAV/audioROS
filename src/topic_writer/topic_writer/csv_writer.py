@@ -108,6 +108,12 @@ class CsvWriter(Node):
             return
 
         if not os.path.exists(fullname):
+
+            try:
+                os.makedirs(os.path.dirname(fullname))
+            except FileExistsError:
+                pass
+
             with open(fullname, "w+") as f:
                 csv_writer = csv.DictWriter(f, sorted(self.header))
                 csv_writer.writeheader()
