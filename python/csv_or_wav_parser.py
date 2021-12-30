@@ -7,9 +7,8 @@ import itertools
 import numpy as np
 import pandas as pd
 from audio_bringup.helpers import get_filename
-from utils.dynamic_analysis import add_pose_to_df
 from utils.evaluate_data import get_positions_absolute
-from utils.evaluate_data import read_df, read_df_from_wav
+from utils.evaluate_data import read_df, read_df_from_wav, add_pose_to_df
 from utils.constants import PLATFORM
 
 FILENAME = "../experiments/datasets.csv"

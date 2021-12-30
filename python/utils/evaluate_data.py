@@ -5,18 +5,11 @@ import warnings
 
 import numpy as np
 import pandas as pd
+
 from audio_bringup.helpers import get_filename
-from audio_stack.beam_former import BeamFormer, combine_rows, normalize_rows
 from crazyflie_description_py.parameters import FS, N_BUFFER
 
-# EXP_NAME = "2020_09_17_white-noise-static"
-# EXP_NAME = "2020_10_14_static"
-# EXP_NAME = "2020_10_14_static_new"
-# EXP_NAME = "2020_10_30_dynamic"
-# EXP_NAME = "2020_11_30_wall_hover"
-EXP_NAME = "2020_06_09_stepper"
-
-RES_DIRNAME = f"../experiments/{EXP_NAME}/results"
+MAX_ALLOWED_LAG_MS = 20
 
 # results
 combine_list = ["product", "sum"]
@@ -39,32 +32,23 @@ def get_fname_old(degree, props, bin_selection, motors, source, **kwargs):
 def read_full_df(
     degree=0,
     props=True,
-    bin_selection=True,
+    bin_selection=1,
     motors=True,
     source=True,
-    exp_name=EXP_NAME,
+    exp_name="",
     distance=None,
     appendix="",
 ):
     CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
-    if exp_name == "2020_09_17_white-noise-static":
-        filename = get_fname_old(
-            degree=degree,
-            props=props,
-            bin_selection=bin_selection,
-            motors=motors,
-            source=source,
-        )
-    else:
-        filename = get_filename(
-            degree=degree,
-            props=props,
-            bin_selection=bin_selection,
-            motors=motors,
-            source=source,
-            distance=distance,
-            appendix=appendix,
-        )
+    filename = get_filename(
+        degree=degree,
+        props=props,
+        bin_selection=bin_selection,
+        motors=motors,
+        source=source,
+        distance=distance,
+        appendix=appendix,
+    )
     fname = f"{CSV_DIRNAME}/{filename}.csv"
     df = pd.read_csv(fname)
     print("read", fname)
@@ -78,7 +62,7 @@ def read_df(
     bin_selection=True,
     motors=True,
     source=True,
-    exp_name=EXP_NAME,
+    exp_name="",
     distance=None,
     appendix="",
     **kwargs,
@@ -161,7 +145,7 @@ def read_df_others(
     bin_selection=True,
     motors=True,
     source=True,
-    exp_name=EXP_NAME,
+    exp_name="",
     distance=None,
     appendix="",
 ):
@@ -356,114 +340,34 @@ def integrate_yaw(times, yaw_rates):
     return np.array(integrated_yaw)
 
 
-def evaluate_data(fname=""):
-    sys.path.append(f"../experiments/{EXP_NAME}/")
-    from params import SOURCE_LIST, DEGREE_LIST, global_params
+def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=False):
+    """ For each row in df, add the latest position estimate, 
+    as long as it is within an allowed time window. """
+    last_idx = None
+    for i, row in df.iterrows():
+        timestamp = row.timestamp
 
-    DURATION_SEC = global_params.get("duration", 30)  # duration before end to be kept
-
-    duration = DURATION_SEC * 1e3  # miliseconds
-
-    source_list = SOURCE_LIST
-    degree_list = DEGREE_LIST
-    props_list = [True, False]
-    bin_selection_list = [True, False]
-    motors_list = [True, False]
-
-    beam_former = None
-
-    result_df = pd.DataFrame(
-        columns=[
-            "index",
-            "degree",
-            "props",
-            "bin_selection",
-            "motors",
-            "source",
-            "combine",
-            "normalize",
-            "method",
-            "spectrum",
-            "spectrum_raw",
-            "frequencies",
-        ]
-    )
-
-    for degree, props, bin_selection, motors, source in itertools.product(
-        degree_list, props_list, bin_selection_list, motors_list, source_list
-    ):
-        try:
-            df, df_pos = read_df(
-                degree=degree,
-                props=props,
-                bin_selection=bin_selection,
-                motors=motors,
-                source=source,
-            )
-        except FileNotFoundError:
-            print("skipping:", degree, props, bin_selection, motors, source)
+        # most recent position timestamp
+        if not len(df_pos[df_pos.timestamp <= timestamp]):
+            if verbose:
+                print(
+                    "Warning: no position before first audio:",
+                    timestamp,
+                    df_pos.timestamp.values,
+                )
             continue
+        pos_idx = df_pos[df_pos.timestamp <= timestamp].index[-1]
+        if pos_idx == last_idx:
+            if verbose:
+                print(f"Warning: using {pos_idx} again.")
+        row = df_pos.loc[pos_idx]
+        lag = timestamp - row.timestamp
 
-        add_soundlevel(df, duration=duration)
-        df = df[(df.timestamp_s > 0) & (df.timestamp_s <= (duration / 1000))]
-
-        for i, row in df.iterrows():
-            signals_f = row.signals_f
-            freqs = row.frequencies
-            if (beam_former is None) and ("mic_positions" in row.index):
-                beam_former = BeamFormer(mic_positions=row.mic_positions)
-                print("Created beamformer with published mic_positions.")
-            elif beam_former is None:
-                from crazyflie_description_py.parameters import MIC_POSITIONS
-
-                beam_fomer = BeamFormer(mic_positions=np.array(MIC_POSITIONS))
-                print("Created beamformer from crazyflie_description_py.")
-
-            arg_idx = np.argsort(freqs)
-            freqs = freqs[arg_idx]
-            signals_f = signals_f[:, arg_idx]
-
-            R = beam_former.get_correlation(signals_f.T)
-
-            for method in method_list:
-                # spectrum_raw is of shape n_frequencies x n_thetas
-                if method == "mvdr":
-                    spectrum_raw = beam_former.get_mvdr_spectrum(R, freqs)
-                elif method == "das":
-                    spectrum_raw = beam_former.get_das_spectrum(R, freqs)
-                else:
-                    raise ValueError(method)
-
-                for normalize in normalize_list:
-                    spectrum_norm = normalize_rows(spectrum_raw, method=normalize)
-
-                    for combine in combine_list:
-                        spectrum = combine_rows(spectrum_norm, method=combine)
-
-                        result_df.loc[len(result_df), :] = {
-                            "index": i,
-                            "degree": degree,
-                            "props": props,
-                            "bin_selection": bin_selection,
-                            "motors": motors,
-                            "source": source,
-                            "combine": combine,
-                            "normalize": normalize,
-                            "method": method,
-                            "spectrum": spectrum,
-                            "spectrum_raw": spectrum_raw,
-                            "frequencies": freqs,
-                        }
-
-        if fname != "":
-            if not os.path.exists(RES_DIRNAME):
-                os.makedirs(RES_DIRNAME)
-            result_df.to_pickle(fname)
-            print(f"saved intermediate as {fname}")
-    return result_df
-
-
-if __name__ == "__main__":
-    # fname = f"{RES_DIRNAME}/static_spectra.pkl"
-    fname = ""
-    result_df = evaluate_data(fname)
+        # find position columns
+        pos_columns = set(row.index).intersection(df.columns)
+        if lag <= MAX_ALLOWED_LAG_MS:
+            df.loc[i, pos_columns] = row[pos_columns]
+        else:
+            if verbose:
+                print(f"Warning for {pos_idx}: too high time lag {lag}ms")
+        last_idx = pos_idx
