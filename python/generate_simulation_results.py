@@ -11,10 +11,10 @@ import itertools
 import numpy as np
 import pandas as pd
 import progressbar
-from geometry import get_deltas_from_global
-from inference import get_probability_cost, get_probability_bayes
-from inference import get_approach_angle_fft, get_approach_angle_cost
-from simulation import get_df_theory_simple
+from utils.geometry import get_deltas_from_global
+from utils.inference import get_probability_cost, get_probability_bayes
+from utils.inference import get_approach_angle_fft, get_approach_angle_cost
+from utils.simulation import get_df_theory_simple
 
 MIC_IDX = 1
 AZIMUTH_DEG = 0

@@ -6,14 +6,13 @@ import pyroomacoustics as pra
 from audio_stack.beam_former import rotate_mics
 from audio_simulation.geometry import ROOM_DIM
 
+from .constants import SPEED_OF_SOUND, PLATFORM
 if PLATFORM == "epuck":
     from crazyflie_description_py.parameters import N_BUFFER, FS
     from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
 else:
     from epuck_description_py.parameters import N_BUFFER, FS
     from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
-
-from .constants import SPEED_OF_SOUND, PLATFORM
 from .frequency_analysis import get_bin
 from .geometry import *
 from .signals import generate_signal
@@ -27,8 +26,8 @@ N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
 def simulate_distance_estimator(
     chosen_mics=range(4), distance_cm=10, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None
 ):
-    from inference import get_probability_bayes
-    from estimators import DistanceEstimator
+    from .inference import get_probability_bayes
+    from .estimators import DistanceEstimator
 
     n_max = 1000
     frequencies = np.linspace(1000, 5000, 32)
@@ -211,7 +210,7 @@ def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANG
 def get_dist_slice_pyroom(
     frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100
 ):
-    from frequency_analysis import get_bin
+    from .frequency_analysis import get_bin
 
     duration_sec = N_BUFFER * n_times / FS
     signal = generate_signal(
