@@ -8,12 +8,9 @@ import sys
 
 import numpy as np
 
-sys.path.append(
-    os.path.dirname(os.path.realpath(__file__)) + "/../crazyflie-audio/python/"
-)
-from algos_basics import get_mic_delays_near, get_mic_delays
-from signals import generate_signal_mono
-from constants import SPEED_OF_SOUND
+from utils.algos_basics import get_mic_delays_near, get_mic_delays
+from utils.constants import SPEED_OF_SOUND
+from utils.signals import generate_signal_mono
 
 from audio_stack.beam_former import rotate_mics
 from audio_stack.beam_former import BeamFormer
@@ -262,8 +259,7 @@ def simulate_doa(
     :param angular_velocity_deg_list:  velocity of drone in deg/sec
     """
     import progressbar
-    from mic_array import get_square_array
-    from geometry import Context
+    from utils.geometry import Context
 
     df = pd.DataFrame(
         columns=[
@@ -517,7 +513,8 @@ if __name__ == "__main__":
     offset_noise_list = [0]  # m/s
     time_noise_list = [0.0]
     n_samples = 3
-    saveas = "results/doa_multi_joint_highres.pkl"
+    #saveas = "results/doa_multi_joint_highres.pkl"
+    saveas = "" #"results/doa_multi_joint_highres.pkl"
     simulate_doa(
         gt_angle_deg,
         degree_noise_list,
