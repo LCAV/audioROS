@@ -404,7 +404,6 @@ def get_periods_fft(
         prob = abs_fft / np.sum(abs_fft)
     return periods_m, prob
 
-
 def get_approach_angle_fft(
     d_slice,
     frequency,
@@ -426,14 +425,12 @@ def get_approach_angle_fft(
     """
 
     # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
-    period_theoretical = SPEED_OF_SOUND / (
-        factor * frequency
-    )  # m in terms of orthogonal distance
+    freq_theoretical = factor * frequency / SPEED_OF_SOUND  # 1/m in terms of orthogonal distance
 
     if interpolate:
         # important to choose small enough step size to insure
         # to capture interference!
-        step = period_theoretical * 1e2 / 20
+        step = 1 / freq_theoretical * 1e2 / 20
         relative_distances_cm_grid, d_slice_grid = interpolate_parts(
             relative_distances_cm, d_slice, step=step
         )
@@ -445,16 +442,25 @@ def get_approach_angle_fft(
             d_slice, frequency, relative_distances_cm, n_max, bayes, sigma
         )
 
-    periods_m = 1 / freqs_m[freqs_m > 0]
     probs = probs[freqs_m > 0]
+    freqs_m = freqs_m[freqs_m > 0]
 
-    # print("periods in cm", np.min(periods_m) * 1e2, np.max(periods_m) * 1e2)
-    probs *= 1 / periods_m ** 2
-    ratios = period_theoretical / periods_m  # arcsin(ratio) will be the angle estimate
-    if not reduced:
-        return ratios, probs
-    else:
-        return get_gamma_distribution(ratios, probs)
+    import scipy.interpolate
+    interpolator = scipy.interpolate.interp1d(
+        freqs_m, probs, kind="linear", fill_value="extrapolate"
+    )
+
+    n_integral = 10 # number of points used to approximate integral
+    ns_integral = np.arange(n_integral) / n_integral
+    gamma_delta = 1 # number of points 
+    gammas_deg = np.arange(1, 90+gamma_delta, step=gamma_delta)
+    probs_gamma = np.empty(len(gammas_deg))
+    for i_g, gamma in enumerate(gammas_deg):
+        sampling_points = (1 - ns_integral) * np.sin(np.deg2rad(gamma - gamma_delta / 2)) \
+                             + ns_integral * np.sin(np.deg2rad(gamma + gamma_delta / 2))
+        sampling_points *= freq_theoretical
+        probs_gamma[i_g] = np.sum(interpolator(sampling_points))
+    return gammas_deg, probs_gamma 
 
 
 def get_approach_angle_cost(
@@ -467,7 +473,6 @@ def get_approach_angle_cost(
     ax=None,
     azimuth_deg=None,
 ):
-
     d_slice_norm = standardize_vec(d_slice)
 
     probs = np.zeros((len(start_distances_grid_cm), len(gammas_grid_deg)))
@@ -496,26 +501,3 @@ def get_approach_angle_cost(
     probs_angle = np.nanmax(probs, axis=0)  # take maximum across distances
     probs_angle /= np.nansum(probs_angle)
     return probs_angle
-
-
-def get_gamma_distribution(ratios, probs, eps=1e-3):
-    valid = ratios <= (1 + eps)
-    # set all ratios between 1 and 1 + eps to 1.0
-    ratios[valid & (ratios > 1)] = 1.0
-
-    # angles
-    gammas = np.arcsin(ratios[valid])
-    # print('last three angles', gammas[-3:] * 180 / np.pi)
-
-    # accumulate probabilities over duplicate gammas (at 90, for instance)
-    gammas_unique, index = np.unique(gammas, return_inverse=True)
-    probs_unique = np.bincount(index, probs[valid])
-
-    probs_unique = probs_unique[gammas_unique > 0]
-    gammas_unique = gammas_unique[gammas_unique > 0]
-
-    # correction factor
-    # TODO(FD) need to figure out how to multiply without having zero-prob at 90.
-    probs_unique *= np.abs(np.cos(gammas_unique) / (np.sin(gammas_unique) ** 2))
-    # probs_unique /= np.sum(probs_unique)
-    return gammas_unique * 180 / np.pi, probs_unique
