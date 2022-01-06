@@ -4,3 +4,6 @@
 [submodule "experiments"]
 	path = experiments
 	url = git@github.com:lcav/drone-experiments
+[submodule "datasets"]
+	path = datasets
+	url = ./datasets

@@ -11,7 +11,7 @@ from utils.evaluate_data import get_positions_absolute
 from utils.evaluate_data import read_df, read_df_from_wav, add_pose_to_df
 from utils.constants import PLATFORM
 
-FILENAME = "../experiments/datasets.csv"
+FILENAME = "../datasets/datasets.csv"
 DEFAULT_DICT = {
     "degree": {0},
     "distance": {0},
@@ -50,7 +50,7 @@ def load_params(exp_name):
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
-        "params", f"../experiments/{exp_name}/params.py"
+        "params", f"../datasets/{exp_name}/params.py"
     )
     params = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(params)
@@ -104,7 +104,7 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
                 positions = get_positions_absolute(df)  # get positions as matrix
             elif params["mic_type"] == "measurement":
                 fname = get_filename(**params)
-                wav_fname = f"../experiments/{exp_name}/export/{fname}.wav"
+                wav_fname = f"../datasets/{exp_name}/export/{fname}.wav"
                 df = read_df_from_wav(
                     wav_fname,
                     n_buffer=N_BUFFER,
@@ -142,7 +142,7 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
 def parse_fslice_experiments(exp_name, verbose=False):
     from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
 
-    path_root = f"../experiments/{exp_name}/csv_files/"
+    path_root = f"../datasets/{exp_name}/csv_files/"
     filenames = os.listdir(path_root)
 
     params = {}

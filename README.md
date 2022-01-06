@@ -82,6 +82,39 @@ A diagram of the interactions of the different packages is shown below.
   ```
   Note that this function is experimental and only used when the bag to csv conversion did not happen correctly during experiments. 
 
+### Analysis
+
+This repo also contains functions to analyze the experimental data, grouped in the folder `python/`. Below table explains where to find what. 
+
+Note that the notebooks use preprocessed data to speed up analysis. To process data for the first time, you can use the examples listed in the Makefile. For instance, to preprocess the stepper motor results of the crazyflie reported in the thesis, run
+`make crayflie_stepper_thesis`. Similarly, for the e-puck results run `make epuck_results`. See `python/Makefile` for all options.
+
+Descriptions:
+
+| notebook         | description                                                               |
+|------------------|---------------------------------------------------------------------------|
+|  StepperAnalysis |  analysis of stepper motor experiments, angle and distance inference      |
+|  DistanceFlying  |  analysis of experiments where drone approaches wall while playing sweeps |
+
+
+| notebook            | datasets               | results                                                                          |
+|---------------------|------------------------|----------------------------------------------------------------------------------|
+|  StepperAnalysis    | 2021_07_08_stepper_fast|   calibration, distance and freq slice, matrices                                 |
+|                     | 2021_07_27_epuck_wall  |   epuck results                                                                  |
+|                     | 2021_10_07_stepper     |   new paper results?                                                             |
+|  CleanupAnalysis    | 2021_07_08_stepper_fast|   all matrix results                                                             |
+|  DistanceFlying     | 2021_10_12_flying      |   flying, distance heatmap results                                               |
+|                     | 2021_11_23_demo        |   new paper results?                                                             |
+|                     | 2021_05_04_flying      |   backup of experiments where each amplitude measurement has timestamp (binsel=3)|
+|                     | 2021_04_30_stepper     |   used for calibration of above                                                  |
+|  ApproachAngleFlying| 2021_05_04_linear      |   approach angle results thesis                                                  |
+|                     | 2021_10_12_linear      |   new paper results?                                                             |
+|  WallStudy          | --                     |   theoretical limits of wall detection algorithms, simulation results            |
+|  DoaAnalysis        | 2021_10_12_doa_stepper |   new paper results?                                                             |
+|                     | 2021_10_12_doa_flying  |   new paper results?                                                             |
+|  DoaStudy           | --                     |   simulation results doa algorithms                                              |
+
+
 ## Requirements (WIP)
 
 Need to grant access to /dev/ttyACM0:
@@ -91,4 +124,4 @@ Need to grant access to /dev/ttyACM0:
 
 ## Credits
 
-We took inspiration from [this](https://roboticsbackend.com/package-organization-for-a-ros-stack-best-practices/) helpful article for the structure of this repo. 
+We took inspiration from [this](https://roboticsbackend.com/package-organization-for-a-ros-stack-best-practices/) helpful article for the structure of this repo.

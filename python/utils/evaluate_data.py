@@ -39,7 +39,7 @@ def read_full_df(
     distance=None,
     appendix="",
 ):
-    CSV_DIRNAME = f"../experiments/{exp_name}/csv_files"
+    CSV_DIRNAME = f"../datasets/{exp_name}/csv_files"
     filename = get_filename(
         degree=degree,
         props=props,

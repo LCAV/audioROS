@@ -9,7 +9,7 @@ def exp_parser(description=""):
     parser.add_argument('--experiment_names', type=str, nargs='+',
             default = [], help='list of experiment names to process (folders inside "experiment_root".')
     parser.add_argument('--experiment_root', type=str,
-        default='../experiments/', help='absolute or relative path to experiment folder.'
+        default='../datasets/', help='absolute or relative path to experiment folder.'
     )
     parser.add_argument('--platform', type=str, default='crazyflie', help='platform to use (crazyflie or epuck).'
     )

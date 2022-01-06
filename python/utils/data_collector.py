@@ -758,7 +758,7 @@ class DataCollector(object):
         self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""
     ):
         fname = (
-            f"../experiments/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
+            f"../datasets/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
         )
         try:
             self.df = pd.read_pickle(fname)
@@ -770,7 +770,7 @@ class DataCollector(object):
 
     def backup(self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""):
         fname = (
-            f"../experiments/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
+            f"../datasets/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
         )
         pd.to_pickle(self.df, fname)
         print("saved", fname)
