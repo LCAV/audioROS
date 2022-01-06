@@ -18,7 +18,7 @@ sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
 
 
-LAMDA = 1  # 1e-10
+LAMDA = 1e-5  # 1e-10
 INVERSE = "pinv"  # use standard pseudoinverse
 # INVERSE = 'low-rank' # use own low-rank inverse (rank in each freq bin is assuemd one)
 
@@ -153,12 +153,7 @@ class BeamFormer(object):
         if signals_f.shape[0] < signals_f.shape[1]:
             # print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
             pass
-        return (
-            1
-            / signals_f.shape[1]
-            * signals_f[:, :, None]
-            @ signals_f[:, None, :].conj()
-        )
+        return 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
 
     def shift_spectrum(self, spectrum, delta_deg):
         """ shift spectrum by delta_deg. 
@@ -261,8 +256,10 @@ class BeamFormer(object):
         Note that offset is given in absolute terms.
         """
         np.testing.assert_allclose(frequencies, self.frequencies_multi)
+
         # delay the signals according to recording times
         phase_shift = frequencies * time_sec
+
         # np.fmod is very slow, so use manual remainder calculation instead.
         exp_factor = np.exp(-2j * np.pi * (phase_shift - np.floor(phase_shift)))
         signals_f_aligned = np.multiply(
@@ -274,7 +271,7 @@ class BeamFormer(object):
             :, n_mics * self.index_multi : n_mics * (self.index_multi + 1)
         ] = signals_f_aligned
 
-        # add the new microphone position according to "orientation"
+        # add the new microphone position according to movement estimates
         if position is not None:
             if offset > 0:
                 print("Warning: offset and position given, ignoring offset.")
@@ -290,10 +287,7 @@ class BeamFormer(object):
         self.multi_mic_positions[
             n_mics * self.index_multi : n_mics * (self.index_multi + 1), :
         ] = moved_mic_positions
-
-        self.index_multi = (self.index_multi + 1) % self.params["multi"][
-            "combination_n"
-        ]
+        self.index_multi = (self.index_multi + 1) % self.params["multi"]["combination_n"]
 
     def get_multi_R(self):
         if np.any(np.isnan(self.signals_f_aligned)):
