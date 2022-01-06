@@ -5,6 +5,7 @@
 beam_former.py: Beamformer class for direction-of-arrival (DOA) estimation.
 """
 
+import math
 import sys
 import os
 
@@ -199,6 +200,8 @@ class BeamFormer(object):
         :param spectrum: spatial spectrum of shape (n_frequencies, n_angles)
         :param orientation_deg: drone orientation_deg in degrees
         """
+        orientation_deg = orientation_deg % 360
+
         self.spectra_aligned[self.index_dynamic, :, :] = self.shift_spectrum(
             spectrum, -orientation_deg
         )
@@ -252,12 +255,16 @@ class BeamFormer(object):
         self.params["multi"] = dict(combination_n=combination_n,)
 
     def add_to_multi_estimate(
-        self, signals_f, frequencies, time_sec, orientation_deg, offset=0
+        self, signals_f, frequencies, time_sec, orientation_deg, offset=0, position=None
     ):
+        """
+        Note that offset is given in absolute terms.
+        """
         np.testing.assert_allclose(frequencies, self.frequencies_multi)
-
         # delay the signals according to recording times
-        exp_factor = np.exp(-2j * np.pi * frequencies * time_sec)
+        phase_shift = frequencies * time_sec
+        # np.fmod is very slow, so use manual remainder calculation instead.
+        exp_factor = np.exp(-2j * np.pi * (phase_shift - np.floor(phase_shift)))
         signals_f_aligned = np.multiply(
             signals_f, exp_factor[:, np.newaxis]
         )  # frequencies x n_mics
@@ -268,10 +275,18 @@ class BeamFormer(object):
         ] = signals_f_aligned
 
         # add the new microphone position according to "orientation"
-        moved_mic_positions = (
-            rotate_mics(self.mic_positions, orientation_deg)
-            + np.array([offset, 0])[None, :]
-        )
+        if position is not None:
+            if offset > 0:
+                print("Warning: offset and position given, ignoring offset.")
+            moved_mic_positions = (
+                rotate_mics(self.mic_positions, orientation_deg)
+                + position[None, :]
+            )
+        else:
+            moved_mic_positions = (
+                rotate_mics(self.mic_positions, orientation_deg)
+                + np.array([offset, 0])[None, :]
+            )
         self.multi_mic_positions[
             n_mics * self.index_multi : n_mics * (self.index_multi + 1), :
         ] = moved_mic_positions
