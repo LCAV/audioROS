@@ -44,44 +44,11 @@ def extract_probs(distribution, method):
     probs /= np.sum(probs)
     return probs
 
-def extract_pdf(distribution, method=METHOD, verbose=False):
-    """
-    Extract pdf from distribution. 
-    Distribution is of form:
-    {
-        x1: [p_1(x1), p_2(x1), ...]
-        x2: [p_1(x2), p_2(x2), ...]
-    }
-
-    For example
-    distance 1: [p_mic1(distance 1), p_mic2(distance 2), ...]
-
-    """
-    values = np.fromiter(distribution.keys(), dtype=float)
-    sorted_idx = np.argsort(values)
-    values = values[sorted_idx]
-
-    # get equally distributed values in the same range.
-    values_interp = np.linspace(values[0], values[-1], len(values))
-    probabilities = np.empty(len(values))
-
-    max_count = np.max([len(p_list) for p_list in distribution.values()])
-    for i, p_list in enumerate(distribution.values()):
-        if method == "product":
-            probabilities[i] = np.product(p_list)
-            # equivalent but potentially more stable numerically:
-            # probabilities[i] = 10**np.sum(np.log10(p_list))
-        elif method == "sum":
-            probabilities[i] = np.mean(p_list)
-        else:
-            raise ValueError(method)
-    probabilities /= np.sum(probabilities)
-    return values, probabilities[sorted_idx]
-
-
 class DistanceEstimator(object):
     DISTANCES_M = np.arange(7, 101) * 1e-2
-    AZIMUTHS_DEG = np.arange(-180, 180, step=10)
+    DISTANCES_M_PRIOR = np.arange(7, 101, step=10) * 1e-2 
+    AZIMUTHS_DEG = np.arange(-180, 180, step=2)
+    AZIMUTHS_DEG_PRIOR = np.arange(-180, 180, step=10)
 
     def __init__(self):
         self.data = {}  # structure: mic: (path_differences, probabilities)
@@ -106,7 +73,7 @@ class DistanceEstimator(object):
         distances_m=None,
     ):
         if azimuth_deg is None:
-            azimuths_deg = self.AZIMUTHS_DEG
+            azimuths_deg = self.AZIMUTHS_DEG_PRIOR
         else:
             azimuths_deg = [azimuth_deg]
 
@@ -114,13 +81,13 @@ class DistanceEstimator(object):
             distances_m = self.DISTANCES_M
 
         fill_count = 0
-        distribution = np.empty((len(azimuths_deg)*len(self.data)*len(distances_m), len(distances_m)))
+        distribution = np.empty((len(azimuths_deg)*len(self.data), len(distances_m)))
 
         # go over all data saved.
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
-
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
+
             deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
             delta_probs = np.bincount(inverse, delta_probs)
 
@@ -131,8 +98,6 @@ class DistanceEstimator(object):
             # "integral" over possible angles
             for azimuth_deg in azimuths_deg:
                 probabilities = np.empty(len(distances_m))
-                avg1 = 0
-                avg2 = 0
                 for i in range(len(distances_m)):
                     distance_min, distance_max = get_window(distances_m, i)
                     delta_min, delta_max = self.context.get_delta(azimuth_deg, np.array([distance_min, distance_max]) * 1e2, mic_idx=mic_idx)
@@ -150,7 +115,7 @@ class DistanceEstimator(object):
         self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
     ):
         if distance_estimate_m is None:
-            distances_m = self.DISTANCES_M
+            distances_m = self.DISTANCES_M_PRIOR
         else:
             distances_m = [distance_estimate_m]
 

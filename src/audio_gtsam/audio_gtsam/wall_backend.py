@@ -19,6 +19,8 @@ P = gtsam.symbol_shorthand.P
 #METHOD = "GN"
 EPS = 1e-10
 
+THRESH = 2
+
 def rad(angle_deg):
     return angle_deg / 180 * np.pi
 
@@ -104,24 +106,37 @@ class WallBackend(object):
         initial_estimates = gtsam.Values()
 
         vector = get_vector(azimuth=azimuth, elevation=elevation)
-        current_plane = gtsam.OrientedPlane3(gtsam.Unit3(vector), distance)
+        new_plane = gtsam.OrientedPlane3(gtsam.Unit3(vector), distance)
+
+        # Figure out when we are next to a new plane
+        current_plane_estimate = None
+        try:
+            self.get_results()
+            current_plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        except:
+            pass
+
+        if current_plane_estimate is not None:
+            error = np.linalg.norm(current_plane_estimate.errorVector(new_plane))
+            print(f"plane error: {error:.2f}")
+            if error > THRESH:
+                print("adding new plane")
+                self.plane_index += 1
 
         if (self.result is None) or not self.result.exists(P(self.plane_index)):
             if self.verbose:
-                print("initial estimate", current_plane.planeCoefficients())
-            initial_estimates.insert(P(self.plane_index), current_plane)
-            self.all_initial_estimates.insert(P(self.plane_index), current_plane)
+                print("initial estimate", new_plane.planeCoefficients())
+            initial_estimates.insert(P(self.plane_index), new_plane)
+            self.all_initial_estimates.insert(P(self.plane_index), new_plane)
 
         if self.verbose:
-            print("plane factor", current_plane.planeCoefficients())
-        factor = gtsam.OrientedPlane3Factor(current_plane.planeCoefficients(), 
+            print("plane factor", new_plane.planeCoefficients())
+        factor = gtsam.OrientedPlane3Factor(new_plane.planeCoefficients(), 
                                             plane_noise, 
                                             X(self.pose_index), P(self.plane_index))
         new_factors.push_back(factor)
         self.isam.update(new_factors, initial_estimates)
 
-        # TODO: figure out when we are next to a new plane
-        # self.plane_index += 1
         return factor
 
     def add_planes_from_distance_distribution(self, dists_cm, probs, azimuth_deg=90, azimuth_deg_std=10, n_estimates=1, verbose=False):
@@ -133,8 +148,8 @@ class WallBackend(object):
         """
 
         distance_estimates, distance_stds = get_estimates(dists_cm, probs, n_estimates=n_estimates)
-        angle_estimates = [rad(azimuth_deg)] 
-        angle_stds = [rad(azimuth_deg_std)]
+        angle_estimates = [azimuth_deg] 
+        angle_stds = [azimuth_deg_std]
 
         if verbose:
             print("distance estimates:", distance_estimates)
@@ -144,10 +159,31 @@ class WallBackend(object):
             azimuth = angle_estimates[a_i]
             #noise = [distance_stds[d_i], angle_stds[a_i], 0.0]
 
-            wall_angle = azimuth - np.pi
+            wall_angle_rad = rad(azimuth) - np.pi
             #print(f"INSIDE: add wall estimate at {distance:.1f}cm {deg(wall_angle):.0f}deg")
             # use the classes plane noise!
-            self.add_plane(distance*1e-2, wall_angle, plane_noise=None)
+            self.add_plane(distance*1e-2, wall_angle_rad, plane_noise=None)
+            self.get_results()
+
+    def add_planes_from_distributions(self, dists_cm, probs, azimuths_deg, probs_angles, n_estimates=1, verbose=False):
+        """ Add plane factor from distance and angle distributions.
+        """
+
+        distance_estimates, distance_stds = get_estimates(dists_cm, probs, n_estimates=n_estimates)
+        angle_estimates, angle_stds = get_estimates(azimuths_deg, probs_angles, n_estimates=n_estimates)
+
+        if verbose:
+            print("distance estimates:", distance_estimates)
+
+        for d_i, a_i in itertools.product(range(len(distance_estimates)), range(len(angle_estimates))):
+            distance = distance_estimates[d_i]
+            azimuth = angle_estimates[a_i]
+            #noise = [distance_stds[d_i], angle_stds[a_i], 0.0]
+
+            # because normal points in other direction than we defined the azimuth angle. 
+            wall_angle_rad = rad(azimuth) - np.pi
+
+            self.add_plane(distance*1e-2, wall_angle_rad, plane_noise=None)
             self.get_results()
 
     def add_pose(self, r_world, yaw):

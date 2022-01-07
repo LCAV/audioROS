@@ -509,5 +509,5 @@ def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side
         fig.set_size_inches(10, 10)
         plot_trajectory(2, estimate, axis_length=axis_length, ls=ls)
         set_axes_equal(2)
-        plt.gca().view_init(elev=90., azim=0)
+        plt.gca().view_init(elev=90., azim=0) # x down, y to right, looking from top
         plt.title("top view", y=0.9)
