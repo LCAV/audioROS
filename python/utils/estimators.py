@@ -3,6 +3,7 @@ estimators.py: Combine angle or distance distributions from multiple mics to yie
 
 """
 import warnings
+import time
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -12,9 +13,36 @@ from utils.geometry import Context
 METHOD = "sum" # method used to combine probability distributions
 EPS = 1e-30  # smallest value for probability distribution
 
+N_INTEGRAL = 10 # number of points used to approximate integral.
+
 def get_estimate(values, probs):
     return values[np.argmax(probs)]
 
+
+def get_window(points, i):
+    """
+    Get window around index i, splitting each interval in half. 
+    At boundaries: use nearest interval's width for extrapolation.
+    """
+    p = points[i]
+    if i > 0:
+        point_min = p - (points[i] - points[i-1]) / 2
+    else:
+        point_min = p - (points[i+1] - points[i]) / 2
+
+    if i < len(points) - 1:
+        point_max = p + (points[i+1] - points[i]) / 2
+    else:
+        point_max = p + (points[i] - points[i-1]) / 2
+    return point_min, point_max
+
+def extract_probs(distribution, method):
+    if method == "sum":
+        probs = np.sum(distribution, axis=0)
+    elif method == "product": 
+        probs = np.product(distribution, axis=0)
+    probs /= np.sum(probs)
+    return probs
 
 def extract_pdf(distribution, method=METHOD, verbose=False):
     """
@@ -85,63 +113,38 @@ class DistanceEstimator(object):
         if distances_m is None:
             distances_m = self.DISTANCES_M
 
-        distribution = {d: [] for d in distances_m}
-
-        if verbose:
-            import matplotlib.pylab as plt
-
-            fig, axs = plt.subplots(1, 2)
-            fig.set_size_inches(10, 3)
+        fill_count = 0
+        distribution = np.empty((len(azimuths_deg)*len(self.data)*len(distances_m), len(distances_m)))
 
         # go over all data saved.
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
 
-            deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
-            if verbose:
-                axs[0].scatter(deltas_m, delta_probs, label=mic_idx)
-            # if len(np.unique(inverse)) != len(inverse):
-            # print("found non-unique deltas", deltas_m)
-            delta_probs = np.bincount(inverse, delta_probs)
-            if verbose:
-                axs[0].plot(deltas_m, delta_probs, label=mic_idx)
-                axs[0].set_xlabel("delta [m]")
-
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
+            deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
+            delta_probs = np.bincount(inverse, delta_probs)
+
+            deltas_interp = interp1d(
+                deltas_m, delta_probs, kind="linear", fill_value="extrapolate"
+            )
 
             # "integral" over possible angles
             for azimuth_deg in azimuths_deg:
-                ds_m = (
-                    self.context.get_distance(deltas_m * 1e2, azimuth_deg, mic_idx)
-                    * 1e-2
-                )
+                probabilities = np.empty(len(distances_m))
+                avg1 = 0
+                avg2 = 0
+                for i in range(len(distances_m)):
+                    distance_min, distance_max = get_window(distances_m, i)
+                    delta_min, delta_max = self.context.get_delta(azimuth_deg, np.array([distance_min, distance_max]) * 1e2, mic_idx=mic_idx)
+                    delta_min *= 1e-2 # convert to meteres
+                    delta_max *= 1e-2
 
-                # interpolate (ds_m, delta_probs) at fixed distances distances_m
-                interp1d_func = interp1d(
-                    ds_m, delta_probs, kind="linear", fill_value="extrapolate"
-                )
-                delta_probs_interp = interp1d_func(distances_m)
-
-                # correcton due to change of variables from deltas to distances
-                # TODO(FD) maybe to be removed to be consistent with angle inference,
-                # since it had negligible effect anyways.
-                correction_factor = self.context.get_delta_gradient(
-                    azimuth_deg, distances_m * 1e2, mic_idx
-                )
-                delta_probs_interp *= correction_factor
-
-                # make sure probabiliy is positive.
-                delta_probs_interp[delta_probs_interp <= 0] = EPS
-                [
-                    distribution[d].append(prob)
-                    for d, prob in zip(distances_m, delta_probs_interp)
-                ]
-                if verbose:
-                    axs[1].plot(ds_m, delta_probs)
-                    axs[1].scatter(distances_m, delta_probs_interp)
-                    axs[1].set_xlabel("distance [m]")
-                    axs[1].legend()
-        return extract_pdf(distribution, method, verbose)
+                    # accumulate probabilities over delta that will be mapped into the integration area in terms in distances.
+                    ns = np.arange(N_INTEGRAL) / N_INTEGRAL
+                    probabilities[i] = np.sum(deltas_interp((1 - ns) * delta_min + ns * delta_max))
+                distribution[fill_count, :] = probabilities
+                fill_count += 1
+        return distances_m, extract_probs(distribution, method)
 
     def get_angle_distribution(
         self, distance_estimate_m, chosen_mics=None, method=METHOD, azimuths_deg=None
@@ -153,65 +156,43 @@ class DistanceEstimator(object):
 
         assert (
             np.linalg.norm(self.context.source) == 0
-        ), "function only works for source at origin!"
+        ), "function only works for source at origin (in relative coordinates)!"
 
         if azimuths_deg is None:
             azimuths_deg = self.AZIMUTHS_DEG
-            # azimuths_deg = np.arange(-180, 180)
 
-        distribution = {a: [] for a in azimuths_deg}
+        fill_count = 0
+        distribution = np.empty((len(distances_m)*len(self.data), len(azimuths_deg)))
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
-            r0 = self.context.get_direct_path(mic_idx)
-
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
 
+            deltas_m, inverse = np.unique(deltas_m, return_inverse=True)
+            delta_probs = np.bincount(inverse, delta_probs)
+
+            deltas_interp = interp1d(
+                deltas_m, delta_probs, kind="linear", fill_value="extrapolate"
+            )
             for distance_estimate_m in distances_m:
 
-                # for a given distance, only certain deltas are possible.
-                mask = (deltas_m <= 2 * distance_estimate_m) & (
-                    deltas_m >= 2 * distance_estimate_m - 2 * r0
-                )
+                probabilities = np.empty(len(azimuths_deg))
+                for i in range(len(azimuths_deg)):
+                    # calculate integration area, considering border effects
+                    azimuth_min, azimuth_max = get_window(azimuths_deg, i)
 
-                thetas_deg = []
-                probs = []
+                    delta_min = self.context.get_delta(azimuth_min, distance_estimate_m * 1e2, mic_idx=mic_idx)
+                    delta_max = self.context.get_delta(azimuth_min, distance_estimate_m * 1e2, mic_idx=mic_idx)
+                    delta_min *= 1e-2 # convert to meteres
+                    delta_max *= 1e-2
 
-                # each delta and probability corresponds to one or two angles.
-                for delta_m, prob in zip(deltas_m[mask], delta_probs[mask]):
-                    theta_deg = self.context.get_angles(
-                        delta_m=delta_m,
-                        distance_m=distance_estimate_m,
-                        mic_idx=mic_idx,
-                    )
-                    if theta_deg is None:
-                        warnings.warn("no theta")
-                        continue
+                    # accumulate probabilities over delta that will be mapped into the integration area in terms in distances.
+                    ns = np.arange(N_INTEGRAL) / N_INTEGRAL
+                    probabilities[i] = np.sum(deltas_interp((1 - ns) * delta_min + ns * delta_max))
 
-                    thetas_deg += list(theta_deg)
-                    probs += [prob] * len(theta_deg)
-
-                if not len(thetas_deg):
-                    warnings.warn("no valid thetas found")
-                    continue
-                # interpolate (ds_m, delta_probs) at current distances
-                interp1d_func = interp1d(
-                    thetas_deg, probs, kind="linear", fill_value="extrapolate"
-                )
-                probs_interp = interp1d_func(azimuths_deg)
-
-                correction_factor = self.context.get_delta_gradient_angle(
-                    distance_estimate_m, azimuths_deg, mic_idx
-                )
-                probs_interp *= correction_factor
-
-                # make sure probabiliy is positive.
-                probs_interp[probs_interp < 0] = EPS
-                [
-                    distribution[a].append(prob)
-                    for a, prob in zip(azimuths_deg, probs_interp)
-                ]
-        return extract_pdf(distribution, method)
+                distribution[fill_count, :] = probabilities
+                fill_count += 1
+        return azimuths_deg, extract_probs(distribution, method)
 
     def get_distance_estimate(self, chosen_mics=None):
         ds, probs = self.get_distance_distribution(chosen_mics)
@@ -235,7 +216,10 @@ class AngleEstimator(object):
     def get_angle_distribution(
         self, chosen_mics=None, method=METHOD, mics_left_right=None
     ):
-        distribution = {g: [] for g in self.ANGLES_DEG}
+        gammas = self.ANGLES_DEG
+
+        fill_count = 0
+        distribution = np.empty((len(self.data), len(gammas)))
         for mic_idx, (gammas_deg_here, probs, frequency) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
                 continue
@@ -243,13 +227,11 @@ class AngleEstimator(object):
             interp1d_func = interp1d(
                 gammas_deg_here, probs, kind="linear", fill_value="extrapolate"
             )
-            probs_interp = interp1d_func(self.ANGLES_DEG)
-            [
-                distribution[g].append(prob)
-                for g, prob in zip(self.ANGLES_DEG, probs_interp)
-            ]
+            probabilities = interp1d_func(gammas)
+            distribution[fill_count, :] = probabilities
+            fill_count += 1
 
-        gammas, probs = extract_pdf(distribution, method)
+        probs = extract_probs(distribution, method)
 
         argmax = np.argmax(probs)
         gamma = gammas[argmax]
