@@ -12,6 +12,7 @@ Make sure to clone this repo including submodules by running
 git clone --recurse-submodules https://github.com/LCAV/audioROS
 ```
 
+
 After installing ROS, and in each new terminal, run
 ```
 source /opt/ros/<distro>/setup.bash
@@ -27,6 +28,11 @@ rosdep update
 rosdep install --from-path src/ --rosdistro $ROS_DISTRO
 colcon build --symlink-install
 . install/local_setup.bash
+```
+
+If you want to setup the git precommit hooks for automatic formatting and jupyter outpoot removal, run
+```
+pre-commit install
 ```
 
 ## Contents    
