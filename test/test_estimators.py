@@ -9,9 +9,12 @@ import sys, os
 import numpy as np
 from scipy.stats import norm
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "python")))
-sys.path.append(os.path.join(os.getcwd(), "python"))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "python", "utils")))
+sys.path.append(os.path.join(os.getcwd(), "python", "utils"))
 from moving_estimators import MovingEstimator
+from geometry import get_deltas_from_global
+
+MIC_IDX = [0, 1]
 
 
 def test_moving_delta():
@@ -30,76 +33,55 @@ def do_test_moving(prob_method, n_window):
     """ Test on simple toy example """
 
     moving_estimator = MovingEstimator(n_window=n_window)  # 2 or 3 works.
-    angle_grid = np.arange(360, step=15)
-    dist_grid = np.arange(50)
+    delta_grid = np.arange(100)
 
-    def get_measurements(distance, angle, prob_method="delta"):
+    def measure_wall(pose):
+        distance = 30 - pose[1]
+        angle = 90 - pose[2]
+        return distance, angle
+
+    def get_delta_distribution(distance, angle, mic_idx, prob_method="delta"):
+        delta = (
+            get_deltas_from_global(
+                azimuth_deg=angle, distances_cm=distance, mic_idx=mic_idx
+            )[0]
+            * 1e2
+        )
         if prob_method == "delta":
-            angle_p0 = np.zeros(len(angle_grid))
-            dist_p0 = np.zeros(len(dist_grid))
-            angle_p0[angle_grid == angle] = 1.0
-            dist_p0[dist_grid == distance] = 1.0
+            probs = np.zeros(len(delta_grid))
+            probs[np.argmin(np.abs(delta_grid - delta))] = 1.0
         elif prob_method == "normal":
-            angle_p0 = norm.pdf(angle_grid, loc=angle, scale=10)
-            dist_p0 = norm.pdf(dist_grid, loc=distance, scale=2)
-        return angle_p0, dist_p0
+            probs = norm.pdf(delta_grid, loc=delta, scale=10)
+        return probs
 
-    # toy example
-    angle_p0_gt = 90
-    dist_p0_gt = 10
-    angle_p0, dist_p0 = get_measurements(dist_p0_gt, angle_p0_gt, prob_method)
-    position_0 = [5, 4]
-    rot_0 = 0
-    angle_p1_gt = 30
-    dist_p1_gt = 9
-    angle_p1, dist_p1 = get_measurements(dist_p1_gt, angle_p1_gt, prob_method)
-    position_1 = [3, 5]
-    rot_1 = 60
+    # toy example: we do a diamond, and rotate by 90 degrees at each position.
+    # the wall is located at 30cm north from the origin, horizontal.
 
-    print("adding first measurement")
-    moving_estimator.add_distributions(
-        angle_grid, angle_p0, dist_grid, dist_p0, position_0, rot_0
-    )
+    poses = [[0, 10, -90], [10, 20, -180], [20, 10, 90], [10, 0, 0]]
+    for i, pose in enumerate(poses):
+        distance, angle = measure_wall(pose)
+        diff_dict = {}
+        for mic_idx in MIC_IDX:
+            probs = get_delta_distribution(distance, angle, mic_idx, prob_method)
+            diff_dict[mic_idx] = (delta_grid, probs)
+        moving_estimator.add_distributions(diff_dict, pose[:2], pose[2])
 
-    # move back to second position
-    print("adding second measurement")
-    moving_estimator.add_distributions(
-        angle_grid, angle_p1, dist_grid, dist_p1, position_1, rot_1
-    )
-    dist_tot, dist_ptot = moving_estimator.get_distance_distribution(verbose=True)
-    assert dist_tot[np.argmax(dist_ptot)] == dist_p1_gt, dist_tot[np.argmax(dist_ptot)]
+        # print(f"added {distance, angle} at pose {i}")
+        if i < n_window - 1:
+            continue
 
-    angle_tot, angle_ptot = moving_estimator.get_angle_distribution(verbose=True)
-    assert angle_tot[np.argmax(angle_ptot)] == angle_p1_gt, angle_tot[
-        np.argmax(angle_ptot)
-    ]
-    print("first position worked ok")
+        prob_matrix = moving_estimator.get_joint_distribution(verbose=False)
+        # print("joint (angles x distances)")
+        # print(prob_matrix)
+        # print("angles:", moving_estimator.ANGLES_DEG)
+        # print("distances:", moving_estimator.DISTANCES_CM)
 
-    # move back to first position
-    moving_estimator.add_distributions(
-        angle_grid, angle_p0, dist_grid, dist_p0, position_0, rot_0
-    )
-    dist_tot, dist_ptot = moving_estimator.get_distance_distribution(verbose=True)
-    assert dist_tot[np.argmax(dist_ptot)] == dist_p0_gt, dist_tot[np.argmax(dist_ptot)]
+        prob_distances, prob_angles = moving_estimator.get_distributions(verbose=False)
+        angles = moving_estimator.ANGLES_DEG
+        distances = moving_estimator.DISTANCES_CM
 
-    angle_tot, angle_ptot = moving_estimator.get_angle_distribution(verbose=True)
-    assert angle_tot[np.argmax(angle_ptot)] == angle_p0_gt, angle_tot[
-        np.argmax(angle_ptot)
-    ]
-    print("second position worked ok")
-
-    # move back to second position
-    moving_estimator.add_distributions(
-        angle_grid, angle_p1, dist_grid, dist_p1, position_1, rot_1
-    )
-    dist_tot, dist_ptot = moving_estimator.get_distance_distribution(verbose=True)
-    assert dist_tot[np.argmax(dist_ptot)] == dist_p1_gt, dist_tot[np.argmax(dist_ptot)]
-
-    angle_tot, angle_ptot = moving_estimator.get_angle_distribution(verbose=True)
-    assert angle_tot[np.argmax(angle_ptot)] == angle_p1_gt, angle_tot[
-        np.argmax(angle_ptot)
-    ]
-    print("second position worked ok")
+        assert distances[np.argmax(prob_distances)] == distance
+        assert angles[np.argmax(prob_angles)] == angle
 
 
 if __name__ == "__main__":

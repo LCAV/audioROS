@@ -15,16 +15,17 @@ from .simulation import get_freq_slice_theory
 
 EPS = 1e-30
 
-#BAD_FREQ_RANGES = []
+# BAD_FREQ_RANGES = []
 if PLATFORM == "crazyflie":
     # for 2021_07_08_stepper results:
     BAD_FREQ_RANGES = [[0, 2995], [3630, 3870], [4445, 5000]]
     # for later results:
-    #BAD_FREQ_RANGES = [[0, 2995]]
+    # BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
 INTERPOLATE = True
 N_MAX = 1000
+
 
 def interpolate_parts(xvalues, values, step=None, verbose=False):
     """ Smart interpolation scheme. 
@@ -127,7 +128,7 @@ class Inference(object):
 
     def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None):
         """
-        Perform inference.
+        Perform distance inference on current data.
         """
         if calibrate and not self.is_calibrated:
             self.calibrate()
@@ -404,6 +405,7 @@ def get_periods_fft(
         prob = abs_fft / np.sum(abs_fft)
     return periods_m, prob
 
+
 def get_approach_angle_fft(
     d_slice,
     frequency,
@@ -425,7 +427,9 @@ def get_approach_angle_fft(
     """
 
     # in terms of delta, we have c/f [m], but in terms of orthogonal we have c/2f [m]
-    freq_theoretical = factor * frequency / SPEED_OF_SOUND  # 1/m in terms of orthogonal distance
+    freq_theoretical = (
+        factor * frequency / SPEED_OF_SOUND
+    )  # 1/m in terms of orthogonal distance
 
     if interpolate:
         # important to choose small enough step size to insure
@@ -446,21 +450,23 @@ def get_approach_angle_fft(
     freqs_m = freqs_m[freqs_m > 0]
 
     import scipy.interpolate
+
     interpolator = scipy.interpolate.interp1d(
         freqs_m, probs, kind="linear", fill_value="extrapolate"
     )
 
-    n_integral = 10 # number of points used to approximate integral
+    n_integral = 10  # number of points used to approximate integral
     ns_integral = np.arange(n_integral) / n_integral
-    gamma_delta = 1 # number of points 
-    gammas_deg = np.arange(1, 90+gamma_delta, step=gamma_delta)
+    gamma_delta = 1  # number of points
+    gammas_deg = np.arange(1, 90 + gamma_delta, step=gamma_delta)
     probs_gamma = np.empty(len(gammas_deg))
     for i_g, gamma in enumerate(gammas_deg):
-        sampling_points = (1 - ns_integral) * np.sin(np.deg2rad(gamma - gamma_delta / 2)) \
-                             + ns_integral * np.sin(np.deg2rad(gamma + gamma_delta / 2))
+        sampling_points = (1 - ns_integral) * np.sin(
+            np.deg2rad(gamma - gamma_delta / 2)
+        ) + ns_integral * np.sin(np.deg2rad(gamma + gamma_delta / 2))
         sampling_points *= freq_theoretical
         probs_gamma[i_g] = np.sum(interpolator(sampling_points))
-    return gammas_deg, probs_gamma 
+    return gammas_deg, probs_gamma
 
 
 def get_approach_angle_cost(

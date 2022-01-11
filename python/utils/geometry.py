@@ -10,7 +10,7 @@ import numpy as np
 
 from audio_stack.beam_former import rotate_mics
 
-from .constants import PLATFORM
+from constants import PLATFORM
 
 DIM = 2
 

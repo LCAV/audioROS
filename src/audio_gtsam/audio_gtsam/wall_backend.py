@@ -115,9 +115,6 @@ class WallBackend(object):
             ]
         )
 
-    def check_wall(self):
-        self.get_results()
-
     def add_plane(
         self, distance, azimuth, elevation=0.0, plane_noise=None, verbose=False
     ):
@@ -147,6 +144,9 @@ class WallBackend(object):
             if error > THRESH:
                 print("adding new plane!")
                 self.plane_index += 1
+            else:
+                pass
+                # print("not adding new plane:", error)
 
         if (self.result is None) or not self.result.exists(P(self.plane_index)):
             if self.verbose:
@@ -166,7 +166,35 @@ class WallBackend(object):
         if self.use_isam:
             self.isam.update(new_factors, initial_estimates)
         else:
-            [self.graph.add(f) for f in new_factors]
+            self.graph.add(factor)
+        return factor
+
+    def add_pose(self, r_world, yaw):
+        self.pose_index += 1
+        new_factors = gtsam.NonlinearFactorGraph()
+        initial_estimates = gtsam.Values()
+
+        current_pose = gtsam.Pose3(
+            r=gtsam.Rot3.Ypr(yaw, 0, 0), t=gtsam.Point3(*r_world)
+        )
+        if (self.result is None) or not self.result.exists(X(self.pose_index)):
+            if self.verbose:
+                print(
+                    "initial estimate",
+                    current_pose.translation(),
+                    current_pose.rotation().yaw(),
+                )
+            initial_estimates.insert(X(self.pose_index), current_pose)
+            self.all_initial_estimates.insert(X(self.pose_index), current_pose)
+
+        factor = gtsam.PriorFactorPose3(
+            X(self.pose_index), current_pose, self.pose_noise
+        )
+        new_factors.push_back(factor)
+        if self.use_isam:
+            self.isam.update(new_factors, initial_estimates)
+        else:
+            self.graph.add(factor)
         return factor
 
     def add_planes_from_distance_distribution(
@@ -236,36 +264,8 @@ class WallBackend(object):
             self.add_plane(distance * 1e-2, wall_angle_rad, plane_noise=None)
             self.get_results()
 
-    def add_pose(self, r_world, yaw):
-        self.pose_index += 1
-        new_factors = gtsam.NonlinearFactorGraph()
-        initial_estimates = gtsam.Values()
-
-        current_pose = gtsam.Pose3(
-            r=gtsam.Rot3.Ypr(yaw, 0, 0), t=gtsam.Point3(*r_world)
-        )
-        if (self.result is None) or not self.result.exists(X(self.pose_index)):
-            if self.verbose:
-                print(
-                    "initial estimate",
-                    current_pose.translation(),
-                    current_pose.rotation().yaw(),
-                )
-            initial_estimates.insert(X(self.pose_index), current_pose)
-            self.all_initial_estimates.insert(X(self.pose_index), current_pose)
-
-        factor = gtsam.PriorFactorPose3(
-            X(self.pose_index), current_pose, self.pose_noise
-        )
-        new_factors.push_back(factor)
-        if self.use_isam:
-            self.isam.update(new_factors, initial_estimates)
-        else:
-            [self.graph.add(f) for f in new_factors]
-        return factor
-
     def get_results(self):
-        if USE_ISAM:
+        if self.use_isam:
             self.result = self.isam.calculateEstimate()
         else:
             optimizer = gtsam.LevenbergMarquardtOptimizer(
@@ -284,19 +284,30 @@ class WallBackend(object):
                 xs[i, :] = self.result.atPose3(
                     X(self.pose_index - N_VELOCITY_ESTIMATE + i)
                 ).translation()
-
             v_estimate = np.mean(np.diff(xs, axis=0), axis=0)
 
-            plane_estimate = self.result.atOrientedPlane3(P(0))
+            plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
             normal = plane_estimate.normal().point3()
 
-            latest_pose_estimate = self.result.atPose3(X(self.pose_index - 1))
-            plane_estimate_from_pose = plane_estimate.transform(latest_pose_estimate)
-            distance_estimate = plane_estimate_from_pose.distance()
+            distance_estimate = abs(self.get_distance_estimate())
             if (distance_estimate < DISTANCE_THRESHOLD_M) & (
                 v_estimate.dot(normal) < 0
             ):
                 if verbose:
-                    print(f"At pose {self.pose_index}: turn around!")
+                    v_angle = np.arctan2(v_estimate[1], v_estimate[0]) * 180 / np.pi
+                    wall_angle = np.arctan2(normal[1], normal[0]) * 180 / np.pi
+                    print(
+                        f"At pose {self.pose_index}, plane {self.plane_index}: turn around! velocity angle: {v_angle:.0f}deg, wall normal angle:{wall_angle:.0f}deg, distance:{distance_estimate*1e2:.0f}cm"
+                    )
                 return True
         return False
+
+    def get_distance_estimate(self):
+        if self.pose_index >= 0 and self.plane_index >= 0:
+            self.get_results()
+            plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+            latest_pose_estimate = self.result.atPose3(X(self.pose_index))
+            plane_estimate_from_pose = plane_estimate.transform(latest_pose_estimate)
+            return plane_estimate_from_pose.distance()
+        else:
+            return None

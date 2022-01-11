@@ -8,7 +8,7 @@ from math import ceil
 
 import numpy as np
 
-from .constants import SPEED_OF_SOUND
+from constants import SPEED_OF_SOUND
 
 
 def low_rank_inverse(low_rank_matrix, rank=1):
