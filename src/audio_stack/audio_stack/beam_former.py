@@ -106,6 +106,17 @@ class BeamFormer(object):
         self.theta_scan = BeamFormer.theta_scan
         self.params = {}
 
+    def beamform_mvdr(
+        self, R, theta, frequencies_hz, mic_positions=None, lamda=LAMDA, inverse=INVERSE
+    ):
+        if mic_positions is None:
+            mic_positions = self.mic_positions
+        constraints = [(theta, 1)]
+        H_mvdr = get_lcmv_beamformer_fast(
+            R, frequencies_hz, mic_positions, constraints, lamda=lamda, inverse=inverse,
+        )
+        return H_mvdr
+
     def get_mvdr_spectrum(
         self, R, frequencies_hz, mic_positions=None, lamda=LAMDA, inverse=INVERSE
     ):
@@ -120,17 +131,17 @@ class BeamFormer(object):
             mic_positions = self.mic_positions
         spectrum = np.empty((len(frequencies_hz), len(self.theta_scan)))
         for i, theta in enumerate(self.theta_scan):
-            constraints = [(theta, 1)]
-            H_mvdr = get_lcmv_beamformer_fast(
-                R,
-                frequencies_hz,
-                mic_positions,
-                constraints,
-                lamda=lamda,
-                inverse=inverse,
+            H_mvdr = self.beamform_mvdr(
+                R, theta, frequencies_hz, mic_positions, lamda, inverse
             )
+
             spectrum[:, i] = get_powers(H_mvdr, R)
         return spectrum
+
+    def beamform_das(self, theta, frequencies_hz, mic_positions=None):
+        if mic_positions is None:
+            mic_positions = self.mic_positions
+        return get_das_beamformer(theta, frequencies_hz, mic_positions)
 
     def get_das_spectrum(self, R, frequencies, mic_positions=None):
         """ Get DAS spatial spectrum.
@@ -142,7 +153,7 @@ class BeamFormer(object):
 
         spectrum = np.empty((len(frequencies), len(self.theta_scan)))
         for i, theta in enumerate(self.theta_scan):
-            H_das = get_das_beamformer(theta, frequencies, mic_positions)
+            H_das = self.beamform_das(theta, frequencies, mic_positions)
             spectrum[:, i] = get_powers(H_das, R)
         return spectrum
 
@@ -153,7 +164,12 @@ class BeamFormer(object):
         if signals_f.shape[0] < signals_f.shape[1]:
             # print("Warning: less frequency bins than mics. Did you forget to transpose signals_f?")
             pass
-        return 1 / signals_f.shape[1] * signals_f[:, :, None] @ signals_f[:, None, :].conj()
+        return (
+            1
+            / signals_f.shape[1]
+            * signals_f[:, :, None]
+            @ signals_f[:, None, :].conj()
+        )
 
     def shift_spectrum(self, spectrum, delta_deg):
         """ shift spectrum by delta_deg. 
@@ -276,8 +292,7 @@ class BeamFormer(object):
             if offset > 0:
                 print("Warning: offset and position given, ignoring offset.")
             moved_mic_positions = (
-                rotate_mics(self.mic_positions, orientation_deg)
-                + position[None, :]
+                rotate_mics(self.mic_positions, orientation_deg) + position[None, :]
             )
         else:
             moved_mic_positions = (
@@ -287,7 +302,9 @@ class BeamFormer(object):
         self.multi_mic_positions[
             n_mics * self.index_multi : n_mics * (self.index_multi + 1), :
         ] = moved_mic_positions
-        self.index_multi = (self.index_multi + 1) % self.params["multi"]["combination_n"]
+        self.index_multi = (self.index_multi + 1) % self.params["multi"][
+            "combination_n"
+        ]
 
     def get_multi_R(self):
         if np.any(np.isnan(self.signals_f_aligned)):

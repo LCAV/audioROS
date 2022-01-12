@@ -7,12 +7,13 @@ from audio_stack.beam_former import rotate_mics
 from audio_simulation.geometry import ROOM_DIM
 
 from .constants import SPEED_OF_SOUND, PLATFORM
+
 if PLATFORM == "epuck":
-    from crazyflie_description_py.parameters import N_BUFFER, FS
-    from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
-else:
     from epuck_description_py.parameters import N_BUFFER, FS
     from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+else:
+    from crazyflie_description_py.parameters import N_BUFFER, FS
+    from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
 from .frequency_analysis import get_bin
 from .geometry import *
 from .signals import generate_signal
@@ -22,6 +23,7 @@ WALL_ABSORPTION = 0.2
 GAIN = 1.0  # default amplitude for input signals
 WIDEBAND_FILE = "results/wideband.npy"
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
+
 
 def simulate_distance_estimator(
     chosen_mics=range(4), distance_cm=10, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None
@@ -62,7 +64,9 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
     return signal
 
 
-def generate_room(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS):
+def generate_room(
+    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS
+):
     """ Generate two-dimensional setup using pyroomacoustics. """
     source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
@@ -123,7 +127,7 @@ def get_amplitude_function(
     return amplitudes
 
 
-# TODO(FD) this slice is squared, but in data_collector the slice is not 
+# TODO(FD) this slice is squared, but in data_collector the slice is not
 # squared yet (will be squared in inference again)
 def get_df_theory_simple(
     deltas_m,
@@ -159,6 +163,16 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     :param n_buffer: buffer size for "STFT"
     :param n_times: number of buffers to average. Will start fromsecond buffer.
     """
+    buffers_f = get_buffers(room, signal, n_buffer, n_times)
+    return np.mean(np.abs(buffers_f), axis=0)
+
+
+def get_buffers(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
+    """ 
+    :param signal: signal to use for simulation, array
+    :param n_buffer: buffer size for "STFT"
+    :param n_times: number of buffers to average. Will start fromsecond buffer.
+    """
     assert len(room.sources) == 1
 
     room.sources[0].add_signal(signal)
@@ -168,16 +182,18 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
         1
     ], f"{n_times}*{n_buffer}={n_times * n_buffer}, {room.mic_array.signals.shape}"
 
-    h_f_list = []
+    buffers_f_list = []
     idx = n_buffer  # skip first buffer to avoid boundary effects
     for _ in range(n_times - 1):
         output_f = np.fft.rfft(
             room.mic_array.signals[:, idx : idx + n_buffer], axis=1
         )  # n_mics x n_frequencies
-        h_f_list.append(output_f[None, :, :] / n_buffer)
+        buffers_f_list.append(output_f[None, :, :] / n_buffer)
         idx += n_buffer
-    h_f = np.concatenate(h_f_list, axis=0)  # n_times x n_mics x n_frequencies
-    return np.mean(np.abs(h_f), axis=0)
+    buffers_f = np.concatenate(
+        buffers_f_list, axis=0
+    )  # n_times x n_mics x n_frequencies
+    return buffers_f
 
 
 def get_df_theory(
@@ -192,7 +208,9 @@ def get_df_theory(
     return H
 
 
-def get_freq_slice_pyroom(frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG_STEPPER):
+def get_freq_slice_pyroom(
+    frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG_STEPPER
+):
     room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
 
     n_times = len(signal) // N_BUFFER
