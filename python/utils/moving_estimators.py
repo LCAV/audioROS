@@ -18,7 +18,7 @@ def from_0_to_360(angle):
 
 
 class MovingEstimator(object):
-    DISTANCES_CM = np.arange(40, step=10)
+    DISTANCES_CM = np.arange(40, step=1)
     ANGLES_DEG = np.arange(360, step=90)
 
     def __init__(self, n_window=2, platform="crazyflie"):
@@ -26,6 +26,7 @@ class MovingEstimator(object):
         self.positions = [[]] * n_window
         self.rotations = [[]] * n_window
 
+        self.dim = 2
         self.reference = None
 
         self.index = -1
@@ -45,6 +46,9 @@ class MovingEstimator(object):
             ...
         }
         """
+        if len(position_cm) > 2:
+            position_cm = position_cm[:2]
+
         # detect if we are still at the same position.
         self.index += 1
         if self.index == self.n_window - 1:
@@ -72,9 +76,11 @@ class MovingEstimator(object):
     def get_distributions(self, verbose=False):
         # get angle distribution (according to when distributions align best)
         distributions = self.get_joint_distribution(verbose=verbose)
-        softmax = np.exp(np.max(distributions, axis=1))
-        softmax /= np.sum(softmax)
-        probs_angles = softmax
+
+        # softmax
+        # probs_angles = np.exp(np.max(distributions, axis=1))
+        probs_angles = np.sum(distributions, axis=1)
+        probs_angles /= np.sum(probs_angles)
 
         angle_idx = np.argwhere(probs_angles == np.amax(probs_angles))[0]
         if len(angle_idx) > 1:
@@ -82,10 +88,22 @@ class MovingEstimator(object):
                 "Warning: ambiguous result for angle distribution! Taking average for distance."
             )
         probs_dist = np.mean(distributions[angle_idx, :], axis=0)
+        probs_dist /= np.sum(probs_dist)
         return probs_dist, probs_angles
 
     def get_distance_estimate(self, dist):
-        return self.DISTANCES_CM[np.argmax(dist)]
+        max_dist = np.max(dist)
+        estimates = self.DISTANCES_CM[np.where(dist == max_dist)[0]]
+        if len(estimates) > 1:
+            print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
+        return estimates[0]
+
+    def get_angle_estimate(self, dist):
+        max_dist = np.max(dist)
+        estimates = self.ANGLES_DEG[np.where(dist == max_dist)[0]]
+        if len(estimates) > 1:
+            print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
+        return estimates[0]
 
     def get_joint_distribution(self, verbose=False):
         if not self.filled:
@@ -103,81 +121,78 @@ class MovingEstimator(object):
             others.remove(current)
 
         if verbose:
-            print("current:", current, "others:", others)
-
-        distributions = np.ones((len(self.ANGLES_DEG), len(self.DISTANCES_CM)))
-        for a, angle in enumerate(self.ANGLES_DEG):
-            if verbose:
-                print(f"\n==== treating angle {angle} ====")
-            # wall azimuth angle in global coordinates
-            angle_absolute = self.rotations[current] + angle
-            normal_absolute = -np.array(
-                [
-                    np.cos(angle_absolute / 180 * np.pi),
-                    np.sin(angle_absolute / 180 * np.pi),
-                ]
+            print(
+                f"current: {current}, ({self.positions[current]}, {self.rotations[current]})"
             )
 
+        distributions = np.ones((len(self.ANGLES_DEG), len(self.DISTANCES_CM)))
+
+        for a, angle in enumerate(self.ANGLES_DEG):  # in global coordinates
+            # wall azimuth angle in local coordinates
+            angle_local = angle - self.rotations[current]
+
+            if verbose:
+                print(f"\n==== treating global angle {angle}, local: {angle_local}====")
+
+            normal_absolute = -np.array(
+                [np.cos(angle / 180 * np.pi), np.sin(angle / 180 * np.pi),]
+            )
+
+            distances_local = self.DISTANCES_CM + normal_absolute.dot(
+                self.positions[current]
+            )
             # convert the differences at the current index to
-            # distance distributions.
+            # global distance distributions.
             for mic, difference_p in self.difference_p[current].items():
                 distance_p[current][mic] = np.array(
                     [
-                        difference_p(self.context.get_delta(angle, d, mic))
-                        for d in self.DISTANCES_CM
+                        difference_p(self.context.get_delta(angle_local, d, mic))
+                        for d in distances_local
                     ]
                 )
                 if verbose:
                     print(
-                        "  distance estimate for latest position:",
+                        "  distance estimate for current position:",
                         self.get_distance_estimate(distance_p[current][mic]),
                     )
 
-                # for previous positions, a bit more work is needed:
-                for previous in others:
-                    delta_rot = self.rotations[current] - self.rotations[previous]
-                    delta_pos = self.positions[current] - self.positions[previous]
-                    delta_pos_angle = (
-                        np.arctan2(delta_pos[1], delta_pos[0]) * 180 / np.pi
+            # for previous positions, a bit more work is needed:
+            for previous in others:
+                print(
+                    f"previous: {previous}, ({self.positions[previous]}, {self.rotations[previous]})"
+                )
+
+                # wall azimuth angle in local coordinates
+                angle_local_prev = angle - self.rotations[previous]
+
+                # local distances current position
+                distances_local_prev = self.DISTANCES_CM + normal_absolute.dot(
+                    self.positions[previous]
+                )
+                if verbose:
+                    print(f"  local angle at position {previous}:", angle_local_prev)
+                    print(
+                        f"  evaluating distances at {previous}:",
+                        np.min(distances_local_prev),
+                        np.max(distances_local_prev),
                     )
-                    delta_pos_d = np.linalg.norm(delta_pos)
 
-                    # wall azimuth angle as seen from this position
-                    angle_trans = angle + delta_rot
-
-                    # distances converted to the current position
-                    distances_trans = self.DISTANCES_CM - normal_absolute.dot(delta_pos)
+                for mic, difference_p2 in self.difference_p[previous].items():
+                    deltas = [
+                        self.context.get_delta(angle_local_prev, d, mic)
+                        for d in distances_local_prev
+                    ]
+                    distance_p[previous][mic] = np.array(
+                        [difference_p2(d) for d in deltas]
+                    )
                     if verbose:
-                        print("  translated angle:", angle_trans)
                         print(
-                            "  translated distances:",
-                            np.min(distances_trans),
-                            np.max(distances_trans),
+                            f"  distance estimate from position {previous}:",
+                            self.get_distance_estimate(distance_p[previous][mic]),
                         )
-
-                    for mic, difference_p2 in self.difference_p[previous].items():
-                        deltas = [
-                            self.context.get_delta(angle_trans, d, mic)
-                            for d in distances_trans
-                        ]
-                        distance_p[previous][mic] = np.array(
-                            [difference_p2(d) for d in deltas]
-                        )
-                        if verbose:
-                            print(
-                                "  distance estimate for previous position:",
-                                self.get_distance_estimate(distance_p[previous][mic]),
-                            )
             # multiply over mics and positions to get one final distance distribution
             # for this angle.
             for i, probs_mics in distance_p.items():
                 for mic, probs in probs_mics.items():
-                    # distributions[a] = np.multiply(distributions[a], probs)
-                    if verbose:
-                        print(
-                            f"mic{mic}, position{i}: adding to row {a} (angle {angle}):",
-                            probs,
-                        )
-                    distributions[a] = distributions[a] + probs
-
+                    distributions[a] = np.multiply(distributions[a], probs)
         return distributions

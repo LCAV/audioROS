@@ -9,8 +9,8 @@ import sys, os
 import numpy as np
 from scipy.stats import norm
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "python", "utils")))
-sys.path.append(os.path.join(os.getcwd(), "python", "utils"))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "utils")))
+sys.path.append(os.path.join(os.getcwd(), "utils"))
 from moving_estimators import MovingEstimator
 from geometry import get_deltas_from_global
 
@@ -54,8 +54,11 @@ def do_test_moving(prob_method, n_window):
             probs = norm.pdf(delta_grid, loc=delta, scale=10)
         return probs
 
-    # toy example: we do a diamond, and rotate by 90 degrees at each position.
+    # toy example: the robot does a diamond-shaped movement,
+    # and rotate by -90 degrees at each position.
     # the wall is located at 30cm north from the origin, horizontal.
+    distance_glob = 30
+    angle_glob = 90
 
     poses = [[0, 10, -90], [10, 20, -180], [20, 10, 90], [10, 0, 0]]
     for i, pose in enumerate(poses):
@@ -65,23 +68,29 @@ def do_test_moving(prob_method, n_window):
             probs = get_delta_distribution(distance, angle, mic_idx, prob_method)
             diff_dict[mic_idx] = (delta_grid, probs)
         moving_estimator.add_distributions(diff_dict, pose[:2], pose[2])
-
         # print(f"added {distance, angle} at pose {i}")
+
         if i < n_window - 1:
             continue
 
-        prob_matrix = moving_estimator.get_joint_distribution(verbose=False)
+        # prob_matrix = moving_estimator.get_joint_distribution(verbose=True)
         # print("joint (angles x distances)")
         # print(prob_matrix)
         # print("angles:", moving_estimator.ANGLES_DEG)
         # print("distances:", moving_estimator.DISTANCES_CM)
 
-        prob_distances, prob_angles = moving_estimator.get_distributions(verbose=False)
+        prob_distances, prob_angles = moving_estimator.get_distributions(verbose=True)
         angles = moving_estimator.ANGLES_DEG
         distances = moving_estimator.DISTANCES_CM
 
-        assert distances[np.argmax(prob_distances)] == distance
-        assert angles[np.argmax(prob_angles)] == angle
+        distance_estimate = moving_estimator.get_distance_estimate(prob_distances)
+        angle_estimate = moving_estimator.get_angle_estimate(prob_angles)
+        assert (
+            distance_estimate == distance_glob
+        ), f"distance at position {i}: {distance_estimate} != true {distance_glob}"
+        assert (
+            angle_estimate == angle_glob
+        ), f"angle at position {i}: {angle_estimate} != true {angle_glob}"
 
 
 if __name__ == "__main__":
