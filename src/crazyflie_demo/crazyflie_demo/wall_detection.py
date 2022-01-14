@@ -25,25 +25,29 @@ from inference import Inference, get_approach_angle_fft
 from estimators import DistanceEstimator, AngleEstimator
 from moving_estimators import MovingEstimator
 
+
 # dslice
 FREQ = 3000  # mono frequency signal
 N_MAX = 14  # how many distances to use
 
 # flsice
+PUBLISH_MOVING = True
+PUBLISH_RAW = False
+
 N_WINDOW = 5
-WALL_ANGLE_DEG = 90
+WALL_ANGLE_DEG = 90  # for raw distribution only
 DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 DIST_RANGE_CM = [min(DISTANCES_CM), max(DISTANCES_CM)]
 N_CALIBRATION = 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
-FLYING_HEIGHT_CM = 30
-VELOCITY_CMS = 5 # cm
-TIME_BLIND_FLIGHT = 0 #10 # seconds
 
-# TODO(FD) in the future, this should be done in gateway depending on the window chosen.
-WINDOW_CORRECTION = 0.215579  #  flattop
+# movement stuff
+FLYING_HEIGHT_CM = 30
+VELOCITY_CMS = 5  # linear constant velocity in cm / s
+TIME_BLIND_FLIGHT = 0  # 10 # seconds
+
 
 class state(Enum):
     GROUND = 0
@@ -56,24 +60,29 @@ class state(Enum):
     ABORT = 7
     BLIND_FLIGHT = 8
 
+
 class mode(Enum):
     FSLICE = 0
     DSLICE = 1
 
+
 MODE = mode.FSLICE
 DRONE = False
 
+
 class WallDetection(NodeWithParams):
-    PARAMS_DICT = {
-        "mode": mode.FSLICE.value,
-        "drone": int(DRONE)
-    }
+    PARAMS_DICT = {"mode": mode.FSLICE.value, "drone": int(DRONE)}
 
     def __init__(self):
         super().__init__("wall_detection")
 
         self._action_client = ActionClient(self, CrazyflieCommands, "commands")
-        self._action_server = ActionServer(self, StateMachine, "state_machine", self.server_callback)
+        self._action_client_wall = ActionClient(
+            self, StateMachine, "state_machine_wall"
+        )
+        self._action_server = ActionServer(
+            self, StateMachine, "state_machine", self.server_callback
+        )
 
         self.subscription_signals = self.create_subscription(
             SignalsFreq, "audio/signals_f", self.listener_callback, 10
@@ -83,24 +92,20 @@ class WallDetection(NodeWithParams):
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
         self.dist_raw_synch = TopicSynchronizer(10, self.get_logger())
-        self.subscription_dist_raw = self.create_subscription(
-            Distribution,
-            "results/distribution_raw",
-            self.dist_raw_synch.listener_callback,
-            10,
-        )
-        self.publisher_distribution_raw = self.create_publisher(
-            Distribution, "results/distribution_raw", 10
-        )
-        self.publisher_distribution_moving = self.create_publisher(
-            Distribution, "results/distribution_moving", 10
-        )
+
+        if PUBLISH_RAW:
+            self.publisher_distribution_raw = self.create_publisher(
+                Distribution, "results/distribution_raw", 10
+            )
+        if PUBLISH_MOVING:
+            self.publisher_distribution_moving = self.create_publisher(
+                Distribution, "results/distribution_moving", 10
+            )
 
         # self.start_time = None # use relative time since start
         self.start_time = 0  # use absolute time
 
         # initialize wall detection stuff
-
         self.data_collector = DataCollector()
         self.inf_machine = Inference()
         self.inf_machine.add_geometry(DIST_RANGE_CM, WALL_ANGLE_DEG)
@@ -113,12 +118,11 @@ class WallDetection(NodeWithParams):
         self.new_sample_to_treat = False
         self.distributions = {}
 
-        self.state = state.GROUND
-        self.state_by_server = None 
+        self.state = State.GROUND
+        self.state_by_server = None
 
         # movement stuff
         self.velocity_ms = VELOCITY_CMS * 1e-2
-
 
     def add_to_calib(self, magnitudes):
         if self.calibration_count == 0:
@@ -129,32 +133,38 @@ class WallDetection(NodeWithParams):
                 [self.calibration_data, magnitudes[:, :, None]], axis=2
             )
             self.calibration_count += 1
-            self.get_logger().info(f"Have added {self.calibration_count} frames to calib")
+            self.get_logger().info(
+                f"Have added {self.calibration_count} frames to calib"
+            )
 
     def calibrate(self, magnitudes):
         # sometimes there can be a sample missing from the end of the signal...
         if len(self.calibration) != len(magnitudes):
             self.get_logger().warn("length mismatch! {len(magnitudes)}")
-            calibration_here = self.calibration[:, :len(magnitudes)]
+            calibration_here = self.calibration[:, : len(magnitudes)]
         else:
             calibration_here = self.calibration
         valid_freqs = np.all(calibration_here > 0, axis=0)
         return magnitudes[:, valid_freqs] / calibration_here[:, valid_freqs]
 
-    def get_distance_distribution(self, magnitudes_calib, freqs):
-        #self.get_logger().info(f"Adding to inf_machine: {magnitudes_calib.shape}, {freqs.shape}")
+    def get_raw_distributions(self, magnitudes_calib, freqs):
+        diff_dict = {}
         self.inf_machine.add_data(
             magnitudes_calib, freqs,  # 4 x 32
         )
-        distance_estimator = DistanceEstimator()
         for mic_i in range(magnitudes_calib.shape[0]):
             __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
-            distance_estimator.add_distribution(diff * 1e-2, prob_mic, mic_i)
+            diff_dict[mic_i] = (diff, prob_mic)
+        return diff_dict
 
+    def get_distance_distribution(diff_dict):
+        distance_estimator = DistanceEstimator()
+        for mic_i, (diff, prob_mic) in diff_dict.items():
+            distance_estimator.add_distribution(diff * 1e-2, prob_mic, mic_i)
         __, prob = distance_estimator.get_distance_distribution(
             distances_m=DISTANCES_CM * 1e-2, azimuth_deg=WALL_ANGLE_DEG
         )
-        return DISTANCES_CM, np.array(prob)
+        return DISTANCES_CM, prob
 
     def get_angle_distribution(self, dslices, resolve_side=False):
         angle_estimator = AngleEstimator()
@@ -182,65 +192,74 @@ class WallDetection(NodeWithParams):
         return angles, prob
 
     def listener_callback(self, msg_signals):
-        if not self.state in [state.WAIT_DISTANCE, state.WAIT_ANGLE, state.WAIT_CALIB]:
+        if not self.state in [State.WAIT_DISTANCE, State.WAIT_ANGLE, State.WAIT_CALIB]:
             self.get_logger().warn(f"ignoring signal because state is {self.state}")
             return
 
         msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
         if msg_pose is not None:
-            self.get_logger().warn(f"treating new signal at time {msg_signals.timestamp}")
+            self.get_logger().warn(
+                f"treating new signal at time {msg_signals.timestamp}"
+            )
             timestamp = self.get_timestamp()
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
-            magnitudes = np.abs(signals_f).T / WINDOW_CORRECTION  # 4 x 20
+            magnitudes = np.abs(signals_f).T  # 4 x 20
 
-            if self.state == state.WAIT_CALIB:
+            if self.state == State.WAIT_CALIB:
                 self.add_to_calib(magnitudes)
                 return None
-            elif self.state == state.WAIT_DISTANCE:
+            elif self.state == State.WAIT_DISTANCE:
                 magnitudes_calib = self.calibrate(magnitudes)
                 assert magnitudes.shape == magnitudes_calib.shape
-                distances_cm, probabilities = self.get_distance_distribution(magnitudes_calib, freqs)
 
-                msg = create_distribution_message(distances_cm, probabilities, timestamp)
-                self.publisher_distribution_raw.publish(msg)
+                diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
 
-                # combine multiple
-                self.moving_estimator.add_distributions(
-                    dist_cm=distances_cm,
-                    dist_p=probabilities,
-                    position_cm=r_world*1e2,
-                    rot_deg=yaw,
-                )
+                if PUBLISH_RAW:
+                    distances_cm, probabilities = self.get_distance_distribution(
+                        diff_dict
+                    )
+                    msg = create_distribution_message(
+                        distances_cm, probabilities, timestamp
+                    )
+                    self.publisher_distribution_raw.publish(msg)
+
+                if PUBLISH_MOVING:
+                    self.moving_estimator.add_distributions(
+                        diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
+                    )
+                    (
+                        probabilities,
+                        probabilities_angle,
+                    ) = self.moving_estimator.get_distance_distribution()
+                    distances_cm = self.moving_estimator.DISTANCES_CM
+                    msg = create_distribution_message(
+                        distances_cm, probabilities, timestamp
+                    )
+                    self.publisher_distribution_moving.publish(msg)
+
                 if not self.moving_estimator.enough_measurements():
                     return None
 
-                __, prob_moving = self.moving_estimator.get_distance_distribution(
-                    distances_cm=distances_cm
-                )
-                msg = create_distribution_message(
-                    distances_cm, np.array(prob_moving), timestamp
-                )
-                self.publisher_distribution_moving.publish(msg)
                 self.get_logger().info("Published moving-average distribution")
 
                 # TODO: can delete below if we work with subscribers instead
                 self.new_sample_to_treat = True
                 if np.any(prob_moving > 0):
                     self.distributions["wall_distance"] = (
-                        DISTANCES_CM,
-                        prob_moving,
+                        distances_cm,
+                        probabilities,
                         timestamp,
                     )
                 else:
                     self.get_logger().warn(f"not adding cause all-zero")
 
-                distance_estimate = DISTANCES_CM[np.argmax(prob_moving)]
+                distance_estimate = distances_cm[np.argmax(probabilities)]
                 self.get_logger().info(
                     f"Current distance estimate: {distance_estimate:.1f}cm"
                 )
-            elif self.state == state.WAIT_ANGLE:
+            elif self.state == State.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
                     n_max=N_MAX, verbose=False
                 )
@@ -256,7 +275,7 @@ class WallDetection(NodeWithParams):
 
                 angles, prob = self.get_angle_distribution(dslices)
 
-                # ANGLES_DEG is between 0 and 90, angles between 0 and 180. 
+                # ANGLES_DEG is between 0 and 90, angles between 0 and 180.
                 msg = create_distribution_message(
                     angle_estimator.ANGLES_DEG, np.array(prob), timestamp
                 )
@@ -264,11 +283,13 @@ class WallDetection(NodeWithParams):
                 self.publisher_distribution_raw.publish(msg)
 
                 angle_estimate = angles[np.argmax(prob)]
-                self.get_logger().warn(f"Current angle estimate: {angle_estimate:.1f}deg, probability:{np.max(prob)}")
+                self.get_logger().warn(
+                    f"Current angle estimate: {angle_estimate:.1f}deg, probability:{np.max(prob)}"
+                )
 
     def server_callback(self, goal_handle):
         msg = goal_handle.request
-        # find which enum the state corresponds to 
+        # find which enum the state corresponds to
         self.state_by_server = state(msg.state)
         self.get_logger().info(
             f"Action received: {msg.state} which corresponds to {self.state_by_server}"
@@ -320,108 +341,112 @@ class WallDetection(NodeWithParams):
             rclpy.spin_once(self)
 
     def execute_state_machine(self):
-        if self.state == state.GROUND:
+        if self.state == State.GROUND:
             self.take_off()
-            return state.HOVER
-            #self.get_logger().warn("abort")
-            #return state.ABORT
+            return State.HOVER
+            # self.get_logger().warn("abort")
+            # return State.ABORT
 
-        elif self.state == state.HOVER:
+        elif self.state == State.HOVER:
             if self.current_params["mode"] == mode.FSLICE.value:
                 self.set_buzzer(1)
                 self.get_logger().warn("calibrating")
                 self.calibration_count = 0
-                return state.WAIT_CALIB
+                return State.WAIT_CALIB
 
             elif self.current_params["mode"] == mode.DSLICE.value:
                 self.set_buzzer(3000)
-                return state.WAIT_ANGLE
+                return State.WAIT_ANGLE
             else:
                 raise ValueError(self.current_params["mode"])
 
-
-        elif self.state == state.WAIT_ANGLE:
+        elif self.state == State.WAIT_ANGLE:
             self.move_linear()
-            #if curr_dist is not None:
+            # if curr_dist is not None:
             timestamp = self.get_timestamp()
             curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
             if curr_dist_message is not None:
-                #angles, prob, timestamp = curr_dist
+                # angles, prob, timestamp = curr_dist
                 angles = curr_dist_message.values
                 prob = curr_dist_message.probabilities
                 angle_estimate = angles[np.argmax(prob)]
                 self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
 
-                #TODO(FD): implement stopping criterion
-                # return state.AVOID_ANGLE
-            return state.WAIT_ANGLE
+                # TODO(FD): implement stopping criterion
+                # return State.AVOID_ANGLE
+            return State.WAIT_ANGLE
 
-        elif self.state == state.WAIT_CALIB:
+        elif self.state == State.WAIT_CALIB:
             # wait until calibration is done
             if self.calibration_count < N_CALIBRATION:
                 rclpy.spin_once(self)
-                return state.WAIT_CALIB
+                return State.WAIT_CALIB
 
             self.calibration = np.median(self.calibration_data, axis=2)
             self.get_logger().warn("done calibrating")
-            return state.WAIT_DISTANCE
+            return State.WAIT_DISTANCE
 
-        elif self.state == state.WAIT_DISTANCE:
+        elif self.state == State.WAIT_DISTANCE:
             self.move_linear()
 
             if not self.new_sample_to_treat:
-                return state.WAIT_DISTANCE
+                return State.WAIT_DISTANCE
             self.new_sample_to_treat = False
 
-            timestamp = self.get_timestamp()
-            # curr_dist = self.distributions.get("wall_distance", None)
-            curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
-            if curr_dist_message is not None:
-                dist = curr_dist_message.values
-                prob = curr_dist_message.probabilities
-                timestamp = curr_dist_message.timestamp
-                distance_estimate = dist[np.argmax(prob)]
-                if distance_estimate < DISTANCE_THRESHOLD_CM:
-                    self.get_logger().warn(
-                        f"WALL AT {distance_estimate}, TURNING AROUND!"
-                    )
-                    return state.AVOID_DISTANCE
-                else:
-                    self.get_logger().info(f"wall at {distance_estimate}, continuing.")
-            else:
-                self.get_logger().info("no distribution yet")
-            return state.WAIT_DISTANCE
+            future = self.ask_about_wall()
+            self.get_logger().info(future.message)
+            return State[future.result().flag]
 
-        elif self.state == state.AVOID_DISTANCE:
+            # return State.WAIT_DISTANCE
+            # timestamp = self.get_timestamp()
+            # curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
+            # if curr_dist_message is not None:
+            #    dist = curr_dist_message.values
+            #    prob = curr_dist_message.probabilities
+            #    timestamp = curr_dist_message.timestamp
+            #    distance_estimate = dist[np.argmax(prob)]
+            #    if distance_estimate < DISTANCE_THRESHOLD_CM:
+            #        self.get_logger().warn(
+            #            f"WALL AT {distance_estimate}, TURNING AROUND!"
+            #        )
+            #        return State.AVOID_DISTANCE
+            #    else:
+            #        self.get_logger().info(f"wall at {distance_estimate}, continuing.")
+            # else:
+            #    self.get_logger().info("no distribution yet")
+
+        elif self.state == State.AVOID_DISTANCE:
             # invert velocity
             self.velocity_ms = -self.velocity_ms
 
             # start a few seconds of blind flight to not retrigger
             self.get_logger().warn("start blind flight")
             self.start_blind = time.time()
-            return state.BLIND_FLIGHT
+            return State.BLIND_FLIGHT
 
-        elif self.state == state.BLIND_FLIGHT:
+        elif self.state == State.BLIND_FLIGHT:
             self.move_linear()
             if time.time() - self.start_blind < TIME_BLIND_FLIGHT:
-                return state.BLIND_FLIGHT
+                return State.BLIND_FLIGHT
             self.get_logger().warn("stop blind flight")
-            return state.WAIT_DISTANCE
+            return State.WAIT_DISTANCE
 
-        elif self.state == state.AVOID_ANGLE:
+        elif self.state == State.AVOID_ANGLE:
             self.velocity_ms = -self.velocity_ms
-            return state.WAIT_ANGLE
+            return State.WAIT_ANGLE
         else:
             raise ValueError(self.state)
 
     def main(self):
         self.get_logger().info("Starting main")
-        while self.state != state.ABORT:
+        while self.state != State.ABORT:
             self.state = self.execute_state_machine()
 
             # check if in the meantime the server was called
-            if self.state_by_server is not None: 
-                self.get_logger().info(f"Overwriting {self.state} with {self.state_by_server}")
+            if self.state_by_server is not None:
+                self.get_logger().info(
+                    f"Overwriting {self.state} with {self.state_by_server}"
+                )
                 self.state = self.state_by_server
                 self.state_by_server = None
 
@@ -448,17 +473,30 @@ class WallDetection(NodeWithParams):
         goal_msg.timestamp = timestamp
 
         if self.current_params["drone"] > 0:
-            self._action_client.wait_for_server() #timeout_sec=0.5)
+            self._action_client.wait_for_server()  # timeout_sec=0.5)
 
         future = self._action_client.send_goal_async(goal_msg)
         rclpy.spin_until_future_complete(self, future)
         return future
 
-        #self._send_goal_future = self._action_client.send_goal_async(
+        # self._send_goal_future = self._action_client.send_goal_async(
         #    goal_msg, feedback_callback=self.feedback_callback
-        #)
-        #self._send_goal_future.add_done_callback(self.goal_response_callback)
-        #return self._send_goal_future
+        # )
+        # self._send_goal_future.add_done_callback(self.goal_response_callback)
+        # return self._send_goal_future
+
+    def ask_about_wall(self):
+        goal_msg = StateMachine.Goal()
+        goal_msg.state = self.state.value
+
+        future = self._action_client_wall.send_goal_async(
+            goal_msg, feedback_callback=self.feedback_callback
+        )
+        rclpy.spin_until_future_complete(self, future)
+        return future
+
+    def feedback_callback(self, feedback):
+        self.get_logger().info(feedback.message)
 
     def goal_response_callback(self, future):
         goal_handle = future.result()
@@ -484,11 +522,12 @@ def main(args=None):
     action_client = WallDetection()
     try:
         action_client.main()
-    except Exception as e :
+    except Exception as e:
         print(e)
         action_client.set_buzzer(0)
         action_client.land()
         rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()

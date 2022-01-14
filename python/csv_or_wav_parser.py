@@ -27,6 +27,7 @@ if PLATFORM == "crazyflie":
 else:
     from epuck_description_py.parameters import N_BUFFER
 
+
 def extract_unique(params_list):
     params = {}
     for p in params_list:
@@ -68,7 +69,7 @@ def clean_stft(stft, max_value=N_BUFFER):
 
 
 def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
-    from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
+    from audio_stack.parameters import WINDOW_NAMES, WINDOW_CORRECTION
     from utils.dataset_parameters import kwargs_datasets
 
     params_all = DEFAULT_DICT
@@ -108,7 +109,7 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
                 df = read_df_from_wav(
                     wav_fname,
                     n_buffer=N_BUFFER,
-                    method_window=WINDOW_TYPES[params["window_type"]],
+                    method_window=WINDOW_NAMES[params["window_type"]],
                 )
         except FileNotFoundError as e:
             if verbose:
@@ -120,7 +121,7 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
                 print("error, signals_f is empty. skipping...")
             continue
 
-        df.signals_f /= WINDOW_CORRECTION[WINDOW_TYPES[params["window_type"]]]
+        df.signals_f /= WINDOW_CORRECTION[params["window_type"]]
 
         stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
@@ -139,8 +140,9 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
 
     return df_total
 
+
 def parse_fslice_experiments(exp_name, verbose=False):
-    from audio_stack.parameters import WINDOW_TYPES, WINDOW_CORRECTION
+    from audio_stack.parameters import WINDOW_CORRECTION
 
     path_root = f"../datasets/{exp_name}/csv_files/"
     filenames = os.listdir(path_root)
@@ -149,7 +151,7 @@ def parse_fslice_experiments(exp_name, verbose=False):
     params["motors"] = "live"
     params["bin_selection"] = 5
     params["appendix"] = filenames
-    params["window_type"] = 2 # flattop
+    params["window_type"] = 2  # flattop
     params["exp_name"] = exp_name
 
     df_total = pd.DataFrame(
@@ -159,13 +161,11 @@ def parse_fslice_experiments(exp_name, verbose=False):
 
     for filename in filenames:
         print("treating", filename)
-        params["appendix"] = filename.strip('.csv')
+        params["appendix"] = filename.strip(".csv")
         positions = None
         try:
-            df, df_pos = read_df(filename=path_root+filename)
-            add_pose_to_df(
-                df, df_pos
-            )  # synchronize position and audio measurements
+            df, df_pos = read_df(filename=path_root + filename)
+            add_pose_to_df(df, df_pos)  # synchronize position and audio measurements
             positions = get_positions_absolute(df)  # get positions as matrix
         except FileNotFoundError as e:
             if verbose:
@@ -177,7 +177,7 @@ def parse_fslice_experiments(exp_name, verbose=False):
                 print("error, signals_f is empty. skipping...")
             continue
 
-        df.signals_f /= WINDOW_CORRECTION[WINDOW_TYPES[params["window_type"]]]
+        df.signals_f /= WINDOW_CORRECTION[params["window_type"]]
 
         stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
@@ -196,7 +196,7 @@ def parse_fslice_experiments(exp_name, verbose=False):
     return df_total
 
 
-#exp_names = [
+# exp_names = [
 #    "2021_10_12_flying",
 #    # "2021_10_12_linear",
 #    # "2021_10_12_hover",
@@ -212,13 +212,15 @@ def parse_fslice_experiments(exp_name, verbose=False):
 #    # "2021_07_08_stepper_slow",
 #    # "2021_07_08_stepper_fast",
 #    # "2021_04_30_stepper",
-#]
+# ]
 if __name__ == "__main__":
     import os
     from utils.custom_argparser import exp_parser, check_platform
 
     parser = exp_parser(description=__doc__)
-    parser.add_argument('--demo', action='store_true', help='Use simplified parsing for demo')
+    parser.add_argument(
+        "--demo", action="store_true", help="Use simplified parsing for demo"
+    )
     args = parser.parse_args()
 
     check_platform(args)

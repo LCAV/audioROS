@@ -8,12 +8,13 @@ import time
 import numpy as np
 from scipy.interpolate import interp1d
 
-from utils.geometry import Context
+from .geometry import Context
 
-METHOD = "sum" # method used to combine probability distributions
+METHOD = "sum"  # method used to combine probability distributions
 EPS = 1e-30  # smallest value for probability distribution
 
-N_INTEGRAL = 10 # number of points used to approximate integral.
+N_INTEGRAL = 10  # number of points used to approximate integral.
+
 
 def get_estimate(values, probs):
     return values[np.argmax(probs)]
@@ -26,27 +27,29 @@ def get_window(points, i):
     """
     p = points[i]
     if i > 0:
-        point_min = p - (points[i] - points[i-1]) / 2
+        point_min = p - (points[i] - points[i - 1]) / 2
     else:
-        point_min = p - (points[i+1] - points[i]) / 2
+        point_min = p - (points[i + 1] - points[i]) / 2
 
     if i < len(points) - 1:
-        point_max = p + (points[i+1] - points[i]) / 2
+        point_max = p + (points[i + 1] - points[i]) / 2
     else:
-        point_max = p + (points[i] - points[i-1]) / 2
+        point_max = p + (points[i] - points[i - 1]) / 2
     return point_min, point_max
+
 
 def extract_probs(distribution, method):
     if method == "sum":
         probs = np.sum(distribution, axis=0)
-    elif method == "product": 
+    elif method == "product":
         probs = np.product(distribution, axis=0)
     probs /= np.sum(probs)
     return probs
 
+
 class DistanceEstimator(object):
     DISTANCES_M = np.arange(7, 101) * 1e-2
-    DISTANCES_M_PRIOR = np.arange(7, 101, step=10) * 1e-2 
+    DISTANCES_M_PRIOR = np.arange(7, 101, step=10) * 1e-2
     AZIMUTHS_DEG = np.arange(-180, 180, step=2)
     AZIMUTHS_DEG_PRIOR = np.arange(-180, 180, step=10)
 
@@ -81,7 +84,7 @@ class DistanceEstimator(object):
             distances_m = self.DISTANCES_M
 
         fill_count = 0
-        distribution = np.empty((len(azimuths_deg)*len(self.data), len(distances_m)))
+        distribution = np.empty((len(azimuths_deg) * len(self.data), len(distances_m)))
 
         # go over all data saved.
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
@@ -100,13 +103,19 @@ class DistanceEstimator(object):
                 probabilities = np.empty(len(distances_m))
                 for i in range(len(distances_m)):
                     distance_min, distance_max = get_window(distances_m, i)
-                    delta_min, delta_max = self.context.get_delta(azimuth_deg, np.array([distance_min, distance_max]) * 1e2, mic_idx=mic_idx)
-                    delta_min *= 1e-2 # convert to meteres
+                    delta_min, delta_max = self.context.get_delta(
+                        azimuth_deg,
+                        np.array([distance_min, distance_max]) * 1e2,
+                        mic_idx=mic_idx,
+                    )
+                    delta_min *= 1e-2  # convert to meteres
                     delta_max *= 1e-2
 
                     # accumulate probabilities over delta that will be mapped into the integration area in terms in distances.
                     ns = np.arange(N_INTEGRAL) / N_INTEGRAL
-                    probabilities[i] = np.sum(deltas_interp((1 - ns) * delta_min + ns * delta_max))
+                    probabilities[i] = np.sum(
+                        deltas_interp((1 - ns) * delta_min + ns * delta_max)
+                    )
                 distribution[fill_count, :] = probabilities
                 fill_count += 1
         return distances_m, extract_probs(distribution, method)
@@ -127,7 +136,7 @@ class DistanceEstimator(object):
             azimuths_deg = self.AZIMUTHS_DEG
 
         fill_count = 0
-        distribution = np.empty((len(distances_m)*len(self.data), len(azimuths_deg)))
+        distribution = np.empty((len(distances_m) * len(self.data), len(azimuths_deg)))
 
         for mic_idx, (deltas_m, delta_probs) in self.data.items():
             if (chosen_mics is not None) and (mic_idx not in chosen_mics):
@@ -146,14 +155,20 @@ class DistanceEstimator(object):
                     # calculate integration area, considering border effects
                     azimuth_min, azimuth_max = get_window(azimuths_deg, i)
 
-                    delta_min = self.context.get_delta(azimuth_min, distance_estimate_m * 1e2, mic_idx=mic_idx)
-                    delta_max = self.context.get_delta(azimuth_min, distance_estimate_m * 1e2, mic_idx=mic_idx)
-                    delta_min *= 1e-2 # convert to meteres
+                    delta_min = self.context.get_delta(
+                        azimuth_min, distance_estimate_m * 1e2, mic_idx=mic_idx
+                    )
+                    delta_max = self.context.get_delta(
+                        azimuth_min, distance_estimate_m * 1e2, mic_idx=mic_idx
+                    )
+                    delta_min *= 1e-2  # convert to meteres
                     delta_max *= 1e-2
 
                     # accumulate probabilities over delta that will be mapped into the integration area in terms in distances.
                     ns = np.arange(N_INTEGRAL) / N_INTEGRAL
-                    probabilities[i] = np.sum(deltas_interp((1 - ns) * delta_min + ns * delta_max))
+                    probabilities[i] = np.sum(
+                        deltas_interp((1 - ns) * delta_min + ns * delta_max)
+                    )
 
                 distribution[fill_count, :] = probabilities
                 fill_count += 1

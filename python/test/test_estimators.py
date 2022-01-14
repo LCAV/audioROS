@@ -9,10 +9,9 @@ import sys, os
 import numpy as np
 from scipy.stats import norm
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "utils")))
-sys.path.append(os.path.join(os.getcwd(), "utils"))
-from moving_estimators import MovingEstimator
-from geometry import get_deltas_from_global
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../")))
+from utils.moving_estimators import MovingEstimator
+from utils.geometry import get_deltas_from_global
 
 MIC_IDX = [0, 1]
 

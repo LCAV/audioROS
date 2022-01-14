@@ -6,9 +6,8 @@ test_geometry.py: Test geometrical conversions from distances to path difference
 import numpy as np
 import sys, os
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "python")))
-sys.path.append(os.path.join(os.getcwd(), "python"))
-from geometry import *
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../")))
+from utils.geometry import *
 
 EPS = 1e-10
 

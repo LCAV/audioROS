@@ -113,7 +113,7 @@ def plot_pose2_on_axes(
     axis_length: float = 0.1,
     cov_scale: float = 0.1,
     covariance: np.ndarray = None,
-    ls = "-"
+    ls="-",
 ) -> None:
     """
     Plot a 2D pose on given axis `axes` with given `axis_length`.
@@ -133,11 +133,11 @@ def plot_pose2_on_axes(
     # draw the camera axes
     x_axis = origin + gRp[:, 0] * axis_length
     line = np.append(origin[np.newaxis], x_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], "r"+ls)
+    axes.plot(line[:, 0], line[:, 1], "r" + ls)
 
     y_axis = origin + gRp[:, 1] * axis_length
     line = np.append(origin[np.newaxis], y_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], "g"+ls)
+    axes.plot(line[:, 0], line[:, 1], "g" + ls)
 
     if covariance is not None:
         pPp = covariance[0:2, 0:2]
@@ -162,7 +162,7 @@ def plot_pose2(
     cov_scale: float = 0.1,
     covariance: np.ndarray = None,
     axis_labels=("X axis", "Y axis", "Z axis"),
-    ls = "-"
+    ls="-",
 ) -> plt.Figure:
     """
     Plot a 2D pose on given figure with given `axis_length`.
@@ -179,7 +179,12 @@ def plot_pose2(
     fig = plt.figure(fignum)
     axes = fig.gca()
     plot_pose2_on_axes(
-        axes, pose, axis_length=axis_length, cov_scale=cov_scale, covariance=covariance, ls=ls
+        axes,
+        pose,
+        axis_length=axis_length,
+        cov_scale=cov_scale,
+        covariance=covariance,
+        ls=ls,
     )
     axes.set_xlabel(axis_labels[0])
     axes.set_ylabel(axis_labels[1])
@@ -290,18 +295,22 @@ def plot_3d_points(
             continue
 
     fig = plt.figure(fignum)
-    #fig.suptitle(title)
+    # fig.suptitle(title)
     fig.canvas.set_window_title(title.lower())
 
 
 def plot_plane3_on_axes(axes, plane, ls="-", axis_length=0.2):
-    wall_vector = -plane.normal().point3() * plane.distance()
-    origin = wall_vector * (1-axis_length)
+    wall_origin = -plane.normal().point3() * plane.distance()
+    wall_end = wall_origin * (1 - axis_length)
     axes.plot(
-        [origin[0], wall_vector[0]], [origin[1], wall_vector[1]], [origin[2], wall_vector[2]], color="k", ls=ls
+        [wall_origin[0], wall_end[0]],
+        [wall_origin[1], wall_end[1]],
+        [wall_origin[2], wall_end[2]],
+        color="k",
+        ls=ls,
     )
-    axes.scatter(*origin, color="k", marker='x')
-    axes.scatter(*wall_vector, color="k", marker='o')
+    axes.scatter(*wall_origin, color="k", marker="o")
+    axes.scatter(*wall_end, color="k", marker=">")
 
 
 def plot_pose3_on_axes(axes, pose, axis_length=0.1, P=None, cov_scale=1, ls="-"):
@@ -321,15 +330,15 @@ def plot_pose3_on_axes(axes, pose, axis_length=0.1, P=None, cov_scale=1, ls="-")
     # draw the camera axes
     x_axis = origin + gRp[:, 0] * axis_length
     line = np.append(origin[np.newaxis], x_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], line[:, 2], "r"+ls)
+    axes.plot(line[:, 0], line[:, 1], line[:, 2], "r" + ls)
 
     y_axis = origin + gRp[:, 1] * axis_length
     line = np.append(origin[np.newaxis], y_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], line[:, 2], "g"+ls)
+    axes.plot(line[:, 0], line[:, 1], line[:, 2], "g" + ls)
 
     z_axis = origin + gRp[:, 2] * axis_length
     line = np.append(origin[np.newaxis], z_axis[np.newaxis], axis=0)
-    axes.plot(line[:, 0], line[:, 1], line[:, 2], "b"+ls)
+    axes.plot(line[:, 0], line[:, 1], line[:, 2], "b" + ls)
 
     # plot the covariance
     if P is not None:
@@ -385,7 +394,7 @@ def plot_trajectory(
     marginals: Marginals = None,
     title: str = "Plot Trajectory",
     axis_labels: Iterable[str] = ("X axis", "Y axis", "Z axis"),
-    ls="-"
+    ls="-",
 ) -> None:
     """
     Plot a complete 2D/3D trajectory using poses in `values`.
@@ -421,7 +430,7 @@ def plot_trajectory(
             covariance=covariance,
             axis_length=axis_length,
             cov_scale=cov_scale,
-            ls=ls
+            ls=ls,
         )
 
     # Then 3D poses, if any
@@ -434,17 +443,21 @@ def plot_trajectory(
             covariance = None
 
         plot_pose3_on_axes(
-            axes, pose, P=covariance, axis_length=axis_length, cov_scale=cov_scale, ls=ls
+            axes,
+            pose,
+            P=covariance,
+            axis_length=axis_length,
+            cov_scale=cov_scale,
+            ls=ls,
         )
 
     # Then planes, if any
     planes = gtsam.utilities.allOrientedPlane3s(values)
     for key in planes.keys():
         plane = planes.atOrientedPlane3(key)
-        #plane = plane.transform(poses.atPose3(poses.keys()[0]))
         plot_plane3_on_axes(axes, plane, ls=ls, axis_length=axis_length)
 
-    #fig.suptitle(title)
+    # fig.suptitle(title)
     fig.canvas.set_window_title(title.lower())
 
 
@@ -489,7 +502,10 @@ def plot_incremental_trajectory(
     # Pause for a fixed amount of seconds
     plt.pause(time_interval)
 
-def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side=True, ls="-"):
+
+def plot_projections(
+    estimate, axis_length=0.2, perspective=True, top=True, side=True, ls="-"
+):
     if perspective:
         fig = plt.figure(0)
         fig.set_size_inches(10, 10)
@@ -501,7 +517,7 @@ def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side
         fig.set_size_inches(10, 10)
         plot_trajectory(1, estimate, axis_length=axis_length, ls=ls)
         set_axes_equal(1)
-        plt.gca().view_init(elev=0., azim=0)
+        plt.gca().view_init(elev=0.0, azim=0)
         plt.title("side view", y=0.9)
 
     if top:
@@ -509,5 +525,5 @@ def plot_projections(estimate, axis_length=0.2, perspective=True, top=True, side
         fig.set_size_inches(10, 10)
         plot_trajectory(2, estimate, axis_length=axis_length, ls=ls)
         set_axes_equal(2)
-        plt.gca().view_init(elev=90., azim=0) # x down, y to right, looking from top
+        plt.gca().view_init(elev=90.0, azim=0)  # x down, y to right, looking from top
         plt.title("top view", y=0.9)

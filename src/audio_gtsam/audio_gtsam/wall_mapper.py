@@ -7,13 +7,15 @@ wall_mapper.py:
 
 import gtsam
 
-X = gtsam.symbol_shorthand.X 
-P = gtsam.symbol_shorthand.P 
+X = gtsam.symbol_shorthand.X
+P = gtsam.symbol_shorthand.P
+
 
 class WallMapper(NodeWithParams):
     """ Node to map out the walls of a room using audio signals  """
+
     PARAMS_DICT = {}
-    
+
     def __init__(self):
         super().__init__("wall_mapper")
 
@@ -26,14 +28,18 @@ class WallMapper(NodeWithParams):
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
 
+        self._action_server = ActionServer(
+            self, StateMachine, "state_machine", self.server_callback
+        )
+
         # initialize ISAM
         self.wall_backend = WallBackend()
 
     def listener_callback_dist(self, msg):
-        # extract the current probability distribution 
+        # extract the current probability distribution
         msg_pose = self.pose_synch.get_latest_message(msg.timestamp)
         if msg_pose is None:
-            return 
+            return
 
         r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
         # add pose factor
@@ -42,11 +48,38 @@ class WallMapper(NodeWithParams):
         # add plane factor
         distances = msg_dist.values
         probs = msg_dist.probabilities
-        distance = distances[np.argmax(probs)]
-        # TODO(FD): remove ground truth angle estimate
-        self.wall_backend.add_plane(distance, azimuth=np.pi/2, elevation=0)
 
-        planes, poses = self.wall_backend.get_results()
+        self.wall_backend.add_plane_from_distances(distances, probs)
+
+    def server_callback(self, goal_handle):
+        from crazyflie_demo.wall_detection import State
+
+        msg = goal_handle.request
+        # find which enum the state corresponds to
+        state_by_server = State(msg.state)
+        self.get_logger().info(
+            f"Action received: {msg.state} which corresponds to {self.state_by_server}"
+        )
+        result = StateMachine.Result()
+        feedback = StateMachine.Feedback()
+        if state_by_server == State.WAIT_DISTANCE:
+            if self.wall_backend.check_wall():
+                feedback.message = "Wall in moving direction!"
+                result.flag = State.AVOID_DISTANCE
+            else:
+                feedback.message = "No wall detected."
+                result.flag = State.WAIT_DISTANCE
+            result.message = f"WallMapper: change state based on distance-check"
+        else:
+            result.flag = 0
+            result.message = (
+                f"WallMapper has nothing to do when state is {state_by_server}"
+            )
+
+        goal_handle.publish_feedback(feedback)
+        goal_handle.succeed()
+        return result
+
 
 def main(args=None):
     rclpy.init(args=args)

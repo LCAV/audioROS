@@ -25,6 +25,7 @@ from audio_interfaces_py.messages import (
     create_ground_truth_message,
 )
 from audio_interfaces.action import CrazyflieCommands
+from audio_stack.parameters import WINDOW_CORRECTION
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
 from crazyflie_description_py.parameters import (
@@ -130,19 +131,19 @@ class Gateway(Node):
     def commands_callback(self, goal_handle):
         msg = goal_handle.request
         self.get_logger().info(
-                f"Command received at time {msg.timestamp}, {msg.command_name}, {msg.command_value:.2f}."
+            f"Command received at time {msg.timestamp}, {msg.command_name}, {msg.command_value:.2f}."
         )
         found_command = self.send_command(msg.command_name, msg.command_value)
 
         result = CrazyflieCommands.Result()
-        #feedback_msg = CrazyflieCommands.Feedback()
+        # feedback_msg = CrazyflieCommands.Feedback()
         if not found_command:
             self.get_logger().warn(f"Unknown command!")
-            #feedback_msg.message = f"Unknown command: {msg.command_name}!"
-            #feedback_msg.value = 0.0
-            #goal_handle.publish_feedback(feedback_msg)
-            #result.message = "Failure"
-            #return result
+            # feedback_msg.message = f"Unknown command: {msg.command_name}!"
+            # feedback_msg.value = 0.0
+            # goal_handle.publish_feedback(feedback_msg)
+            # result.message = "Failure"
+            # return result
 
         result.message = "Success"
         result.value = 1.0
@@ -234,12 +235,16 @@ class Gateway(Node):
             signals_f[i].real = signals_f_vect[i :: N_MICS * 2]
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
 
-        abs_signals_f = np.abs(signals_f)
-        if np.any(abs_signals_f > N_BUFFER):
-            self.get_logger().warn("Possibly invalid audio:")
-            xx, yy = np.where(abs_signals_f > N_BUFFER)
-            self.get_logger().warn(f"at indices: {xx}, {yy}")
-            self.get_logger().warn(f"values: {abs_signals_f[xx, yy]}")
+        window_type = self.get_parameter("audio.window_type").value
+        signals_f /= WINDOW_CORRECTION[window_type]
+
+        if DEBUG:
+            abs_signals_f = np.abs(signals_f)
+            if np.any(abs_signals_f > N_BUFFER):
+                self.get_logger().warn("Possibly invalid audio:")
+                xx, yy = np.where(abs_signals_f > N_BUFFER)
+                self.get_logger().warn(f"at indices: {xx}, {yy}")
+                self.get_logger().warn(f"values: {abs_signals_f[xx, yy]}")
 
         mic_positions_arr = np.array(MIC_POSITIONS)
         msg = create_signals_freq_message(
@@ -253,7 +258,6 @@ class Gateway(Node):
         self.publisher_signals.publish(msg)
 
         self.get_logger().info(
-            # f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0][[0, 1, 2, -1]]} and timestamp {msg.audio_timestamp}"
             f"{msg.timestamp}: Published audio data with fbins {fbins[fbins>0]} and timestamp {msg.audio_timestamp}"
         )
 
@@ -287,12 +291,11 @@ class Gateway(Node):
         self.get_logger().debug(f"{msg_pose_raw.timestamp}: Published motion data.")
 
     def set_params(self, params):
-        """ Overwrite the function set_params by NodeWithParams. 
+        """ Instead of using set_params by NodeWithParams. 
         We need this so we commute new parameters directly to the Crazyflie drone.
         """
         for param in params:
-            # we need this in case this parameter
-            # was not set yet at startup.
+            # we need this in case this parameter was not set yet at startup.
             # in that case we use the default values.
             if param.type_ == param.Type.NOT_SET:
                 param = rclpy.parameter.Parameter(
@@ -318,7 +321,7 @@ class Gateway(Node):
                 self.get_logger().info(f"sending hover command...")
                 success = self.reader_crtp.send_hover_command(param_value)
                 self.get_logger().warn(f"...done.")
-               	if not success:
+                if not success:
                     self.get_logger().warn(f"no battery, or not monitoring.")
             return True
         elif param_name == "turn_angle":
@@ -337,7 +340,7 @@ class Gateway(Node):
         elif param_name == "move_forward":
             # move by given velocity, non-blocking
             if param_value != 0:
-                #self.get_logger().warn(f"send forward command {param_value:.2f}")
+                # self.get_logger().warn(f"send forward command {param_value:.2f}")
                 self.reader_crtp.send_forward_command(param_value)
             return True
         elif param_name == "buzzer_idx":
@@ -382,8 +385,11 @@ def main(args=None):
     with SyncCrazyflie(id) as scf:
         cf = scf.cf
         reader_crtp = ReaderCRTP(
-            crazyflie=cf, verbose=verbose, log_motion=log_motion, log_motors=log_motors,
-            log_status=log_status
+            crazyflie=cf,
+            verbose=verbose,
+            log_motion=log_motion,
+            log_motors=log_motors,
+            log_status=log_status,
         )
         node = Gateway(reader_crtp)
 
@@ -399,6 +405,7 @@ def main(args=None):
 
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
