@@ -24,7 +24,7 @@ To install all packages contained in this repo, including dependencies, run (fro
 sudo apt-get install python3-rosdep python3-colcon-common-extensions
 sudo rosdep init
 cp 19-custom.list /etc/ros/rosdep/sources.list.d/ #might need sudo here
-rosdep update 
+rosdep update --include-eol-distros #needed for eloquent  
 rosdep install --from-path src/ --rosdistro $ROS_DISTRO
 colcon build --symlink-install
 . install/local_setup.bash

@@ -20,10 +20,10 @@ from audio_interfaces_py.node_with_params import NodeWithParams
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
 sys.path.append("python/")
-from data_collector import DataCollector
-from inference import Inference, get_approach_angle_fft
-from estimators import DistanceEstimator, AngleEstimator
-from moving_estimators import MovingEstimator
+from utils.data_collector import DataCollector
+from utils.inference import Inference, get_approach_angle_fft
+from utils.estimators import DistanceEstimator, AngleEstimator
+from utils.moving_estimators import MovingEstimator
 
 
 # dslice
@@ -49,7 +49,7 @@ VELOCITY_CMS = 5  # linear constant velocity in cm / s
 TIME_BLIND_FLIGHT = 0  # 10 # seconds
 
 
-class state(Enum):
+class State(Enum):
     GROUND = 0
     HOVER = 1
     WAIT_DISTANCE = 2
@@ -232,7 +232,7 @@ class WallDetection(NodeWithParams):
                     (
                         probabilities,
                         probabilities_angle,
-                    ) = self.moving_estimator.get_distance_distribution()
+                    ) = self.moving_estimator.get_distributions(local=True)
                     distances_cm = self.moving_estimator.DISTANCES_CM
                     msg = create_distribution_message(
                         distances_cm, probabilities, timestamp
@@ -246,7 +246,7 @@ class WallDetection(NodeWithParams):
 
                 # TODO: can delete below if we work with subscribers instead
                 self.new_sample_to_treat = True
-                if np.any(prob_moving > 0):
+                if np.any(probabilities > 0):
                     self.distributions["wall_distance"] = (
                         distances_cm,
                         probabilities,

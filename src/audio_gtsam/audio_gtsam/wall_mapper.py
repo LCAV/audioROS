@@ -5,10 +5,17 @@
 wall_mapper.py: 
 """
 
-import gtsam
+import rclpy
+from rclpy.action import ActionServer
 
-X = gtsam.symbol_shorthand.X
-P = gtsam.symbol_shorthand.P
+from audio_interfaces.action import StateMachine
+from audio_interfaces.msg import Distribution, PoseRaw
+from audio_stack.topic_synchronizer import TopicSynchronizer
+from audio_gtsam.wall_backend import WallBackend
+
+from audio_interfaces_py.node_with_params import NodeWithParams
+
+from crazyflie_demo.wall_detection import State
 
 
 class WallMapper(NodeWithParams):
@@ -20,7 +27,7 @@ class WallMapper(NodeWithParams):
         super().__init__("wall_mapper")
 
         self.subscription_dist_moving = self.create_subscription(
-            Signals, "results/distribution_moving", self.listener_callback_dist, 10
+            Distribution, "results/distribution_moving", self.listener_callback_dist, 10
         )
 
         self.pose_synch = TopicSynchronizer(10, self.get_logger())
@@ -52,7 +59,6 @@ class WallMapper(NodeWithParams):
         self.wall_backend.add_plane_from_distances(distances, probs)
 
     def server_callback(self, goal_handle):
-        from crazyflie_demo.wall_detection import State
 
         msg = goal_handle.request
         # find which enum the state corresponds to
