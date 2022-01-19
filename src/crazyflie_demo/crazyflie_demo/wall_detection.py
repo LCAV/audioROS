@@ -231,13 +231,12 @@ class WallDetection(NodeWithParams):
                     self.moving_estimator.add_distributions(
                         diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
                     )
-                    (
-                        probabilities,
-                        probabilities_angle,
-                    ) = self.moving_estimator.get_distributions(local=True)
-                    distances_cm = self.moving_estimator.DISTANCES_CM
+                    probabilities, __ = self.moving_estimator.get_distributions(
+                        local=True
+                    )
+
                     msg = create_distribution_message(
-                        distances_cm, probabilities, timestamp
+                        self.moving_estimator.DISTANCES_CM, probabilities, timestamp
                     )
                     self.publisher_distribution_moving.publish(msg)
                     self.get_logger().warn(
@@ -245,10 +244,7 @@ class WallDetection(NodeWithParams):
                     )
 
                 self.new_sample_to_treat = True
-                # distance_estimate = distances_cm[np.argmax(probabilities)]
-                # self.get_logger().info(
-                #    f"Current distance estimate: {distance_estimate:.1f}cm"
-                # )
+
             elif self.state == State.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
                     n_max=N_MAX, verbose=False
@@ -261,7 +257,6 @@ class WallDetection(NodeWithParams):
 
                 if len(rel_distances_cm) < N_MAX:
                     self.get_logger().warn(f"Not ready yet: {len(rel_distances_cm)}")
-                    # return
 
                 angles, prob = self.get_angle_distribution(dslices)
 

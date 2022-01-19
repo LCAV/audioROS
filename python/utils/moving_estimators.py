@@ -73,8 +73,8 @@ class MovingEstimator(object):
             if not any(diff > 1):
                 print("Warning: need to pass diff in centimeters")
             self.difference_p[self.index][mic_idx] = scipy.interpolate.interp1d(
-                diff.astype(np.float),
-                prob.astype(np.float),
+                diff.astype(float),
+                prob.astype(float),
                 fill_value=0,
                 bounds_error=False,
                 kind="linear",

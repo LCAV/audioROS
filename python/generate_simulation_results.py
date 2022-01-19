@@ -265,7 +265,7 @@ if __name__ == "__main__":
     relative_distances_cm = np.arange(20)
     frequencies = np.linspace(1000, 5000, 10)
     step = 5
-    gammas_deg = np.arange(step, 91, step=step, dtype=np.float)
+    gammas_deg = np.arange(step, 91, step=step, dtype=float)
     gammas_deg += np.random.uniform(
         low=-step // 2, high=step // 2, size=len(gammas_deg)
     )
@@ -345,7 +345,7 @@ if 0:  # __name__ == "__main__":
     n_instances = 10
     np.random.seed(1)
     frequencies = FREQUENCIES
-    distances_cm = np.arange(8, 60, dtype=np.float)
+    distances_cm = np.arange(8, 60, dtype=float)
     # distances_cm += np.random.uniform(low=-1, high=1, size=len(distances_cm))
 
     fname = "results/simulation/amplitude_noise_new.pkl"

@@ -484,7 +484,7 @@ if __name__ == "__main__":
     gt_angle_deg = 50
     frequency_list = np.arange(1000, 11000, step=1000)
     angular_velocity_deg = [0.0]
-    linear_velocity_cm = np.arange(300, step=10, dtype=np.float)
+    linear_velocity_cm = np.arange(300, step=10, dtype=float)
     degree_noise_list = [0.0]
     offset_noise_list = [1e-2]  # m/s
     time_noise_list = [0.0]
@@ -513,8 +513,8 @@ if __name__ == "__main__":
     offset_noise_list = [0]  # m/s
     time_noise_list = [0.0]
     n_samples = 3
-    #saveas = "results/doa_multi_joint_highres.pkl"
-    saveas = "" #"results/doa_multi_joint_highres.pkl"
+    # saveas = "results/doa_multi_joint_highres.pkl"
+    saveas = ""  # "results/doa_multi_joint_highres.pkl"
     simulate_doa(
         gt_angle_deg,
         degree_noise_list,

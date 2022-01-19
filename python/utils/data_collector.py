@@ -384,10 +384,10 @@ class DataCollector(object):
         return sorted_and_unique(self.df, "mic").astype(np.int)
 
     def get_distances(self):
-        return sorted_and_unique(self.df, "distance").astype(np.float)
+        return sorted_and_unique(self.df, "distance").astype(float)
 
     def get_frequencies(self):
-        return sorted_and_unique(self.df, "frequency").astype(np.float)
+        return sorted_and_unique(self.df, "frequency").astype(float)
 
     def next_fslice_ready(self, signals_f, frequencies, verbose=False):
         """ find big frequency jump, meaning end of sweep. """
@@ -757,9 +757,7 @@ class DataCollector(object):
     def fill_from_backup(
         self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""
     ):
-        fname = (
-            f"../datasets/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
-        )
+        fname = f"../datasets/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
         try:
             self.df = pd.read_pickle(fname)
             print("read", fname)
@@ -769,9 +767,7 @@ class DataCollector(object):
             return False
 
     def backup(self, exp_name, mic_type="audio_deck", motors="0", snr="", appendix=""):
-        fname = (
-            f"../datasets/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
-        )
+        fname = f"../datasets/{exp_name}/backup_{mic_type}_{motors}{snr}{appendix}.pkl"
         pd.to_pickle(self.df, fname)
         print("saved", fname)
 

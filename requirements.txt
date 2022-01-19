@@ -1,11 +1,6 @@
-pandas # for analysis
 empy # needed for colcon build
 lark # needed for colcon build
-#numpy
-#scipy
 pyserial
-pyparsing # for gtsam
-sounddevice # also by rosdep
-pyroomacoustics #  also by rosdep
-cflib # also by rosdep
-pre-commit # for dev only
+sounddevice # also in rosdep
+pyroomacoustics #  also in rosdep
+cflib # also in rosdep
