@@ -379,10 +379,11 @@ class WallBackend(object):
                 self.graph, self.all_initial_estimates
             )
             self.result = optimizer.optimizeSafely()
-        planes = gtsam.utilities.allOrientedPlane3s(self.result)
-        poses = gtsam.utilities.allPose3s(self.result)
         self.need_to_update_results = False
-        return planes, poses
+        return None, None
+        # planes = gtsam.utilities.allOrientedPlane3s(self.result)
+        # poses = gtsam.utilities.allPose3s(self.result)
+        # return planes, poses
 
     def check_wall(self, verbose=False):
         # no wall added yet

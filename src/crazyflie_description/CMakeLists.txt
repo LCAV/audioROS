@@ -31,6 +31,5 @@ endif()
 
 ## added to install the python module crazyflie_description_py
 find_package(ament_cmake_python REQUIRED)
-ament_python_install_package(crazyflie_description_py/)
-
+ament_python_install_package(crazyflie_description_py)
 ament_package()

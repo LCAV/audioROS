@@ -55,6 +55,5 @@ ament_export_dependencies(rosidl_default_runtime)
 
 ## added to install the python module audio_interfaces_py
 find_package(ament_cmake_python REQUIRED)
-ament_python_install_package(audio_interfaces_py/)
-
+ament_python_install_package(audio_interfaces_py)
 ament_package()

@@ -38,7 +38,7 @@ N_WINDOW = 5
 WALL_ANGLE_DEG = 90  # for raw distribution only
 DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 DIST_RANGE_CM = [min(DISTANCES_CM), max(DISTANCES_CM)]
-N_CALIBRATION = 10
+N_CALIBRATION = 3  # 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
@@ -99,7 +99,7 @@ class WallDetection(NodeWithParams):
             )
         if PUBLISH_MOVING:
             self.publisher_distribution_moving = self.create_publisher(
-                Distribution, "results/distribution_moving", 10
+                Distribution, "distribution_moving", 10
             )
 
         # self.start_time = None # use relative time since start
@@ -116,7 +116,6 @@ class WallDetection(NodeWithParams):
         self.calibration = np.empty((N_MICS, 0))
 
         self.new_sample_to_treat = False
-        self.distributions = {}
 
         self.state = State.GROUND
         self.state_by_server = None
@@ -224,6 +223,9 @@ class WallDetection(NodeWithParams):
                         distances_cm, probabilities, timestamp
                     )
                     self.publisher_distribution_raw.publish(msg)
+                    self.get_logger().warn(
+                        f"Published raw distribution with timestamp {msg.timestamp}"
+                    )
 
                 if PUBLISH_MOVING:
                     self.moving_estimator.add_distributions(
@@ -238,27 +240,15 @@ class WallDetection(NodeWithParams):
                         distances_cm, probabilities, timestamp
                     )
                     self.publisher_distribution_moving.publish(msg)
-
-                if not self.moving_estimator.enough_measurements():
-                    return None
-
-                self.get_logger().info("Published moving-average distribution")
-
-                # TODO: can delete below if we work with subscribers instead
-                self.new_sample_to_treat = True
-                if np.any(probabilities > 0):
-                    self.distributions["wall_distance"] = (
-                        distances_cm,
-                        probabilities,
-                        timestamp,
+                    self.get_logger().warn(
+                        f"Published moving-average distribution with timestamp {timestamp}"
                     )
-                else:
-                    self.get_logger().warn(f"not adding cause all-zero")
 
-                distance_estimate = distances_cm[np.argmax(probabilities)]
-                self.get_logger().info(
-                    f"Current distance estimate: {distance_estimate:.1f}cm"
-                )
+                self.new_sample_to_treat = True
+                # distance_estimate = distances_cm[np.argmax(probabilities)]
+                # self.get_logger().info(
+                #    f"Current distance estimate: {distance_estimate:.1f}cm"
+                # )
             elif self.state == State.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
                     n_max=N_MAX, verbose=False
@@ -390,7 +380,9 @@ class WallDetection(NodeWithParams):
             self.move_linear()
 
             if not self.new_sample_to_treat:
+                self.get_logger().warn("staying in WAIT_DISTANCE cause no new data")
                 return State.WAIT_DISTANCE
+
             self.new_sample_to_treat = False
 
             future = self.ask_about_wall()
@@ -486,6 +478,7 @@ class WallDetection(NodeWithParams):
         # return self._send_goal_future
 
     def ask_about_wall(self):
+        self.get_logger().warn(f"Sending current state {self.state} to wall_mapper...")
         goal_msg = StateMachine.Goal()
         goal_msg.state = self.state.value
 
@@ -493,10 +486,11 @@ class WallDetection(NodeWithParams):
             goal_msg, feedback_callback=self.feedback_callback
         )
         rclpy.spin_until_future_complete(self, future)
+        self.get_logger().warn("... done!")
         return future
 
     def feedback_callback(self, feedback):
-        self.get_logger().info(feedback.message)
+        self.get_logger().warn(feedback.message)
 
     def goal_response_callback(self, future):
         goal_handle = future.result()

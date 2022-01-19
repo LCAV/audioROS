@@ -8,13 +8,14 @@ wall_mapper.py:
 import rclpy
 from rclpy.action import ActionServer
 
+import numpy as np
+
+from audio_gtsam.wall_backend import WallBackend
 from audio_interfaces.action import StateMachine
 from audio_interfaces.msg import Distribution, PoseRaw
-from audio_stack.topic_synchronizer import TopicSynchronizer
-from audio_gtsam.wall_backend import WallBackend
-
+from audio_interfaces_py.messages import read_pose_raw_message
 from audio_interfaces_py.node_with_params import NodeWithParams
-
+from audio_stack.topic_synchronizer import TopicSynchronizer
 from crazyflie_demo.wall_detection import State
 
 
@@ -26,12 +27,12 @@ class WallMapper(NodeWithParams):
     def __init__(self):
         super().__init__("wall_mapper")
 
-        self.subscription_dist_moving = self.create_subscription(
-            Distribution, "results/distribution_moving", self.listener_callback_dist, 10
+        self._subscription_dist_moving = self.create_subscription(
+            Distribution, "distribution_moving", self.listener_callback_dist, 10
         )
 
         self.pose_synch = TopicSynchronizer(10, self.get_logger())
-        self.subscription_pose = self.create_subscription(
+        self._subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
 
@@ -42,9 +43,12 @@ class WallMapper(NodeWithParams):
         # initialize ISAM
         self.wall_backend = WallBackend()
 
-    def listener_callback_dist(self, msg):
+    def listener_callback_dist(self, msg_dist):
         # extract the current probability distribution
-        msg_pose = self.pose_synch.get_latest_message(msg.timestamp)
+        self.get_logger().warn(
+            f"treating distribution with timestamp {msg_dist.timestamp}"
+        )
+        msg_pose = self.pose_synch.get_latest_message(msg_dist.timestamp)
         if msg_pose is None:
             return
 
@@ -53,13 +57,14 @@ class WallMapper(NodeWithParams):
         self.wall_backend.add_pose(r_world, yaw)
 
         # add plane factor
-        distances = msg_dist.values
-        probs = msg_dist.probabilities
+        distances = np.array(msg_dist.values)
+        probs = np.array(msg_dist.probabilities)
 
         self.wall_backend.add_plane_from_distances(distances, probs)
 
     def server_callback(self, goal_handle):
 
+        self.get_logger().warn(f"server callback")
         msg = goal_handle.request
         # find which enum the state corresponds to
         state_by_server = State(msg.state)

@@ -18,10 +18,11 @@ BAG_FILE_ROOT = ""
 BAG_PLAYBACK = ""
 
 node_config = {
+    "wall_mapper": {"pkg": "audio_gtsam"},
     "wall_detection": {"pkg": "crazyflie_demo"},
-    #"geometry": {"pkg": "topic_plotter"},
+    # "geometry": {"pkg": "topic_plotter"},
     "distribution": {"pkg": "topic_plotter"},
-    #"status": {"pkg": "topic_plotter"},
+    # "status": {"pkg": "topic_plotter"},
 }
 
 # add parameters from file to node_config
@@ -37,6 +38,7 @@ with open(PARAMS_FILE) as f:
             print("setting log level to", values)
             BAG_PLAYBACK = values
 
+
 def generate_launch_description():
     if BAG_FILE_ROOT != "":
         for counter in range(100):
@@ -47,7 +49,10 @@ def generate_launch_description():
     else:
         bag_file = ""
     return get_launch_description(
-        node_config, log_level=LOG_LEVEL, bag_filename=bag_file, bag_playback=BAG_PLAYBACK
+        node_config,
+        log_level=LOG_LEVEL,
+        bag_filename=bag_file,
+        bag_playback=BAG_PLAYBACK,
     )
 
 

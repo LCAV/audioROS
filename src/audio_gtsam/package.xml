@@ -12,7 +12,8 @@
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
-  <exec_depend>python-gtsam</exec_depend>
+  <!-- can only use this once OrientedPlane3 python support is 
+  integrated in the official version <exec_depend>python-gtsam</exec_depend>-->
 
   <export>
     <build_type>ament_python</build_type>

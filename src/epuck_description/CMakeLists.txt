@@ -31,6 +31,6 @@ endif()
 
 ## added to install the python module epuck_description_py
 find_package(ament_cmake_python REQUIRED)
-ament_python_install_package(epuck_description_py/)
+ament_python_install_package(epuck_description_py)
 
 ament_package()
