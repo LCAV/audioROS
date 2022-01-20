@@ -360,13 +360,14 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=Fa
         if pos_idx == last_idx:
             if verbose:
                 print(f"Warning: using {pos_idx} again.")
-        row = df_pos.loc[pos_idx]
-        lag = timestamp - row.timestamp
+        pos_row = df_pos.loc[pos_idx]
+        lag = timestamp - pos_row.timestamp
+        print(f"for audio {timestamp}, using position {pos_row.timestamp}")
 
         # find position columns
-        pos_columns = set(row.index).intersection(df.columns)
+        pos_columns = set(pos_row.index).intersection(df.columns)
         if lag <= MAX_ALLOWED_LAG_MS:
-            df.loc[i, pos_columns] = row[pos_columns]
+            df.loc[i, pos_columns] = pos_row[pos_columns]
         else:
             if verbose:
                 print(f"Warning for {pos_idx}: too high time lag {lag}ms")

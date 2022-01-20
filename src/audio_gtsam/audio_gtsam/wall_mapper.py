@@ -28,10 +28,10 @@ class WallMapper(NodeWithParams):
         super().__init__("wall_mapper")
 
         self._subscription_dist_moving = self.create_subscription(
-            Distribution, "distribution_moving", self.listener_callback_dist, 10
+            Distribution, "results/distribution_moving", self.listener_callback_dist, 10
         )
 
-        self.pose_synch = TopicSynchronizer(10, self.get_logger())
+        self.pose_synch = TopicSynchronizer(10, n_buffer=200)
         self._subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
@@ -45,26 +45,32 @@ class WallMapper(NodeWithParams):
 
     def listener_callback_dist(self, msg_dist):
         # extract the current probability distribution
-        self.get_logger().warn(
-            f"treating distribution with timestamp {msg_dist.timestamp}"
-        )
+
+        # creates lag... need to u
         msg_pose = self.pose_synch.get_latest_message(msg_dist.timestamp)
         if msg_pose is None:
             return
 
-        r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
+        # self.get_logger().warn(f"treating distribution with timestamp {msg_dist.timestamp} and pose {msg_pose.timestamp}")
+
+        r_world, v_world, yaw_deg, yaw_rate = read_pose_raw_message(msg_pose)
+
         # add pose factor
-        self.wall_backend.add_pose(r_world, yaw)
+        self.wall_backend.add_pose(
+            r_world, yaw_deg / 180 * np.pi, verbose=True, logger=self.get_logger()
+        )
 
         # add plane factor
         distances = np.array(msg_dist.values)
         probs = np.array(msg_dist.probabilities)
+        # self.get_logger().warn(f"distribution: {distances[0]}...{distances[-1]}, {probs[0]}, {probs[-1]}")
 
-        self.wall_backend.add_plane_from_distances(distances, probs)
+        self.wall_backend.add_plane_from_distances(
+            distances, probs, verbose=True, logger=self.get_logger()
+        )
 
     def server_callback(self, goal_handle):
-
-        self.get_logger().warn(f"server callback")
+        self.get_logger().warn(f"Server callback")
         msg = goal_handle.request
         # find which enum the state corresponds to
         state_by_server = State(msg.state)

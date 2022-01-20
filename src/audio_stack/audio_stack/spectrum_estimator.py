@@ -18,6 +18,7 @@ from audio_interfaces_py.messages import (
     create_spectrum_message,
     read_signals_freq_message,
 )
+from audio_interfaces_py.node_with_params import NodeWithParams
 from audio_stack.beam_former import BeamFormer
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
@@ -36,7 +37,13 @@ NORMALIZE = "none"
 # NORMALIZE = "sum_to_one"
 
 
-class SpectrumEstimator(Node):
+class SpectrumEstimator(NodeWithParams):
+    PARAMS_DICT = {
+        "bf_method": BF_METHOD,
+        "combination_n": COMBINATION_N,
+        "combination_method": COMBINATION_METHOD,
+    }
+
     def __init__(self, plot=False):
         super().__init__("spectrum_estimator")
 
@@ -58,48 +65,13 @@ class SpectrumEstimator(Node):
         self.publisher_spectrum_multi = self.create_publisher(
             Spectrum, "audio/spectrum_multi", 10
         )
-
         self.beam_former = None
 
         # create ROS parameters that can be changed from command line.
-        self.combination_n = COMBINATION_N
-        self.combination_method = COMBINATION_METHOD
-        self.bf_method = BF_METHOD
-
-        self.declare_parameter("bf_method")
-        self.declare_parameter("combination_n")
-        self.declare_parameter("combination_method")
-        parameters = [
-            rclpy.parameter.Parameter(
-                "bf_method", rclpy.Parameter.Type.STRING, self.bf_method
-            ),
-            rclpy.parameter.Parameter(
-                "combination_method",
-                rclpy.Parameter.Type.STRING,
-                self.combination_method,
-            ),
-            rclpy.parameter.Parameter(
-                "combination_n",
-                rclpy.Parameter.Type.INTEGER,
-                self.combination_n,
-            ),
-        ]
-        self.set_parameters_callback(self.set_params)
+        self.add_on_set_parameters_callback(self.set_params)
         self.set_parameters(parameters)
 
     def set_params(self, params):
-        for param in params:
-            if param.name == "bf_method":
-                self.bf_method = param.get_parameter_value().string_value
-            elif param.name == "combination_method":
-                self.combination_method = (
-                    param.get_parameter_value().string_value
-                )
-            elif param.name == "combination_n":
-                self.combination_n = param.get_parameter_value().integer_value
-            else:
-                return SetParametersResult(successful=False)
-
         self.beam_former = None
         return SetParametersResult(successful=True)
 
@@ -118,10 +90,13 @@ class SpectrumEstimator(Node):
                 )
             self.beam_former = BeamFormer(mic_positions)
             self.beam_former.init_dynamic_estimate(
-                frequencies, self.combination_n, self.combination_method, "none"
+                frequencies,
+                self.current_params["combination_n"],
+                self.current_params["combination_method"],
+                "none",
             )
             self.beam_former.init_multi_estimate(
-                frequencies, self.combination_n
+                frequencies, self.current_params["combination_n"]
             )
 
         R = self.beam_former.get_correlation(signals_f)
@@ -139,9 +114,7 @@ class SpectrumEstimator(Node):
         # publish raw spectrum
         msg_spec = create_spectrum_message(spectrum, frequencies, msg.timestamp)
         self.publisher_spectrum_raw.publish(msg_spec)
-        self.get_logger().info(
-            f"Published raw spectrum after {time.time() - t1:.2f}s."
-        )
+        self.get_logger().info(f"Published raw spectrum after {time.time() - t1:.2f}s.")
 
         #### combined specra
         pose_message = self.pose_synch.get_latest_message(
@@ -157,9 +130,7 @@ class SpectrumEstimator(Node):
         dynamic_spectrum = self.beam_former.get_dynamic_estimate()
 
         msg_dynamic = msg_spec
-        msg_dynamic.spectrum_vect = list(
-            dynamic_spectrum.astype(float).flatten()
-        )
+        msg_dynamic.spectrum_vect = list(dynamic_spectrum.astype(float).flatten())
         self.publisher_spectrum_combined.publish(msg_dynamic)
         self.get_logger().info(
             f"Published dynamic spectrum after {time.time() - t1:.2f}s."
@@ -170,9 +141,7 @@ class SpectrumEstimator(Node):
         self.beam_former.add_to_multi_estimate(
             signals_f, frequencies, timestamp, yaw_deg
         )
-        spectrum_multi = self.beam_former.get_multi_estimate(
-            method=self.bf_method
-        )
+        spectrum_multi = self.beam_former.get_multi_estimate(method=self.bf_method)
 
         msg_multi = msg_spec
         msg_multi.spectrum_vect = list(spectrum_multi.astype(float).flatten())

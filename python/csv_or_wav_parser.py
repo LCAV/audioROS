@@ -160,6 +160,10 @@ def parse_fslice_experiments(exp_name, verbose=False):
     )
 
     for filename in filenames:
+        # skip hidden files
+        if filename[0] == ".":
+            print("skipping", filename)
+            continue
         print("treating", filename)
         params["appendix"] = filename.strip(".csv")
         positions = None

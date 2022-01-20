@@ -1,0 +1,9 @@
+wall_detection:
+  ros__parameters:
+    mode: 0 # 0: FSLICE, 1: DSLICE
+    drone: 0 # 0: none, 1: buzzer, 2: flying
+launch:
+  ros__parameters:
+    log_level: "warn"
+    bag_playback: "" #"datasets/2021_11_23_demo/hover8" # hover12 is also good
+    bag_record_root: ""

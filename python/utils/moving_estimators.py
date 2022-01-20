@@ -4,6 +4,7 @@
 """
 moving_estimators.py: Integrate moving into the distance- and angle estimation. 
 """
+import warnings
 
 import numpy as np
 import scipy.interpolate
@@ -109,7 +110,7 @@ class MovingEstimator(object):
             starting_distance = -normal_absolute.dot(position)
             idx = np.where(self.DISTANCES_CM > starting_distance)[0]
             if len(idx) < 1:
-                raise ValueError("moved out of range")
+                warnings.warn(f"moved out of range: {starting_distance:.0f}cm")
             # shift probability at starting_distance to 0, etc.
             probs_dist = np.roll(probs_dist, shift=-idx[0])
             probs_dist[-idx[0] :] = 1e-3

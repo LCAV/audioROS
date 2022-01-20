@@ -25,10 +25,10 @@ class NodeWithParams(Node, ABC):
         super().__init__(
             *args,
             automatically_declare_parameters_from_overrides=True,
-            allow_undeclared_parameters=True
+            allow_undeclared_parameters=True,
         )
 
-        self.set_parameters_callback(self.set_params)
+        self.add_on_set_parameters_callback(self.set_params)
         parameters = self.get_parameters(self.PARAMS_DICT.keys())
 
         # Store the current parameters in a way that is

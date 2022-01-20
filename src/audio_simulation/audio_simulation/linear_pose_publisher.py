@@ -11,7 +11,10 @@ from scipy.spatial.transform import Rotation as R
 
 from geometry_msgs.msg import PoseStamped
 
-from audio_interfaces_py.messages import create_pose_message_from_arrays, create_pose_message
+from audio_interfaces_py.messages import (
+    create_pose_message_from_arrays,
+    create_pose_message,
+)
 from audio_simulation.geometry import (
     ROOM_DIM,
     STARTING_POS,
@@ -21,6 +24,7 @@ from audio_simulation.geometry import (
 VELOCITY = np.array([0.0, 0.5, 0.0])  # m/s, in drone coordinates
 EPS = 0.2  # m, safety margin from walls
 MAX_Y = None
+
 
 class LinearPosePublisher(Node):
     def __init__(
@@ -47,9 +51,6 @@ class LinearPosePublisher(Node):
         # we do not need to wait before starting the timer
         # because the timer first waits for self.timer_period.
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
-
-        timestamp = self.get_time_ms()
-        self.publisher_pose.publish(msg)
 
     def get_time_ms(self):
         return int(round(time.time() * 1e3))
@@ -82,6 +83,7 @@ class LinearPosePublisher(Node):
         self.publisher_pose.publish(msg)
         self.get_logger().info(f"Pose has been published at time {timestamp}")
 
+
 def main(args=None):
     rclpy.init(args=args)
 
@@ -91,6 +93,7 @@ def main(args=None):
 
     linear_pub.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()

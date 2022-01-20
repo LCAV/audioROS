@@ -5,8 +5,8 @@ wall_approach_publisher.py: Approach wall inside a room.
 import numpy as np
 import rclpy
 
-from .linear_pose_publisher import LinearPosePublisher, EPS
-from crazyflie_description_py.experiments import ROOM_DIM
+from audio_simulation.linear_pose_publisher import LinearPosePublisher, EPS
+from audio_simulation.geometry import ROOM_DIM
 
 VELOCITY = np.array([0.0, 0.02, 0.0])  # m/s, in drone coordinates
 POSITION = np.array([ROOM_DIM[0] / 2.0, EPS, ROOM_DIM[2] / 2.0])

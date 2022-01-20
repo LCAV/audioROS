@@ -116,7 +116,7 @@ class Gateway(Node):
 
         self.reader_crtp = reader_crtp
 
-        self.set_parameters_callback(self.set_params)
+        self.add_on_set_parameters_callback(self.set_params)
 
         # need to do this to send initial parameters
         # over to Crazyflie.

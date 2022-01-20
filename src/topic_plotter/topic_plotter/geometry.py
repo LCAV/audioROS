@@ -20,7 +20,7 @@ from audio_interfaces_py.messages import (
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
 # consider publishing these to a topic instead of this bad dependency.
-from crazyflie_description_py.experiments import (
+from audio_simulation.geometry import (
     SPEAKER_POSITION,
     ROOM_DIM,
     STARTING_POS,
@@ -32,6 +32,8 @@ MAX_LENGTH = 1000  # number of positions to plot
 
 XLABEL = "x [m]"
 YLABEL = "y [m]"
+
+Z_THRESHOLD = 0.3  # do not plot poses below this threshold.
 
 
 def plot_room(ax):
@@ -60,10 +62,6 @@ class GeometryPlotter(Node):
 
         self.subscription_doa = self.create_subscription(
             DoaEstimates, "geometry/doa_estimates", self.listener_callback_doa, 10,
-        )
-
-        self.subscription_doa = self.create_subscription(
-            DoaEstimates, "geometry/ground_truth", self.listener_callback_doa, 10,
         )
 
         self.plotter_dict = {}
@@ -128,6 +126,8 @@ class GeometryPlotter(Node):
         """ Plot the latest poses, calculated from the velocity estimates. """
         self.init_plotter("position raw", xlabel=XLABEL, ylabel=YLABEL)
         r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose_raw)
+        if r_world[2] < Z_THRESHOLD:
+            return
         v_world = np.r_[v_world, 0.0]
 
         if self.previous_time is None:
@@ -143,7 +143,9 @@ class GeometryPlotter(Node):
         if self.pose_imu_list.shape[1] > MAX_LENGTH:
             self.pose_imu_list = self.pose_imu_list[:, -MAX_LENGTH:]
 
-        self.update_plotter("position raw", self.pose_imu_list, pose_label="imu")
+        self.update_plotter(
+            "position raw", self.pose_imu_list, yaw_deg=yaw, pose_label="imu"
+        )
         self.plotter_dict["position raw"].fig.canvas.draw()
 
     def listener_callback_pose(self, msg_pose):

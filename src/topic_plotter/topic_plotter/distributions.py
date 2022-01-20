@@ -36,12 +36,12 @@ class DistributionsPlotter(Node):
         self.fig, self.axs = plt.subplots(1, len(distributions))
         self.fig.set_size_inches(5 * len(distributions), 5)
 
-        # topic = f"results/distribution_raw"
-        # self._subscription_distribution_raw = self.create_subscription(
-        #    Distribution, topic, self.listener_callback_distribution_raw, 10
-        # )
-        # self.get_logger().info(f"subscribed to {topic}")
-        topic = "distribution_moving"
+        topic = "results/distribution_raw"
+        self._subscription_distribution_raw = self.create_subscription(
+            Distribution, topic, self.listener_callback_distribution_raw, 10
+        )
+        self.get_logger().info(f"subscribed to {topic}")
+        topic = "results/distribution_moving"
         self._subscription_distribution_moving = self.create_subscription(
             Distribution, topic, self.listener_callback_distribution_moving, 10
         )

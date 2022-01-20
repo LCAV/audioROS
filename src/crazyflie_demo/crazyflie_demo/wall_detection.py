@@ -61,17 +61,53 @@ class State(Enum):
     BLIND_FLIGHT = 8
 
 
-class mode(Enum):
+class Mode(Enum):
     FSLICE = 0
     DSLICE = 1
 
 
-MODE = mode.FSLICE
+MODE = Mode.FSLICE
 DRONE = False
 
 
+def get_distance_distribution(diff_dict):
+    distance_estimator = DistanceEstimator()
+    for mic_i, (diff, prob_mic) in diff_dict.items():
+        distance_estimator.add_distribution(diff * 1e-2, prob_mic, mic_i)
+    __, prob = distance_estimator.get_distance_distribution(
+        distances_m=DISTANCES_CM * 1e-2, azimuth_deg=WALL_ANGLE_DEG
+    )
+    return DISTANCES_CM, prob
+
+
+def get_angle_distribution(dslices, resolve_side=False):
+    angle_estimator = AngleEstimator()
+    # d_slices is of shape 4x20, rel_distances_cm of shape 20
+    for mic_idx in range(N_MICS):
+        angles, proba = get_approach_angle_fft(
+            d_slice=d_slices[mic_idx],  # shape 4 x 20
+            frequency=FREQ,
+            relative_distances_cm=rel_distances_cm,
+            bayes=True,
+            reduced=True,
+        )
+        angle_estimator.add_distribution(angles, proba, mic_idx, FREQ)
+
+    if resolve_side:
+        # from 0 to 90 or 90 to 180
+        angles_augment, prob_augment = angle_estimator.get_angle_distribution(
+            mics_left_right=[[1], [3]]
+        )
+        angles = np.arange(180)
+        prob = np.zeros(180)
+        prob[angles_augment] = prob_augment
+    else:
+        angles, prob = angle_estimator.get_angle_distribution()
+    return angles, prob
+
+
 class WallDetection(NodeWithParams):
-    PARAMS_DICT = {"mode": mode.FSLICE.value, "drone": int(DRONE)}
+    PARAMS_DICT = {"mode": Mode.FSLICE.value, "drone": int(DRONE)}
 
     def __init__(self):
         super().__init__("wall_detection")
@@ -84,26 +120,27 @@ class WallDetection(NodeWithParams):
             self, StateMachine, "state_machine", self.server_callback
         )
 
-        self.subscription_signals = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback, 10
-        )
-        self.pose_synch = TopicSynchronizer(10, self.get_logger())
+        self.pose_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=10)
         self.subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
-        self.dist_raw_synch = TopicSynchronizer(10, self.get_logger())
+        self.subscription_signals = self.create_subscription(
+            SignalsFreq, "audio/signals_f", self.listener_callback, 10
+        )
 
+        # self.dist_raw_synch = TopicSynchronizer(10, self.get_logger())
         if PUBLISH_RAW:
             self.publisher_distribution_raw = self.create_publisher(
                 Distribution, "results/distribution_raw", 10
             )
         if PUBLISH_MOVING:
             self.publisher_distribution_moving = self.create_publisher(
-                Distribution, "distribution_moving", 10
+                Distribution, "results/distribution_moving", 10
             )
 
         # self.start_time = None # use relative time since start
         self.start_time = 0  # use absolute time
+        self.start_timestamp = None
 
         # initialize wall detection stuff
         self.data_collector = DataCollector()
@@ -156,52 +193,35 @@ class WallDetection(NodeWithParams):
             diff_dict[mic_i] = (diff, prob_mic)
         return diff_dict
 
-    def get_distance_distribution(diff_dict):
-        distance_estimator = DistanceEstimator()
-        for mic_i, (diff, prob_mic) in diff_dict.items():
-            distance_estimator.add_distribution(diff * 1e-2, prob_mic, mic_i)
-        __, prob = distance_estimator.get_distance_distribution(
-            distances_m=DISTANCES_CM * 1e-2, azimuth_deg=WALL_ANGLE_DEG
-        )
-        return DISTANCES_CM, prob
-
-    def get_angle_distribution(self, dslices, resolve_side=False):
-        angle_estimator = AngleEstimator()
-        # d_slices is of shape 4x20, rel_distances_cm of shape 20
-        for mic_idx in range(N_MICS):
-            angles, proba = get_approach_angle_fft(
-                d_slice=d_slices[mic_idx],  # shape 4 x 20
-                frequency=FREQ,
-                relative_distances_cm=rel_distances_cm,
-                bayes=True,
-                reduced=True,
-            )
-            angle_estimator.add_distribution(angles, proba, mic_idx, FREQ)
-
-        if resolve_side:
-            # from 0 to 90 or 90 to 180
-            angles_augment, prob_augment = angle_estimator.get_angle_distribution(
-                mics_left_right=[[1], [3]]
-            )
-            angles = np.arange(180)
-            prob = np.zeros(180)
-            prob[angles_augment] = prob_augment
-        else:
-            angles, prob = angle_estimator.get_angle_distribution()
-        return angles, prob
-
     def listener_callback(self, msg_signals):
         if not self.state in [State.WAIT_DISTANCE, State.WAIT_ANGLE, State.WAIT_CALIB]:
-            self.get_logger().warn(f"ignoring signal because state is {self.state}")
+            # self.get_logger().warn(f"ignoring signal because state is {self.state}")
             return
 
-        msg_pose = self.pose_synch.get_latest_message(msg_signals.timestamp)
+        # use the audio signal timestamp as reference for this measurement.
+        timestamp = msg_signals.timestamp
+
+        # Sometimes, this callback is called while the other TopicSynchronizer has not
+        # registered the latest messages yet. therefore, we add a little buffer
+        msg_pose = None
+        i = 0
+        timeout = 3
+        while msg_pose is None:
+            msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=False)
+            i += 1
+            if i > timeout:
+                self.get_logger().warn("did not register valid pose")
+                break
+        # msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=True)
+
         if msg_pose is not None:
             self.get_logger().warn(
-                f"treating new signal at time {msg_signals.timestamp}"
+                f"for audio {timestamp}, using pose {msg_pose.timestamp}. lag: {msg_pose.timestamp - timestamp}ms"
             )
-            timestamp = self.get_timestamp()
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
+            if r_world[2] < 0.3:
+                self.get_logger().warn("Not flying.")
+                return
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
             magnitudes = np.abs(signals_f).T  # 4 x 20
@@ -216,14 +236,12 @@ class WallDetection(NodeWithParams):
                 diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
 
                 if PUBLISH_RAW:
-                    distances_cm, probabilities = self.get_distance_distribution(
-                        diff_dict
-                    )
+                    distances_cm, probabilities = get_distance_distribution(diff_dict)
                     msg = create_distribution_message(
                         distances_cm, probabilities, timestamp
                     )
                     self.publisher_distribution_raw.publish(msg)
-                    self.get_logger().warn(
+                    self.get_logger().info(
                         f"Published raw distribution with timestamp {msg.timestamp}"
                     )
 
@@ -239,7 +257,7 @@ class WallDetection(NodeWithParams):
                         self.moving_estimator.DISTANCES_CM, probabilities, timestamp
                     )
                     self.publisher_distribution_moving.publish(msg)
-                    self.get_logger().warn(
+                    self.get_logger().info(
                         f"Published moving-average distribution with timestamp {timestamp}"
                     )
 
@@ -252,13 +270,13 @@ class WallDetection(NodeWithParams):
                 if data is not None:
                     d_slices, rel_distances_cm, *_ = data
                 else:
-                    self.get_logger().warn("No measurements yet")
+                    self.get_logger().info("No measurements yet")
                     return
 
                 if len(rel_distances_cm) < N_MAX:
                     self.get_logger().warn(f"Not ready yet: {len(rel_distances_cm)}")
 
-                angles, prob = self.get_angle_distribution(dslices)
+                angles, prob = get_angle_distribution(dslices)
 
                 # ANGLES_DEG is between 0 and 90, angles between 0 and 180.
                 msg = create_distribution_message(
@@ -268,7 +286,7 @@ class WallDetection(NodeWithParams):
                 self.publisher_distribution_raw.publish(msg)
 
                 angle_estimate = angles[np.argmax(prob)]
-                self.get_logger().warn(
+                self.get_logger().info(
                     f"Current angle estimate: {angle_estimate:.1f}deg, probability:{np.max(prob)}"
                 )
 
@@ -326,6 +344,7 @@ class WallDetection(NodeWithParams):
             rclpy.spin_once(self)
 
     def execute_state_machine(self):
+        rclpy.spin_once(self)
         if self.state == State.GROUND:
             self.take_off()
             return State.HOVER
@@ -333,13 +352,13 @@ class WallDetection(NodeWithParams):
             # return State.ABORT
 
         elif self.state == State.HOVER:
-            if self.current_params["mode"] == mode.FSLICE.value:
+            if self.current_params["mode"] == Mode.FSLICE.value:
                 self.set_buzzer(1)
                 self.get_logger().warn("calibrating")
                 self.calibration_count = 0
                 return State.WAIT_CALIB
 
-            elif self.current_params["mode"] == mode.DSLICE.value:
+            elif self.current_params["mode"] == Mode.DSLICE.value:
                 self.set_buzzer(3000)
                 return State.WAIT_ANGLE
             else:
@@ -368,39 +387,21 @@ class WallDetection(NodeWithParams):
                 return State.WAIT_CALIB
 
             self.calibration = np.median(self.calibration_data, axis=2)
-            self.get_logger().warn("done calibrating")
+            self.get_logger().info("done calibrating")
             return State.WAIT_DISTANCE
 
         elif self.state == State.WAIT_DISTANCE:
             self.move_linear()
 
             if not self.new_sample_to_treat:
-                self.get_logger().warn("staying in WAIT_DISTANCE cause no new data")
+                self.get_logger().info("staying in WAIT_DISTANCE cause no new data")
                 return State.WAIT_DISTANCE
 
             self.new_sample_to_treat = False
 
             future = self.ask_about_wall()
-            self.get_logger().info(future.message)
+            self.get_logger().warn(f"Action result: {future.message}")
             return State[future.result().flag]
-
-            # return State.WAIT_DISTANCE
-            # timestamp = self.get_timestamp()
-            # curr_dist_message = self.dist_raw_synch.get_latest_message(timestamp)
-            # if curr_dist_message is not None:
-            #    dist = curr_dist_message.values
-            #    prob = curr_dist_message.probabilities
-            #    timestamp = curr_dist_message.timestamp
-            #    distance_estimate = dist[np.argmax(prob)]
-            #    if distance_estimate < DISTANCE_THRESHOLD_CM:
-            #        self.get_logger().warn(
-            #            f"WALL AT {distance_estimate}, TURNING AROUND!"
-            #        )
-            #        return State.AVOID_DISTANCE
-            #    else:
-            #        self.get_logger().info(f"wall at {distance_estimate}, continuing.")
-            # else:
-            #    self.get_logger().info("no distribution yet")
 
         elif self.state == State.AVOID_DISTANCE:
             # invert velocity
@@ -445,6 +446,11 @@ class WallDetection(NodeWithParams):
     def sleep(self, time_s):
         self.get_logger().info(f"sleeping for {time_s}...")
         time.sleep(time_s)
+
+    def get_seconds(self, timestamp_ms):
+        if self.start_timestamp is None:
+            self.start_timestamp = timestamp_ms * 1e-3
+        return round(timestamp_ms * 1e-3 - self.start_timestamp, 3)
 
     def get_timestamp(self):
         curr_time = int(time.process_time() * 1e3)  # ms

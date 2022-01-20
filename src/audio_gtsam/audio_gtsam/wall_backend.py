@@ -148,7 +148,13 @@ class WallBackend(object):
         )
 
     def add_plane(
-        self, distance, azimuth, elevation=0.0, plane_noise=None, verbose=False
+        self,
+        distance,
+        azimuth,
+        elevation=0.0,
+        plane_noise=None,
+        verbose=False,
+        logger=None,
     ):
         if self.need_to_update_results:
             self.get_results()
@@ -176,12 +182,6 @@ class WallBackend(object):
             current_plane = current_plane_global.transform(current_pose)
             error = plane_error(current_plane, new_plane)
 
-            # error = np.linalg.norm(current_plane.errorVector(new_plane))
-            # if verbose:
-            #    print(f"current plane: {get_azimuth_angle(current_plane.normal().point3(), degrees=True):.0f}, {current_plane.distance():.2f}m")
-            #    print(f"new plane: {get_azimuth_angle(new_plane.normal().point3(), degrees=True):.0f}, {new_plane.distance():.2f}m")
-            #    print(f"plane error: {error:.2f}")
-
             if error > WALL_THRESH_M:
                 print("adding new plane!")
                 self.plane_index += 1
@@ -198,18 +198,20 @@ class WallBackend(object):
         if verbose:
             azimuth = get_azimuth_angle(new_plane.normal().point3(), degrees=True)
             distance = new_plane.distance()
-            print(
-                f"add to plane {self.plane_index} and pose {self.pose_index}: {azimuth:.0f}deg, {distance:.2f}m"
-            )
+            msg = f"add to plane {self.plane_index} and pose {self.pose_index}: {azimuth:.0f}deg, {distance:.2f}m"
+            print(msg)
+            if logger is not None:
+                logger.warn(msg)
             current_pose = self.result.atPose3(X(self.pose_index))
             new_plane_global = new_plane.transform(current_pose.inverse())
             azimuth = get_azimuth_angle(
                 new_plane_global.normal().point3(), degrees=True
             )
             distance = new_plane_global.distance()
-            print(
-                f"add to plane (global){self.plane_index}: {azimuth:.0f}deg, {distance:.2f}m\n"
-            )
+            # msg = f"add to plane (global){self.plane_index}: {azimuth:.0f}deg, {distance:.2f}m\n"
+            # print(msg)
+            # if logger is not None:
+            #    logger.warn(msg)
 
         factor = gtsam.OrientedPlane3Factor(
             new_plane.planeCoefficients(),
@@ -226,7 +228,7 @@ class WallBackend(object):
         self.need_to_update_results = True
         return factor
 
-    def add_pose(self, r_world, yaw, verbose=False):
+    def add_pose(self, r_world, yaw, verbose=False, logger=None):
         self.pose_index += 1
         new_factors = gtsam.NonlinearFactorGraph()
         initial_estimates = gtsam.Values()
@@ -235,12 +237,6 @@ class WallBackend(object):
             r=gtsam.Rot3.Ypr(yaw, 0, 0), t=gtsam.Point3(*r_world)
         )
         if (self.result is None) or not self.result.exists(X(self.pose_index)):
-            if verbose:
-                print(
-                    "initial estimate",
-                    current_pose.translation(),
-                    current_pose.rotation().yaw(),
-                )
             initial_estimates.insert(X(self.pose_index), current_pose)
             self.all_initial_estimates.insert(X(self.pose_index), current_pose)
 
@@ -248,6 +244,13 @@ class WallBackend(object):
             X(self.pose_index), current_pose, self.pose_noise
         )
         new_factors.push_back(factor)
+
+        if verbose:
+            msg = f"added to pose {self.pose_index}: {current_pose.translation().round(2)}m, {deg(current_pose.rotation().yaw()):.1f}deg"
+            print(msg)
+            if logger is not None:
+                logger.warn(msg)
+
         if self.use_isam:
             self.isam.update(new_factors, initial_estimates)
         else:
@@ -335,6 +338,7 @@ class WallBackend(object):
         n_estimates=1,
         limit_distance=LIMIT_DISTANCE_CM,
         verbose=False,
+        logger=None,
     ):
         """ 
         Add plane factor from distance distributions, using angle ahead.
@@ -368,7 +372,11 @@ class WallBackend(object):
         azimuth_estimated_rad = get_azimuth_angle(plane_local.normal().point3())
         wall_angle_rad = azimuth_estimated_rad + np.pi
         self.add_plane(
-            distance * 1e-2, wall_angle_rad, plane_noise=None, verbose=verbose
+            distance * 1e-2,
+            wall_angle_rad,
+            plane_noise=None,
+            verbose=verbose,
+            logger=logger,
         )
 
     def get_results(self):

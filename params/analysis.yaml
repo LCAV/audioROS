@@ -1,6 +1,0 @@
-wall_detection:
-  ros__parameters:
-    mode: 0 # 0: FSLICE, 1: DSLICE
-    drone: 0 # 0: none, 1: buzzer, 2: flying
-logging: "warn"
-#bag_playback: "experiments/2021_11_23_demo/hover12" # hover12 is also good
