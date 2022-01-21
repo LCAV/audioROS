@@ -53,13 +53,12 @@ class TopicSynchronizer(object):
         elif timestamp < latest_time:
             if verbose and logger:
                 logger.warn(
-                    f"Latest time {latest_time} bigger than requested {timestamp}."
+                    f" {timestamp}, all times currently in buffer: {self.get_times()}"
                 )
-                logger.warn(f"All times currently in buffer: {self.get_times()}")
             if self.n_buffer > 1:
                 min_idx = (self.buffer_idx - 1) % self.n_buffer
                 max_idx = (self.buffer_idx - self.n_buffer) % self.n_buffer
-                if verbose and logger:
+                if False and logger:
                     logger.warn(
                         f"Checking {get_time(self.buffer[max_idx])} to {get_time(self.buffer[min_idx])}"
                     )
@@ -69,11 +68,9 @@ class TopicSynchronizer(object):
                 for i in range(1, self.n_buffer + 1):
                     idx = (self.buffer_idx - i) % self.n_buffer
                     time = get_time(self.buffer[idx])
-                    if verbose and logger:
+                    if False and logger:
                         logger.warn(f"Checking {min_time} < {time} < {timestamp}")
                     if (time is not None) and (time < timestamp):
-                        if verbose and logger:
-                            logger.warn("ok")
                         break
                     elif (time is not None) and allow_reuse and (time == timestamp):
                         break

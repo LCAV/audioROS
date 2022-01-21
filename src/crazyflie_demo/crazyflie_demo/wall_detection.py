@@ -6,7 +6,6 @@ import numpy as np
 
 import rclpy
 from rclpy.action import ActionClient
-from rclpy.node import Node
 from rclpy.action import ActionServer
 
 from audio_interfaces.action import CrazyflieCommands, StateMachine
@@ -122,7 +121,7 @@ class WallDetection(NodeWithParams):
 
         self.pose_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=10)
         self.subscription_pose = self.create_subscription(
-            PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
+            PoseRaw, "geometry/pose_raw_synch", self.pose_synch.listener_callback, 10,
         )
         self.subscription_signals = self.create_subscription(
             SignalsFreq, "audio/signals_f", self.listener_callback, 10
@@ -159,6 +158,10 @@ class WallDetection(NodeWithParams):
 
         # movement stuff
         self.velocity_ms = VELOCITY_CMS * 1e-2
+
+        # start main timer
+        timer_period = 1e-3  # seconds
+        self.timer = self.create_timer(timer_period, self.main)
 
     def add_to_calib(self, magnitudes):
         if self.calibration_count == 0:
@@ -203,16 +206,7 @@ class WallDetection(NodeWithParams):
 
         # Sometimes, this callback is called while the other TopicSynchronizer has not
         # registered the latest messages yet. therefore, we add a little buffer
-        msg_pose = None
-        i = 0
-        timeout = 3
-        while msg_pose is None:
-            msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=False)
-            i += 1
-            if i > timeout:
-                self.get_logger().warn("did not register valid pose")
-                break
-        # msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=True)
+        msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=False)
 
         if msg_pose is not None:
             self.get_logger().warn(
@@ -293,7 +287,7 @@ class WallDetection(NodeWithParams):
     def server_callback(self, goal_handle):
         msg = goal_handle.request
         # find which enum the state corresponds to
-        self.state_by_server = state(msg.state)
+        self.state_by_server = State(msg.state)
         self.get_logger().info(
             f"Action received: {msg.state} which corresponds to {self.state_by_server}"
         )
@@ -313,7 +307,6 @@ class WallDetection(NodeWithParams):
             self.get_logger().warn("done")
         else:
             self.get_logger().warn("simulating buzzer")
-            rclpy.spin_once(self)
 
     def take_off(self, height_m=0.4):
         if self.current_params["drone"] > 1:
@@ -322,7 +315,6 @@ class WallDetection(NodeWithParams):
             self.get_logger().warn("done")
         else:
             self.get_logger().info(f"simulating takeoff")
-            rclpy.spin_once(self)
 
     def land(self):
         if self.current_params["drone"] > 1:
@@ -332,7 +324,6 @@ class WallDetection(NodeWithParams):
             self.get_logger().warn("exiting...")
         else:
             self.get_logger().info(f"simulating landing")
-            rclpy.spin_once(self)
 
     def move_linear(self):
         if self.current_params["drone"] > 1:
@@ -341,10 +332,8 @@ class WallDetection(NodeWithParams):
             self.get_logger().info("done")
         else:
             self.get_logger().info(f"simulating moving with {self.velocity_ms:.2f}m/s")
-            rclpy.spin_once(self)
 
     def execute_state_machine(self):
-        rclpy.spin_once(self)
         if self.state == State.GROUND:
             self.take_off()
             return State.HOVER
@@ -383,7 +372,6 @@ class WallDetection(NodeWithParams):
         elif self.state == State.WAIT_CALIB:
             # wait until calibration is done
             if self.calibration_count < N_CALIBRATION:
-                rclpy.spin_once(self)
                 return State.WAIT_CALIB
 
             self.calibration = np.median(self.calibration_data, axis=2)
@@ -399,9 +387,10 @@ class WallDetection(NodeWithParams):
 
             self.new_sample_to_treat = False
 
-            future = self.ask_about_wall()
-            self.get_logger().warn(f"Action result: {future.message}")
-            return State[future.result().flag]
+            self.ask_about_wall()
+            # if there is a wall in sight, the attribute state_by_server
+            # is changed, and below will be overwritten in main.
+            return State.WAIT_DISTANCE
 
         elif self.state == State.AVOID_DISTANCE:
             # invert velocity
@@ -426,22 +415,25 @@ class WallDetection(NodeWithParams):
             raise ValueError(self.state)
 
     def main(self):
-        self.get_logger().info("Starting main")
-        while self.state != State.ABORT:
-            self.state = self.execute_state_machine()
-
-            # check if in the meantime the server was called
-            if self.state_by_server is not None:
-                self.get_logger().info(
-                    f"Overwriting {self.state} with {self.state_by_server}"
-                )
-                self.state = self.state_by_server
-                self.state_by_server = None
-
         # land and exit
-        self.set_buzzer(0)
-        self.land()
-        return
+        if self.state == State.ABORT:
+            self.set_buzzer(0)
+            self.land()
+            rclpy.shutdown(0)
+            return
+
+        state = self.execute_state_machine()
+        if state != self.state:
+            self.get_logger().warn(f"Change state from {self.state} to {state}")
+            self.state = state
+
+        # check if in the meantime the server was called
+        if self.state_by_server is not None:
+            self.get_logger().info(
+                f"Overwriting {self.state} with {self.state_by_server}"
+            )
+            self.state = self.state_by_server
+            self.state_by_server = None
 
     def sleep(self, time_s):
         self.get_logger().info(f"sleeping for {time_s}...")
@@ -472,23 +464,18 @@ class WallDetection(NodeWithParams):
         rclpy.spin_until_future_complete(self, future)
         return future
 
-        # self._send_goal_future = self._action_client.send_goal_async(
-        #    goal_msg, feedback_callback=self.feedback_callback
-        # )
-        # self._send_goal_future.add_done_callback(self.goal_response_callback)
-        # return self._send_goal_future
-
     def ask_about_wall(self):
         self.get_logger().warn(f"Sending current state {self.state} to wall_mapper...")
         goal_msg = StateMachine.Goal()
         goal_msg.state = self.state.value
 
-        future = self._action_client_wall.send_goal_async(
+        self._send_goal_future = self._action_client_wall.send_goal_async(
             goal_msg, feedback_callback=self.feedback_callback
         )
-        rclpy.spin_until_future_complete(self, future)
-        self.get_logger().warn("... done!")
-        return future
+        self._send_goal_future.add_done_callback(self.goal_response_callback)
+        # rclpy.spin_until_future_complete(self, future)
+        # self.get_logger().warn(f"Result: {future.result().message}")
+        # return future.result().flag
 
     def feedback_callback(self, feedback):
         self.get_logger().warn(feedback.message)
@@ -498,25 +485,27 @@ class WallDetection(NodeWithParams):
         if not goal_handle.accepted:
             self.get_logger().warn("goal_response_callback: Command rejected")
             return
-
         # self.get_logger().info("goal_response_callback: Command accepted")
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
 
     def get_result_callback(self, future):
-        result = future.result().result
-        # self.get_logger().info(f"get_result_callback: Result: {result.message}")
+        new_state = future.result().flag
+        state_by_server = State(new_state)
+        self.get_logger().info(
+            f"get_result_callback: Change to state {state_by_server}"
+        )
 
     def feedback_callback(self, feedback_msg):
         feedback = feedback_msg.feedback
-        # self.get_logger().info(f"Received feedback: {feedback.message}")
+        self.get_logger().info(f"Received feedback: {feedback.message}")
 
 
 def main(args=None):
     rclpy.init(args=args)
     action_client = WallDetection()
     try:
-        action_client.main()
+        rclpy.spin(action_client)
     except Exception as e:
         print(e)
         action_client.set_buzzer(0)
