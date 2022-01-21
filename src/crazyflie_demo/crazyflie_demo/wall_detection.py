@@ -1,3 +1,4 @@
+from copy import deepcopy
 from enum import Enum
 import sys
 import time
@@ -119,13 +120,21 @@ class WallDetection(NodeWithParams):
             self, StateMachine, "state_machine", self.server_callback
         )
 
-        self.pose_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=10)
-        self.subscription_pose = self.create_subscription(
-            PoseRaw, "geometry/pose_raw_synch", self.pose_synch.listener_callback, 10,
-        )
+        self.signals_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=2)
         self.subscription_signals = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.listener_callback, 10
+            SignalsFreq, "audio/signals_f", self.signals_synch.listener_callback, 10
         )
+        # self.pose_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=2)
+        self.subscription_pose = self.create_subscription(
+            PoseRaw,
+            "geometry/pose_raw_synch",
+            self.listener_callback,
+            10,
+            # PoseRaw, "geometry/pose_raw_synch", self.pose_synch.listener_callback, 10,
+        )
+        # self.subscription_signals = self.create_subscription(
+        #    SignalsFreq, "audio/signals_f", self.listener_callback, 10
+        # )
 
         # self.dist_raw_synch = TopicSynchronizer(10, self.get_logger())
         if PUBLISH_RAW:
@@ -164,6 +173,15 @@ class WallDetection(NodeWithParams):
         self.timer = self.create_timer(timer_period, self.main)
 
     def add_to_calib(self, magnitudes):
+        # TODO(FD) continue here, figure out why this happens
+        # when it doesn't happen for offline analysis
+        invalid_freqs = np.any(magnitudes <= 0, axis=0)
+        if np.sum(invalid_freqs):
+            self.get_logger().error(
+                f"Ignoring invalid values: {magnitudes[:, invalid_freqs].flatten()} for {np.where(invalid_freqs)[0]}."
+            )
+            return
+
         if self.calibration_count == 0:
             self.calibration_data = magnitudes[:, :, None]
             self.calibration_count += 1
@@ -177,14 +195,19 @@ class WallDetection(NodeWithParams):
             )
 
     def calibrate(self, magnitudes):
-        # sometimes there can be a sample missing from the end of the signal...
+        # sometimes there can be a sample missing from the end of the signal.
         if len(self.calibration) != len(magnitudes):
-            self.get_logger().warn("length mismatch! {len(magnitudes)}")
             calibration_here = self.calibration[:, : len(magnitudes)]
         else:
             calibration_here = self.calibration
-        valid_freqs = np.all(calibration_here > 0, axis=0)
-        return magnitudes[:, valid_freqs] / calibration_here[:, valid_freqs]
+        invalid_freqs = np.any(calibration_here <= 0, axis=0)
+        if np.sum(invalid_freqs):
+            self.get_logger().error(
+                f"Encountered invalid values: {calibration_here[:, invalid_freqs].flatten()} for {np.where(invalid_freqs)[0]}."
+            )
+        magnitudes_calib = deepcopy(magnitudes)
+        magnitudes_calib[:, ~invalid_freqs] /= calibration_here[:, ~invalid_freqs]
+        return magnitudes_calib
 
     def get_raw_distributions(self, magnitudes_calib, freqs):
         diff_dict = {}
@@ -196,21 +219,21 @@ class WallDetection(NodeWithParams):
             diff_dict[mic_i] = (diff, prob_mic)
         return diff_dict
 
-    def listener_callback(self, msg_signals):
+    def listener_callback(self, msg_pose):
         if not self.state in [State.WAIT_DISTANCE, State.WAIT_ANGLE, State.WAIT_CALIB]:
             # self.get_logger().warn(f"ignoring signal because state is {self.state}")
             return
 
-        # use the audio signal timestamp as reference for this measurement.
-        timestamp = msg_signals.timestamp
+        timestamp = msg_pose.timestamp
 
         # Sometimes, this callback is called while the other TopicSynchronizer has not
         # registered the latest messages yet. therefore, we add a little buffer
-        msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=False)
 
-        if msg_pose is not None:
+        # TODO(FD) continue here, still have too much lag
+        msg_signals = self.signals_synch.get_latest_message(timestamp, verbose=False)
+        if msg_signals is not None:
             self.get_logger().warn(
-                f"for audio {timestamp}, using pose {msg_pose.timestamp}. lag: {msg_pose.timestamp - timestamp}ms"
+                f"for pose {timestamp}, using audio {msg_signals.timestamp}. lag: {msg_signals.timestamp - timestamp}ms"
             )
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
             if r_world[2] < 0.3:
@@ -222,10 +245,13 @@ class WallDetection(NodeWithParams):
 
             if self.state == State.WAIT_CALIB:
                 self.add_to_calib(magnitudes)
-                return None
+                return
             elif self.state == State.WAIT_DISTANCE:
-                magnitudes_calib = self.calibrate(magnitudes)
-                assert magnitudes.shape == magnitudes_calib.shape
+                t1 = time.time()
+                magnitudes_calib = self.calibrate(deepcopy(magnitudes))
+                assert (
+                    magnitudes.shape == magnitudes_calib.shape
+                ), f"{magnitudes.shape, magnitudes_calib.shape}"
 
                 diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
 
@@ -254,9 +280,8 @@ class WallDetection(NodeWithParams):
                     self.get_logger().info(
                         f"Published moving-average distribution with timestamp {timestamp}"
                     )
-
+                self.get_logger().warn(f"Callback took {time.time() - t1:.2f} seconds")
                 self.new_sample_to_treat = True
-
             elif self.state == State.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
                     n_max=N_MAX, verbose=False
@@ -283,6 +308,8 @@ class WallDetection(NodeWithParams):
                 self.get_logger().info(
                     f"Current angle estimate: {angle_estimate:.1f}deg, probability:{np.max(prob)}"
                 )
+        else:
+            self.get_logger().error(f"Did not find valid audio for pose {timestamp}")
 
     def server_callback(self, goal_handle):
         msg = goal_handle.request
@@ -417,6 +444,7 @@ class WallDetection(NodeWithParams):
     def main(self):
         # land and exit
         if self.state == State.ABORT:
+            self.get_logger().error(f"Received ABORT state")
             self.set_buzzer(0)
             self.land()
             rclpy.shutdown(0)
@@ -508,6 +536,7 @@ def main(args=None):
         rclpy.spin(action_client)
     except Exception as e:
         print(e)
+        raise e
         action_client.set_buzzer(0)
         action_client.land()
         rclpy.shutdown()

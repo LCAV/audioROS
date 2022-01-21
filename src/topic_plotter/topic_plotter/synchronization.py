@@ -19,6 +19,7 @@ from .live_plotter import LivePlotter
 
 N_TIMES_POSE = 100
 N_TIMES_SIGNALS = 5
+N_TIMES_POSE_SYNCH = 5
 FIG_SIZE = (10, 4)
 
 
@@ -26,6 +27,7 @@ class TimePlotter(NodeWithParams):
     PARAMS_DICT = {
         "n_times_pose": N_TIMES_POSE,
         "n_times_signals": N_TIMES_SIGNALS,
+        "n_times_pose_synch": N_TIMES_POSE_SYNCH,
     }
 
     def __init__(self):
@@ -39,6 +41,12 @@ class TimePlotter(NodeWithParams):
         self.subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.listener_callback_pose_raw, 10
         )
+        self.subscription_pose = self.create_subscription(
+            PoseRaw,
+            "geometry/pose_raw_synch",
+            self.listener_callback_pose_raw_synch,
+            10,
+        )
         # need to do this here becasue it requires self.axs etc.
 
         self.lines = {
@@ -46,7 +54,7 @@ class TimePlotter(NodeWithParams):
                 k: np.full(self.current_params[f"n_times_{name}"], np.nan)
                 for k in ["x", "y"]
             }
-            for name in ["signals", "pose"]
+            for name in ["signals", "pose", "pose_synch"]
         }
         self.plotter = LivePlotter(
             2, 0, label="time", log=False, ax=self.ax, fig=self.fig,
@@ -76,9 +84,22 @@ class TimePlotter(NodeWithParams):
         self.set_lims()
         self.fig.canvas.draw()
 
+    def listener_callback_pose_raw_synch(self, msg):
+        x = msg.timestamp * 1e-3
+        y = 0.5
+        self.lines["pose_synch"]["x"] = np.r_[self.lines["pose_synch"]["x"][1:], x]
+        self.lines["pose_synch"]["y"] = np.r_[self.lines["pose_synch"]["y"][1:], y]
+        self.plotter.update_scatter(
+            self.lines["pose_synch"]["x"], self.lines["pose_synch"]["y"], "pose_synch"
+        )
+        self.set_lims()
+        self.fig.canvas.draw()
+
     def set_lims(self):
-        xmin = np.nanmin([self.lines["pose"]["x"][0], self.lines["signals"]["x"][0]])
-        xmax = np.nanmax([self.lines["pose"]["x"][-1], self.lines["signals"]["x"][-1]])
+        mins = [val["x"][0] for val in self.lines.values()]
+        maxs = [val["x"][-1] for val in self.lines.values()]
+        xmin = np.nanmin(mins)
+        xmax = np.nanmax(maxs)
         if np.isnan(xmin):
             xmin = None
         if np.isnan(xmax):

@@ -37,13 +37,15 @@ class PoseSynch(Node):
         i = 0
         timeout = 10
         while msg_pose is None:
-            msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=True)
+            msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=False)
             i += 1
             if i > timeout:
-                self.get_logger().warn("did not register valid pose")
+                self.get_logger().warn(
+                    "did not register valid pose at time {msg_signals.timestamp}"
+                )
                 return
 
-        self.get_logger().warn(
+        self.get_logger().info(
             f"for audio {timestamp}, using pose {msg_pose.timestamp}. lag: {msg_pose.timestamp - timestamp}ms"
         )
         self.publisher_pose_raw_synch.publish(msg_pose)
