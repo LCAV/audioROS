@@ -1,0 +1,13 @@
+gateway:
+  ros__parameters:
+    window_type: 2 # flattop
+    bin_selection: 5 # one sweep = one buffer
+wall_detection:
+  ros__parameters:
+    mode: 0 # 0: FSLICE, 1: DSLICE
+    drone: 1 # 0: none, 1: buzzer, 2: flying
+launch:
+  ros__parameters:
+    log_level: "warn"
+    bag_playback: "" 
+    bag_record_root: "datasets/2022_01_25/test"

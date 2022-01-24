@@ -51,6 +51,8 @@ id = f"radio://0/80/2M/{cf_id}"
 MAX_YLIM = 1e13  # set to inf for no effect.
 MIN_YLIM = 1e-13  # set to -inf for no effect.
 
+DEBUG = True  # some extra verbose stuff
+
 
 class Gateway(Node):
     # parameter default values, will be overwritten by
@@ -75,8 +77,6 @@ class Gateway(Node):
         "land_velocity": 0.0,
         "move_distance": 0.0,
         "buzzer_idx": 0,
-        # "buzzer_effect": -1,
-        # "buzzer_freq": 0,
     }
 
     def __init__(self, reader_crtp):
@@ -118,10 +118,10 @@ class Gateway(Node):
 
         self.add_on_set_parameters_callback(self.set_params)
 
-        # need to do this to send initial parameters
-        # over to Crazyflie.
-        parameters = self.get_parameters(self.PARAMS_DICT.keys())
-        self.set_parameters(parameters)
+        # fill parameters with default values, unless otherwise specified
+        # by parameters file.
+        params = self.get_parameters(self.PARAMS_DICT.keys())
+        self.set_parameters(params)
 
         # choose high publish rate so that we introduce as little
         # waiting time as possible
@@ -235,8 +235,11 @@ class Gateway(Node):
             signals_f[i].real = signals_f_vect[i :: N_MICS * 2]
             signals_f[i].imag = signals_f_vect[i + N_MICS :: N_MICS * 2]
 
-        window_type = self.get_parameter("audio.window_type").value
-        signals_f /= WINDOW_CORRECTION[window_type]
+        window_type = self.get_parameter("window_type").value
+        if window_type is not None:
+            signals_f /= WINDOW_CORRECTION[window_type]
+        else:
+            self.get_logger().warn("window type is None")
 
         if DEBUG:
             abs_signals_f = np.abs(signals_f)
@@ -297,17 +300,18 @@ class Gateway(Node):
         for param in params:
             # we need this in case this parameter was not set yet at startup.
             # in that case we use the default values.
+            # TODO: althought these default values are sent to
+            # the Crazyflie as desired, the parameter is not actually
+            # set with these values and will not be listed by the cli.
             if param.type_ == param.Type.NOT_SET:
                 param = rclpy.parameter.Parameter(
                     param.name, value=self.PARAMS_DICT[param.name]
                 )
 
             if param.name == "send_audio_enable":
-                self.get_logger().info(f"set {param.name} to {param.value}")
                 # needs to also reset the arrays.
                 if self.reader_crtp is not None:
                     self.reader_crtp.send_audio_enable(param.value)
-
             else:
                 param_is_command = self.send_command(param.name, param.value)
                 if not param_is_command:
@@ -363,11 +367,10 @@ class Gateway(Node):
         try:
             self.reader_crtp.set_audio_param(param)
             self.get_logger().info(
-                f"changed {param.name} from {old_value} to {param.value}"
+                f"changed audio parameter {param.name} from {old_value} to {param.value}"
             )
         except Exception as e:
             self.get_logger().warn(f"error when trying to set {param.name}: {e}")
-        return True
 
 
 def main(args=None):
@@ -393,15 +396,12 @@ def main(args=None):
         )
         node = Gateway(reader_crtp)
 
-        try:
-            rclpy.spin(node)
-        except Exception as e:
-            print("Node interrupted: Exception", e)
-            reader_crtp.send_audio_enable(0)
-            reader_crtp.send_disable_motors()
-            reader_crtp.send_buzzer_idx(0)
-            print("Stop buzzer, motors, and audio sending, wait for 1s...")
-            time.sleep(1)
+        rclpy.spin(node)
+        print("Stop buzzer, motors, and audio sending, wait for 1s...")
+        reader_crtp.send_audio_enable(0)
+        reader_crtp.send_disable_motors()
+        reader_crtp.send_buzzer_idx(0)
+        time.sleep(1)
 
     node.destroy_node()
     rclpy.shutdown()

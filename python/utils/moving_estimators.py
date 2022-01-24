@@ -127,8 +127,9 @@ class MovingEstimator(object):
             if len(idx) < 1:
                 warnings.warn(f"moved out of range: {starting_distance:.0f}cm")
             # shift probability at starting_distance to 0, etc.
-            probs_dist = np.roll(probs_dist, shift=-idx[0])
-            probs_dist[-idx[0] :] = 1e-3
+            else:
+                probs_dist = np.roll(probs_dist, shift=-idx[0])
+                probs_dist[-idx[0] :] = 1e-3
         return probs_dist, probs_angles
 
     def get_distance_estimate(self, dist):

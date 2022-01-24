@@ -78,7 +78,7 @@ class DistributionsPlotter(Node):
         self.results_matrix[name] = np.c_[
             self.results_matrix[name][:, 1:], probs.reshape(-1, 1)
         ]
-        self.get_logger().warn(f"Updating for time {msg_dist.timestamp}")
+        # self.get_logger().warn(f"Updating for time {msg_dist.timestamp}")
 
         self.plotter_dict[f"{name}"].update_mesh(
             self.results_matrix[name],

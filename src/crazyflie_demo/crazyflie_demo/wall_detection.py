@@ -116,6 +116,7 @@ class WallDetection(NodeWithParams):
         super().__init__("wall_detection")
 
         self._action_client = ActionClient(self, CrazyflieCommands, "commands")
+        # TODO(FD) below should be a service and not actionserver
         self._action_client_wall = ActionClient(
             self, StateMachine, "state_machine_wall"
         )
@@ -169,6 +170,20 @@ class WallDetection(NodeWithParams):
         # start main timer
         timer_period = 1e-3  # seconds
         self.timer = self.create_timer(timer_period, self.main)
+
+        self.get_logger().warn(f"Current parameters: {self.current_params}")
+
+    def flight_check(self):
+        """ 
+        drone=0: analyzing bag file, should be "flying" to do analysis
+        drone=1: only buzzer, for debugging, don't mind if not flying
+        drone=2: full experiment, has to be flying. 
+        """
+        if self.current_params["drone"] == 1:
+            return True
+        if position_cm[2] < FLYING_HEIGHT_CM * 1e-2:
+            return False
+        return True
 
     def add_to_calib(self, magnitudes):
         invalid_freqs = np.any(magnitudes <= 0, axis=0)
@@ -230,11 +245,11 @@ class WallDetection(NodeWithParams):
     def listener_callback_offline(
         self, signals_f, freqs, position_cm, yaw_deg, calib=False, timestamp=0
     ):
-        from audio_stack.parameters import WINDOW_CORRECTION
 
-        if position_cm[2] < FLYING_HEIGHT_CM * 1e-2:
-            print("Not flying.")
+        if not self.flight_check():
             return
+
+        from audio_stack.parameters import WINDOW_CORRECTION
 
         magnitudes = np.abs(signals_f).T  # 4 x 20
         magnitudes *= WINDOW_CORRECTION[
@@ -284,8 +299,8 @@ class WallDetection(NodeWithParams):
             #    f"for pose {timestamp}, using audio {msg_signals.timestamp}. lag: {msg_signals.timestamp - timestamp}ms"
             # )
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
-            if r_world[2] < FLYING_HEIGHT_CM * 1e-2:
-                self.get_logger().warn("Not flying.")
+
+            if not self.flight_check():
                 return
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
@@ -382,7 +397,7 @@ class WallDetection(NodeWithParams):
         if self.current_params["drone"] > 0:
             self.get_logger().warn("setting buzzer...")
             self.send_command("buzzer_idx", buzzer_idx)
-            self.get_logger().warn("done")
+            self.get_logger().warn("...done")
         else:
             self.get_logger().warn("simulating buzzer")
 
@@ -539,9 +554,10 @@ class WallDetection(NodeWithParams):
         if self.current_params["drone"] > 0:
             self._action_client.wait_for_server()  # timeout_sec=0.5)
 
-        future = self._action_client.send_goal_async(goal_msg)
-        rclpy.spin_until_future_complete(self, future)
-        return future
+        self._send_goal_future = self._action_client.send_goal_async(
+            goal_msg, feedback_callback=self.feedback_callback
+        )
+        self._send_goal_future.add_done_callback(self.goal_response_command)
 
     def ask_about_wall(self):
         self.get_logger().info(f"Sending current state {self.state} to wall_mapper...")
@@ -551,22 +567,29 @@ class WallDetection(NodeWithParams):
         self._send_goal_future = self._action_client_wall.send_goal_async(
             goal_msg, feedback_callback=self.feedback_callback
         )
-        self._send_goal_future.add_done_callback(self.goal_response_callback)
-        # rclpy.spin_until_future_complete(self, future)
-        # self.get_logger().warn(f"Result: {future.result().message}")
-        # return future.result().flag
+        self._send_goal_future.add_done_callback(self.goal_response_wall)
 
-    def feedback_callback(self, feedback):
-        self.get_logger().warn(feedback.message)
+    def goal_response_command(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().warn("goal_response_command: Command rejected")
+            return
+        # self.get_logger().info("goal_response_callback: Command accepted")
+        self._get_result_future = goal_handle.get_result_async()
+        self._get_result_future.add_done_callback(self.get_result_command)
 
-    def goal_response_callback(self, future):
+    def get_result_command(self, future):
+        # msg = future.result().message
+        self.get_logger().info(f"get_result_command: got command.")
+
+    def goal_response_wall(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().warn("goal_response_callback: Command rejected")
             return
         # self.get_logger().info("goal_response_callback: Command accepted")
         self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.get_result_callback)
+        self._get_result_future.add_done_callback(self.get_result_wall)
 
     def get_result_callback(self, future):
         new_state = future.result().flag

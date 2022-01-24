@@ -108,7 +108,7 @@ class ArrayCRTP(object):
         self.n_frames = n_frames
         self.n_bytes = n_frames * np.dtype(dtype).itemsize + extra_bytes
         self.n_packets_full, self.n_bytes_last = divmod(self.n_bytes, CRTP_PAYLOAD)
-        #print(f"{name}: waiting for {self.n_bytes} bytes.")
+        # print(f"{name}: waiting for {self.n_bytes} bytes.")
         self.packet_counter = 0
         self.dtype = dtype
         self.packet_start_time = time.time()
@@ -263,7 +263,7 @@ class ReaderCRTP(object):
         if self.cf is not None:
             self.cf.param.set_value(f"audio.{param.name}", param.value)
 
-    def send_disable_motors():
+    def send_disable_motors(self):
         if self.cf is not None:
             self.cf.param.set_value("motorPowerSet.enable", 0)
 
