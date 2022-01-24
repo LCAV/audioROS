@@ -32,7 +32,7 @@ N_MAX = 14  # how many distances to use
 
 # flsice
 PUBLISH_MOVING = True
-PUBLISH_RAW = True
+PUBLISH_RAW = False
 
 DISTANCES_CM = np.arange(100, step=5)
 ANGLES_DEG = np.arange(360, step=30)
@@ -342,13 +342,14 @@ class WallDetection(NodeWithParams):
                 )
 
             if PUBLISH_MOVING:
-                # self.get_logger().warn(f"diff_dict: {diff_dict[0][1][:3]}")
                 self.moving_estimator.add_distributions(
                     diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
                 )
                 probabilities, __ = self.moving_estimator.get_distributions(local=True)
                 # self.get_logger().warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")
 
+                # TODO(FD) to save time, we could consider only publishing the distribution
+                # if it contains viable distance estimates.
                 msg = create_distribution_message(
                     self.moving_estimator.distances_cm, probabilities, timestamp
                 )

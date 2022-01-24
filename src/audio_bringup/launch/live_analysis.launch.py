@@ -18,7 +18,7 @@ def generate_launch_description():
         "wall_mapper": {"pkg": "audio_gtsam"},
         "wall_detection": {"pkg": "crazyflie_demo"},
         "pose_synch": {"pkg": "audio_stack"},
-        "time": {"pkg": "topic_plotter"},
+        # "time": {"pkg": "topic_plotter"},
         # "geometry": {"pkg": "topic_plotter"},
         "distribution": {"pkg": "topic_plotter"},
         # "status": {"pkg": "topic_plotter"},
