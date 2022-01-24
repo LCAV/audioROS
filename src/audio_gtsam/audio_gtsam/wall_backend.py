@@ -357,8 +357,8 @@ class WallBackend(object):
         v_estimate_global = self.get_velocity_estimate()
         if v_estimate_global is None:
             return
-
         normal_vector_global = -v_estimate_global / np.linalg.norm(v_estimate_global)
+
         # hack to get the local normal vector
         # TODO(FD) in add_plane, we will convert the angle back to normal, so should
         # probably refactor this. Also, when we don't care about the distance it
@@ -422,18 +422,23 @@ class WallBackend(object):
 
     def get_velocity_estimate(self):
         """ Return the direction estimate (not true velocity because we don't save timing) """
-        if self.pose_index < 1:  # need at least two poses to calculate velocity
+        if self.pose_index <= 1:  # need at least two poses to calculate velocity
             return None
 
         if self.need_to_update_results:
             self.get_results()
 
         n_poses = min(self.pose_index, N_VELOCITY_ESTIMATE)
+
         xs = np.empty((n_poses, 3))
         for i in range(n_poses):
             idx = self.pose_index - n_poses + i
             xs[i, :] = self.result.atPose3(X(idx)).translation()
-        return np.mean(np.diff(xs, axis=0), axis=0)  # in global coordinates!
+        velocity = np.mean(np.diff(xs, axis=0), axis=0)  # in global coordinates!
+        if np.linalg.norm(velocity) == 0:
+            return None
+
+        return velocity
 
     def get_distance_estimate(self):
         if (self.pose_index < 0) or (self.plane_index < 0):

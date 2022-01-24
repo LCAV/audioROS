@@ -41,7 +41,7 @@ class PoseSynch(Node):
             i += 1
             if i > timeout:
                 self.get_logger().warn(
-                    "did not register valid pose at time {msg_signals.timestamp}"
+                    f"did not register valid pose at time {msg_signals.timestamp}"
                 )
                 return
 

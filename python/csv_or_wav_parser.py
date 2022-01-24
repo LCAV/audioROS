@@ -126,7 +126,8 @@ def parse_experiments(exp_name="2020_12_9_moving", verbose=False):
         stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
 
-        seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
+        # seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
+        seconds = df.timestamp.values / 1000.0
         frequencies_matrix = np.array([*df.loc[:, "frequencies"]])
 
         all_items = dict(
@@ -186,7 +187,8 @@ def parse_fslice_experiments(exp_name, verbose=False):
         stft = np.array([*df.signals_f.values])  # n_times x n_mics x n_freqs
         stft = clean_stft(stft)
 
-        seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
+        # seconds = (df.timestamp.values - df.iloc[0].timestamp) / 1000
+        seconds = df.timestamp.values / 1000.0
         frequencies_matrix = np.array([*df.loc[:, "frequencies"]])
 
         all_items = dict(

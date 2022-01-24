@@ -57,7 +57,7 @@ class WallMapper(NodeWithParams):
 
         # add pose factor
         self.wall_backend.add_pose(
-            r_world, yaw_deg / 180 * np.pi, verbose=True, logger=self.get_logger()
+            r_world, yaw_deg / 180 * np.pi, verbose=False, logger=self.get_logger()
         )
 
         # add plane factor
@@ -66,11 +66,11 @@ class WallMapper(NodeWithParams):
         # self.get_logger().warn(f"distribution: {distances[0]}...{distances[-1]}, {probs[0]}, {probs[-1]}")
 
         self.wall_backend.add_plane_from_distances(
-            distances, probs, verbose=True, logger=self.get_logger()
+            distances, probs, verbose=False, logger=self.get_logger()
         )
 
     def server_callback(self, goal_handle):
-        self.get_logger().warn(f"Server callback")
+        # self.get_logger().warn(f"Server callback")
         msg = goal_handle.request
         # find which enum the state corresponds to
         state_by_server = State(msg.state)

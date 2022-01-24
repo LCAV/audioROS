@@ -121,20 +121,22 @@ def read_df(
         inplace=True,
         errors="ignore",
     )
-    pose_columns = set(
-        [
-            "vx",
-            "vy",
-            "x",
-            "y",
-            "z",
-            "yaw_deg",
-            "yaw_rate_deg",
-            "timestamp",
-            "index",
-            "topic",
-        ]
-    ).intersection(df.columns)
+    pose_columns = list(
+        set(
+            [
+                "vx",
+                "vy",
+                "x",
+                "y",
+                "z",
+                "yaw_deg",
+                "yaw_rate_deg",
+                "timestamp",
+                "index",
+                "topic",
+            ]
+        ).intersection(df.columns)
+    )
     df_pose = df.loc[df.topic == "geometry/pose_raw", pose_columns]
     return df_audio, df_pose
 
@@ -365,7 +367,7 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=Fa
         print(f"for audio {timestamp}, using position {pos_row.timestamp}")
 
         # find position columns
-        pos_columns = set(pos_row.index).intersection(df.columns)
+        pos_columns = list(set(pos_row.index).intersection(df.columns))
         if lag <= MAX_ALLOWED_LAG_MS:
             df.loc[i, pos_columns] = pos_row[pos_columns]
         else:

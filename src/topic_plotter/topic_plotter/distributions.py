@@ -38,12 +38,12 @@ class DistributionsPlotter(Node):
 
         topic = "results/distribution_raw"
         self._subscription_distribution_raw = self.create_subscription(
-            Distribution, topic, self.listener_callback_distribution_raw, 10
+            Distribution, topic, self.listener_callback_distribution_raw, 20
         )
         self.get_logger().info(f"subscribed to {topic}")
         topic = "results/distribution_moving"
         self._subscription_distribution_moving = self.create_subscription(
-            Distribution, topic, self.listener_callback_distribution_moving, 10
+            Distribution, topic, self.listener_callback_distribution_moving, 20
         )
         self.get_logger().info(f"subscribed to {topic}")
 
@@ -78,6 +78,7 @@ class DistributionsPlotter(Node):
         self.results_matrix[name] = np.c_[
             self.results_matrix[name][:, 1:], probs.reshape(-1, 1)
         ]
+        self.get_logger().warn(f"Updating for time {msg_dist.timestamp}")
 
         self.plotter_dict[f"{name}"].update_mesh(
             self.results_matrix[name],

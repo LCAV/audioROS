@@ -32,10 +32,19 @@ class MovingEstimator(object):
     DISTANCES_CM = np.arange(100, step=2)
     ANGLES_DEG = np.arange(360, step=10)
 
-    def __init__(self, n_window=2, platform="crazyflie"):
+    def __init__(
+        self,
+        n_window=2,
+        platform="crazyflie",
+        distances_cm=DISTANCES_CM,
+        angles_deg=ANGLES_DEG,
+    ):
         self.difference_p = {n: {} for n in range(n_window)}
         self.positions = [[]] * n_window
         self.rotations = [[]] * n_window
+
+        self.distances_cm = distances_cm
+        self.angles_deg = angles_deg
 
         self.dim = 2
         self.reference = None
@@ -60,7 +69,6 @@ class MovingEstimator(object):
         if len(position_cm) > 2:
             position_cm = position_cm[:2]
 
-        # detect if we are still at the same position.
         self.index += 1
         if self.index == self.n_window - 1:
             self.filled = True
@@ -85,30 +93,37 @@ class MovingEstimator(object):
         return self.filled
 
     def get_distributions(self, local=False, verbose=False):
+        def clean_distribution(dist):
+            if not np.any(~np.isnan(dist)):
+                dist = np.ones_like(dist)
+            sum_ = np.sum(dist)
+            if sum_:
+                dist /= sum_
+            return dist
+
         # get angle distribution (according to when distributions align best)
         distributions = self.get_joint_distribution(verbose=verbose)
 
         # softmax
         # probs_angles = np.exp(np.max(distributions, axis=1))
         probs_angles = np.sum(distributions, axis=1)
-        probs_angles /= np.sum(probs_angles)
+        probs_angles = clean_distribution(probs_angles)
 
-        angle_idx = np.argwhere(probs_angles == np.amax(probs_angles))[0]
+        angle_idx = np.argwhere(probs_angles == np.nanmax(probs_angles))[0]
         if len(angle_idx) > 1:
             print(
                 "Warning: ambiguous result for angle distribution! Taking average for distance."
             )
         probs_dist = np.mean(distributions[angle_idx, :], axis=0)
-        probs_dist /= np.sum(probs_dist)
+        probs_dist = clean_distribution(probs_dist)
 
         # convert distribution to local coordinates.
         if local:
             position = self.positions[self.index]
-            angle = self.ANGLES_DEG[angle_idx]
-            # print("angle", angle)
+            angle = self.angles_deg[angle_idx]
             normal_absolute = get_normal(angle)
             starting_distance = -normal_absolute.dot(position)
-            idx = np.where(self.DISTANCES_CM > starting_distance)[0]
+            idx = np.where(self.distances_cm > starting_distance)[0]
             if len(idx) < 1:
                 warnings.warn(f"moved out of range: {starting_distance:.0f}cm")
             # shift probability at starting_distance to 0, etc.
@@ -118,14 +133,14 @@ class MovingEstimator(object):
 
     def get_distance_estimate(self, dist):
         max_dist = np.max(dist)
-        estimates = self.DISTANCES_CM[np.where(dist == max_dist)[0]]
+        estimates = self.distances_cm[np.where(dist == max_dist)[0]]
         if len(estimates) > 1:
             print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
         return estimates[0]
 
     def get_angle_estimate(self, dist):
         max_dist = np.max(dist)
-        estimates = self.ANGLES_DEG[np.where(dist == max_dist)[0]]
+        estimates = self.angles_deg[np.where(dist == max_dist)[0]]
         if len(estimates) > 1:
             print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
         return estimates[0]
@@ -150,9 +165,9 @@ class MovingEstimator(object):
                 f"current: {current}, ({self.positions[current]}, {self.rotations[current]})"
             )
 
-        distributions = np.ones((len(self.ANGLES_DEG), len(self.DISTANCES_CM)))
+        distributions = np.ones((len(self.angles_deg), len(self.distances_cm)))
 
-        for a, angle in enumerate(self.ANGLES_DEG):  # in global coordinates
+        for a, angle in enumerate(self.angles_deg):  # in global coordinates
             # wall azimuth angle in local coordinates
             angle_local = angle - self.rotations[current]
 
@@ -161,7 +176,7 @@ class MovingEstimator(object):
 
             normal_absolute = get_normal(angle)
 
-            distances_local = self.DISTANCES_CM + normal_absolute.dot(
+            distances_local = self.distances_cm + normal_absolute.dot(
                 self.positions[current]
             )
             # convert the differences at the current index to
@@ -190,7 +205,7 @@ class MovingEstimator(object):
                 angle_local_prev = angle - self.rotations[previous]
 
                 # local distances current position
-                distances_local_prev = self.DISTANCES_CM + normal_absolute.dot(
+                distances_local_prev = self.distances_cm + normal_absolute.dot(
                     self.positions[previous]
                 )
                 if verbose:
@@ -218,7 +233,6 @@ class MovingEstimator(object):
             # for this angle.
             for i, probs_mics in distance_p.items():
                 for mic, probs in probs_mics.items():
-
                     distributions[a] = (
                         np.multiply(distributions[a] ** ALPHA, probs ** ALPHA) ** 1
                         / ALPHA
