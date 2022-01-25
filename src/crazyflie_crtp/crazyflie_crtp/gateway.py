@@ -132,19 +132,14 @@ class Gateway(Node):
         self.get_logger().info(
             f"Command received at time {request.timestamp}, {request.command_name}, {request.command_value:.2f}."
         )
-        found_command = self.send_command(request.command_name, request.command_value)
-
-        # feedback_msg = CrazyflieCommands.Feedback()
-        if not found_command:
-            self.get_logger().warn(f"Unknown command!")
-            # feedback_msg.message = f"Unknown command: {msg.command_name}!"
-            # feedback_msg.value = 0.0
-            # goal_handle.publish_feedback(feedback_msg)
-            # result.message = "Failure"
-            # return result
-
-        response.message = "Success"
-        response.value = 1.0
+        success = self.send_command(request.command_name, request.command_value)
+        if not success:
+            self.get_logger().warn(f"Failed to send command")
+            response.message = "Fail"
+            response.value = 0.0
+        else:
+            response.message = "Success"
+            response.value = 1.0
         return response
 
     def publish_current_data(self):
@@ -166,7 +161,6 @@ class Gateway(Node):
 
         if not self.ground_truth_published:
             self.publish_ground_truth()
-            # self.ground_truth_published = True
 
     def publish_battery(self):
         msg = CrazyflieStatus()
@@ -319,9 +313,7 @@ class Gateway(Node):
         param_value = float(param_value)
         if param_name == "hover_height":
             if param_value > 0:
-                self.get_logger().info(f"sending hover command...")
                 success = self.reader_crtp.send_hover_command(param_value)
-                self.get_logger().warn(f"...done.")
                 if not success:
                     self.get_logger().warn(f"no battery, or not monitoring.")
             return True
@@ -336,13 +328,21 @@ class Gateway(Node):
         elif param_name == "move_distance":
             # move by given distance, blocking
             if param_value != 0:
-                self.reader_crtp.send_move_command(param_value)
+                try:
+                    self.reader_crtp.send_move_command(param_value)
+                except Exception as e:
+                    self.get_logger().warn(f"Error in send_forward_command: {e}")
+                    return False
             return True
         elif param_name == "move_forward":
             # move by given velocity, non-blocking
             if param_value != 0:
                 # self.get_logger().warn(f"send forward command {param_value:.2f}")
-                self.reader_crtp.send_forward_command(param_value)
+                try:
+                    self.reader_crtp.send_forward_command(param_value)
+                except Exception as e:
+                    self.get_logger().warn(f"Error in send_forward_command: {e}")
+                    return False
             return True
         elif param_name == "buzzer_idx":
             if param_value >= 0:

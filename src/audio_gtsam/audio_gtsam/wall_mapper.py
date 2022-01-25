@@ -69,7 +69,6 @@ class WallMapper(NodeWithParams):
         )
 
     def check_wall_callback(self, request, response):
-        self.get_logger().warn(f"Check wall callback")
         # find which enum the state corresponds to
         state_by_server = State(request.state)
         self.get_logger().info(

@@ -41,7 +41,7 @@ N_WINDOW = 5
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
-N_CALIBRATION = 3  # 10
+N_CALIBRATION = 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
@@ -119,6 +119,7 @@ class WallDetection(NodeWithParams):
             CrazyflieCommands, "send_command_manual"
         )
         self._client_wall = self.create_client(StateMachine, "check_wall")
+        self.already_asking = False  # semaphore to make sure we only ask once at a time
         self._server_state = self.create_service(
             StateMachine, "change_state_manual", self.change_state_manual_callback
         )
@@ -172,7 +173,7 @@ class WallDetection(NodeWithParams):
 
         self.get_logger().warn(f"Current parameters: {self.current_params}")
 
-    def flight_check(self):
+    def flight_check(self, position_cm=None):
         """ 
         drone=0: analyzing bag file, should be "flying" to do analysis
         drone=1: only buzzer, for debugging, don't mind if not flying
@@ -180,7 +181,7 @@ class WallDetection(NodeWithParams):
         """
         if self.current_params["drone"] == 1:
             return True
-        if position_cm[2] < FLYING_HEIGHT_CM * 1e-2:
+        if (position_cm is not None) and (position_cm[2] < FLYING_HEIGHT_CM * 1e-2):
             return False
         return True
 
@@ -245,7 +246,7 @@ class WallDetection(NodeWithParams):
         self, signals_f, freqs, position_cm, yaw_deg, calib=False, timestamp=0
     ):
 
-        if not self.flight_check():
+        if not self.flight_check(position_cm):
             return
 
         from audio_stack.parameters import WINDOW_CORRECTION
@@ -298,14 +299,13 @@ class WallDetection(NodeWithParams):
             #    f"for pose {timestamp}, using audio {msg_signals.timestamp}. lag: {msg_signals.timestamp - timestamp}ms"
             # )
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
+            position_cm = r_world * 1e2
 
-            if not self.flight_check():
+            if not self.flight_check(position_cm):
                 return
 
             __, signals_f, freqs = read_signals_freq_message(msg_signals)
             magnitudes = np.abs(signals_f).T  # 4 x 20
-
-            position_cm = r_world * 1e2
 
             if self.state == State.WAIT_ANGLE:
                 data = self.data_collector.get_current_distance_slice(
@@ -397,9 +397,9 @@ class WallDetection(NodeWithParams):
 
     def take_off(self, height_m=0.4):
         if self.current_params["drone"] > 1:
-            self.get_logger().warn("taking off...")
+            self.get_logger().warn("Taking off...")
             self.send_command("hover_height", height_m)
-            self.get_logger().warn("done")
+            self.get_logger().warn("...done")
         else:
             self.get_logger().info(f"simulating takeoff")
 
@@ -415,8 +415,12 @@ class WallDetection(NodeWithParams):
     def move_linear(self):
         if self.current_params["drone"] > 1:
             self.get_logger().info(f"moving with {self.velocity_ms:.2f}m/s...")
-            future = self.send_command("move_forward", self.velocity_ms)
-            self.get_logger().info("done")
+            try:
+                future = self.send_command("move_forward", self.velocity_ms)
+            except Exception as e:
+                self.get_logger().warn(f"Error when trying to move forward: {e}")
+            else:
+                self.get_logger().info("...done")
         else:
             self.get_logger().info(f"simulating moving with {self.velocity_ms:.2f}m/s")
 
@@ -430,7 +434,6 @@ class WallDetection(NodeWithParams):
         elif self.state == State.HOVER:
             if self.current_params["mode"] == Mode.FSLICE.value:
                 self.set_buzzer(1)
-                self.get_logger().warn("calibrating")
                 self.calibration_count = 0
                 return State.WAIT_CALIB
 
@@ -471,10 +474,10 @@ class WallDetection(NodeWithParams):
             if not self.new_sample_to_treat:
                 self.get_logger().info("staying in WAIT_DISTANCE cause no new data")
                 return State.WAIT_DISTANCE
-
             self.new_sample_to_treat = False
 
-            self.ask_about_wall()
+            if not self.already_asking:
+                self.ask_about_wall()
             # if there is a wall in sight, the attribute state_by_server
             # is changed, and below will be overwritten in main.
             return State.WAIT_DISTANCE
@@ -484,7 +487,6 @@ class WallDetection(NodeWithParams):
             self.velocity_ms = -self.velocity_ms
 
             # start a few seconds of blind flight to not retrigger
-            self.get_logger().warn("start blind flight")
             self.start_blind = time.time()
             return State.BLIND_FLIGHT
 
@@ -492,7 +494,6 @@ class WallDetection(NodeWithParams):
             self.move_linear()
             if time.time() - self.start_blind < TIME_BLIND_FLIGHT:
                 return State.BLIND_FLIGHT
-            self.get_logger().warn("stop blind flight")
             return State.WAIT_DISTANCE
 
         elif self.state == State.AVOID_ANGLE:
@@ -564,15 +565,15 @@ class WallDetection(NodeWithParams):
         else:
             value = response.value
             msg = response.message
-            self.get_logger().warn(
-                "get_result_command received response message:{msg}, value:{value}"
+            self.get_logger().info(
+                f"get_result_command received response message:{msg}, value:{value}"
             )
 
     def ask_about_wall(self):
+        self.already_asking = True
         request = StateMachine.Request()
         request.state = self.state.value
 
-        self.get_logger().warn("waiting for server...")
         ok = self._client_wall.wait_for_service(timeout_sec=3)
         if not ok:
             self.get_logger().warn(f"timeout while waiting for wall service")
@@ -589,10 +590,11 @@ class WallDetection(NodeWithParams):
             new_state_int = response.flag
             if new_state_int < 0:
                 self.get_logger().warn(f"get_result_wall received -1, doing nothing.")
-            state_by_server = State(new_state_int)
+            self.state_by_server = State(new_state_int)
             self.get_logger().warn(
-                f"get_result_wall: Change to state {state_by_server}"
+                f"get_result_wall: Change to state {self.state_by_server}"
             )
+            self.already_asking = False
 
 
 def main(args=None):

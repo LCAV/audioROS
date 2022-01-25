@@ -198,7 +198,7 @@ class LivePlotter(object):
             return
 
         if logger:
-            logger.warn(f"Plotting from {vmin} to {vmax}")
+            logger.info(f"Plotting from {vmin} to {vmax}")
 
         if self.log:
             data = np.log10(data_matrix)

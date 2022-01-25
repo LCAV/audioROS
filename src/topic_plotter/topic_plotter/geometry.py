@@ -31,7 +31,7 @@ from audio_simulation.geometry import (
 
 from .live_plotter import LivePlotter
 
-MAX_LENGTH = 10  # number of positions to plot
+MAX_LENGTH = 1000  # number of positions to plot
 
 XLABEL = "x [m]"
 YLABEL = "y [m]"
