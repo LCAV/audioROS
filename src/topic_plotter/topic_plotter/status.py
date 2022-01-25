@@ -5,11 +5,6 @@ import matplotlib.pylab as plt
 
 from audio_interfaces.msg import CrazyflieStatus
 
-import sys
-
-sys.path.append("crazyflie-audio/python")
-from reader_crtp import ReaderCRTP
-
 
 class StatusPlotter(Node):
     def __init__(self):
@@ -20,19 +15,18 @@ class StatusPlotter(Node):
         )
 
         self.fig, self.ax = plt.subplots()
+        self.fig.set_size_inches(5, 5)
         self.ax.set_title("Status")
         self.ax.set_xlabel("time [s]")
         self.ax.set_ylabel("battery level [V]")
         self.ax.set_ylim(2.5, 4.2)
-        self.hline = self.ax.axhline(
-            ReaderCRTP.BATTERY_OK, label="OK level", color="C0"
-        )
+
         self.hline_initial = None
-        self.ax.scatter([], [], color="C2", label="current level")
-        self.ax.legend()
-        # self.fig.set_size_inches(14, 10)
-        self.fig.set_size_inches(5, 5)
         self.start_time = None
+
+        self.ax.scatter([], [], color="C1", label="current level")
+        self.ax.legend()
+
         plt.show(block=False)
 
     def listener_callback_status(self, msg):

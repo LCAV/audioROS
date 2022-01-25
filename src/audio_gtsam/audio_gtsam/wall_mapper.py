@@ -37,9 +37,8 @@ class WallMapper(NodeWithParams):
         )
 
         self._action_server = ActionServer(
-            self, StateMachine, "state_machine", self.server_callback
+            self, StateMachine, "check_wall", self.check_wall_callback
         )
-
         # initialize ISAM
         self.wall_backend = WallBackend()
 
@@ -69,13 +68,13 @@ class WallMapper(NodeWithParams):
             distances, probs, verbose=False, logger=self.get_logger()
         )
 
-    def server_callback(self, goal_handle):
-        # self.get_logger().warn(f"Server callback")
+    def check_wall_callback(self, goal_handle):
+        self.get_logger().warn(f"Check wall callback")
         msg = goal_handle.request
         # find which enum the state corresponds to
         state_by_server = State(msg.state)
         self.get_logger().info(
-            f"Action received: {msg.state} which corresponds to {self.state_by_server}"
+            f"Action received: {msg.state} which corresponds to {state_by_server}"
         )
         result = StateMachine.Result()
         feedback = StateMachine.Feedback()

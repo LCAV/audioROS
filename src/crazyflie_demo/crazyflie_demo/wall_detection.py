@@ -49,18 +49,18 @@ DISTANCE_THRESHOLD_CM = 20
 # movement stuff
 FLYING_HEIGHT_CM = 30
 VELOCITY_CMS = 5  # linear constant velocity in cm / s
-TIME_BLIND_FLIGHT = 0  # 10 # seconds
+TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
 
 
 class State(Enum):
-    GROUND = 0
+    ABORT = 0
     HOVER = 1
     WAIT_DISTANCE = 2
     WAIT_ANGLE = 3
     WAIT_CALIB = 4
     AVOID_DISTANCE = 5
     AVOID_ANGLE = 6
-    ABORT = 7
+    GROUND = 7
     BLIND_FLIGHT = 8
 
 
@@ -97,7 +97,7 @@ def get_angle_distribution(dslices, resolve_side=False):
         angle_estimator.add_distribution(angles, proba, mic_idx, FREQ)
 
     if resolve_side:
-        # from 0 to 90 or 90 to 180
+        # output is from from 0 to 90 or 90 to 180
         angles_augment, prob_augment = angle_estimator.get_angle_distribution(
             mics_left_right=[[1], [3]]
         )
@@ -115,17 +115,17 @@ class WallDetection(NodeWithParams):
     def __init__(self):
         super().__init__("wall_detection")
 
-        self._action_client = ActionClient(self, CrazyflieCommands, "commands")
-        # TODO(FD) below should be a service and not actionserver
-        self._action_client_wall = ActionClient(
-            self, StateMachine, "state_machine_wall"
+        # TODO(FD) all of below could be a Service and not ActionServer/Client
+        self._action_client_command = ActionClient(
+            self, CrazyflieCommands, "send_command_manual"
         )
+        self._action_client_wall = ActionClient(self, StateMachine, "check_wall")
         self._action_server = ActionServer(
-            self, StateMachine, "state_machine", self.server_callback
+            self, StateMachine, "change_state_manual", self.change_state_manual_callback
         )
 
         # Note that for this usecase,  n_buffer>1 doesn't work because the pose synchronizer
-        # creates exactly one matching
+        # creates exactly one matching message.
         self.signals_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=1)
         self.subscription_signals = self.create_subscription(
             SignalsFreq, "audio/signals_f", self.signals_synch.listener_callback, 10
@@ -377,7 +377,7 @@ class WallDetection(NodeWithParams):
         else:
             self.get_logger().error(f"Did not find valid audio for pose {timestamp}")
 
-    def server_callback(self, goal_handle):
+    def change_state_manual_callback(self, goal_handle):
         msg = goal_handle.request
         # find which enum the state corresponds to
         self.state_by_server = State(msg.state)
@@ -510,10 +510,13 @@ class WallDetection(NodeWithParams):
     def main(self):
         # land and exit
         if self.state == State.ABORT:
-            self.get_logger().error(f"Received ABORT state")
+            self.get_logger().error(
+                f"Received ABORT state. Setting buzzer to 0 and landing."
+            )
             self.set_buzzer(0)
             self.land()
-            rclpy.shutdown(0)
+            self.destroy_node()
+            rclpy.shutdown()
             return
 
         state = self.execute_state_machine()
@@ -552,22 +555,12 @@ class WallDetection(NodeWithParams):
         goal_msg.timestamp = timestamp
 
         if self.current_params["drone"] > 0:
-            self._action_client.wait_for_server()  # timeout_sec=0.5)
+            self._action_client_command.wait_for_server()  # timeout_sec=0.5)
 
-        self._send_goal_future = self._action_client.send_goal_async(
+        self._send_goal_future = self._action_client_command.send_goal_async(
             goal_msg, feedback_callback=self.feedback_callback
         )
         self._send_goal_future.add_done_callback(self.goal_response_command)
-
-    def ask_about_wall(self):
-        self.get_logger().info(f"Sending current state {self.state} to wall_mapper...")
-        goal_msg = StateMachine.Goal()
-        goal_msg.state = self.state.value
-
-        self._send_goal_future = self._action_client_wall.send_goal_async(
-            goal_msg, feedback_callback=self.feedback_callback
-        )
-        self._send_goal_future.add_done_callback(self.goal_response_wall)
 
     def goal_response_command(self, future):
         goal_handle = future.result()
@@ -582,6 +575,16 @@ class WallDetection(NodeWithParams):
         # msg = future.result().message
         self.get_logger().info(f"get_result_command: got command.")
 
+    def ask_about_wall(self):
+        self.get_logger().info(f"Asking wall mapper about wall...")
+        goal_msg = StateMachine.Goal()
+        goal_msg.state = self.state.value
+
+        self._send_goal_future = self._action_client_wall.send_goal_async(
+            goal_msg, feedback_callback=self.feedback_callback
+        )
+        self._send_goal_future.add_done_callback(self.goal_response_wall)
+
     def goal_response_wall(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
@@ -591,7 +594,7 @@ class WallDetection(NodeWithParams):
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_wall)
 
-    def get_result_callback(self, future):
+    def get_result_wall(self, future):
         new_state = future.result().flag
         state_by_server = State(new_state)
         self.get_logger().info(

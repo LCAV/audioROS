@@ -48,6 +48,7 @@ class PoseSynch(Node):
         self.get_logger().info(
             f"for audio {timestamp}, using pose {msg_pose.timestamp}. lag: {msg_pose.timestamp - timestamp}ms"
         )
+        msg_pose.timestamp = timestamp
         self.publisher_pose_raw_synch.publish(msg_pose)
 
 

@@ -12,12 +12,24 @@ import numpy as np
 
 matplotlib.use("TkAgg")
 matplotlib.interactive(False)
+current_cmap = matplotlib.cm.get_cmap()
+current_cmap.set_bad(color="gray")
 
 MAX_YLIM = math.inf  # set to inf for no effect.
 MIN_YLIM = -math.inf  # set to -inf for no effect.
 
 MAX_XLIM = math.inf  # set to inf for no effect.
 MIN_XLIM = -math.inf  # set to -inf for no effect.
+
+EPS = 1e-10
+
+
+def add_colorbar(fig, ax, im, title=None):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    return cax
 
 
 class LivePlotter(object):
@@ -36,6 +48,9 @@ class LivePlotter(object):
         self.min_ylim = min_ylim
         self.max_xlim = max_xlim
         self.min_xlim = min_xlim
+        self.vmin = np.inf
+        self.vmax = -np.inf
+
         self.log = log
 
         if (fig is None) and (ax is None):
@@ -52,6 +67,9 @@ class LivePlotter(object):
         self.arrows = {}
         self.scatter = {}
 
+        self.mesh = None
+        self.colorbar = None
+
         self.fig.canvas.mpl_connect("close_event", self.handle_close)
         self.fig.canvas.mpl_connect("resize_event", self.handle_resize)
 
@@ -61,7 +79,6 @@ class LivePlotter(object):
 
     def handle_close(self, evt):
         plt.close("all")
-        print("closed all figures")
 
     def handle_resize(self, evt):
         # TODO(FD) this is not called when we resize
@@ -74,7 +91,7 @@ class LivePlotter(object):
         self.lines = {}
         self.axvlines = {}
 
-    def update_arrow(self, origin, angle_deg, label="orientation"):
+    def update_arrow(self, origin, angle_deg, label=None):
         """ Update arrow coordinates. 
         """
         xmin, xmax = self.ax.get_xlim()
@@ -84,7 +101,7 @@ class LivePlotter(object):
         dx = arrow_length * math.cos(angle_deg * math.pi / 180)
         dy = arrow_length * math.sin(angle_deg * math.pi / 180)
 
-        if label in self.arrows.keys():  #
+        if label in self.arrows.keys():
             self.arrows[label]["pointer"].set_data(origin_x + dx, origin_y + dy)
             self.arrows[label]["line"].set_data(
                 [origin_x, origin_x + dx], [origin_y, origin_y + dy]
@@ -92,37 +109,37 @@ class LivePlotter(object):
         else:
             self.arrows[label] = {}
             (line,) = self.ax.plot(
-                origin_x + dx, origin_y + dy, marker=">", color=f"C{len(self.arrows)}"
+                origin_x + dx, origin_y + dy, marker=">", color=f"C{len(self.arrows)-1}"
             )
             self.arrows[label]["pointer"] = line
             (line,) = self.ax.plot(
                 [origin_x, origin_x + dx],
                 [origin_y, origin_y + dy],
                 label=label,
-                color=f"C{len(self.arrows)}",
+                color=f"C{len(self.arrows)-1}",
             )
             self.arrows[label]["line"] = line
 
-    def update_lines(self, data_matrix, x_data=None, labels=None, **kwargs):
-        """ Plot each row of data_matrix as one line.
+    def update_lines(self, row_matrix, x_data=None, labels=None, **kwargs):
+        """ Plot each row of row_matrix as one line.
         """
-        for i in range(data_matrix.shape[0]):
+        for i in range(row_matrix.shape[0]):
             if i in self.lines.keys():
                 if x_data is not None:
-                    self.lines[i].set_data(x_data, data_matrix[i, :])
+                    self.lines[i].set_data(x_data, row_matrix[i, :])
                     self.ax.set_xlim(min(x_data), max(x_data))
                 else:
-                    self.lines[i].set_ydata(data_matrix[i, :])
+                    self.lines[i].set_ydata(row_matrix[i, :])
 
                 if labels is not None:
                     self.lines[i].set_label(labels[i])
             else:
-                x_data = range(data_matrix.shape[1]) if x_data is None else x_data
+                x_data = range(row_matrix.shape[1]) if x_data is None else x_data
                 label = labels[i] if labels is not None else None
                 if self.log:
                     (line,) = self.ax.semilogy(
                         x_data,
-                        data_matrix[i, :],
+                        row_matrix[i, :],
                         color=f"C{i % 10}",
                         label=label,
                         **kwargs,
@@ -130,7 +147,7 @@ class LivePlotter(object):
                 else:
                     (line,) = self.ax.plot(
                         x_data,
-                        data_matrix[i, :],
+                        row_matrix[i, :],
                         color=f"C{i % 10}",
                         label=label,
                         **kwargs,
@@ -141,32 +158,83 @@ class LivePlotter(object):
         self.reset_ylim()
 
     def update_mesh(
-        self, data_matrix, y_labels=None, x_labels=None, log=False, n_labels=5
+        self,
+        data_matrix,
+        y_labels=None,
+        x_labels=None,
+        n_labels=5,
+        colorbar=False,
+        vmin=None,
+        vmax=None,
+        logger=None,
     ):
-        """ Plot each row of data_matrix in an image. """
-        mesh = self.ax.pcolorfast(data_matrix)
 
-        if y_labels is not None:
-            if n_labels is None:
-                step = 1
-            else:
-                step = max(len(y_labels) // n_labels, 1)
-            self.ax.set_yticks(step / 2 + np.arange(len(y_labels), step=step))
-            self.ax.set_yticklabels(y_labels[::step])
-        if x_labels is not None:
-            if n_labels is None:
-                step = 1
-            else:
-                step = max(len(x_labels) // n_labels, 1)
-            self.ax.set_xticks(step / 2 + np.arange(len(x_labels), step=step))
-            self.ax.set_xticklabels(x_labels[::step])
-            # xticks = self.ax.get_xticks()
-            # new_xticks = np.array(x_labels)[xticks[:-1].astype(int)]
-            # self.ax.set_xticks(xticks.astype(int))
-            # self.ax.set_xticklabels(new_xticks)
+        """ Plot data_matrix as a heatmap. """
 
-    def update_axvlines(self, data_vector, **kwargs):
-        for i, xcoord in enumerate(data_vector):
+        # we round vmax and vmin so we don't have to recretae colorbars all the time for minor changes.
+        if vmax is None:
+            vmax = np.max(data_matrix)
+            if self.log:
+                if vmax == 0:
+                    vmax = 2 * EPS  # 2 x to make it bigger than vmin
+                vmax = np.log10(vmax)
+            vmax = np.ceil(vmax)
+
+        if vmin is None:
+            if self.log:
+                vals = data_matrix[data_matrix > 0]
+                if len(vals):
+                    vmin = np.min(vals)
+                else:
+                    vmin = EPS
+                vmin = np.log10(vmin)
+            else:
+                vmin = np.min(data_matrix)
+            vmin = np.floor(vmin)
+
+        if vmin >= vmax:
+            if logger:
+                logger.error(f"Cannot plot from {vmin} to {vmax}")
+            return
+
+        if logger:
+            logger.warn(f"Plotting from {vmin} to {vmax}")
+
+        if self.log:
+            data = np.log10(data_matrix)
+        else:
+            data = data_matrix
+
+        if self.mesh is None:
+            self.mesh = self.ax.pcolorfast(data)
+        else:
+            self.mesh.set_data(data)
+
+        self.mesh.set_clim(vmin, vmax)
+        if colorbar:
+            title = "log10-values" if self.log else "values"
+            if self.colorbar is None:
+                axcolorbar = add_colorbar(self.fig, self.ax, self.mesh)
+                axcolorbar.set_ylabel(title, rotation=90)
+                self.colorbar = self.fig.colorbar(
+                    self.mesh, cax=axcolorbar, orientation="vertical"
+                )
+
+            self.colorbar.set_ticks(np.linspace(vmin, vmax, num=5))
+            self.colorbar.draw_all()
+
+        for axis, labels in zip(["x", "y"], [x_labels, y_labels]):
+            ax = eval(f"self.ax.get_{axis}axis()")
+            if labels is not None:
+                if n_labels is None:
+                    step = 1
+                else:
+                    step = max(len(labels) // n_labels, 1)
+            ax.set_ticks(step / 2 + np.arange(len(labels), step=step))
+            ax.set_ticklabels(labels[::step])
+
+    def update_axvlines(self, vlines, **kwargs):
+        for i, xcoord in enumerate(vlines):
             if i in self.axvlines.keys():
                 self.axvlines[i].set_xdata(xcoord)
             else:

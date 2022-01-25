@@ -27,6 +27,7 @@ setup(
             "wall = topic_plotter.wall:main",
             "distribution = topic_plotter.distributions:main",
             "time = topic_plotter.synchronization:main",
+            "message_timings = topic_plotter.message_timings:main",
         ],
     },
 )

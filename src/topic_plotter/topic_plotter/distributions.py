@@ -17,7 +17,7 @@ from audio_interfaces_py.messages import read_distribution_message
 from .live_plotter import LivePlotter
 
 N_TIMES = 30
-LOG = False
+LOG = True
 N_LABELS = 10
 # YLABEL = "distance [cm]"
 YLABEL = "angle [deg]"
@@ -49,7 +49,7 @@ class DistributionsPlotter(Node):
 
         for i, name in enumerate(distributions):
             self.plotter_dict[name] = LivePlotter(
-                label=name, log=False, fig=self.fig, ax=self.axs[i],
+                label=name, log=LOG, fig=self.fig, ax=self.axs[i],
             )
             self.x_labels[name] = np.zeros(N_TIMES)
             self.y_labels[name] = None
@@ -78,14 +78,13 @@ class DistributionsPlotter(Node):
         self.results_matrix[name] = np.c_[
             self.results_matrix[name][:, 1:], probs.reshape(-1, 1)
         ]
-        # self.get_logger().warn(f"Updating for time {msg_dist.timestamp}")
-
         self.plotter_dict[f"{name}"].update_mesh(
             self.results_matrix[name],
             x_labels=self.x_labels[name],
             y_labels=self.y_labels[name],
-            log=LOG,
             n_labels=N_LABELS,
+            colorbar=True,
+            logger=self.get_logger(),
         )
         self.fig.canvas.draw()
 
