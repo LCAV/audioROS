@@ -1,0 +1,6 @@
+# Request
+uint8 state # requested state, has to correspond to value in State Enum.
+---
+# Response
+uint8 flag 0 # result flag
+string message ""

@@ -43,8 +43,8 @@ set(msg_files
   "msg/Spectrum.msg"
   "msg/Signals.msg"
   "msg/SignalsFreq.msg"
-  "action/CrazyflieCommands.action"
-  "action/StateMachine.action"
+  "srv/CrazyflieCommands.srv"
+  "srv/StateMachine.srv"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

@@ -92,6 +92,7 @@ def add_colorbar(fig, ax, im, title=None):
     fig.colorbar(im, cax=cax, orientation="vertical")
     if title is not None:
         cax.set_ylabel(title)
+    return cax
 
 
 def plot_spectrograms(df_freq):

@@ -1,9 +1,0 @@
-# Goal request
-uint8 state # requested state, has to correspond to value in Enum.
----
-# Result
-uint8 flag 0 # result flag
-string message ""
----
-# Feedback
-string message ""

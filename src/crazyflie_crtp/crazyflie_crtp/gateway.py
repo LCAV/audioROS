@@ -24,7 +24,7 @@ from audio_interfaces_py.messages import (
     create_signals_freq_message,
     create_ground_truth_message,
 )
-from audio_interfaces.action import CrazyflieCommands
+from audio_interfaces.srv import CrazyflieCommands
 from audio_stack.parameters import WINDOW_CORRECTION
 
 from crazyflie_crtp.reader_crtp import ReaderCRTP
@@ -107,8 +107,8 @@ class Gateway(Node):
             CrazyflieMotors, "crazyflie/motors", 10
         )
 
-        self.commands_action_server = ActionServer(
-            self, CrazyflieCommands, "commands", self.commands_callback,
+        self._server_command = self.create_service(
+            CrazyflieCommands, "send_command_manual", self.commands_callback,
         )
 
         self.ground_truth_published = False
@@ -128,14 +128,12 @@ class Gateway(Node):
         desired_rate = 1000  # Hz
         self.create_timer(1 / desired_rate, self.publish_current_data)
 
-    def commands_callback(self, goal_handle):
-        msg = goal_handle.request
+    def commands_callback(self, request, response):
         self.get_logger().info(
-            f"Command received at time {msg.timestamp}, {msg.command_name}, {msg.command_value:.2f}."
+            f"Command received at time {request.timestamp}, {request.command_name}, {request.command_value:.2f}."
         )
-        found_command = self.send_command(msg.command_name, msg.command_value)
+        found_command = self.send_command(request.command_name, request.command_value)
 
-        result = CrazyflieCommands.Result()
         # feedback_msg = CrazyflieCommands.Feedback()
         if not found_command:
             self.get_logger().warn(f"Unknown command!")
@@ -145,10 +143,9 @@ class Gateway(Node):
             # result.message = "Failure"
             # return result
 
-        result.message = "Success"
-        result.value = 1.0
-        goal_handle.succeed()
-        return result
+        response.message = "Success"
+        response.value = 1.0
+        return response
 
     def publish_current_data(self):
         if not self.reader_crtp.audio_dict["published"]:

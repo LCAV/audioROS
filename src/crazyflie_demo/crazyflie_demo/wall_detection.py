@@ -9,7 +9,7 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.action import ActionServer
 
-from audio_interfaces.action import CrazyflieCommands, StateMachine
+from audio_interfaces.srv import CrazyflieCommands, StateMachine
 from audio_interfaces.msg import PoseRaw, SignalsFreq, Distribution
 from audio_interfaces_py.messages import (
     read_signals_freq_message,
@@ -41,7 +41,7 @@ N_WINDOW = 5
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
-N_CALIBRATION = 10
+N_CALIBRATION = 3  # 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
@@ -53,14 +53,14 @@ TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
 
 
 class State(Enum):
-    ABORT = 0
+    GROUND = 0
     HOVER = 1
     WAIT_DISTANCE = 2
     WAIT_ANGLE = 3
     WAIT_CALIB = 4
     AVOID_DISTANCE = 5
     AVOID_ANGLE = 6
-    GROUND = 7
+    ABORT = 7
     BLIND_FLIGHT = 8
 
 
@@ -115,13 +115,12 @@ class WallDetection(NodeWithParams):
     def __init__(self):
         super().__init__("wall_detection")
 
-        # TODO(FD) all of below could be a Service and not ActionServer/Client
-        self._action_client_command = ActionClient(
-            self, CrazyflieCommands, "send_command_manual"
+        self._client_command = self.create_client(
+            CrazyflieCommands, "send_command_manual"
         )
-        self._action_client_wall = ActionClient(self, StateMachine, "check_wall")
-        self._action_server = ActionServer(
-            self, StateMachine, "change_state_manual", self.change_state_manual_callback
+        self._client_wall = self.create_client(StateMachine, "check_wall")
+        self._server_state = self.create_service(
+            StateMachine, "change_state_manual", self.change_state_manual_callback
         )
 
         # Note that for this usecase,  n_buffer>1 doesn't work because the pose synchronizer
@@ -377,21 +376,16 @@ class WallDetection(NodeWithParams):
         else:
             self.get_logger().error(f"Did not find valid audio for pose {timestamp}")
 
-    def change_state_manual_callback(self, goal_handle):
-        msg = goal_handle.request
+    def change_state_manual_callback(self, request, response):
         # find which enum the state corresponds to
-        self.state_by_server = State(msg.state)
+        self.state_by_server = State(request.state)
         self.get_logger().info(
-            f"Action received: {msg.state} which corresponds to {self.state_by_server}"
+            f"Action received: {request.state} which corresponds to {self.state_by_server}"
         )
-        feedback = StateMachine.Feedback()
-        goal_handle.publish_feedback(feedback)
-        goal_handle.succeed()
 
-        result = StateMachine.Result()
-        result.flag = 1
-        result.message = f"Changed to {self.state_by_server}"
-        return result
+        response.flag = 1
+        response.message = f"Changed to {self.state_by_server}"
+        return response
 
     def set_buzzer(self, buzzer_idx):
         if self.current_params["drone"] > 0:
@@ -548,62 +542,57 @@ class WallDetection(NodeWithParams):
         return curr_time - self.start_time
 
     def send_command(self, command_name, command_value=0.0):
-        goal_msg = CrazyflieCommands.Goal()
-        goal_msg.command_name = command_name
-        goal_msg.command_value = float(command_value)
+        request = CrazyflieCommands.Request()
+        request.command_name = command_name
+        request.command_value = float(command_value)
         timestamp = self.get_timestamp()
-        goal_msg.timestamp = timestamp
+        request.timestamp = timestamp
 
         if self.current_params["drone"] > 0:
-            self._action_client_command.wait_for_server()  # timeout_sec=0.5)
+            ok = self._client_command.wait_for_service(timeout_sec=3)
+            if not ok:
+                self.get_logger().warn(f"timeout while waiting for commands service")
 
-        self._send_goal_future = self._action_client_command.send_goal_async(
-            goal_msg, feedback_callback=self.feedback_callback
-        )
-        self._send_goal_future.add_done_callback(self.goal_response_command)
-
-    def goal_response_command(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.get_logger().warn("goal_response_command: Command rejected")
-            return
-        # self.get_logger().info("goal_response_callback: Command accepted")
-        self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.get_result_command)
+        self.future_command = self._client_command.call_async(request)
+        self.future_command.add_done_callback(self.get_result_command)
 
     def get_result_command(self, future):
-        # msg = future.result().message
-        self.get_logger().info(f"get_result_command: got command.")
+        try:
+            response = future.result()
+        except Exception as e:
+            self.get_logger().error(f"get_result_command failed: {e}")
+        else:
+            value = response.value
+            msg = response.message
+            self.get_logger().warn(
+                "get_result_command received response message:{msg}, value:{value}"
+            )
 
     def ask_about_wall(self):
-        self.get_logger().info(f"Asking wall mapper about wall...")
-        goal_msg = StateMachine.Goal()
-        goal_msg.state = self.state.value
+        request = StateMachine.Request()
+        request.state = self.state.value
 
-        self._send_goal_future = self._action_client_wall.send_goal_async(
-            goal_msg, feedback_callback=self.feedback_callback
-        )
-        self._send_goal_future.add_done_callback(self.goal_response_wall)
+        self.get_logger().warn("waiting for server...")
+        ok = self._client_wall.wait_for_service(timeout_sec=3)
+        if not ok:
+            self.get_logger().warn(f"timeout while waiting for wall service")
 
-    def goal_response_wall(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.get_logger().warn("goal_response_callback: Command rejected")
-            return
-        # self.get_logger().info("goal_response_callback: Command accepted")
-        self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.get_result_wall)
+        self.future_wall = self._client_wall.call_async(request)
+        self.future_wall.add_done_callback(self.get_result_wall)
 
-    def get_result_wall(self, future):
-        new_state = future.result().flag
-        state_by_server = State(new_state)
-        self.get_logger().info(
-            f"get_result_callback: Change to state {state_by_server}"
-        )
-
-    def feedback_callback(self, feedback_msg):
-        feedback = feedback_msg.feedback
-        self.get_logger().info(f"Received feedback: {feedback.message}")
+    def get_result_wall(self, future):  # state_machine
+        try:
+            response = future.result()
+        except Exception as e:
+            self.get_logger().error(f"get_result_wall failed: {e}")
+        else:
+            new_state_int = response.flag
+            if new_state_int < 0:
+                self.get_logger().warn(f"get_result_wall received -1, doing nothing.")
+            state_by_server = State(new_state_int)
+            self.get_logger().warn(
+                f"get_result_wall: Change to state {state_by_server}"
+            )
 
 
 def main(args=None):

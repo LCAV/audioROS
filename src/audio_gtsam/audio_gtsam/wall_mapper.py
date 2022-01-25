@@ -11,7 +11,7 @@ from rclpy.action import ActionServer
 import numpy as np
 
 from audio_gtsam.wall_backend import WallBackend
-from audio_interfaces.action import StateMachine
+from audio_interfaces.srv import StateMachine
 from audio_interfaces.msg import Distribution, PoseRaw
 from audio_interfaces_py.messages import read_pose_raw_message
 from audio_interfaces_py.node_with_params import NodeWithParams
@@ -36,8 +36,8 @@ class WallMapper(NodeWithParams):
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
 
-        self._action_server = ActionServer(
-            self, StateMachine, "check_wall", self.check_wall_callback
+        self._service_wall = self.create_service(
+            StateMachine, "check_wall", self.check_wall_callback
         )
         # initialize ISAM
         self.wall_backend = WallBackend()
@@ -68,33 +68,21 @@ class WallMapper(NodeWithParams):
             distances, probs, verbose=False, logger=self.get_logger()
         )
 
-    def check_wall_callback(self, goal_handle):
+    def check_wall_callback(self, request, response):
         self.get_logger().warn(f"Check wall callback")
-        msg = goal_handle.request
         # find which enum the state corresponds to
-        state_by_server = State(msg.state)
+        state_by_server = State(request.state)
         self.get_logger().info(
-            f"Action received: {msg.state} which corresponds to {state_by_server}"
+            f"Action received: {request.state} which corresponds to {state_by_server}"
         )
-        result = StateMachine.Result()
-        feedback = StateMachine.Feedback()
         if state_by_server == State.WAIT_DISTANCE:
             if self.wall_backend.check_wall():
-                feedback.message = "Wall in moving direction!"
-                result.flag = State.AVOID_DISTANCE
+                response.flag = State.AVOID_DISTANCE.value
             else:
-                feedback.message = "No wall detected."
-                result.flag = State.WAIT_DISTANCE
-            result.message = f"WallMapper: change state based on distance-check"
+                response.flag = State.WAIT_DISTANCE.value
         else:
-            result.flag = 0
-            result.message = (
-                f"WallMapper has nothing to do when state is {state_by_server}"
-            )
-
-        goal_handle.publish_feedback(feedback)
-        goal_handle.succeed()
-        return result
+            response.flag = -1
+        return response
 
 
 def main(args=None):
