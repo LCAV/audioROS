@@ -37,7 +37,7 @@ PUBLISH_RAW = False
 DISTANCES_CM = np.arange(100, step=5)
 ANGLES_DEG = np.arange(360, step=30)
 
-N_WINDOW = 5
+N_WINDOW = 3
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
@@ -48,8 +48,8 @@ DISTANCE_THRESHOLD_CM = 20
 
 # movement stuff
 FLYING_HEIGHT_CM = 30
-VELOCITY_CMS = 5  # linear constant velocity in cm / s
-TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
+VELOCITY_CMS = 3  # linear constant velocity in cm / s
+TIME_BLIND_FLIGHT = 5  # seconds, set to 0 for no effect
 
 
 class State(Enum):
@@ -382,9 +382,8 @@ class WallDetection(NodeWithParams):
         self.get_logger().info(
             f"Action received: {request.state} which corresponds to {self.state_by_server}"
         )
-
         response.flag = 1
-        response.message = f"Changed to {self.state_by_server}"
+        response.message = f"Manually changed to {self.state_by_server}"
         return response
 
     def set_buzzer(self, buzzer_idx):
