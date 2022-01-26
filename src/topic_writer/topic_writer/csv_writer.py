@@ -20,6 +20,54 @@ from audio_interfaces.msg import (
 TIMEOUT_S = np.inf  # seconds
 
 
+class CsvHelper(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.header = {"index", "topic"}
+        self.rows = []
+
+    def callback_message(self, msg, topic):
+        row_dict = {}
+        for key, type_ in msg.get_fields_and_field_types().items():
+            if "sequence" in type_:
+                row_dict[key] = np.array(msg.__getattribute__(key))
+            else:
+                row_dict[key] = msg.__getattribute__(key)
+        # row_dict = {key: msg.__getattribute__(key) for key in keys}
+        row_dict["index"] = len(self.rows)
+        row_dict["topic"] = topic
+
+        self.header = set(row_dict.keys()).union(self.header)
+        self.rows.append(row_dict)
+
+    def write_file(self, fullname, logger=None):
+        if not self.rows:
+            if logger:
+                logger.info("Empty rows, not saving.")
+            return
+
+        try:
+            os.makedirs(os.path.dirname(fullname))
+        except FileExistsError:
+            pass
+
+        with open(fullname, "w") as f:
+            csv_writer = csv.DictWriter(f, sorted(self.header))
+            csv_writer.writeheader()
+
+            msg = f"Wrote header in new file {fullname}."
+            if logger:
+                logger.info(msg)
+            csv_writer.writerows(self.rows)
+
+            if logger:
+                logger.info(f"Appended {len(self.rows)} rows to {fullname}.")
+            self.reset()
+        return True
+
+
 class CsvWriter(Node):
     def __init__(self):
         super().__init__("csv_writer")
@@ -33,30 +81,24 @@ class CsvWriter(Node):
         )
 
         self.subscription_status = self.create_subscription(
-            CrazyflieStatus,
-            "crazyflie/status",
-            self.listener_callback_status,
-            10,
+            CrazyflieStatus, "crazyflie/status", self.listener_callback_status, 10,
         )
 
         self.subscription_motors = self.create_subscription(
-            CrazyflieMotors,
-            "crazyflie/motors",
-            self.listener_callback_motors,
-            10,
+            CrazyflieMotors, "crazyflie/motors", self.listener_callback_motors, 10,
         )
 
         self.declare_parameter("filename")
-        self.set_parameters_callback(self.set_params)
+        self.add_on_set_parameters_callback(self.set_params)
 
         self.reset()
         self.get_logger().info(
             "Subscribed to audio/signals_f and crazyflie/status and crazyflie/motors and geometry/pose_raw."
         )
+        self.csv_helper = CsvHelper()
 
     def reset(self):
-        self.header = {"index", "topic"}
-        self.rows = []
+        self.csv_helper.reset()
 
     def listener_callback_signals_f(self, msg):
         self.callback_message(msg, "audio/signals_f")
@@ -73,18 +115,7 @@ class CsvWriter(Node):
     def callback_message(self, msg, topic):
         # fill the dictionary with all fields of this message.
         # if the field is an array, we convert it to a numpy array.
-        row_dict = {}
-        for key, type_ in msg.get_fields_and_field_types().items():
-            if "sequence" in type_:
-                row_dict[key] = np.array(msg.__getattribute__(key))
-            else:
-                row_dict[key] = msg.__getattribute__(key)
-        # row_dict = {key: msg.__getattribute__(key) for key in keys}
-        row_dict["index"] = len(self.rows)
-        row_dict["topic"] = topic
-
-        self.header = set(row_dict.keys()).union(self.header)
-        self.rows.append(row_dict)
+        self.csv_helper.callback_message(msg, topic)
 
     def set_params(self, params):
         """ Set the parameter. If filename is set, we save the current rows and reset. """
@@ -99,36 +130,8 @@ class CsvWriter(Node):
         if filename[-4:] != ".csv":
             filename = filename + ".csv"
 
-        self.write_file(filename)
+        self.csv_helper.write_file(filename)
         return SetParametersResult(successful=True)
-
-    def write_file(self, fullname):
-        if not self.rows:
-            self.get_logger().info("Empty rows, not saving.")
-            return
-
-        if not os.path.exists(fullname):
-
-            try:
-                os.makedirs(os.path.dirname(fullname))
-            except FileExistsError:
-                pass
-
-            with open(fullname, "w+") as f:
-                csv_writer = csv.DictWriter(f, sorted(self.header))
-                csv_writer.writeheader()
-            self.get_logger().info(f"Wrote header in new file {fullname}.")
-        else:
-            self.get_logger().warn(
-                f"File {fullname} exists! Appending new rows to it."
-            )
-
-        with open(fullname, "a") as f:
-            csv_writer = csv.DictWriter(f, sorted(self.header))
-            csv_writer.writerows(self.rows)
-
-        self.get_logger().info(f"Appended {len(self.rows)} rows to {fullname}.")
-        self.reset()
 
 
 def main(args=None):
