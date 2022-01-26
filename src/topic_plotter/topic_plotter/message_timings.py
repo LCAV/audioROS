@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 
 import matplotlib.pylab as plt
+import numpy as np
 
 from audio_interfaces.msg import SignalsFreq, Distribution, PoseRaw
 
@@ -15,9 +16,8 @@ MESSAGES = {
     "results/distribution_raw": Distribution,
 }
 
-N_COLORS = 10
-REFERENCE = "audio/signals_f"
-MAX_TIME_S = 10
+N_COLORS = 10  # number of available colors
+MAX_TIME_S = 10  # length of time window to plot
 
 
 class MessagePlotter(Node):
@@ -33,6 +33,9 @@ class MessagePlotter(Node):
         self.ax.set_xlabel("time [s]")
         self.ax.set_ylabel("topic")
         self.ax.set_ylim(-0.5, len(MESSAGES) - 0.5)
+
+        self.lines = np.full(N_COLORS, None)
+        self.labels = np.full(N_COLORS, None)
 
         # TODO(FD) for an unknown reason, using lambda for the callbacks below
         # doesn't work, the passed topic will always be the last one from MESSAGES.
@@ -63,22 +66,24 @@ class MessagePlotter(Node):
             f"Callback for topic {topic} at time {time_s:.1f}s since startup"
         )
 
+        color_idx = 0
         color = self.colors.get(msg.timestamp, None)
+        label = None
         if color is None:
             color_idx = len(self.colors) % N_COLORS
             color = f"C{color_idx}"
+            label = f"{msg.timestamp * 1e-3:.1f}s"
             self.colors[msg.timestamp] = color
 
-            label = time_s
-            self.get_logger().info(f"Added new timestamp {msg.timestamp}")
-        else:
-            label = None
-
         y = list(MESSAGES.keys()).index(topic)
-        self.ax.scatter(time_s, y, color=color, label=label)
+        line = self.ax.scatter(time_s, y, color=color, label=label)
+        if label is not None:
+            self.lines[color_idx] = line
+            self.labels[color_idx] = label
+            self.ax.legend(self.lines, self.labels, loc="upper left")
 
-        # only show latest 3 minutes
-        min_time_s = max(time_s - MAX_TIME_S, 0)
+        # only show latest time window
+        min_time_s = max(time_s - MAX_TIME_S, -1e-3)
         self.ax.set_xlim(min_time_s, time_s)
         self.fig.canvas.draw()
 

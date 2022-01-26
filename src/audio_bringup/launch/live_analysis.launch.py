@@ -6,7 +6,8 @@ live_analysis.launch.py: replay and analyse bag files from past demo experiments
 
 import sys
 
-import launch
+from launch import LaunchService
+from launch.actions import DeclareLaunchArgument
 
 from audio_bringup.helpers import get_launch_description, parse_params_file
 
@@ -19,7 +20,7 @@ def generate_launch_description():
         "wall_detection": {"pkg": "crazyflie_demo"},  # make sure DRONE=1!
         "pose_synch": {"pkg": "audio_stack"},
         # "time": {"pkg": "topic_plotter"},
-        # "geometry": {"pkg": "topic_plotter"},
+        "geometry": {"pkg": "topic_plotter"},
         "distribution": {"pkg": "topic_plotter"},
     }
     for node in node_config.keys():

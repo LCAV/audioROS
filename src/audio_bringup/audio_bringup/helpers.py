@@ -58,12 +58,21 @@ def set_param(node_name, param_name, param_value):
 
 
 def get_launch_description(
-    node_config, log_level=LOG_LEVEL, bag_record_root="", bag_playback=""
+    node_config,
+    log_level=LOG_LEVEL,
+    bag_record_root="",
+    bag_playback="",
+    bag_playback_delay=0,
+    video_playback="",
+    video_playback_delay=0,
+    video_start_time=0,
 ):
-    import launch
-    import launch.actions
-    import launch.substitutions
-    import launch_ros.actions
+    from launch import LaunchDescription
+    from launch.substitutions import LaunchConfiguration
+    from launch_ros.actions import Node
+    from launch.actions import DeclareLaunchArgument, ExecuteProcess
+    from launch.actions import RegisterEventHandler, TimerAction
+    from launch.event_handlers import OnProcessStart, OnProcessIO
 
     bag_record = ""
     if bag_record_root != "":
@@ -72,33 +81,22 @@ def get_launch_description(
             if not os.path.exists(bag_record):
                 break
 
-    logger = launch.substitutions.LaunchConfiguration("log_level")
+    # TODO(FD) below could be simplified by using
+    # ExecuteProcess with IfConditions, as done in:
+    # https://docs.ros.org/en/galactic/Tutorials/Launch/Using-Substitutions.html#modifying-launch-arguments
+
+    logger = LaunchConfiguration("log_level")
     launch_arguments = [
-        launch.actions.DeclareLaunchArgument(
+        DeclareLaunchArgument(
             "log_level", default_value=[log_level], description="Logging level",
         )
     ]
-
-    if bag_record != "":
-        print("adding rosbag record process")
-        launch_arguments.append(
-            launch.actions.ExecuteProcess(
-                cmd=["ros2 bag record -o", bag_record] + TOPICS_TO_RECORD, shell=True
-            )
-        )
-    if bag_playback != "":
-        print("adding rosbag play process")
-        launch_arguments.append(
-            launch.actions.ExecuteProcess(
-                cmd=["ros2 bag play", bag_playback], shell=True
-            )
-        )
     for executable, dict_ in node_config.items():
         if "params" in dict_.keys():
             raise DeprecationWarning("Do not use params, but ros__parameters")
 
         launch_arguments.append(
-            launch_ros.actions.Node(
+            Node(
                 package=dict_["pkg"],
                 executable=executable,
                 output="screen",
@@ -106,7 +104,41 @@ def get_launch_description(
                 arguments=["--ros-args", "--log-level", logger],
             )
         )
-    return launch.LaunchDescription(launch_arguments)
+
+    if bag_record != "":
+        print("adding rosbag record process")
+        launch_arguments.append(
+            ExecuteProcess(
+                cmd=["ros2 bag record -o", bag_record] + TOPICS_TO_RECORD, shell=True
+            )
+        )
+    execute_video_delayed = None
+    if video_playback != "":
+        video_command = (
+            f"vlc --start-time={video_start_time} --width=200 {video_playback}"
+        )
+        execute_video = ExecuteProcess(cmd=[video_command], shell=True)
+        execute_video_delayed = TimerAction(
+            period=float(video_playback_delay), actions=[execute_video]
+        )
+
+    if bag_playback != "":
+        execute_bag = ExecuteProcess(
+            cmd=[f"ros2 bag play {bag_playback} --delay={bag_playback_delay}"],
+            shell=True,
+        )
+        launch_arguments.append(execute_bag)
+        # run video after bag has launched.
+        if execute_video_delayed is not None:
+            event_handler = RegisterEventHandler(
+                event_handler=OnProcessStart(
+                    target_action=execute_bag, on_start=[execute_video_delayed],
+                )
+            )
+            launch_arguments.append(event_handler)
+    elif video_playback != "":  # run video without event handler if no bag is playing
+        launch_arguments.append(execute_video_delayed)
+    return LaunchDescription(launch_arguments)
 
 
 def parse_params_file(params_file):

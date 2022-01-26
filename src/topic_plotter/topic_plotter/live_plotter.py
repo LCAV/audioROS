@@ -252,7 +252,7 @@ class LivePlotter(object):
 
         else:
             (line,) = self.ax.plot(
-                x_data, y_data, label=label, linestyle="-", marker="o", **kwargs
+                x_data, y_data, label=label, linestyle="", marker="o", **kwargs
             )
             self.scatter[label] = line
 

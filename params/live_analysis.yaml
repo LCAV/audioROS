@@ -5,5 +5,19 @@ wall_detection:
 launch:
   ros__parameters:
     log_level: "warn"
-    bag_playback: "" #"datasets/2021_11_23_demo/hover8" # hover12 is also good
     bag_record_root: ""
+
+    # glass wall:
+    #video_playback: "datasets/2021_11_23_demo/videos/glass-topdown.m4v"
+    #video_playback_delay: 3 # how long to wait after launching bag (found heuristically)
+    #bag_playback: "datasets/2021_11_23_demo/hover8"
+
+    # normal wall:
+    #video_playback: "datasets/2021_11_23_demo/videos/wall-full.mp4"
+    #video_start_time: 17
+    #video_playback_delay: 0 # how long to wait after launching bag (found heuristically)
+    #bag_playback: "datasets/2021_11_23_demo/hover12"
+
+    # latest measurement
+    video_playback: ""
+    bag_playback: "datasets/2022_01_25/test24"

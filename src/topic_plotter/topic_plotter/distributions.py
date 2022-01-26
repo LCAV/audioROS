@@ -19,8 +19,8 @@ from .live_plotter import LivePlotter
 N_TIMES = 30
 LOG = True
 N_LABELS = 10
-# YLABEL = "distance [cm]"
-YLABEL = "angle [deg]"
+YLABEL = "distance [cm]"
+# YLABEL = "angle [deg]"
 
 
 class DistributionsPlotter(Node):

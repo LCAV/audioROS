@@ -16,7 +16,7 @@ class PoseSynch(Node):
     def __init__(self):
         super().__init__("pose_synch")
 
-        self.pose_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=10)
+        self.pose_synch = TopicSynchronizer(50, self.get_logger(), n_buffer=3)
         self.subscription_pose = self.create_subscription(
             PoseRaw, "geometry/pose_raw", self.pose_synch.listener_callback, 10,
         )
@@ -35,13 +35,16 @@ class PoseSynch(Node):
         # registered the latest messages yet. therefore, we add a little buffer
         msg_pose = None
         i = 0
-        timeout = 10
+        timeout = 20
         while msg_pose is None:
             msg_pose = self.pose_synch.get_latest_message(timestamp, verbose=False)
             i += 1
             if i > timeout:
                 self.get_logger().warn(
                     f"did not register valid pose at time {msg_signals.timestamp}"
+                )
+                self.get_logger().warn(
+                    f"times in buffer: {self.pose_synch.get_times()}"
                 )
                 return
 

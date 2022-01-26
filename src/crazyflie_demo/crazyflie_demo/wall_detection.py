@@ -49,7 +49,7 @@ DISTANCE_THRESHOLD_CM = 20
 # movement stuff
 FLYING_HEIGHT_CM = 30
 VELOCITY_CMS = 3  # linear constant velocity in cm / s
-TIME_BLIND_FLIGHT = 5  # seconds, set to 0 for no effect
+TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
 
 
 class State(Enum):
@@ -245,8 +245,8 @@ class WallDetection(NodeWithParams):
     def listener_callback_offline(
         self, signals_f, freqs, position_cm, yaw_deg, calib=False, timestamp=0
     ):
-
         if not self.flight_check(position_cm):
+            print("did not pass flight check")
             return
 
         from audio_stack.parameters import WINDOW_CORRECTION
@@ -258,6 +258,7 @@ class WallDetection(NodeWithParams):
 
         if calib:
             self.add_to_calib(magnitudes)
+            return
 
         # print("data in callback", magnitudes[:, 0], freqs[0], position_cm, yaw_deg)
 
@@ -337,6 +338,7 @@ class WallDetection(NodeWithParams):
 
             if self.state == State.WAIT_CALIB:
                 self.add_to_calib(magnitudes)
+                return
 
             magnitudes_calib = self.calibrate(deepcopy(magnitudes))
             assert (
@@ -590,9 +592,8 @@ class WallDetection(NodeWithParams):
             if new_state_int < 0:
                 self.get_logger().warn(f"get_result_wall received -1, doing nothing.")
             self.state_by_server = State(new_state_int)
-            self.get_logger().warn(
-                f"get_result_wall: Change to state {self.state_by_server}"
-            )
+            if self.state_by_server == State.AVOID_DISTANCE:
+                self.get_logger().warn(f"Avoiding detected wall!")
             self.already_asking = False
 
 
