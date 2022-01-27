@@ -134,7 +134,7 @@ class Gateway(Node):
         )
         success = self.send_command(request.command_name, request.command_value)
         if not success:
-            self.get_logger().warn(f"Failed to send command")
+            self.get_logger().info(f"Failed to send command")
             response.message = "Fail"
             response.value = 0.0
         else:
@@ -331,7 +331,7 @@ class Gateway(Node):
                 try:
                     self.reader_crtp.send_move_command(param_value)
                 except Exception as e:
-                    self.get_logger().warn(f"Error in send_forward_command: {e}")
+                    # self.get_logger().warn(f"Error in send_forward_command: {e}")
                     return False
             return True
         elif param_name == "move_forward":
@@ -341,7 +341,7 @@ class Gateway(Node):
                 try:
                     self.reader_crtp.send_forward_command(param_value)
                 except Exception as e:
-                    self.get_logger().warn(f"Error in send_forward_command: {e}")
+                    # self.get_logger().warn(f"Error in send_forward_command: {e}")
                     return False
             return True
         elif param_name == "buzzer_idx":

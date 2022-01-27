@@ -5,8 +5,6 @@ wall_detection:
 launch:
   ros__parameters:
     log_level: "warn"
-    bag_record_root: ""
-
     # glass wall:
     #video_playback: "datasets/2021_11_23_demo/videos/glass-topdown.m4v"
     #video_playback_delay: 3 # how long to wait after launching bag (found heuristically)
