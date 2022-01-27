@@ -8,6 +8,8 @@ normal_wall:
 abort: 
 		ros2 service call /change_state_manual audio_interfaces/srv/StateMachine "state: 7"
 stop: abort
+avoid:
+		ros2 service call /change_state_manual audio_interfaces/srv/StateMachine "state: 5"
 stop_buzzer:
 		ros2 service call /send_command_manual audio_interfaces/srv/CrazyflieCommands "{command_name: buzzer_idx, command_value: 0.0}"
 land:
@@ -16,3 +18,4 @@ move:
 		ros2 service call /send_command_manual audio_interfaces/srv/CrazyflieCommands "{command_name: move_forward, command_value: 0.03}"
 hover:
 		ros2 service call /send_command_manual audio_interfaces/srv/CrazyflieCommands "{command_name: hover_height, command_value: 0.4}"
+

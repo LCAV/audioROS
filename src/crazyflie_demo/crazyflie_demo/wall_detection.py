@@ -48,8 +48,9 @@ DISTANCE_THRESHOLD_CM = 20
 
 # movement stuff
 FLYING_HEIGHT_CM = 30
-VELOCITY_CMS = 3  # linear constant velocity in cm / s
+VELOCITY_CMS = 4  # linear constant velocity in cm / s
 TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
+TIME_FORWARD = 60  # seconds, time to move forward in BLIND mode
 
 
 class State(Enum):
@@ -67,10 +68,11 @@ class State(Enum):
 class Mode(Enum):
     FSLICE = 0
     DSLICE = 1
+    BLIND = 2
 
 
 MODE = Mode.FSLICE
-DRONE = False
+DRONE = 0  # 0: no drone, 1: buzzer only, 2: flying
 
 
 def get_distance_distribution(diff_dict):
@@ -168,9 +170,9 @@ class WallDetection(NodeWithParams):
         self.velocity_ms = VELOCITY_CMS * 1e-2
 
         # start main timer
-        timer_period = 1e-3  # seconds
+        timer_period = 0.1  # seconds
         self.timer = self.create_timer(timer_period, self.main)
-
+        self.start_forward = None
         self.get_logger().warn(f"Current parameters: {self.current_params}")
 
     def flight_check(self, position_cm=None):
@@ -433,11 +435,10 @@ class WallDetection(NodeWithParams):
             # return State.ABORT
 
         elif self.state == State.HOVER:
-            if self.current_params["mode"] == Mode.FSLICE.value:
+            if self.current_params["mode"] in (Mode.FSLICE.value, Mode.BLIND.value):
                 self.set_buzzer(1)
                 self.calibration_count = 0
                 return State.WAIT_CALIB
-
             elif self.current_params["mode"] == Mode.DSLICE.value:
                 self.set_buzzer(3000)
                 return State.WAIT_ANGLE
@@ -445,6 +446,8 @@ class WallDetection(NodeWithParams):
                 raise ValueError(self.current_params["mode"])
 
         elif self.state == State.WAIT_ANGLE:
+            self.get_logger().error("wait_angle is not implemented yet")
+            return State.ABORT
             self.move_linear()
             # if curr_dist is not None:
             timestamp = self.get_timestamp()
@@ -467,10 +470,17 @@ class WallDetection(NodeWithParams):
 
             self.calibration = np.median(self.calibration_data, axis=2)
             self.get_logger().info("done calibrating")
+            self.start_forward = time.time()
             return State.WAIT_DISTANCE
 
         elif self.state == State.WAIT_DISTANCE:
             self.move_linear()
+
+            if self.current_params["mode"] == Mode.BLIND.value:
+                if (time.time() - self.start_forward) > TIME_FORWARD:
+                    return State.AVOID_DISTANCE
+                else:
+                    return State.WAIT_DISTANCE
 
             if not self.new_sample_to_treat:
                 self.get_logger().info("staying in WAIT_DISTANCE cause no new data")
@@ -487,7 +497,7 @@ class WallDetection(NodeWithParams):
             # invert velocity
             self.velocity_ms = -self.velocity_ms
 
-            # start a few seconds of blind flight to not retrigger
+            # start a few seconds of blind flight to not retrigger immediately
             self.start_blind = time.time()
             return State.BLIND_FLIGHT
 
@@ -495,6 +505,8 @@ class WallDetection(NodeWithParams):
             self.move_linear()
             if time.time() - self.start_blind < TIME_BLIND_FLIGHT:
                 return State.BLIND_FLIGHT
+
+            self.start_forward = time.time()
             return State.WAIT_DISTANCE
 
         elif self.state == State.AVOID_ANGLE:

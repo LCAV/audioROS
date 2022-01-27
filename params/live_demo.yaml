@@ -4,9 +4,9 @@ gateway:
     bin_selection: 5 # one sweep = one buffer
 wall_detection:
   ros__parameters:
-    mode: 0 # 0: FSLICE, 1: DSLICE
+    mode: 2 # 0: FSLICE, 1: DSLICE # 2: BLIND
     drone: 2 # 0: none, 1: buzzer, 2: flying
 launch:
   ros__parameters:
     log_level: "warn"
-    bag_record_root: "datasets/2021_01_27_demo/test"
+    bag_record_root: "datasets/2022_01_27_demo/test"
