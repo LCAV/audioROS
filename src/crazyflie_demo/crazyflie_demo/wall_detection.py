@@ -34,10 +34,11 @@ N_MAX = 14  # how many distances to use
 PUBLISH_MOVING = True
 PUBLISH_RAW = False
 
-DISTANCES_CM = np.arange(100, step=5)
+DISTANCES_CM = np.arange(5, 100, step=5)
 ANGLES_DEG = np.arange(360, step=30)
+# [90, 270] #
 
-N_WINDOW = 3
+N_WINDOW = 5
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
@@ -45,6 +46,7 @@ N_CALIBRATION = 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
+SIMPLIFY_ANGLES = False
 
 # movement stuff
 FLYING_HEIGHT_CM = 30
@@ -173,7 +175,6 @@ class WallDetection(NodeWithParams):
         timer_period = 0.1  # seconds
         self.timer = self.create_timer(timer_period, self.main)
         self.start_forward = None
-        self.get_logger().warn(f"Current parameters: {self.current_params}")
 
     def flight_check(self, position_cm=None):
         """ 
@@ -214,7 +215,7 @@ class WallDetection(NodeWithParams):
                 return magnitudes
             elif self.calibration_data.shape[2] != N_CALIBRATION:
                 self.get_logger().warn(
-                    f"Not enough calibration data yet: {self.calibration_data.shape[2]} < {N_CALIBRATION}"
+                    f"Calibration data incorrect: {self.calibration_data.shape[2]} != {N_CALIBRATION}"
                 )
         self.calibration = np.median(
             self.calibration_data[:, :, : self.calibration_count], axis=2
@@ -279,9 +280,11 @@ class WallDetection(NodeWithParams):
             diff_dict, position_cm=position_cm, rot_deg=yaw_deg,
         )
         (
+            distances_cm,
             probabilities_moving,
+            angles_deg,
             probabilities_moving_angle,
-        ) = self.moving_estimator.get_distributions(local=True)
+        ) = self.moving_estimator.get_distributions(simplify_angles=SIMPLIFY_ANGLES)
         # self.get_logger().warn(f"{timestamp}, after adding {position_cm[0]:.2f}, {yaw_deg:.1f}: {probabilities_moving[2]}")
         return (
             distances_cm,
@@ -363,13 +366,20 @@ class WallDetection(NodeWithParams):
                 self.moving_estimator.add_distributions(
                     diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
                 )
-                probabilities, __ = self.moving_estimator.get_distributions(local=True)
+                (
+                    distances_cm,
+                    probabilities,
+                    __,
+                    __,
+                ) = self.moving_estimator.get_distributions(
+                    simplify_angles=SIMPLIFY_ANGLES
+                )
                 # self.get_logger().warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")
 
                 # TODO(FD) to save time, we could consider only publishing the distribution
                 # if it contains viable distance estimates.
                 msg = create_distribution_message(
-                    self.moving_estimator.distances_cm, probabilities, timestamp
+                    distances_cm, probabilities, timestamp
                 )
                 self.publisher_distribution_moving.publish(msg)
                 self.get_logger().info(

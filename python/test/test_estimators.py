@@ -20,18 +20,24 @@ def test_moving_delta():
     print("==== testing with delta ====")
     do_test_moving("delta", n_window=2)
     do_test_moving("delta", n_window=3)
+    do_test_moving("delta", n_window=4)
 
 
 def test_moving_normal():
     print("==== testing with normal ====")
     do_test_moving("normal", n_window=2)
     do_test_moving("normal", n_window=3)
+    do_test_moving("normal", n_window=4)
 
 
 def do_test_moving(prob_method, n_window):
     """ Test on simple toy example """
 
-    moving_estimator = MovingEstimator(n_window=n_window)  # 2 or 3 works.
+    angles_deg = np.arange(360, step=10)
+    distances_cm = np.arange(100, step=10)
+    moving_estimator = MovingEstimator(
+        n_window=n_window, angles_deg=angles_deg, distances_cm=distances_cm
+    )
     delta_grid = np.arange(100)
 
     def measure_wall(pose):
@@ -67,29 +73,26 @@ def do_test_moving(prob_method, n_window):
             probs = get_delta_distribution(distance, angle, mic_idx, prob_method)
             diff_dict[mic_idx] = (delta_grid, probs)
         moving_estimator.add_distributions(diff_dict, pose[:2], pose[2])
-        # print(f"added {distance, angle} at pose {i}")
+        print(f"added {distance, angle} at pose {i}")
 
         if i < n_window - 1:
             continue
 
-        # prob_matrix = moving_estimator.get_joint_distribution(verbose=True)
-        # print("joint (angles x distances)")
-        # print(prob_matrix)
-        # print("angles:", moving_estimator.ANGLES_DEG)
-        # print("distances:", moving_estimator.DISTANCES_CM)
-
-        prob_distances, prob_angles = moving_estimator.get_distributions(verbose=True)
-        angles = moving_estimator.ANGLES_DEG
-        distances = moving_estimator.DISTANCES_CM
+        (
+            distances,
+            prob_distances,
+            angles,
+            prob_angles,
+        ) = moving_estimator.get_distributions(verbose=True, simplify_angles=False)
 
         distance_estimate = moving_estimator.get_distance_estimate(prob_distances)
         angle_estimate = moving_estimator.get_angle_estimate(prob_angles)
         assert (
-            distance_estimate == distance_glob
-        ), f"distance at position {i}: {distance_estimate} != true {distance_glob}"
+            distance_estimate == distance
+        ), f"distance at position {i}: {distance_estimate} != true {distance}"
         assert (
-            angle_estimate == angle_glob
-        ), f"angle at position {i}: {angle_estimate} != true {angle_glob}"
+            angle_estimate == angle
+        ), f"angle at position {i}: {angle_estimate} != true {angle}"
 
 
 if __name__ == "__main__":
