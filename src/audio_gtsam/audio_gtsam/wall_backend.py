@@ -30,7 +30,7 @@ DISTANCE_THRESHOLD_M = 0.2  # when to consider wall too close
 
 LIMIT_DISTANCE_CM = 20  # threshold for adding wall to factor graph
 
-ESTIMATION_METHOD = "mean"
+ESTIMATION_METHOD = "peak"
 
 
 def angle_difference(a1, a2):
@@ -260,6 +260,7 @@ class WallBackend(object):
         n_estimates=1,
         limit_distance=LIMIT_DISTANCE_CM,
         verbose=False,
+        method=ESTIMATION_METHOD,
     ):
         """ Add plane factor from distance and angle distributions.
         """
@@ -267,20 +268,20 @@ class WallBackend(object):
         # TODO(FD) can remove n_estimates parameter because factor graph
         # does not deal well with multiple measurements.
         distance_estimates, distance_stds = get_estimates(
-            dists_cm, probs, n_estimates=n_estimates
+            dists_cm, probs, n_estimates=n_estimates, method=method
         )
         angle_estimates, angle_stds = get_estimates(
-            azimuths_deg, probs_angles, n_estimates=n_estimates
+            azimuths_deg, probs_angles, n_estimates=n_estimates, method=method
         )
-
-        # if verbose:
-        #    print("distance estimates:", distance_estimates)
 
         for d_i, a_i in itertools.product(
             range(len(distance_estimates)), range(len(angle_estimates))
         ):
+
             distance = distance_estimates[d_i]
             azimuth = angle_estimates[a_i]
+            if (distance is None) or (azimuth is None):
+                continue
 
             if distance > limit_distance:
                 continue

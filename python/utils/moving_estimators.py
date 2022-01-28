@@ -24,17 +24,18 @@ ESTIMATION_METHOD = "peak"
 
 
 def get_std_sample(values, probs, means, unbiased=True):
-    norm = (np.sum(probs) - 1) if unbiased else np.sum(probs)
+    if np.isclose(np.nansum(probs), 1):  # for distributions
+        norm = 1.0
+    else:  # for histograms
+        norm = (np.nansum(probs) - 1) if unbiased else np.nansum(probs)
+    if not norm:
+        return None if np.ndim(means) == 0 else np.full(len(means), None)
+
     if np.ndim(means) > 0:
-        var = (
-            np.sum(
-                np.multiply(probs[:, None], (values[:, None] - means[None, :]) ** 2),
-                axis=0,
-            )
-            / norm
-        )
+        coeffs = np.multiply(probs[:, None], (values[:, None] - means[None, :]) ** 2)
+        var = np.nansum(coeffs, axis=0) / norm
     else:
-        var = np.sum(np.multiply(probs, (values - means) ** 2), axis=0) / norm
+        var = np.nansum(np.multiply(probs, (values - means) ** 2), axis=0) / norm
     return np.sqrt(var)
 
 
@@ -55,6 +56,8 @@ def get_estimate(values, probs, method=ESTIMATION_METHOD, unbiased=True):
         stds = get_std_sample(values, probs, means=estimates, unbiased=unbiased)
     elif method == "peak":
         indices, __ = scipy.signal.find_peaks(probs)
+        if not len(indices):
+            return None, None
         prob_estimates = probs[indices]
         max_prob = np.max(prob_estimates)
         indices = np.where(probs == max_prob)[0]
@@ -80,6 +83,9 @@ def get_estimates(values, probs, sort=True, n_estimates=None, method=ESTIMATION_
             )
 
         indices, properties = scipy.signal.find_peaks(probs, width=True)
+        if n_estimates and len(indices) < n_estimates:
+            warnings.warn("Found less peaks than requested")
+            return None, None
         stds = get_std_of_peaks(indices)
 
         estimates = values[indices]
