@@ -344,7 +344,8 @@ class WallBackend(object):
             return
 
         distance = distances[0]
-        if distance > limit_distance:
+
+        if (distance is None) or (distance > limit_distance):
             return
 
         # because the angle estimates are very unreliable we fall back to

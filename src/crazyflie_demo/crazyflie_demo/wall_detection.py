@@ -25,6 +25,16 @@ from utils.inference import Inference, get_approach_angle_fft
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 
+BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
+# BAD_FREQ_RANGES = []
+
+ALPHA_CALIBRATION = 0.1  # 1: overwrite with new data, 1: ignore with new data
+
+CALIBRATION = "iir"
+N_CALIBRATION = 2  # need at least two, otherwise end up with all-ones magnitudes_calib.
+
+# CALIBRATION = "window"
+# N_CALIBRATION = 10
 
 # dslice
 FREQ = 3000  # mono frequency signal
@@ -42,7 +52,6 @@ N_WINDOW = 5
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
-N_CALIBRATION = 10
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
@@ -160,8 +169,11 @@ class WallDetection(NodeWithParams):
         )
 
         self.calibration_count = 0
-        self.calibration_data = np.empty((N_MICS, 0, 0))
+
         self.calibration = None
+        self.calibrationsq = None
+        if CALIBRATION == "window":
+            self.calibration_data = np.empty((N_MICS, 0, 0))
 
         self.new_sample_to_treat = False
 
@@ -205,21 +217,44 @@ class WallDetection(NodeWithParams):
             )
             self.calibration_count += 1
 
+    def add_to_calib_iir(self, magnitudes):
+        if self.calibration is None:
+            self.calibration = magnitudes
+            self.calibrationsq = magnitudes ** 2
+        else:
+            self.calibration = (
+                1 - ALPHA_CALIBRATION
+            ) * self.calibration + ALPHA_CALIBRATION * magnitudes
+            self.calibrationsq = (
+                1 - ALPHA_CALIBRATION
+            ) * self.calibrationsq + ALPHA_CALIBRATION * (magnitudes ** 2)
+        self.calibration_count += 1
+
     def calibrate(self, magnitudes):
         # sometimes there can be a sample missing from the end of the signal.
-        if self.calibration is None:
-            if self.calibration_data.shape[2] <= 1:
+        if CALIBRATION == "window":
+            if self.calibration is None:
+                if self.calibration_data.shape[2] <= 1:
+                    self.get_logger().error(
+                        f"No calibration data yet. Returning raw magnitudes. "
+                    )
+                    return magnitudes
+                elif self.calibration_data.shape[2] != N_CALIBRATION:
+                    self.get_logger().warn(
+                        f"Calibration data incorrect: {self.calibration_data.shape[2]} != {N_CALIBRATION}"
+                    )
+            self.calibration = np.median(
+                self.calibration_data[:, :, : self.calibration_count], axis=2
+            )
+            self.calibrationsq = np.median(
+                self.calibration_data[:, :, : self.calibration_count] ** 2, axis=2
+            )
+        elif CALIBRATION == "iir":
+            if self.calibration is None:
                 self.get_logger().error(
                     f"No calibration data yet. Returning raw magnitudes. "
                 )
                 return magnitudes
-            elif self.calibration_data.shape[2] != N_CALIBRATION:
-                self.get_logger().warn(
-                    f"Calibration data incorrect: {self.calibration_data.shape[2]} != {N_CALIBRATION}"
-                )
-        self.calibration = np.median(
-            self.calibration_data[:, :, : self.calibration_count], axis=2
-        )
 
         if len(self.calibration) != len(magnitudes):
             self.get_logger().warn("length mismatch in calibration")
@@ -240,6 +275,7 @@ class WallDetection(NodeWithParams):
         self.inf_machine.add_data(
             magnitudes_calib, freqs,  # 4 x 32
         )
+        self.inf_machine.filter_out_freqs(freq_ranges=BAD_FREQ_RANGES, verbose=False)
         for mic_i in range(magnitudes_calib.shape[0]):
             __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
             diff_dict[mic_i] = (diff, prob_mic)
@@ -259,9 +295,11 @@ class WallDetection(NodeWithParams):
             2
         ]  # just a formality to compare bag file to csv file.
 
-        if calib:
+        if calib and CALIBRATION == "window":
             self.add_to_calib(magnitudes)
             return
+        if CALIBRATION == "iir":
+            self.add_to_calib_iir(magnitudes)
 
         # print("data in callback", magnitudes[:, 0], freqs[0], position_cm, yaw_deg)
 

@@ -117,14 +117,18 @@ class Inference(object):
         self.slices[:, self.valid_idx] /= f_calib_mics
         self.is_calibrated = True
 
-    def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES):
+    def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES, verbose=False):
         """
         :param freq_ranges: list of frequency ranges to filter out
         """
+        if verbose:
+            print("number of frequencies before:", np.sum(self.valid_idx))
         for freq_range in freq_ranges:
             self.valid_idx &= (freq_range[1] <= self.values) | (
                 self.values <= freq_range[0]
             )
+        if verbose:
+            print("number of frequencies after:", np.sum(self.valid_idx))
 
     def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None):
         """
