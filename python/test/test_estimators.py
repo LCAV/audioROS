@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-test_estimators.py:  Test estimators
+test_estimators.py:  Test moving estimator class.
 """
 
 import sys, os

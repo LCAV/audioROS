@@ -8,6 +8,7 @@ import warnings
 
 import numpy as np
 import scipy.interpolate
+import scipy.signal
 
 from .geometry import Context
 
@@ -16,6 +17,83 @@ from .geometry import Context
 ALPHA = 0.8
 ANGLE_WINDOW_DEG = 20  # set to zero to use only the forward direction. o
 ANGLE_RESOLUTION_DEG = 20
+
+ESTIMATION_METHOD = "peak"
+# ESTIMATION_METHOD = "mean"
+# ESTIMATION_METHOD = "max"
+
+
+def get_std_sample(values, probs, means, unbiased=True):
+    norm = (np.sum(probs) - 1) if unbiased else np.sum(probs)
+    if np.ndim(means) > 0:
+        var = (
+            np.sum(
+                np.multiply(probs[:, None], (values[:, None] - means[None, :]) ** 2),
+                axis=0,
+            )
+            / norm
+        )
+    else:
+        var = np.sum(np.multiply(probs, (values - means) ** 2), axis=0) / norm
+    return np.sqrt(var)
+
+
+def get_std_of_peaks(values, probs, peaks):
+    widths, *__ = scipy.signal.peak_widths(probs, peaks)
+    fwhm = widths * (values[1] - values[0])  # assumes uniform values
+    return fwhm / 2 / np.sqrt(2 * np.log(2))
+
+
+def get_estimate(values, probs, method=ESTIMATION_METHOD, unbiased=True):
+    if method == "mean":
+        mean = np.sum(np.multiply(probs, values)) / np.sum(probs)
+        std = get_std_sample(values, probs, means=mean, unbiased=unbiased)
+        return mean, std
+    elif method == "max":
+        max_prob = np.max(probs)
+        estimates = values[np.where(probs == max_prob)[0]]
+        stds = get_std_sample(values, probs, means=estimates, unbiased=unbiased)
+    elif method == "peak":
+        indices, __ = scipy.signal.find_peaks(probs)
+        prob_estimates = probs[indices]
+        max_prob = np.max(prob_estimates)
+        indices = np.where(probs == max_prob)[0]
+        estimates = values[indices]
+        stds = get_std_of_peaks(values, probs, indices)
+    if len(estimates) > 1:
+        print(f"Warning: ambiguous valuesribution, {len(estimates)} maxima")
+    return estimates[0], stds[0]
+
+
+def get_estimates(values, probs, sort=True, n_estimates=None, method=ESTIMATION_METHOD):
+    """
+    :param n_estimates: number of estimates (i.e. peaks) to return. None: return all.
+    :param sort: sort estimates by probability (most likely first).
+    """
+    if n_estimates == 1:
+        mean, std = get_estimate(values, probs, method=method)
+        return [mean], [std]
+    if n_estimates is None or n_estimates > 1:
+        if method != "peak":
+            warnings.warn(
+                f"Using method peak instead of {method} for n_estimates={n_estimates}"
+            )
+
+        indices, properties = scipy.signal.find_peaks(probs, width=True)
+        stds = get_std_of_peaks(indices)
+
+        estimates = values[indices]
+        prob_estimates = probs[indices]
+        if sort:
+            sort_indices = prob_estimates.argsort()[::-1]
+            estimates = estimates[sort_indices]
+            prob_estimates = prob_estimates[sort_indices]
+            stds = stds[sort_indices]
+
+        if n_estimates is None:
+            return estimates, stds
+        else:
+            return estimates[:n_estimates], stds[:n_estimates]
 
 
 def from_0_to_360(angle):
@@ -122,19 +200,11 @@ class MovingEstimator(object):
         probs_dist = clean_distribution(probs_dist)
         return distances_cm, probs_dist, angles_deg, probs_angles
 
-    def get_distance_estimate(self, dist):
-        max_dist = np.max(dist)
-        estimates = self.distances_cm[np.where(dist == max_dist)[0]]
-        if len(estimates) > 1:
-            print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
-        return estimates[0]
+    def get_distance_estimate(self, dist, method=ESTIMATION_METHOD):
+        return get_estimate(self.distances_cm, dist, method=method)
 
-    def get_angle_estimate(self, dist):
-        max_dist = np.max(dist)
-        estimates = self.angles_deg[np.where(dist == max_dist)[0]]
-        if len(estimates) > 1:
-            print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
-        return estimates[0]
+    def get_angle_estimate(self, dist, method=ESTIMATION_METHOD):
+        return get_estimate(self.angles_deg, dist, method=method)
 
     def get_joint_distribution(self, verbose=False, simplify_angles=True):
         if not self.filled:

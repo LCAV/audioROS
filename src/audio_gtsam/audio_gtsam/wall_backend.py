@@ -12,6 +12,11 @@ import scipy
 
 import gtsam
 
+import sys, os
+
+sys.path.append(os.path.join(os.getcwd(), "python/"))
+from utils.moving_estimators import get_estimates
+
 X = gtsam.symbol_shorthand.X
 P = gtsam.symbol_shorthand.P
 
@@ -24,6 +29,8 @@ N_VELOCITY_ESTIMATE = 3  # how many points to use for velocity estimate
 DISTANCE_THRESHOLD_M = 0.2  # when to consider wall too close
 
 LIMIT_DISTANCE_CM = 20  # threshold for adding wall to factor graph
+
+ESTIMATION_METHOD = "mean"
 
 
 def angle_difference(a1, a2):
@@ -74,21 +81,6 @@ def get_azimuth_angle(normal_vector, degrees=False):
     angle_rad = get_angle(normal_vector)
     angle_rad += np.pi  # plus pi because of different conventions
     return angle_rad * 180 / np.pi if degrees else angle_rad
-
-
-def get_estimates(values, prob, sort=True, n_estimates=None):
-    indices, __ = scipy.signal.find_peaks(prob)
-    estimates = values[indices]
-    prob_estimates = prob[indices]
-    sort_indices = prob_estimates.argsort()[::-1]
-    if sort:
-        estimates = estimates[sort_indices]
-        prob_estimates = prob_estimates[sort_indices]
-    stds = (values[1] - values[0]) / (prob_estimates * np.sqrt(2 * np.pi))
-    if n_estimates is None:
-        return estimates, stds
-    else:
-        return estimates[:n_estimates], stds[:n_estimates]
 
 
 class WallBackend(object):
@@ -339,11 +331,14 @@ class WallBackend(object):
         limit_distance=LIMIT_DISTANCE_CM,
         verbose=False,
         logger=None,
+        method=ESTIMATION_METHOD,
     ):
         """ 
         Add plane factor from distance distributions, using angle ahead.
         """
-        distances, distance_stds = get_estimates(dists_cm, probs, n_estimates=1)
+        distances, distance_stds = get_estimates(
+            dists_cm, probs, n_estimates=1, method=method
+        )
         if not len(distances):
             return
 
