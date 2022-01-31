@@ -65,6 +65,9 @@ def get_estimate(values, probs, method=ESTIMATION_METHOD, unbiased=True):
         stds = get_std_of_peaks(values, probs, indices)
     if len(estimates) > 1:
         print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
+    elif not len(estimates):
+        print(f"Warning: no valid estimates detected: {values}, {probs}")
+        return None, None
     return estimates[0], stds[0]
 
 
