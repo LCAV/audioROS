@@ -85,8 +85,8 @@ def do_test_moving(prob_method, n_window):
             prob_angles,
         ) = moving_estimator.get_distributions(verbose=True, simplify_angles=False)
 
-        distance_estimate = moving_estimator.get_distance_estimate(prob_distances)
-        angle_estimate = moving_estimator.get_angle_estimate(prob_angles)
+        distance_estimate, __ = moving_estimator.get_distance_estimate(prob_distances)
+        angle_estimate, __ = moving_estimator.get_angle_estimate(prob_angles)
         assert (
             distance_estimate == distance
         ), f"distance at position {i}: {distance_estimate} != true {distance}"

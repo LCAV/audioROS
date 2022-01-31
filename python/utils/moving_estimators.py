@@ -12,9 +12,20 @@ import scipy.signal
 
 from .geometry import Context
 
-# Factor to use in probability distribution multiplication.
-# 1 tends to lead to over-confident estimates, 0.5 was found to give good results.
-ALPHA = 0.8
+
+# RELATIVE_MOVEMENT_STD implicityly defines the forgetting factor when
+# combining multiple measurements. The relative weights of the
+# latest to the oldest measurements are, for instance:
+# for 1:
+# [1, 0.5, 0.25, 0.125, 0.0625]
+# for 0.3:
+# [1... 0.7]
+# for 0.1:
+# [1, 0.99, 0.98, 0.97, 0.96]
+# for 0:
+# [1, 1, 1, 1, 1]
+RELATIVE_MOVEMENT_STD = 1.0  #
+
 ANGLE_WINDOW_DEG = 20  # set to zero to use only the forward direction. o
 ANGLE_RESOLUTION_DEG = 20
 
@@ -63,7 +74,10 @@ def get_estimate(values, probs, method=ESTIMATION_METHOD, unbiased=True):
         indices = np.where(probs == max_prob)[0]
         estimates = values[indices]
         stds = get_std_of_peaks(values, probs, indices)
-    if len(estimates) > 1:
+    if len(estimates) == len(probs):
+        print(f"Warning: uniform distribution.")
+        return None, None
+    elif len(estimates) > 1:
         print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
     elif not len(estimates):
         print(f"Warning: no valid estimates detected: {values}, {probs}")
@@ -131,6 +145,7 @@ class MovingEstimator(object):
         self.difference_p = {n: {} for n in range(n_window)}
         self.positions = np.full((n_window, 2), None)
         self.rotations = np.full(n_window, None)
+        self.times = np.full(n_window, None)
 
         self.distances_cm = distances_cm
         self.angles_deg = angles_deg
@@ -138,7 +153,8 @@ class MovingEstimator(object):
         self.dim = 2
         self.reference = None
 
-        self.index = -1
+        self.counter = 0  # total counter
+        self.index = -1  # rolling index
         self.n_window = n_window
         self.filled = False
 
@@ -166,6 +182,8 @@ class MovingEstimator(object):
 
         self.positions[self.index, :] = position_cm
         self.rotations[self.index] = rot_deg
+        self.times[self.index] = self.counter
+        self.counter += 1
 
         for mic_idx, (diff, prob) in diff_dictionary.items():
             if not any(diff > 1):
@@ -309,23 +327,43 @@ class MovingEstimator(object):
                             f"  distance estimate from position {previous}:",
                             self.get_distance_estimate(distance_p[previous][mic]),
                         )
-            # multiply over mics and positions to get one final distance distribution
-            # for this angle. ALPHA is used to not get over-confident estimates.
-            for i, probs_mics in distance_p.items():
-                for mic, probs in probs_mics.items():
-                    joint_distribution[a] = (
-                        np.multiply(joint_distribution[a] ** ALPHA, probs ** ALPHA) ** 1
-                        / ALPHA
-                    )
+
+            current_time = self.times[self.index]
+            lambdas = []
+            for i_time, probs_mics in distance_p.items():  # all measurement times
+                if len(probs_mics):
+                    time_lag = current_time - self.times[i_time]
+                    # print(f"current index {self.index}: other index {i_time}, lag: {time_lag}")
+                    lambdas.append(1 / (1 + RELATIVE_MOVEMENT_STD ** 2) ** time_lag)
+                for mic, probs in probs_mics.items():  # all mics
+                    joint_distribution[a] *= probs ** lambdas[-1]
+            joint_distribution[a] = joint_distribution[a] ** (1 / np.sum(lambdas))
         return joint_distribution, angles_deg, self.distances_cm
+
+    def get_ordered_index(self):
+        """ Get the list of indices that the current elements in the buffer correspond to. 
+        For instance, if self.positions contains: [p7 p1 p2 p3 p4 p5 p6]
+        it returns ordered_index=[6, 0, 1, 2, 3, 4, 5], such that positions[ordered_index] 
+        corresponds to the positions ordered chronologically: [p1, p2, p3, p4, p5, p6, p7], 
+        with the oldest position first. 
+        """
+        if self.filled:
+            n_elements = self.n_window
+        else:
+            n_elements = self.index + 1
+        ordered_index = np.roll(range(n_elements), -self.index - 1)
+        return ordered_index
 
     def get_local_forward_angle(self):
         current = self.index
-        if not self.filled:
+        if not self.filled and (self.index < 2):
             print("Warning: cannot simplify angles yet because buffer not filled.")
             return 0
-        # if self.positions is [5, 6, 2, 3, 4] with current=2, return [2, 3, 4, 5, 6]
-        ordered_positions = np.roll(self.positions, -current - 1, axis=0)
+        # if self.positions is [p5, p6, p2, p3, p4] with current=2, return [p2, p3, p4, p5, p6]
+        ordered_positions = self.positions[
+            self.get_ordered_index()
+        ]  # np.roll(self.positions, -current - 1, axis=0)
+
         forward_dir_global = np.mean(np.diff(ordered_positions, axis=0), axis=0)
         angle_global_deg = (
             180 / np.pi * np.arctan2(forward_dir_global[1], forward_dir_global[0])

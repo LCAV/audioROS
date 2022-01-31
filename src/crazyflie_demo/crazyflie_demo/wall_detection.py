@@ -26,10 +26,10 @@ from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 
 # MASK_BAD = "fixed"
-BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
+# BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
 # MASK_BAD = "adaptive"
 # OUTLIER_FACTOR = 10 # reject values outside of OUTLIER_FACTOR * std window
-# MASK_BAD = None
+MASK_BAD = None
 
 CALIBRATION = "iir"
 N_CALIBRATION = 2  # need at least two, otherwise end up with all-ones magnitudes_calib.
@@ -38,7 +38,7 @@ N_CALIBRATION = 2  # need at least two, otherwise end up with all-ones magnitude
 # CALIBRATION= "fixed"
 # N_CALIBRATION = 10
 
-ALPHA_IIR = 0.2  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
+ALPHA_IIR = 0.5  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
 
 # dslice
 FREQ = 3000  # mono frequency signal
