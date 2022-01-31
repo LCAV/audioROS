@@ -26,13 +26,6 @@ from .geometry import Context
 # [1, 1, 1, 1, 1]
 RELATIVE_MOVEMENT_STD = 1.0  #
 
-ANGLE_WINDOW_DEG = 20  # set to zero to use only the forward direction. o
-ANGLE_RESOLUTION_DEG = 20
-
-ESTIMATION_METHOD = "peak"
-# ESTIMATION_METHOD = "mean"
-# ESTIMATION_METHOD = "max"
-
 
 def get_std_sample(values, probs, means, unbiased=True):
     if np.isclose(np.nansum(probs), 1):  # for distributions
@@ -56,7 +49,11 @@ def get_std_of_peaks(values, probs, peaks):
     return fwhm / 2 / np.sqrt(2 * np.log(2))
 
 
-def get_estimate(values, probs, method=ESTIMATION_METHOD, unbiased=True):
+def get_estimate(values, probs, method, unbiased=True):
+    # distirbution with only one value, return that value.
+    if len(values) == 1:
+        return values[0], 0.0
+
     if method == "mean":
         mean = np.sum(np.multiply(probs, values)) / np.sum(probs)
         std = get_std_sample(values, probs, means=mean, unbiased=unbiased)
@@ -85,7 +82,7 @@ def get_estimate(values, probs, method=ESTIMATION_METHOD, unbiased=True):
     return estimates[0], stds[0]
 
 
-def get_estimates(values, probs, sort=True, n_estimates=None, method=ESTIMATION_METHOD):
+def get_estimates(values, probs, method, sort=True, n_estimates=None):
     """
     :param n_estimates: number of estimates (i.e. peaks) to return. None: return all.
     :param sort: sort estimates by probability (most likely first).
@@ -134,6 +131,13 @@ def get_normal(angle_deg):
 class MovingEstimator(object):
     DISTANCES_CM = np.arange(100, step=2)
     ANGLES_DEG = np.arange(360, step=10)
+
+    ANGLE_WINDOW_DEG = 20  # set to zero to use only the forward direction. o
+    ANGLE_RESOLUTION_DEG = 20
+
+    # ESTIMATION_METHOD = "peak"
+    # ESTIMATION_METHOD = "mean"
+    ESTIMATION_METHOD = "max"
 
     def __init__(
         self,
@@ -258,10 +262,11 @@ class MovingEstimator(object):
         if simplify_angles:
             angle_local_deg = self.get_local_forward_angle()
             angles_deg = np.arange(
-                angle_local_deg - ANGLE_WINDOW_DEG / 2,
-                angle_local_deg + ANGLE_WINDOW_DEG / 2 + ANGLE_RESOLUTION_DEG,
-                step=ANGLE_RESOLUTION_DEG,
+                self.ANGLE_WINDOW_DEG + self.ANGLE_RESOLUTION_DEG,
+                step=self.ANGLE_RESOLUTION_DEG,
+                dtype=float,
             )
+            angles_deg += angle_local_deg - angles_deg[len(angles_deg) // 2]
         else:
             angles_deg = self.angles_deg
 
@@ -278,16 +283,17 @@ class MovingEstimator(object):
             # convert the differences at the current index to
             # local distance distributions.
             for mic, difference_p in self.difference_p[current].items():
-                distance_p[current][mic] = np.array(
-                    [
-                        difference_p(self.context.get_delta(angle_local, d, mic))
-                        for d in self.distances_cm
-                    ]
-                )
+                deltas = [
+                    self.context.get_delta(angle_local, d, mic)
+                    for d in self.distances_cm
+                ]
+                distance_p[current][mic] = np.array(difference_p(deltas))
+
+                # print(distance_p[current][mic])
                 if verbose:
                     print(
-                        "  distance estimate for current position:",
-                        self.get_distance_estimate(distance_p[current][mic]),
+                        f"  distance estimate for current position, mic{mic}:",
+                        self.get_distance_estimate(distance_p[current][mic])[0],
                     )
 
             # for previous positions, a bit more work is needed:
@@ -322,10 +328,11 @@ class MovingEstimator(object):
                     distance_p[previous][mic] = np.array(
                         [difference_p2(d) for d in deltas]
                     )
+                    # print(distance_p[previous][mic])
                     if verbose:
                         print(
-                            f"  distance estimate from position {previous}:",
-                            self.get_distance_estimate(distance_p[previous][mic]),
+                            f"  distance estimate from position {previous}, mic{mic}:",
+                            self.get_distance_estimate(distance_p[previous][mic])[0],
                         )
 
             current_time = self.times[self.index]
