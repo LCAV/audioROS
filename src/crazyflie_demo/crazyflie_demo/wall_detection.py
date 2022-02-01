@@ -25,21 +25,6 @@ from utils.inference import Inference, get_approach_angle_fft
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 
-# MASK_BAD = "fixed"
-# BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
-# MASK_BAD = "adaptive"
-# OUTLIER_FACTOR = 10 # reject values outside of OUTLIER_FACTOR * std window
-MASK_BAD = None
-
-CALIBRATION = "iir"
-N_CALIBRATION = 2  # need at least two, otherwise end up with all-ones magnitudes_calib.
-# CALIBRATION = "window"
-# N_CALIBRATION = 10
-# CALIBRATION= "fixed"
-# N_CALIBRATION = 10
-
-ALPHA_IIR = 0.5  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
-
 # dslice
 FREQ = 3000  # mono frequency signal
 N_MAX = 14  # how many distances to use
@@ -47,18 +32,17 @@ N_MAX = 14  # how many distances to use
 PUBLISH_MOVING = True
 PUBLISH_RAW = False
 
-DISTANCES_CM = np.arange(5, 100, step=5)
+DISTANCES_CM = np.arange(7, 80, step=5)
 ANGLES_DEG = np.arange(360, step=30)
 # [90, 270] #
 
-N_WINDOW = 5
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
 LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
-SIMPLIFY_ANGLES = False
+SIMPLIFY_ANGLES = True
 
 # movement stuff
 FLYING_HEIGHT_CM = 30
@@ -125,39 +109,80 @@ def get_angle_distribution(dslices, resolve_side=False):
     return angles, prob
 
 
+class PythonLogger(object):
+    def warn(self, msg):
+        print("Warn:", msg)
+
+    def info(self, msg):
+        print("Info:", msg)
+
+    def error(self, msg):
+        print("Error:", msg)
+
+
 class WallDetection(NodeWithParams):
     PARAMS_DICT = {"mode": Mode.FSLICE.value, "drone": int(DRONE)}
 
-    def __init__(self):
-        super().__init__("wall_detection")
+    MASK_BAD = "fixed"
+    # MASK_BAD = "adaptive"
+    # MASK_BAD = None
 
-        self._client_command = self.create_client(
-            CrazyflieCommands, "send_command_manual"
-        )
-        self._client_wall = self.create_client(StateMachine, "check_wall")
-        self.already_asking = False  # semaphore to make sure we only ask once at a time
-        self._server_state = self.create_service(
-            StateMachine, "change_state_manual", self.change_state_manual_callback
-        )
+    BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
+    OUTLIER_FACTOR = 10  # reject values outside of OUTLIER_FACTOR * std window
 
-        # Note that for this usecase,  n_buffer>1 doesn't work because the pose synchronizer
-        # creates exactly one matching message.
-        self.signals_synch = TopicSynchronizer(20, self.get_logger(), n_buffer=1)
-        self.subscription_signals = self.create_subscription(
-            SignalsFreq, "audio/signals_f", self.signals_synch.listener_callback, 10
-        )
-        self.subscription_pose = self.create_subscription(
-            PoseRaw, "geometry/pose_raw_synch", self.listener_callback, 10,
-        )
+    CALIBRATION = "iir"
+    N_CALIBRATION = (
+        2  # need at least two, otherwise end up with all-ones magnitudes_calib.
+    )
+    # CALIBRATION = "window"
+    # N_CALIBRATION = 10
+    # CALIBRATION= "fixed"
+    # N_CALIBRATION = 10
 
-        if PUBLISH_RAW:
-            self.publisher_distribution_raw = self.create_publisher(
-                Distribution, "results/distribution_raw", 10
+    ALPHA_IIR = 0.2  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
+    N_WINDOW = 3
+
+    def __init__(self, python_only=False):
+        if not python_only:
+            print("initializing ros stuff")
+            super().__init__("wall_detection")
+            self.logger = self.get_logger()
+
+            self._client_command = self.create_client(
+                CrazyflieCommands, "send_command_manual"
             )
-        if PUBLISH_MOVING:
-            self.publisher_distribution_moving = self.create_publisher(
-                Distribution, "results/distribution_moving", 10
+            self._client_wall = self.create_client(StateMachine, "check_wall")
+            self.already_asking = (
+                False  # semaphore to make sure we only ask once at a time
             )
+            self._server_state = self.create_service(
+                StateMachine, "change_state_manual", self.change_state_manual_callback
+            )
+
+            # Note that for this usecase,  n_buffer>1 doesn't work because the pose synchronizer
+            # creates exactly one matching message.
+            self.signals_synch = TopicSynchronizer(20, self.logger, n_buffer=1)
+            self.subscription_signals = self.create_subscription(
+                SignalsFreq, "audio/signals_f", self.signals_synch.listener_callback, 10
+            )
+            self.subscription_pose = self.create_subscription(
+                PoseRaw, "geometry/pose_raw_synch", self.listener_callback, 10,
+            )
+
+            if PUBLISH_RAW:
+                self.publisher_distribution_raw = self.create_publisher(
+                    Distribution, "results/distribution_raw", 10
+                )
+            if PUBLISH_MOVING:
+                self.publisher_distribution_moving = self.create_publisher(
+                    Distribution, "results/distribution_moving", 10
+                )
+            timer_period = 0.1  # seconds
+            self.timer = self.create_timer(timer_period, self.main)
+
+        else:
+            self.current_params = self.PARAMS_DICT
+            self.logger = PythonLogger()
 
         # self.start_time = None # use relative time since start
         self.start_time = 0  # use absolute time
@@ -168,15 +193,14 @@ class WallDetection(NodeWithParams):
         self.inf_machine = Inference()
         self.inf_machine.add_geometry(LOCAL_DIST_RANGE_CM, WALL_ANGLE_DEG)
         self.moving_estimator = MovingEstimator(
-            n_window=N_WINDOW, distances_cm=DISTANCES_CM, angles_deg=ANGLES_DEG
+            n_window=self.N_WINDOW, distances_cm=DISTANCES_CM, angles_deg=ANGLES_DEG
         )
 
         self.calibration_count = 0
 
         self.calibration = None
         self.calibrationsq = None
-        if CALIBRATION in ("window", "fixed"):
-            self.calibration_data = None
+        self.calibration_data = None
 
         self.new_sample_to_treat = False
 
@@ -187,8 +211,6 @@ class WallDetection(NodeWithParams):
         self.velocity_ms = VELOCITY_CMS * 1e-2
 
         # start main timer
-        timer_period = 0.1  # seconds
-        self.timer = self.create_timer(timer_period, self.main)
         self.start_forward = None
 
     def flight_check(self, position_cm=None):
@@ -204,12 +226,12 @@ class WallDetection(NodeWithParams):
         return True
 
     def add_to_calib(self, magnitudes, calib_state=True):
-        if calib_state and CALIBRATION == "fixed":
+        if calib_state and self.CALIBRATION == "fixed":
             self.add_to_calib_data(magnitudes)
             return
-        elif CALIBRATION == "window":
-            self.add_to_calib_data(magnitudes)
-        if CALIBRATION == "iir":
+        elif self.CALIBRATION == "window":
+            self.add_to_calib_data(magnitudes, verbose=False)
+        if self.CALIBRATION == "iir":
             self.add_to_calib_iir(magnitudes)
 
     def add_to_calib_data(self, magnitudes, verbose=False):
@@ -225,12 +247,12 @@ class WallDetection(NodeWithParams):
             )
         else:
             assert (
-                CALIBRATION != "fixed"
-            ), f"Trying to fill more than requested {N_CALIBRATION}!"
+                self.CALIBRATION != "fixed"
+            ), f"Trying to fill more than requested {self.N_CALIBRATION}!"
             if verbose:
                 print(f"filling at {self.calibration_count}")
             self.calibration_data[:, :, self.calibration_count] = magnitudes
-        self.calibration_count = (self.calibration_count + 1) % N_CALIBRATION
+        self.calibration_count = (self.calibration_count + 1) % self.N_CALIBRATION
 
     def add_to_calib_iir(self, magnitudes):
         if self.calibration is None:
@@ -238,12 +260,12 @@ class WallDetection(NodeWithParams):
             self.calibrationsq = magnitudes ** 2
         else:
             valid = ~np.isnan(self.calibration)
-            self.calibration[valid] = (1 - ALPHA_IIR) * self.calibration[
+            self.calibration[valid] = (1 - self.ALPHA_IIR) * self.calibration[
                 valid
-            ] + ALPHA_IIR * magnitudes[valid]
-            self.calibrationsq[valid] = (1 - ALPHA_IIR) * self.calibrationsq[
+            ] + self.ALPHA_IIR * magnitudes[valid]
+            self.calibrationsq[valid] = (1 - self.ALPHA_IIR) * self.calibrationsq[
                 valid
-            ] + ALPHA_IIR * (magnitudes[valid] ** 2)
+            ] + self.ALPHA_IIR * (magnitudes[valid] ** 2)
 
             self.calibration[~valid] = magnitudes[~valid]
             self.calibrationsq[~valid] = magnitudes[~valid] ** 2
@@ -251,35 +273,44 @@ class WallDetection(NodeWithParams):
 
     def calibrate(self, magnitudes):
         """  Note that invalid values are masked (set to zero). """
-        if CALIBRATION in ("fixed", "window"):
+        if self.CALIBRATION in ("fixed", "window"):
             if self.calibration is None:
                 if self.calibration_data.shape[2] <= 1:
-                    self.get_logger().error(
-                        f"No calibration data yet. Returning raw magnitudes. "
-                    )
+                    # self.logger.error(f"No calibration data yet. Returning raw magnitudes. ")
                     return magnitudes
-                elif self.calibration_data.shape[2] != N_CALIBRATION:
-                    self.get_logger().warn(
-                        f"Not enough calibration data yet: {self.calibration_data.shape[2]} != {N_CALIBRATION}"
-                    )
-                # if self.calibration_data.shape[2] == 1:
-                #    self.calibration = self.calibration_data[:, :, 0]
-                #    self.calibration_std = np.ones_like(self.calibration)
-                # else:
-                self.calibration = np.nanmedian(self.calibration_data, axis=2)
-                self.calibration_std = np.nanstd(self.calibration_data, axis=2)
 
-        elif CALIBRATION == "iir":
+                if (
+                    self.CALIBRATION == "fixed"
+                    and self.calibration_data.shape[2] != self.N_CALIBRATION
+                ):
+                    # self.logger.warn(f"Not enough calibration data yet: {self.calibration_data.shape[2]} != {self.N_CALIBRATION}")
+                    pass
+
+            # treat invalid frequencies (nan for all mics and all times) especially, because otherwise
+            # nanmedian raises suspicious warning.
+            freqs_all_nan = np.all(np.isnan(self.calibration_data), axis=(0, 2))
+            self.calibration = np.full(self.calibration_data.shape[:2], np.nan)
+            self.calibration_std = np.full(self.calibration_data.shape[:2], np.nan)
+            self.calibration[:, ~freqs_all_nan] = np.nanmedian(
+                self.calibration_data[:, ~freqs_all_nan], axis=2
+            )
+            self.calibration_std[:, ~freqs_all_nan] = np.nanstd(
+                self.calibration_data[:, ~freqs_all_nan], axis=2
+            )
+            self.calibration_std[self.calibration_std == 0] = np.nan
+
+        elif self.CALIBRATION == "iir":
             if self.calibration is None:
-                self.get_logger().error(
+                self.logger.error(
                     f"No calibration data yet. Returning raw magnitudes. "
                 )
                 return magnitudes
 
             self.calibration_std = np.sqrt(self.calibrationsq - self.calibration ** 2)
+            self.calibration_std[self.calibration_std == 0] = np.nan
 
         if self.calibration.shape[1] != magnitudes.shape[1]:
-            self.get_logger().error("length mismatch in calibration")
+            self.logger.error("length mismatch in calibration")
             return None
 
         valid = ~np.isnan(self.calibration)
@@ -300,23 +331,29 @@ class WallDetection(NodeWithParams):
 
     def mask_bad_measurements(self, magnitudes, freqs, verbose=False):
         magnitudes[magnitudes <= 0] = np.nan
-        if MASK_BAD == "fixed":
+        if self.MASK_BAD == "fixed":
             remove = np.zeros(magnitudes.shape[1], dtype=bool)
-            for freq_range in BAD_FREQ_RANGES:
+            for freq_range in self.BAD_FREQ_RANGES:
                 remove |= (freq_range[0] <= freqs) & (freqs <= freq_range[1])
             magnitudes[:, remove] = np.nan
             return magnitudes
-        elif MASK_BAD == "adaptive":
+        elif self.MASK_BAD == "adaptive":
             if self.calibration is None:
+                return magnitudes
+            elif not np.any(self.calibration_std > 0):
                 return magnitudes
             else:
                 remove = np.abs(magnitudes - self.calibration) >= (
-                    self.calibration_std * OUTLIER_FACTOR
+                    self.calibration_std * self.OUTLIER_FACTOR
                 )
+                remove[np.isnan(self.calibration)] = False
                 if np.sum(remove) == np.size(remove):
                     print("Not removing all measurements.")
                 elif np.sum(remove):
                     if verbose:
+                        print(
+                            f"Removing {np.sum(remove)} of {np.size(remove)} elements"
+                        )
                         xx, yy = np.where(remove.T)
                         freqs_i = np.unique(xx)
                         mics_per_freq = np.split(
@@ -328,15 +365,13 @@ class WallDetection(NodeWithParams):
                                 for f, m in zip(freqs_i, mics_per_freq)
                             ]
                         )
-                        print(
-                            f"Removing {np.sum(remove)} of {np.size(remove)} elements: \n{removed}"
-                        )
+                        print(f"Removed elements: \n{removed}")
                     magnitudes[remove] = np.nan
                 return magnitudes
-        elif MASK_BAD is None:
+        elif self.MASK_BAD is None:
             return magnitudes
         else:
-            raise ValueError(MASK_BAD)
+            raise ValueError(self.MASK_BAD)
 
     def listener_callback_offline(
         self, signals_f, freqs, position_cm, yaw_deg, calib=False, timestamp=0
@@ -357,12 +392,16 @@ class WallDetection(NodeWithParams):
 
         magnitudes_calib = self.calibrate(deepcopy(magnitudes))
         if magnitudes_calib is None:
+            print("could not calibrate")
             return
-        assert (
-            magnitudes.shape == magnitudes_calib.shape
-        ), f"{magnitudes.shape, magnitudes_calib.shape}"
 
-        diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
+        try:
+            diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
+        except:
+            # print("Error processing", magnitudes_calib)
+            print(magnitudes_calib)
+            print("could not process calibrated magnitudes")
+            return None
 
         distances_cm, probabilities = get_distance_distribution(diff_dict)
 
@@ -375,7 +414,7 @@ class WallDetection(NodeWithParams):
             angles_deg,
             probabilities_moving_angle,
         ) = self.moving_estimator.get_distributions(simplify_angles=SIMPLIFY_ANGLES)
-        # self.get_logger().warn(f"{timestamp}, after adding {position_cm[0]:.2f}, {yaw_deg:.1f}: {probabilities_moving[2]}")
+        # self.logger.warn(f"{timestamp}, after adding {position_cm[0]:.2f}, {yaw_deg:.1f}: {probabilities_moving[2]}")
         return (
             distances_cm,
             probabilities,
@@ -385,13 +424,13 @@ class WallDetection(NodeWithParams):
 
     def listener_callback(self, msg_pose):
         if not self.state in [State.WAIT_DISTANCE, State.WAIT_ANGLE, State.WAIT_CALIB]:
-            # self.get_logger().warn(f"ignoring signal because state is {self.state}")
+            # self.logger.warn(f"ignoring signal because state is {self.state}")
             return
         timestamp = msg_pose.timestamp
 
         msg_signals = self.signals_synch.get_latest_message(timestamp, verbose=False)
         if msg_signals is not None:
-            # self.get_logger().warn(
+            # self.logger.warn(
             #    f"for pose {timestamp}, using audio {msg_signals.timestamp}. lag: {msg_signals.timestamp - timestamp}ms"
             # )
             r_world, v_world, yaw, yaw_rate = read_pose_raw_message(msg_pose)
@@ -410,11 +449,11 @@ class WallDetection(NodeWithParams):
                 if data is not None:
                     d_slices, rel_distances_cm, *_ = data
                 else:
-                    self.get_logger().info("No measurements yet")
+                    self.logger.info("No measurements yet")
                     return
 
                 if len(rel_distances_cm) < N_MAX:
-                    self.get_logger().warn(f"Not ready yet: {len(rel_distances_cm)}")
+                    self.logger.warn(f"Not ready yet: {len(rel_distances_cm)}")
 
                 angles, prob = get_angle_distribution(dslices)
 
@@ -422,11 +461,11 @@ class WallDetection(NodeWithParams):
                 msg = create_distribution_message(
                     angle_estimator.ANGLES_DEG, np.array(prob), timestamp
                 )
-                self.get_logger().info("Published raw distribution")
+                self.logger.info("Published raw distribution")
                 self.publisher_distribution_raw.publish(msg)
 
                 angle_estimate = angles[np.argmax(prob)]
-                self.get_logger().info(
+                self.logger.info(
                     f"Current angle estimate: {angle_estimate:.1f}deg, probability:{np.max(prob)}"
                 )
                 return
@@ -443,7 +482,7 @@ class WallDetection(NodeWithParams):
                     distances_cm, probabilities, timestamp
                 )
                 self.publisher_distribution_raw.publish(msg)
-                self.get_logger().info(
+                self.logger.info(
                     f"Published raw distribution with timestamp {msg.timestamp}"
                 )
 
@@ -458,7 +497,7 @@ class WallDetection(NodeWithParams):
                 ) = self.moving_estimator.get_distributions(
                     simplify_angles=SIMPLIFY_ANGLES
                 )
-                # self.get_logger().warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")
+                # self.logger.warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")
 
                 # TODO(FD) to save time, we could consider only publishing the distribution
                 # if it contains viable distance estimates.
@@ -466,18 +505,18 @@ class WallDetection(NodeWithParams):
                     distances_cm, probabilities, timestamp
                 )
                 self.publisher_distribution_moving.publish(msg)
-                self.get_logger().info(
+                self.logger.info(
                     f"Published moving-average distribution with timestamp {timestamp}"
                 )
             self.new_sample_to_treat = True
 
         else:
-            self.get_logger().error(f"Did not find valid audio for pose {timestamp}")
+            self.logger.error(f"Did not find valid audio for pose {timestamp}")
 
     def change_state_manual_callback(self, request, response):
         # find which enum the state corresponds to
         self.state_by_server = State(request.state)
-        self.get_logger().info(
+        self.logger.info(
             f"Action received: {request.state} which corresponds to {self.state_by_server}"
         )
         response.flag = 1
@@ -486,46 +525,46 @@ class WallDetection(NodeWithParams):
 
     def set_buzzer(self, buzzer_idx):
         if self.current_params["drone"] > 0:
-            self.get_logger().warn("setting buzzer...")
+            self.logger.warn("setting buzzer...")
             self.send_command("buzzer_idx", buzzer_idx)
-            self.get_logger().warn("...done")
+            self.logger.warn("...done")
         else:
-            self.get_logger().warn("simulating buzzer")
+            self.logger.warn("simulating buzzer")
 
     def take_off(self, height_m=0.4):
         if self.current_params["drone"] > 1:
-            self.get_logger().warn("Taking off...")
+            self.logger.warn("Taking off...")
             self.send_command("hover_height", height_m)
-            self.get_logger().warn("...done")
+            self.logger.warn("...done")
         else:
-            self.get_logger().info(f"simulating takeoff")
+            self.logger.info(f"simulating takeoff")
 
     def land(self):
         if self.current_params["drone"] > 1:
-            self.get_logger().info("landing...")
+            self.logger.info("landing...")
             future = self.send_command("land_velocity", 0.2)  # 50.0)
-            self.get_logger().info("done")
-            self.get_logger().warn("exiting...")
+            self.logger.info("done")
+            self.logger.warn("exiting...")
         else:
-            self.get_logger().info(f"simulating landing")
+            self.logger.info(f"simulating landing")
 
     def move_linear(self):
         if self.current_params["drone"] > 1:
-            self.get_logger().info(f"moving with {self.velocity_ms:.2f}m/s...")
+            self.logger.info(f"moving with {self.velocity_ms:.2f}m/s...")
             try:
                 future = self.send_command("move_forward", self.velocity_ms)
             except Exception as e:
-                self.get_logger().warn(f"Error when trying to move forward: {e}")
+                self.logger.warn(f"Error when trying to move forward: {e}")
             else:
-                self.get_logger().info("...done")
+                self.logger.info("...done")
         else:
-            self.get_logger().info(f"simulating moving with {self.velocity_ms:.2f}m/s")
+            self.logger.info(f"simulating moving with {self.velocity_ms:.2f}m/s")
 
     def execute_state_machine(self):
         if self.state == State.GROUND:
             self.take_off()
             return State.HOVER
-            # self.get_logger().warn("abort")
+            # self.logger.warn("abort")
             # return State.ABORT
 
         elif self.state == State.HOVER:
@@ -540,7 +579,7 @@ class WallDetection(NodeWithParams):
                 raise ValueError(self.current_params["mode"])
 
         elif self.state == State.WAIT_ANGLE:
-            self.get_logger().error("wait_angle is not implemented yet")
+            self.logger.error("wait_angle is not implemented yet")
             return State.ABORT
             self.move_linear()
             # if curr_dist is not None:
@@ -551,7 +590,7 @@ class WallDetection(NodeWithParams):
                 angles = curr_dist_message.values
                 prob = curr_dist_message.probabilities
                 angle_estimate = angles[np.argmax(prob)]
-                self.get_logger().info(f"wall at {angle_estimate} deg, continuing.")
+                self.logger.info(f"wall at {angle_estimate} deg, continuing.")
 
                 # TODO(FD): implement stopping criterion
                 # return State.AVOID_ANGLE
@@ -559,13 +598,14 @@ class WallDetection(NodeWithParams):
 
         elif self.state == State.WAIT_CALIB:
             # wait until calibration is done
-            if self.calibration_count < N_CALIBRATION:
+            if self.calibration_count < self.N_CALIBRATION:
                 return State.WAIT_CALIB
 
             self.calibration = np.nanmedian(self.calibration_data, axis=2)
             self.calibration_std = np.nanstd(self.calibration_data, axis=2)
+            self.calibration_std[self.calibration_std == 0] = np.nan
 
-            self.get_logger().info("done calibrating")
+            self.logger.info("done calibrating")
             self.start_forward = time.time()
             return State.WAIT_DISTANCE
 
@@ -579,7 +619,7 @@ class WallDetection(NodeWithParams):
                     return State.WAIT_DISTANCE
 
             if not self.new_sample_to_treat:
-                self.get_logger().info("staying in WAIT_DISTANCE cause no new data")
+                self.logger.info("staying in WAIT_DISTANCE cause no new data")
                 return State.WAIT_DISTANCE
             self.new_sample_to_treat = False
 
@@ -614,9 +654,7 @@ class WallDetection(NodeWithParams):
     def main(self):
         # land and exit
         if self.state == State.ABORT:
-            self.get_logger().error(
-                f"Received ABORT state. Setting buzzer to 0 and landing."
-            )
+            self.logger.error(f"Received ABORT state. Setting buzzer to 0 and landing.")
             self.set_buzzer(0)
             self.land()
             self.destroy_node()
@@ -625,19 +663,17 @@ class WallDetection(NodeWithParams):
 
         state = self.execute_state_machine()
         if state != self.state:
-            self.get_logger().warn(f"Change state from {self.state} to {state}")
+            self.logger.warn(f"Change state from {self.state} to {state}")
             self.state = state
 
         # check if in the meantime the server was called
         if self.state_by_server is not None:
-            self.get_logger().info(
-                f"Overwriting {self.state} with {self.state_by_server}"
-            )
+            self.logger.info(f"Overwriting {self.state} with {self.state_by_server}")
             self.state = self.state_by_server
             self.state_by_server = None
 
     def sleep(self, time_s):
-        self.get_logger().info(f"sleeping for {time_s}...")
+        self.logger.info(f"sleeping for {time_s}...")
         time.sleep(time_s)
 
     def get_seconds(self, timestamp_ms):
@@ -661,7 +697,7 @@ class WallDetection(NodeWithParams):
         if self.current_params["drone"] > 0:
             ok = self._client_command.wait_for_service(timeout_sec=3)
             if not ok:
-                self.get_logger().warn(f"timeout while waiting for commands service")
+                self.logger.warn(f"timeout while waiting for commands service")
 
         self.future_command = self._client_command.call_async(request)
         self.future_command.add_done_callback(self.get_result_command)
@@ -670,11 +706,11 @@ class WallDetection(NodeWithParams):
         try:
             response = future.result()
         except Exception as e:
-            self.get_logger().error(f"get_result_command failed: {e}")
+            self.logger.error(f"get_result_command failed: {e}")
         else:
             value = response.value
             msg = response.message
-            self.get_logger().info(
+            self.logger.info(
                 f"get_result_command received response message:{msg}, value:{value}"
             )
 
@@ -685,7 +721,7 @@ class WallDetection(NodeWithParams):
 
         ok = self._client_wall.wait_for_service(timeout_sec=3)
         if not ok:
-            self.get_logger().warn(f"timeout while waiting for wall service")
+            self.logger.warn(f"timeout while waiting for wall service")
 
         self.future_wall = self._client_wall.call_async(request)
         self.future_wall.add_done_callback(self.get_result_wall)
@@ -694,14 +730,14 @@ class WallDetection(NodeWithParams):
         try:
             response = future.result()
         except Exception as e:
-            self.get_logger().error(f"get_result_wall failed: {e}")
+            self.logger.error(f"get_result_wall failed: {e}")
         else:
             new_state_int = response.flag
             if new_state_int < 0:
-                self.get_logger().warn(f"get_result_wall received -1, doing nothing.")
+                self.logger.warn(f"get_result_wall received -1, doing nothing.")
             self.state_by_server = State(new_state_int)
             if self.state_by_server == State.AVOID_DISTANCE:
-                self.get_logger().warn(f"Avoiding detected wall!")
+                self.logger.warn(f"Avoiding detected wall!")
             self.already_asking = False
 
 

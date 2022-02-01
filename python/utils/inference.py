@@ -258,6 +258,9 @@ def get_posterior(abs_fft, sigma=None, data=None):
             posterior[np.argmax(periodogram)] = 1.0
     else:
         d_bar = 1 / len(data) * np.sum((data - np.mean(data)) ** 2)
+        if d_bar == 0:
+            return np.ones_like(periodogram)
+
         arg = 1 - 2 * periodogram / (N * d_bar)
 
         # arg may not be negative.

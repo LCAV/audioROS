@@ -25,14 +25,18 @@ from .geometry import Context
 # [1, 0.99, 0.98, 0.97, 0.96]
 # for 0:
 # [1, 1, 1, 1, 1]
-RELATIVE_MOVEMENT_STD = 1.0  #
+RELATIVE_MOVEMENT_STD = 0.3  #
 
 
 def get_std_sample(values, probs, means, unbiased=True):
-    if np.isclose(np.nansum(probs), 1):  # for distributions
+    if np.isclose(np.nansum(probs), 1) or (
+        np.nansum(probs) < 1
+    ):  # for distributions (might be unnormalized)
         norm = 1.0
     else:  # for histograms
-        norm = (np.nansum(probs) - 1) if unbiased else np.nansum(probs)
+        norm = (
+            (np.nansum(probs) - 1) if unbiased else np.nansum(probs)
+        )  # for histograms
     if not norm:
         return None if np.ndim(means) == 0 else np.full(len(means), None)
 
@@ -55,12 +59,15 @@ def get_estimate(values, probs, method, unbiased=True):
     if len(values) == 1:
         return values[0], 0.0
 
+    if np.nansum(probs) == 0:
+        return None, None
+
     if method == "mean":
-        mean = np.sum(np.multiply(probs, values)) / np.sum(probs)
+        mean = np.nansum(np.multiply(probs, values)) / np.nansum(probs)
         std = get_std_sample(values, probs, means=mean, unbiased=unbiased)
         return mean, std
     elif method == "max":
-        max_prob = np.max(probs)
+        max_prob = np.nanmax(probs)
         estimates = values[np.where(probs == max_prob)[0]]
         stds = get_std_sample(values, probs, means=estimates, unbiased=unbiased)
     elif method == "peak":
@@ -72,13 +79,17 @@ def get_estimate(values, probs, method, unbiased=True):
         indices = np.where(probs == max_prob)[0]
         estimates = values[indices]
         stds = get_std_of_peaks(values, probs, indices)
+    else:
+        raise ValueError(method)
+
     if len(estimates) == len(probs):
-        print(f"Warning: uniform distribution.")
+        # print(f"Warning: uniform distribution?")
         return None, None
     elif len(estimates) > 1:
-        print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
+        pass
+        # print(f"Warning: ambiguous distribution, {len(estimates)} maxima")
     elif not len(estimates):
-        print(f"Warning: no valid estimates detected: {values}, {probs}")
+        # print(f"Warning: no valid estimates detected: {values}, {probs}")
         return None, None
     return estimates[0], stds[0]
 
@@ -133,7 +144,7 @@ class MovingEstimator(object):
     DISTANCES_CM = np.arange(100, step=2)
     ANGLES_DEG = np.arange(360, step=10)
 
-    ANGLE_WINDOW_DEG = 20  # set to zero to use only the forward direction. o
+    ANGLE_WINDOW_DEG = 0  # set to zero to use only the forward direction. o
     ANGLE_RESOLUTION_DEG = 20
 
     # ESTIMATION_METHOD = "peak"
@@ -209,8 +220,8 @@ class MovingEstimator(object):
             if not np.any(~np.isnan(dist)):
                 dist = np.ones_like(dist)
             sum_ = np.sum(dist)
-            if sum_:
-                dist /= sum_
+            # if sum_:
+            #    dist /= sum_
             return dist
 
         # get angle distribution (according to when distributions align best)
@@ -253,7 +264,8 @@ class MovingEstimator(object):
 
     def get_joint_distribution(self, verbose=False, simplify_angles=True):
         if not self.filled:
-            print("Warning: not enough measurements yet.")
+            # print("Warning: not enough measurements yet.")
+            pass
 
         current = self.index
         distance_p = {n: {} for n in range(self.n_window)}
@@ -271,7 +283,7 @@ class MovingEstimator(object):
                 f"current: {current}: ({self.positions[current]}, {self.rotations[current]})"
             )
 
-        # search only aroundo the forward direction instead of all 360 degrees. This makes sense
+        # search only around the forward direction instead of all 360 degrees. This makes sense
         # because the only "dangerous" angles are in front of us.
         if simplify_angles:
             angle_local_deg = self.get_local_forward_angle()
@@ -391,12 +403,10 @@ class MovingEstimator(object):
     def get_local_forward_angle(self):
         current = self.index
         if not self.filled and (self.index < 2):
-            print("Warning: cannot simplify angles yet because buffer not filled.")
+            # print("Warning: cannot simplify angles yet because buffer not filled.")
             return 0
         # if self.positions is [p5, p6, p2, p3, p4] with current=2, return [p2, p3, p4, p5, p6]
-        ordered_positions = self.positions[
-            self.get_ordered_index()
-        ]  # np.roll(self.positions, -current - 1, axis=0)
+        ordered_positions = self.positions[self.get_ordered_index()]
 
         forward_dir_global = np.mean(np.diff(ordered_positions, axis=0), axis=0)
         angle_global_deg = (
