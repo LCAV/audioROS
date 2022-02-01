@@ -17,6 +17,7 @@ DIM = 2
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
+    """ Return path differences in m """
     context = Context.get_platform_setup()
     delta = (
         context.get_delta(
@@ -29,6 +30,7 @@ def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
 
 
 def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None):
+    """ Return distances in cm """
     context = Context.get_platform_setup()
     distances_cm = context.get_distance(deltas_cm, azimuth_deg, mic_idx)
     return distances_cm

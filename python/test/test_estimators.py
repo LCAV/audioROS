@@ -10,7 +10,7 @@ import numpy as np
 from scipy.stats import norm
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../")))
-from utils.moving_estimators import MovingEstimator
+from utils.moving_estimators import MovingEstimator, get_estimate
 from utils.geometry import get_deltas_from_global
 
 MIC_IDX = [0, 1]
@@ -18,6 +18,10 @@ MIC_IDX = [0, 1]
 DELTA_GRID = np.arange(100)
 DISTANCE_GLOB = 30
 ANGLE_GLOB = 90
+
+VERBOSE = False
+
+ESTIMATION_METHOD = "max"  # only max works for these examples.
 
 
 def measure_wall(pose):
@@ -27,6 +31,7 @@ def measure_wall(pose):
     """
     distance = DISTANCE_GLOB - pose[1]
     angle = ANGLE_GLOB - pose[2]
+    angle %= 360
     return distance, angle
 
 
@@ -59,11 +64,41 @@ def test_rotation_normal():
     do_test_rotation("normal", n_window=4)
 
 
+def test_simplify_angles():
+    for movement_dir_deg in np.arange(70, 111, step=10):
+        do_test_linear(
+            "delta", n_window=2, movement_dir_deg=movement_dir_deg, simplify_angles=True
+        )
+        do_test_linear(
+            "normal",
+            n_window=2,
+            movement_dir_deg=movement_dir_deg,
+            simplify_angles=True,
+        )
+
+        do_test_linear(
+            "delta", n_window=3, movement_dir_deg=movement_dir_deg, simplify_angles=True
+        )
+        do_test_linear(
+            "normal",
+            n_window=3,
+            movement_dir_deg=movement_dir_deg,
+            simplify_angles=True,
+        )
+
+
+def test_linear_many_directions():
+    print("==== testing many directions ====")
+    for movement_dir_deg in np.arange(360, step=20):
+        do_test_linear("normal", n_window=3, movement_dir_deg=movement_dir_deg)
+        do_test_linear("delta", n_window=3, movement_dir_deg=movement_dir_deg)
+
+
 def test_linear_delta():
     print("==== testing linear with delta ====")
     do_test_linear("delta", n_window=2)
-    # do_test_linear("delta", n_window=3)
-    # do_test_linear("delta", n_window=4)
+    do_test_linear("delta", n_window=3)
+    do_test_linear("delta", n_window=4)
 
 
 def test_linear_normal():
@@ -73,14 +108,16 @@ def test_linear_normal():
     do_test_linear("normal", n_window=4)
 
 
-def do_test_linear(prob_method, n_window):
+def do_test_linear(
+    prob_method, n_window, movement_dir_deg=70, simplify_angles=False, verbose=VERBOSE
+):
     """ Test on rotating toy example """
-
-    movement_dir_deg = 70
+    print(f"testing {prob_method}, {n_window}, {movement_dir_deg}, {simplify_angles}")
     yaw_deg = movement_dir_deg - 90
 
-    angles_deg = [ANGLE_GLOB - yaw_deg]  # np.arange(360, step=10)
-    distances_cm = np.arange(0, 50, step=0.5)
+    # angles_deg = [ANGLE_GLOB - yaw_deg]  # ground truth only
+    angles_deg = np.arange(360, step=10)
+    distances_cm = np.arange(0, 60, step=0.5)
     moving_estimator = MovingEstimator(
         n_window=n_window, angles_deg=angles_deg, distances_cm=distances_cm
     )
@@ -93,7 +130,7 @@ def do_test_linear(prob_method, n_window):
             step * np.sin(movement_dir_deg / 180 * np.pi),
             yaw_deg,
         ]
-        for step in np.linspace(0, 20, 5)
+        for step in np.linspace(0, 19, 3)
     ]
     for i, pose in enumerate(poses):
         distance, angle = measure_wall(pose)
@@ -102,50 +139,56 @@ def do_test_linear(prob_method, n_window):
             probs = get_delta_distribution(distance, angle, mic_idx, prob_method)
             diff_dict[mic_idx] = (DELTA_GRID, probs)
         moving_estimator.add_distributions(diff_dict, pose[:2], pose[2])
-        print(f"added {distance:.2f}, {angle:.0f} at pose {i}")
+        # print(f"added {distance:.2f}, {angle:.0f} at pose {i}")
 
         if i < n_window - 1:
             continue
 
-        print("--- Test without simplified angles ---")
         (
             distances,
             prob_distances,
             angles,
             prob_angles,
-        ) = moving_estimator.get_distributions(verbose=True, simplify_angles=False)
+        ) = moving_estimator.get_distributions(
+            verbose=verbose, simplify_angles=simplify_angles
+        )
 
-        distance_estimate, __ = moving_estimator.get_distance_estimate(prob_distances)
-        angle_estimate, __ = moving_estimator.get_angle_estimate(prob_angles)
-        assert (
-            abs(distance_estimate - distance) < 1
-        ), f"distance at position {i}: {distance_estimate} != true {distance}"
-        assert (
-            abs(angle_estimate - angle) < 1
-        ), f"angle at position {i}: {angle_estimate} != true {angle}"
+        distance_estimate, __ = moving_estimator.get_distance_estimate(
+            prob_distances, method=ESTIMATION_METHOD
+        )
+        if simplify_angles:
+            angle_estimate, __ = get_estimate(
+                angles, prob_angles, method=ESTIMATION_METHOD
+            )
+        else:
+            angle_estimate, __ = moving_estimator.get_angle_estimate(
+                prob_angles, method=ESTIMATION_METHOD
+            )
 
-        print("---- Test with simplified angles ----")
-        (
-            distances,
-            prob_distances,
-            angles,
-            prob_angles,
-        ) = moving_estimator.get_distributions(verbose=True, simplify_angles=True)
-
-        distance_estimate, __ = moving_estimator.get_distance_estimate(prob_distances)
-        angle_estimate, __ = moving_estimator.get_angle_estimate(prob_angles)
-        assert (
-            abs(distance_estimate - distance) < 1
-        ), f"distance at position {i}: {distance_estimate} != true {distance}"
-        assert (
-            abs(angle_estimate - angle) < 1
-        ), f"angle at position {i}: {angle_estimate} != true {angle}"
+        try:
+            assert (
+                abs(distance_estimate - distance) < 1
+            ), f"distance at position {i}: {distance_estimate} != true {distance}"
+            assert (
+                abs(angle_estimate - angle) < 1
+            ), f"angle at position {i}: {angle_estimate} != true {angle}"
+        except AssertionError as e:
+            print(f"Caught AssertionError {e}, running again with verbose.")
+            (
+                distances,
+                prob_distances,
+                angles,
+                prob_angles,
+            ) = moving_estimator.get_distributions(
+                verbose=True, simplify_angles=simplify_angles
+            )
+            raise e
 
 
 def do_test_rotation(prob_method, n_window):
     """ Test on rotating toy example """
     angles_deg = np.arange(360, step=10)
-    distances_cm = np.arange(100, step=11)
+    distances_cm = np.arange(100, step=10)
     moving_estimator = MovingEstimator(
         n_window=n_window, angles_deg=angles_deg, distances_cm=distances_cm
     )
@@ -172,10 +215,14 @@ def do_test_rotation(prob_method, n_window):
             prob_distances,
             angles,
             prob_angles,
-        ) = moving_estimator.get_distributions(verbose=True, simplify_angles=False)
+        ) = moving_estimator.get_distributions(verbose=VERBOSE, simplify_angles=False)
 
-        distance_estimate, __ = moving_estimator.get_distance_estimate(prob_distances)
-        angle_estimate, __ = moving_estimator.get_angle_estimate(prob_angles)
+        distance_estimate, __ = moving_estimator.get_distance_estimate(
+            prob_distances, method=ESTIMATION_METHOD
+        )
+        angle_estimate, __ = moving_estimator.get_angle_estimate(
+            prob_angles, method=ESTIMATION_METHOD
+        )
         assert (
             distance_estimate == distance
         ), f"distance at position {i}: {distance_estimate} != true {distance}"
@@ -185,8 +232,13 @@ def do_test_rotation(prob_method, n_window):
 
 
 if __name__ == "__main__":
+    # from utils.geometry import Context
+    # print(Context.get_platform_setup().mics)
+
     test_linear_delta()
     test_linear_normal()
+    test_linear_many_directions()
+    test_simplify_angles()
 
     test_rotation_delta()
     test_rotation_normal()

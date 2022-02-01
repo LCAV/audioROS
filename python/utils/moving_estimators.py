@@ -12,6 +12,7 @@ import scipy.signal
 
 from .geometry import Context
 
+# import matplotlib.pylab as plt
 
 # RELATIVE_MOVEMENT_STD implicityly defines the forgetting factor when
 # combining multiple measurements. The relative weights of the
@@ -218,9 +219,22 @@ class MovingEstimator(object):
         )
 
         # softmax
-        # probs_angles = np.exp(np.max(distributions, axis=1))
-        probs_angles = np.sum(distributions, axis=1)
+
+        # the more 'peaky', the better the distance measurements match for, therefore the more likely
+        # this angle is the correct one.
+
+        probs_angles = np.exp(np.max(distributions, axis=1))
+        # probs_angles = np.max(distributions, axis=1)
+        # probs_angles = np.sum(distributions, axis=1)
+
         probs_angles = clean_distribution(probs_angles)
+        if verbose:
+            argmax = np.argmax(probs_angles)
+            print(
+                "around argmax",
+                self.angles_deg[argmax - 1 : argmax + 2],
+                probs_angles[argmax - 1 : argmax + 2],
+            )
 
         angle_idx = np.argwhere(probs_angles == np.nanmax(probs_angles))[0]
         if len(angle_idx) > 1:
@@ -274,6 +288,8 @@ class MovingEstimator(object):
         for a, angle_local in enumerate(angles_deg):  # in local coordinates
             # wall azimuth angle in global coordinates
             angle = angle_local + self.rotations[current]
+            # if verbose and angle_local in [110, 120]:
+            #    fig, ax = plt.subplots()
 
             if verbose:
                 print(f"\n==== treating global angle {angle}, local: {angle_local}====")
@@ -343,8 +359,19 @@ class MovingEstimator(object):
                     # print(f"current index {self.index}: other index {i_time}, lag: {time_lag}")
                     lambdas.append(1 / (1 + RELATIVE_MOVEMENT_STD ** 2) ** time_lag)
                 for mic, probs in probs_mics.items():  # all mics
+                    # if verbose and angle_local in [110, 120]:
+                    #    ax.plot(self.distances_cm, probs ** lambdas[-1], label=f'{i_time}, {mic}')
                     joint_distribution[a] *= probs ** lambdas[-1]
+
             joint_distribution[a] = joint_distribution[a] ** (1 / np.sum(lambdas))
+            # if verbose and angle_local in [110, 120]:
+            #    print(f"joint distribution for angle {angle}", joint_distribution[a])
+            #    print("sum:", np.sum(joint_distribution[a]))
+            #    joint_distribution[a] /= np.sum(joint_distribution[a])
+            #    print("max:", np.max(joint_distribution[a]))
+            #    ax.plot(self.distances_cm, joint_distribution[a], label='joint')
+            #    plt.legend()
+            #    plt.show()
         return joint_distribution, angles_deg, self.distances_cm
 
     def get_ordered_index(self):
