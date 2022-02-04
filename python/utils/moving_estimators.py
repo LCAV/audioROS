@@ -157,6 +157,7 @@ class MovingEstimator(object):
         platform="crazyflie",
         distances_cm=DISTANCES_CM,
         angles_deg=ANGLES_DEG,
+        relative_movement_std=RELATIVE_MOVEMENT_STD,
     ):
         self.difference_p = {n: {} for n in range(n_window)}
         self.positions = np.full((n_window, 2), None)
@@ -165,6 +166,7 @@ class MovingEstimator(object):
 
         self.distances_cm = distances_cm
         self.angles_deg = angles_deg
+        self.relative_movement_std = relative_movement_std
 
         self.dim = 2
         self.reference = None
@@ -233,8 +235,7 @@ class MovingEstimator(object):
 
         # the more 'peaky', the better the distance measurements match for, therefore the more likely
         # this angle is the correct one.
-
-        probs_angles = np.exp(np.max(distributions, axis=1))
+        probs_angles = np.exp(np.max(distributions, axis=1))  # softmax
         # probs_angles = np.max(distributions, axis=1)
         # probs_angles = np.sum(distributions, axis=1)
 
@@ -286,13 +287,18 @@ class MovingEstimator(object):
         # search only around the forward direction instead of all 360 degrees. This makes sense
         # because the only "dangerous" angles are in front of us.
         if simplify_angles:
-            angle_local_deg = self.get_local_forward_angle()
-            angles_deg = np.arange(
-                self.ANGLE_WINDOW_DEG + self.ANGLE_RESOLUTION_DEG,
-                step=self.ANGLE_RESOLUTION_DEG,
-                dtype=float,
-            )
-            angles_deg += angle_local_deg - angles_deg[len(angles_deg) // 2]
+            # angle_local_deg = self.get_local_forward_angle()
+            # angles_deg = np.arange(
+            #    self.ANGLE_WINDOW_DEG + self.ANGLE_RESOLUTION_DEG,
+            #    step=self.ANGLE_RESOLUTION_DEG,
+            #    dtype=float,
+            # )
+            # angles_deg += angle_local_deg - angles_deg[len(angles_deg) // 2]
+            position = self.positions[current]
+            if position[1] < 0:
+                angles_deg = [270]
+            else:
+                angles_deg = [90]
         else:
             angles_deg = self.angles_deg
 
@@ -369,7 +375,9 @@ class MovingEstimator(object):
                 if len(probs_mics):
                     time_lag = current_time - self.times[i_time]
                     # print(f"current index {self.index}: other index {i_time}, lag: {time_lag}")
-                    lambdas.append(1 / (1 + RELATIVE_MOVEMENT_STD ** 2) ** time_lag)
+                    lambdas.append(
+                        1 / (1 + self.relative_movement_std ** 2) ** time_lag
+                    )
                 for mic, probs in probs_mics.items():  # all mics
                     # if verbose and angle_local in [110, 120]:
                     #    ax.plot(self.distances_cm, probs ** lambdas[-1], label=f'{i_time}, {mic}')

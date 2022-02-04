@@ -115,11 +115,20 @@ Descriptions:
 |  DoaStudy           | --                     |   simulation results doa algorithms                                              |
 
 
-## Requirements (WIP)
+## Notes (WIP)
 
 Need to grant access to /dev/ttyACM0:
 
 ```sudo chmod 666 /dev/ttyACM0 ```
+
+To install jupyter notebook with extensions: 
+
+```
+workon Audio
+pip install jupyter_contrib_nbextensions
+jupyter contrib nbextension install --sys-prefix
+```
+
 
 
 ## Credits

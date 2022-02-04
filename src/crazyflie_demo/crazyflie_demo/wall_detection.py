@@ -32,9 +32,9 @@ N_MAX = 14  # how many distances to use
 PUBLISH_MOVING = True
 PUBLISH_RAW = False
 
-DISTANCES_CM = np.arange(7, 80, step=5)
-ANGLES_DEG = np.arange(360, step=30)
-# [90, 270] #
+DISTANCES_CM = np.arange(7, 80, step=2)
+# ANGLES_DEG = np.arange(360, step=90)
+ANGLES_DEG = [0, 90, 180, 270]
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
@@ -42,7 +42,6 @@ LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
-SIMPLIFY_ANGLES = True
 
 # movement stuff
 FLYING_HEIGHT_CM = 30
@@ -110,6 +109,8 @@ def get_angle_distribution(dslices, resolve_side=False):
 
 
 class PythonLogger(object):
+    """ Simple wrapper for ROS2 logger that doesn't require ROS """
+
     def warn(self, msg):
         print("Warn:", msg)
 
@@ -131,16 +132,20 @@ class WallDetection(NodeWithParams):
     OUTLIER_FACTOR = 10  # reject values outside of OUTLIER_FACTOR * std window
 
     CALIBRATION = "iir"
-    N_CALIBRATION = (
-        2  # need at least two, otherwise end up with all-ones magnitudes_calib.
-    )
+    # need at least two, otherwise end up with all-ones magnitudes_calib.
+    N_CALIBRATION = 2
+
     # CALIBRATION = "window"
     # N_CALIBRATION = 10
     # CALIBRATION= "fixed"
     # N_CALIBRATION = 10
 
     ALPHA_IIR = 0.2  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
-    N_WINDOW = 3
+    N_WINDOW = 5
+
+    SIMPLIFY_ANGLES = False
+
+    RELATIVE_MOVEMENT_STD = 1.0
 
     def __init__(self, python_only=False):
         if not python_only:
@@ -193,9 +198,11 @@ class WallDetection(NodeWithParams):
         self.inf_machine = Inference()
         self.inf_machine.add_geometry(LOCAL_DIST_RANGE_CM, WALL_ANGLE_DEG)
         self.moving_estimator = MovingEstimator(
-            n_window=self.N_WINDOW, distances_cm=DISTANCES_CM, angles_deg=ANGLES_DEG
+            n_window=self.N_WINDOW,
+            distances_cm=DISTANCES_CM,
+            angles_deg=ANGLES_DEG,
+            relative_movement_std=self.RELATIVE_MOVEMENT_STD,
         )
-
         self.calibration_count = 0
 
         self.calibration = None
@@ -221,17 +228,20 @@ class WallDetection(NodeWithParams):
         """
         if self.current_params["drone"] == 1:
             return True
-        if (position_cm is not None) and (position_cm[2] < FLYING_HEIGHT_CM * 1e-2):
+        if (position_cm is not None) and (position_cm[2] < FLYING_HEIGHT_CM):
             return False
         return True
 
-    def add_to_calib(self, magnitudes, calib_state=True):
-        if calib_state and self.CALIBRATION == "fixed":
-            self.add_to_calib_data(magnitudes)
+    def add_to_calib(self, magnitudes):
+        if self.CALIBRATION == "fixed":
+            if self.calibration_data is None:
+                self.add_to_calib_data(magnitudes)
+            elif self.calibration_data.shape[2] < self.N_CALIBRATION:
+                self.add_to_calib_data(magnitudes)
             return
         elif self.CALIBRATION == "window":
             self.add_to_calib_data(magnitudes, verbose=False)
-        if self.CALIBRATION == "iir":
+        elif self.CALIBRATION == "iir":
             self.add_to_calib_iir(magnitudes)
 
     def add_to_calib_data(self, magnitudes, verbose=False):
@@ -374,10 +384,10 @@ class WallDetection(NodeWithParams):
             raise ValueError(self.MASK_BAD)
 
     def listener_callback_offline(
-        self, signals_f, freqs, position_cm, yaw_deg, calib=False, timestamp=0
+        self, signals_f, freqs, position_cm, yaw_deg, timestamp=0
     ):
         if not self.flight_check(position_cm):
-            print("did not pass flight check")
+            # print("did not pass flight check:", position_cm)
             return
 
         from audio_stack.parameters import WINDOW_CORRECTION
@@ -388,7 +398,7 @@ class WallDetection(NodeWithParams):
 
         magnitudes = self.mask_bad_measurements(magnitudes, freqs)
 
-        self.add_to_calib(magnitudes, calib_state=calib)
+        self.add_to_calib(magnitudes)
 
         magnitudes_calib = self.calibrate(deepcopy(magnitudes))
         if magnitudes_calib is None:
@@ -397,10 +407,8 @@ class WallDetection(NodeWithParams):
 
         try:
             diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
-        except:
-            # print("Error processing", magnitudes_calib)
-            print(magnitudes_calib)
-            print("could not process calibrated magnitudes")
+        except Exception as e:
+            print("could not process calibrated magnitudes:", e)
             return None
 
         distances_cm, probabilities = get_distance_distribution(diff_dict)
@@ -413,8 +421,9 @@ class WallDetection(NodeWithParams):
             probabilities_moving,
             angles_deg,
             probabilities_moving_angle,
-        ) = self.moving_estimator.get_distributions(simplify_angles=SIMPLIFY_ANGLES)
-        # self.logger.warn(f"{timestamp}, after adding {position_cm[0]:.2f}, {yaw_deg:.1f}: {probabilities_moving[2]}")
+        ) = self.moving_estimator.get_distributions(
+            simplify_angles=self.SIMPLIFY_ANGLES
+        )
         return (
             distances_cm,
             probabilities,
