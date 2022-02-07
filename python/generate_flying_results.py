@@ -8,7 +8,7 @@ from crazyflie_demo.wall_detection import WallDetection
 from utils.moving_estimators import get_estimate
 
 
-def generate_matrix_results(exp_name, appendix, parameters, fname=""):
+def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=False):
     data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
     data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
 
@@ -119,5 +119,7 @@ if __name__ == "__main__":
         "simplify": [True, False],
     }
 
-    fname = "results/DistanceFlying_matrices.pkl"
-    matrix_df = generate_matrix_results(exp_name, appendix, parameters, fname=fname)
+    fname = "results/DistanceFlying_test.pkl"
+    matrix_df = generate_matrix_results(
+        exp_name, appendix, parameters, fname=fname, verbose=True
+    )

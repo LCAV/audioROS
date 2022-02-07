@@ -22,6 +22,7 @@ STD_THRESH = 2
 
 # if we didn't see a wall and there was one at < D_FALSE_NEG, this is a false negative.
 # if we saw a wall and there was none at < D_FALSE_NEG this is a false positive.
+# used only if USE_FIXED_THRESH is True
 D_FALSE_NEG = 20
 
 USE_FIXED_THRESH = True
@@ -37,9 +38,9 @@ THRESHOLDS_DICT = {
 METHODS = [
     "distance-mean",
     # "distance-max",
-    "std-mean",
+    # "std-mean",
     # "std-max",
-    "tail",
+    # "tail",
 ]
 
 
@@ -79,7 +80,7 @@ def get_groundtruth_distances(exp_name, appendix):
     return distances_wall
 
 
-def get_precision_recall(matrix, distances_wall, method):
+def get_precision_recall(matrix, distances_wall, method, verbose=False, sort=True):
     thresholds = THRESHOLDS_DICT[method]
     false_positives = np.zeros_like(thresholds)
     false_negatives = np.zeros_like(thresholds)
@@ -113,7 +114,15 @@ def get_precision_recall(matrix, distances_wall, method):
             # true positives
             elif wall_estimate and wall_gt:
                 true_positives[j] += 1
-        # print("Fp", false_positives[j], "Fn", false_negatives[j], "Tp", true_positives[j])
+        if verbose:
+            print(
+                f"For threshold {thresh}: Fp",
+                false_positives[j],
+                "Fn",
+                false_negatives[j],
+                "Tp",
+                true_positives[j],
+            )
 
     precision = np.full(len(thresholds), np.nan)
     recall = np.full(len(thresholds), np.nan)
@@ -123,15 +132,15 @@ def get_precision_recall(matrix, distances_wall, method):
     denom = true_positives + false_negatives
     recall[denom > 0] = true_positives[denom > 0] / denom[denom > 0]
 
-    sort_idx = np.argsort(precision)
-    sort_idx = sort_idx[~np.isnan(precision[sort_idx])]
-
-    precision = precision[sort_idx]
-    recall = recall[sort_idx]
+    if sort:
+        sort_idx = np.argsort(precision)
+        sort_idx = sort_idx[~np.isnan(precision[sort_idx])]
+        precision = precision[sort_idx]
+        recall = recall[sort_idx]
     return precision, recall
 
 
-def generate_classifier_results(matrix_df, fname=""):
+def generate_classifier_results(matrix_df, fname="", verbose=False):
     distances_wall = get_groundtruth_distances("2022_01_27_demo", appendix="test4")
 
     categories = matrix_df.columns.drop(["matrix distances", "matrix angles"]).values
@@ -150,7 +159,9 @@ def generate_classifier_results(matrix_df, fname=""):
 
         for method in METHODS:
 
-            precision, recall = get_precision_recall(matrix, distances_wall, method)
+            precision, recall = get_precision_recall(
+                matrix, distances_wall, method, verbose=verbose
+            )
 
             metric = auc(precision, recall)
             fill_dict = {
@@ -183,12 +194,13 @@ def generate_classifier_results(matrix_df, fname=""):
 
 if __name__ == "__main__":
     try:
-        # matrix_df = pd.read_pickle("results/DistanceFlying_matrices.pkl")
-        matrix_df_0 = pd.read_pickle("results/DistanceFlying_matrices_std0.pkl")
-        matrix_df_1 = pd.read_pickle("results/DistanceFlying_matrices_std1.pkl")
-        matrix_df = pd.concat([matrix_df_0, matrix_df_1])
+        matrix_df = pd.read_pickle("results/DistanceFlying_matrices.pkl")
+        # matrix_df_0 = pd.read_pickle("results/DistanceFlying_matrices_std0.pkl")
+        # matrix_df_1 = pd.read_pickle("results/DistanceFlying_matrices_std1.pkl")
+        # matrix_df = pd.concat([matrix_df_0, matrix_df_1])
     except FileNotFoundError:
         print("Run generate_flying_results.py to generate results.")
 
-    fname = "results/DistanceFlying_classifier.pkl"
-    generate_classifier_results(matrix_df, fname)
+    # fname = "results/DistanceFlying_classifier.pkl"
+    fname = "results/DistanceFlying_classifier_test.pkl"
+    generate_classifier_results(matrix_df, fname, verbose=True)
