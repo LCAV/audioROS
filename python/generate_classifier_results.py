@@ -27,6 +27,12 @@ D_FALSE_NEG = 20
 
 USE_FIXED_THRESH = True
 
+# walls location per dataset, [distance_cm, angle_deg]
+WALLS_DICT = {
+    "2021_10_12_flying": [[100, 90]],
+    "2022_01_27_demo": [[100, 90], [100, -90]],
+}
+
 THRESHOLDS_DICT = {
     "distance-mean": np.arange(40, step=2)[::-1],
     "distance-max": np.arange(40, step=2)[::-1],
@@ -38,9 +44,9 @@ THRESHOLDS_DICT = {
 METHODS = [
     "distance-mean",
     # "distance-max",
-    # "std-mean",
+    "std-mean",
     # "std-max",
-    # "tail",
+    "tail",
 ]
 
 
@@ -69,14 +75,32 @@ def detect_wall(
         return np.log10(mean_tail) < thresh
 
 
-def get_groundtruth_distances(exp_name, appendix):
+def get_groundtruth_distances(exp_name, appendix, walls=None, flying=False):
+    def normal(angle_deg):
+        return np.r_[
+            [np.cos(angle_deg / 180 * np.pi)], [np.sin(angle_deg / 180 * np.pi)]
+        ]
+
     data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
     row = data_df.loc[data_df.appendix == appendix].iloc[0]
-    wall1_y_cm = 100
-    wall2_y_cm = -100
-    distances_wall1 = wall1_y_cm - row.positions[:, 1] * 1e2
-    distances_wall2 = (row.positions[:, 1] * 1e2) - wall2_y_cm
-    distances_wall = np.minimum(distances_wall1, distances_wall2)
+    if flying:
+        from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
+
+        positions_cm = (
+            row.positions[row.positions[:, 2] > FLYING_HEIGHT_CM * 1e-2, :2] * 1e2
+        )
+    else:
+        positions_cm = row.positions[:, :2] * 1e2
+
+    if walls is None:
+        walls = WALLS_DICT[exp_name]
+    distances = []
+    distances_wall = np.full(positions_cm.shape[0], np.nan)
+    for wall in walls:
+        distances = wall[0] - positions_cm.dot(normal(wall[1]))
+        mask = np.isnan(distances_wall)
+        distances_wall[mask] = distances[mask]
+        distances_wall[~mask] = np.minimum(distances[~mask], distances_wall[~mask])
     return distances_wall
 
 
@@ -201,6 +225,6 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("Run generate_flying_results.py to generate results.")
 
-    # fname = "results/DistanceFlying_classifier.pkl"
-    fname = "results/DistanceFlying_classifier_test.pkl"
-    generate_classifier_results(matrix_df, fname, verbose=True)
+    fname = "results/DistanceFlying_classifier.pkl"
+    # fname = "results/DistanceFlying_classifier_test.pkl"
+    generate_classifier_results(matrix_df, fname, verbose=False)

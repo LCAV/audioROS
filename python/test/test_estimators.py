@@ -7,47 +7,17 @@ test_estimators.py:  Test moving estimator class.
 import sys, os
 
 import numpy as np
-from scipy.stats import norm
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../")))
 from utils.moving_estimators import MovingEstimator, get_estimate
-from utils.geometry import get_deltas_from_global
+
+from helpers import measure_wall, get_delta_distribution
 
 MIC_IDX = [0, 1]
-
-DELTA_GRID = np.arange(100)
-DISTANCE_GLOB = 30
-ANGLE_GLOB = 90
 
 VERBOSE = False
 
 ESTIMATION_METHOD = "max"  # only max works for these examples.
-
-
-def measure_wall(pose):
-    """ 
-    simplified function for measuring the wall distance and angle in 
-    local coordinates. Works for this geometry only .
-    """
-    distance = DISTANCE_GLOB - pose[1]
-    angle = ANGLE_GLOB - pose[2]
-    angle %= 360
-    return distance, angle
-
-
-def get_delta_distribution(distance, angle, mic_idx, prob_method="delta"):
-    delta = (
-        get_deltas_from_global(
-            azimuth_deg=angle, distances_cm=distance, mic_idx=mic_idx
-        )[0]
-        * 1e2
-    )
-    if prob_method == "delta":
-        probs = np.zeros(len(DELTA_GRID))
-        probs[np.argmin(np.abs(DELTA_GRID - delta))] = 1.0
-    elif prob_method == "normal":
-        probs = norm.pdf(DELTA_GRID, loc=delta, scale=10)
-    return probs
 
 
 def test_rotation_delta():
@@ -65,7 +35,8 @@ def test_rotation_normal():
 
 
 def test_simplify_angles():
-    for movement_dir_deg in np.arange(70, 111, step=10):
+    print("==== testing simplified angles ====")
+    for movement_dir_deg in [90, 270]:
         do_test_linear(
             "delta", n_window=2, movement_dir_deg=movement_dir_deg, simplify_angles=True
         )
@@ -115,9 +86,11 @@ def do_test_linear(
     print(f"testing {prob_method}, {n_window}, {movement_dir_deg}, {simplify_angles}")
     yaw_deg = movement_dir_deg - 90
 
+    step_angle_deg = 10
+    step_distance_cm = 0.5
     # angles_deg = [ANGLE_GLOB - yaw_deg]  # ground truth only
-    angles_deg = np.arange(360, step=10)
-    distances_cm = np.arange(0, 60, step=0.5)
+    angles_deg = np.arange(360, step=step_angle_deg)
+    distances_cm = np.arange(0, 60, step=step_distance_cm)
     moving_estimator = MovingEstimator(
         n_window=n_window, angles_deg=angles_deg, distances_cm=distances_cm
     )
@@ -134,10 +107,13 @@ def do_test_linear(
     ]
     for i, pose in enumerate(poses):
         distance, angle = measure_wall(pose)
+
         diff_dict = {}
         for mic_idx in MIC_IDX:
-            probs = get_delta_distribution(distance, angle, mic_idx, prob_method)
-            diff_dict[mic_idx] = (DELTA_GRID, probs)
+            delta_grid, probs = get_delta_distribution(
+                distance, angle, mic_idx, prob_method
+            )
+            diff_dict[mic_idx] = (delta_grid, probs)
         moving_estimator.add_distributions(diff_dict, pose[:2], pose[2])
         # print(f"added {distance:.2f}, {angle:.0f} at pose {i}")
 
@@ -167,28 +143,45 @@ def do_test_linear(
 
         try:
             assert (
-                abs(distance_estimate - distance) < 1
-            ), f"distance at position {i}: {distance_estimate} != true {distance}"
+                abs(distance_estimate - distance) <= 2 * step_distance_cm
+            ), f"distance at position {i}: {distance_estimate} != true {distance}. Correct angle: {angle}"
             assert (
-                abs(angle_estimate - angle) < 1
-            ), f"angle at position {i}: {angle_estimate} != true {angle}"
-        except AssertionError as e:
-            print(f"Caught AssertionError {e}, running again with verbose.")
+                abs(angle_estimate - angle) <= 2 * step_angle_deg
+            ), f"angle at position {i}: {angle_estimate} != true {angle}. Correct distance: {distance}"
+        # except AssertionError as e:
+        except Exception as e:
+            print(f"Caught Exception {e}, running again with verbose.")
             (
                 distances,
                 prob_distances,
                 angles,
                 prob_angles,
             ) = moving_estimator.get_distributions(
-                verbose=True, simplify_angles=simplify_angles
+                verbose=True, simplify_angles=simplify_angles, plot_angles=[angle]
             )
+            import matplotlib.pylab as plt
+
+            fig, axs = plt.subplots(2)
+            axs[0].plot(angles, prob_angles)
+            axs[0].axvline(angle_estimate, color="r")
+            axs[0].axvline(angle, color="g", ls=":")
+            axs[0].set_xlabel("angle [deg]")
+            axs[0].grid(which="both")
+            axs[1].plot(distances, prob_distances)
+            axs[1].axvline(distance_estimate, color="r")
+            axs[1].axvline(distance, color="g", ls=":")
+            axs[1].set_xlabel("distance [cm]")
+            axs[1].grid(which="both")
+            plt.show(block=True)
             raise e
 
 
 def do_test_rotation(prob_method, n_window):
     """ Test on rotating toy example """
-    angles_deg = np.arange(360, step=10)
-    distances_cm = np.arange(100, step=10)
+    step_angle_deg = 10
+    step_distance_cm = 10
+    angles_deg = np.arange(360, step=step_angle_deg)
+    distances_cm = np.arange(100, step=step_distance_cm)
     moving_estimator = MovingEstimator(
         n_window=n_window, angles_deg=angles_deg, distances_cm=distances_cm
     )
@@ -202,8 +195,10 @@ def do_test_rotation(prob_method, n_window):
         distance, angle = measure_wall(pose)
         diff_dict = {}
         for mic_idx in MIC_IDX:
-            probs = get_delta_distribution(distance, angle, mic_idx, prob_method)
-            diff_dict[mic_idx] = (DELTA_GRID, probs)
+            delta_grid, probs = get_delta_distribution(
+                distance, angle, mic_idx, prob_method
+            )
+            diff_dict[mic_idx] = (delta_grid, probs)
         moving_estimator.add_distributions(diff_dict, pose[:2], pose[2])
         print(f"added {distance, angle} at pose {i}")
 
@@ -224,10 +219,10 @@ def do_test_rotation(prob_method, n_window):
             prob_angles, method=ESTIMATION_METHOD
         )
         assert (
-            distance_estimate == distance
+            abs(distance_estimate - distance) <= 2 * step_distance_cm
         ), f"distance at position {i}: {distance_estimate} != true {distance}"
         assert (
-            angle_estimate == angle
+            abs(angle_estimate - angle) <= 2 * step_angle_deg
         ), f"angle at position {i}: {angle_estimate} != true {angle}"
 
 

@@ -119,7 +119,7 @@ if __name__ == "__main__":
         "simplify": [True, False],
     }
 
-    fname = "results/DistanceFlying_test.pkl"
+    fname = "results/DistanceFlying_matrices.pkl"
     matrix_df = generate_matrix_results(
         exp_name, appendix, parameters, fname=fname, verbose=True
     )
