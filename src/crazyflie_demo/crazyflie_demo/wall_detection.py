@@ -19,6 +19,8 @@ from audio_interfaces_py.messages import (
 from audio_interfaces_py.node_with_params import NodeWithParams
 from audio_stack.topic_synchronizer import TopicSynchronizer
 
+from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
+
 sys.path.append("python/")
 from utils.data_collector import DataCollector
 from utils.inference import Inference, get_approach_angle_fft
@@ -44,7 +46,6 @@ ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
 
 # movement stuff
-FLYING_HEIGHT_CM = 30
 VELOCITY_CMS = 4  # linear constant velocity in cm / s
 TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
 TIME_FORWARD = 60  # seconds, time to move forward in BLIND mode

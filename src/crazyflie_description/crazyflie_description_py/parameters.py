@@ -37,3 +37,5 @@ SOUND_EFFECTS = {
     "sweep_new": (3, [2000, 6000], 8),  # corresponds to three sweeps.
     "sweep_cont": (1, [2000, 6000], 6),
 }
+
+FLYING_HEIGHT_CM = 30
