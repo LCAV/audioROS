@@ -211,6 +211,12 @@ class BaseEstimator(object):
         ordered_index = np.roll(range(n_elements), -self.index - 1)
         return ordered_index
 
+    def get_forward_angle(self):
+        if self.positions[self.index][1] < 0:
+            return 270
+        else:
+            return 90
+
     def get_local_forward_angle(self):
         current = self.index
         if not self.filled and (self.index < 2):
@@ -346,16 +352,12 @@ class MovingEstimator(BaseEstimator):
         if simplify_angles:
             # angle_local_deg = self.get_local_forward_angle()
             # angles_deg = np.arange(
-            #    self.ANGLE_WINDOW_DEG + self.ANGLE_RESOLUTION_DEG,
-            #    step=self.ANGLE_RESOLUTION_DEG,
-            #    dtype=float,
+            #   self.ANGLE_WINDOW_DEG + self.ANGLE_RESOLUTION_DEG,
+            #   step=self.ANGLE_RESOLUTION_DEG,
+            #   dtype=float,
             # )
             # angles_deg += angle_local_deg - angles_deg[len(angles_deg) // 2]
-            position = self.positions[current]
-            if position[1] < 0:
-                angles_deg = [270]
-            else:
-                angles_deg = [90]
+            angles_deg = [self.get_forward_angle()]
         else:
             angles_deg = self.angles_deg
 
