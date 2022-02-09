@@ -26,6 +26,7 @@ from utils.data_collector import DataCollector
 from utils.inference import Inference, get_approach_angle_fft
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
+from utils.particle_estimators import ParticleEstimator
 
 # dslice
 FREQ = 3000  # mono frequency signal
@@ -36,7 +37,7 @@ PUBLISH_RAW = False
 
 DISTANCES_CM = np.arange(7, 80, step=2)
 # ANGLES_DEG = np.arange(360, step=90)
-ANGLES_DEG = [0, 90, 180, 270]
+ANGLES_DEG = np.array([0, 90, 180, 270])
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
 LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
@@ -144,11 +145,13 @@ class WallDetection(NodeWithParams):
     ALPHA_IIR = 0.2  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
     N_WINDOW = 5
 
-    SIMPLIFY_ANGLES = False
+    SIMPLIFY_ANGLES = True
 
     RELATIVE_MOVEMENT_STD = 1.0
 
-    def __init__(self, python_only=False):
+    N_PARTICLES = 100
+
+    def __init__(self, python_only=False, estimator="moving"):
         if not python_only:
             print("initializing ros stuff")
             super().__init__("wall_detection")
@@ -198,12 +201,24 @@ class WallDetection(NodeWithParams):
         self.data_collector = DataCollector()
         self.inf_machine = Inference()
         self.inf_machine.add_geometry(LOCAL_DIST_RANGE_CM, WALL_ANGLE_DEG)
-        self.moving_estimator = MovingEstimator(
-            n_window=self.N_WINDOW,
-            distances_cm=DISTANCES_CM,
-            angles_deg=ANGLES_DEG,
-            relative_movement_std=self.RELATIVE_MOVEMENT_STD,
-        )
+
+        if estimator == "moving":
+            self.estimator = MovingEstimator(
+                n_window=self.N_WINDOW,
+                distances_cm=DISTANCES_CM,
+                angles_deg=ANGLES_DEG,
+                relative_movement_std=self.RELATIVE_MOVEMENT_STD,
+            )
+        elif estimator == "particle":
+            ParticleEstimator.ANGLES_DEG = ANGLES_DEG
+            ParticleEstimator.DISTANCE_RANGE_CM = [
+                np.min(DISTANCES_CM),
+                np.max(DISTANCES_CM),
+            ]
+            self.estimator = ParticleEstimator(
+                n_particles=self.N_PARTICLES, global_=False
+            )
+
         self.calibration_count = 0
 
         self.calibration = None
@@ -414,7 +429,7 @@ class WallDetection(NodeWithParams):
 
         distances_cm, probabilities = get_distance_distribution(diff_dict)
 
-        self.moving_estimator.add_distributions(
+        self.estimator.add_distributions(
             diff_dict, position_cm=position_cm, rot_deg=yaw_deg,
         )
         (
@@ -422,9 +437,7 @@ class WallDetection(NodeWithParams):
             probabilities_moving,
             angles_deg,
             probabilities_moving_angle,
-        ) = self.moving_estimator.get_distributions(
-            simplify_angles=self.SIMPLIFY_ANGLES
-        )
+        ) = self.estimator.get_distributions(simplify_angles=self.SIMPLIFY_ANGLES)
         return (
             distances_cm,
             probabilities,
@@ -497,14 +510,10 @@ class WallDetection(NodeWithParams):
                 )
 
             if PUBLISH_MOVING:
-                self.moving_estimator.add_distributions(
+                self.estimator.add_distributions(
                     diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
                 )
-                (
-                    distances_cm,
-                    probabilities,
-                    *_,
-                ) = self.moving_estimator.get_distributions(
+                (distances_cm, probabilities, *_,) = self.estimator.get_distributions(
                     simplify_angles=SIMPLIFY_ANGLES
                 )
                 # self.logger.warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")

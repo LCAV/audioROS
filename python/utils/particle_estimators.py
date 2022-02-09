@@ -65,11 +65,11 @@ class ParticleEstimator(BaseEstimator):
         # if false, will express particles in local reference frame.
         self.global_ = global_
 
+        self.distances_cm = np.arange(*self.DISTANCE_RANGE_CM, step=1.0)
+        self.angles_deg = self.ANGLES_DEG
+
     def effective_n(self):
         return 1.0 / np.sum(np.square(self.weights))
-
-    def get_distances_cm(self):
-        return np.arange(*self.DISTANCE_RANGE_CM, step=1.0)
 
     def get_distributions(self, simplify_angles=False, method="histogram"):
         if simplify_angles:
@@ -83,30 +83,28 @@ class ParticleEstimator(BaseEstimator):
         self.update(simplify_angles=simplify_angles)
         self.resample()
 
-        distances_cm = self.get_distances_cm()
-        angles_deg = self.ANGLES_DEG
         if method == "histogram":
-            bins = get_bins(distances_cm)
+            bins = get_bins(self.distances_cm)
             probs_dist, __ = np.histogram(
                 self.particles[:, 0], bins=bins, weights=self.weights
             )
 
-            bins = get_bins(angles_deg)
+            bins = get_bins(self.angles_deg)
             probs_angles, __ = np.histogram(
                 self.particles[:, 1], bins=bins, weights=self.weights
             )
         elif method == "gaussian":
             (mean_dist, mean_angle), (var_dist, var_angle) = self.estimate()
             norm_dist = norm(loc=mean_dist, scale=np.sqrt(var_dist))
-            probs_dist = norm_dist.pdf(distances_cm)
+            probs_dist = norm_dist.pdf(self.distances_cm)
             probs_dist /= np.sum(probs_dist)
 
             norm_angles = norm(loc=mean_angle, scale=np.sqrt(var_angle))
-            probs_angles = norm_angles.pdf(angles_deg)
+            probs_angles = norm_angles.pdf(self.angles_deg)
             probs_angles /= np.sum(probs_angles)
         else:
             raise ValueError(method)
-        return distances_cm, probs_dist, angles_deg, probs_angles
+        return self.distances_cm, probs_dist, self.angles_deg, probs_angles
 
     def update(self, simplify_angles=False):
         for i, (d_particle, a_particle) in enumerate(self.particles):
