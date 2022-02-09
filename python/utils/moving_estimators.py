@@ -357,7 +357,7 @@ class MovingEstimator(BaseEstimator):
             #   dtype=float,
             # )
             # angles_deg += angle_local_deg - angles_deg[len(angles_deg) // 2]
-            angles_deg = [self.get_forward_angle()]
+            angles_deg = np.array([self.get_forward_angle()])
         else:
             angles_deg = self.angles_deg
 

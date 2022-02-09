@@ -225,6 +225,7 @@ class WallBackend(object):
         new_factors = gtsam.NonlinearFactorGraph()
         initial_estimates = gtsam.Values()
 
+        assert len(r_world) == 3, "Need to give 3d pose estimate!"
         current_pose = gtsam.Pose3(
             r=gtsam.Rot3.Ypr(yaw, 0, 0), t=gtsam.Point3(*r_world)
         )
@@ -268,7 +269,7 @@ class WallBackend(object):
         # TODO(FD) can remove n_estimates parameter because factor graph
         # does not deal well with multiple measurements.
         distance_estimates, distance_stds = get_estimates(
-            dists_cm, probs, n_estimates=n_estimates, method=method
+            np.array(dists_cm), np.array(probs), n_estimates=n_estimates, method=method
         )
         angle_estimates, angle_stds = get_estimates(
             azimuths_deg, probs_angles, n_estimates=n_estimates, method=method
@@ -308,8 +309,9 @@ class WallBackend(object):
                 azimuth_estimated = deg(
                     get_azimuth_angle(plane_local.normal().point3())
                 )
-                print(f"  wall ahead of us: {azimuth_estimated:.0f}")
-                print(f"  wall estimate: {azimuth:.0f}")
+                if verbose:
+                    print(f"  wall ahead of us: {azimuth_estimated:.0f}")
+                    print(f"  wall estimate: {azimuth:.0f}")
 
                 if abs(angle_difference(azimuth, azimuth_estimated)) > 30:
                     if verbose:
