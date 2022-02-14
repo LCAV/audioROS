@@ -43,12 +43,20 @@ def resample_from_index(particles, weights, indices):
 
 
 class ParticleEstimator(BaseEstimator):
-    DISTANCE_RANGE_CM = [0, 100]
+    DISTANCES_CM = np.arange(7, 100, step=1.0)
+
     # ANGLES_DEG = np.arange(360, step=1.0)
     # ANGLES_DEG = np.arange(360, step=90)
     ANGLES_DEG = np.arange(360, step=90)
 
-    def __init__(self, n_particles, platform="crazyflie", global_=True):
+    def __init__(
+        self,
+        n_particles,
+        platform="crazyflie",
+        global_=True,
+        distances_cm=DISTANCES_CM,
+        angles_deg=ANGLES_DEG,
+    ):
         super().__init__(
             n_window=1, platform=platform,
         )
@@ -56,17 +64,17 @@ class ParticleEstimator(BaseEstimator):
         self.n_particles = n_particles
         self.particles = np.empty((n_particles, 2))
         self.particles[:, 0] = np.random.uniform(
-            *self.DISTANCE_RANGE_CM, size=n_particles
+            distances_cm[0], distances_cm[-1], size=n_particles
         )
-        self.particles[:, 1] = np.random.choice(self.ANGLES_DEG, size=n_particles)
+        self.particles[:, 1] = np.random.choice(angles_deg, size=n_particles)
         self.weights = np.ones(n_particles) / n_particles
 
         # express particles in global reference frame.
         # if false, will express particles in local reference frame.
         self.global_ = global_
 
-        self.distances_cm = np.arange(*self.DISTANCE_RANGE_CM, step=1.0)
-        self.angles_deg = self.ANGLES_DEG
+        self.distances_cm = distances_cm
+        self.angles_deg = angles_deg
 
     def effective_n(self):
         return 1.0 / np.sum(np.square(self.weights))
@@ -131,8 +139,8 @@ class ParticleEstimator(BaseEstimator):
         )
         self.particles[:, 0] = np.clip(
             self.particles[:, 0],
-            a_min=self.DISTANCE_RANGE_CM[0],
-            a_max=self.DISTANCE_RANGE_CM[1],
+            a_min=self.distances_cm[0],
+            a_max=self.distances_cm[-1],
         )
         self.particles[:, 1] += np.random.normal(
             scale=STD_ANGLE_DEG, size=self.n_particles
