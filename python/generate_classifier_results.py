@@ -1,8 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
-generate_classifier_results.py: 
+generate_classifier_results.py: Detect if there is a wall or not based on distributions.
 """
 
 import matplotlib.pylab as plt

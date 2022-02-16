@@ -99,7 +99,7 @@ class Inference(object):
         self.azimuth_deg = azimuth_deg
 
     def add_calibration_function(self, calibration_function):
-        if calibration_function in [""]:
+        if calibration_function in ["", False, None]:
             self.calibration_function = None
         else:
             self.calibration_function = calibration_function
