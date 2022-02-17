@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-generate_stepper_results_cdf.py: Calculate and save distance estimates for all measured stepper data.
+generate_filtering_results.py: Calculate and save distance estimates for all measured stepper data.
 """
 
 from crazyflie_description_py.experiments import (
@@ -21,6 +21,8 @@ from utils.simulation import get_freq_slice_theory
 
 from utils.moving_estimators import MovingEstimator
 from utils.particle_estimators import ParticleEstimator
+
+from crazyflie_demo.wall_detection import WallDetection
 
 DISCRETIZATIONS = dict(
     superfine=(1.0, 5),
@@ -188,6 +190,16 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 angles_deg=angles_deg,
             )
 
+            WallDetection.CALIBRATION = "iir"  # fixed, iir, window
+            WallDetection.N_CALIBRATION = 2  # for iir, at least two.
+            WallDetection.ALPHA_IIR = 0.2
+            WallDetection.MASK_BAD = None
+            WallDetection.SIMPLIFY_ANGLES = False
+            wall_detection_dict = {
+                key: WallDetection(python_only=True, estimator=value)
+                for key, value in estimator_dict.items()
+            }
+
             p = progressbar.ProgressBar(maxval=len(distances))
             p.start()
 
@@ -200,79 +212,27 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                         chosen_mics=chosen_mics,
                     )
                     magnitudes = np.sqrt(magnitudes.T)  # now it's 4x32
-                    freqs = frequencies
                 else:
+                    stft_exp = df_chosen.loc[
+                        df_chosen.distance == distance, "stft"
+                    ].iloc[0]
+                    magnitudes = get_magnitudes(stft_exp)[chosen_mics, :]
 
-                    if USE_DATA_COLLECTOR:
-                        magnitudes, *_ = df_chosen.get_frequency_slice_fixed(
-                            frequencies, distance, mics=chosen_mics
-                        )
-                    else:
-                        stft_exp = df_chosen.loc[
-                            df_chosen.distance == distance, "stft"
-                        ].iloc[0]
-                        magnitudes = get_magnitudes(stft_exp)[chosen_mics, :]
-
-                if method == "calibrated" and not USE_DATA_COLLECTOR:
-                    magnitudes /= calibration_magnitudes[chosen_mics, :]
-                elif USE_DATA_COLLECTOR:
-                    if method == "calibrated":
-                        inf_machine.add_calibration_function(calib_function_median)
-                    else:
-                        inf_machine.add_calibration_function(None)
-
-                inf_machine.add_data(magnitudes, frequencies, mics=chosen_mics)
-                inf_machine.filter_out_freqs()
-
-                distance_estimator = DistanceEstimator(
-                    distances_cm=distances_cm, angles_deg=angles_deg
-                )
-                diff_dict = {}
-                for i_mic, mic_idx in enumerate(chosen_mics):
-                    distances_cm_here, proba, diff_cm = inf_machine.do_inference(
-                        algorithm=algo, mic_idx=i_mic
-                    )
-                    diff_dict[mic_idx] = (diff_cm, proba)
-                    distance_estimator.add_distribution(diff_cm * 1e-2, proba, mic_idx)
-                    # uncomment to add individual mics.
-                    # d = get_estimate(distances_cm_here, proba)
-                    # err_df.loc[len(err_df), :] = {
-                    #    'error': d - distance,
-                    #    'mic': mic_idx,
-                    #    'distance': distance,
-                    #    'method': method,
-                    #    'algorithm': algo
-                    # }
-                for estimator in estimator_dict.values():
-                    estimator.add_distributions(diff_dict, position_cm=[0, -distance])
-
-                angle_deg_here = None if use_uniform_prior else azimuth_deg
-
-                t1 = time.time()
-                __, proba = distance_estimator.get_distance_distribution(
-                    angle_deg=angle_deg_here
-                )
-                runtime = time.time() - t1
-                fill_distance(err_df, proba, method=f"{method} single")
-
-                # angle distribution doesn't work with uniform prior!
-                # this is normal, there is no information on angle without some distance information.
-                t1 = time.time()
-                __, proba = distance_estimator.get_angle_distribution(
-                    distance_estimate_cm=distance
-                )
-                runtime = time.time() - t1
-                fill_angle(err_df, proba, method=f"{method} single")
-
-                for name, estimator in estimator_dict.items():
+                position_cm = [0, -distance, 50]
+                yaw_deg = 0
+                for name, wall_detection in wall_detection_dict.items():
                     t1 = time.time()
-                    __, probs_dist, __, probs_angles = estimator.get_distributions(
-                        simplify_angles=False
+                    (
+                        __,
+                        __,
+                        probs_dist,
+                        probs_angles,
+                    ) = wall_detection.listener_callback_offline(
+                        magnitudes.T, frequencies, position_cm, yaw_deg
                     )
                     runtime = time.time() - t1
                     fill_distance(err_df, probs_dist, method=f"{method} {name}")
                     fill_angle(err_df, probs_angles, method=f"{method} {name}")
-
                 p.update(i_d)
 
             if fname != "":
@@ -307,12 +267,12 @@ if __name__ == "__main__":
         methods=["calibrated"],
     )
     fname = "results/stepper_results_timing.pkl"
-    generate_results(df_chosen, fname=fname, parameters=parameters)
+    # generate_results(df_chosen, fname=fname, parameters=parameters)
 
     parameters = dict(
         discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
         n_windows=[1, 3, 5],
-        methods=["raw", "theoretical", "calibrated"],
+        methods=["theoretical", "calibrated"],
     )
-    fname = "results/stepper_results_cdfs.pkl"
+    fname = "results/stepper_results_online.pkl"
     generate_results(df_chosen, fname=fname, parameters=parameters)

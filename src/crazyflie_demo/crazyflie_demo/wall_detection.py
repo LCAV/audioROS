@@ -40,8 +40,6 @@ DISTANCES_CM = np.arange(7, 80, step=2)
 ANGLES_DEG = np.array([0, 90, 180, 270])
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
-LOCAL_DISTANCES_CM = DistanceEstimator.DISTANCES_M * 1e2
-LOCAL_DIST_RANGE_CM = [min(LOCAL_DISTANCES_CM), max(LOCAL_DISTANCES_CM)]
 N_MICS = 4
 ALGORITHM = "bayes"
 DISTANCE_THRESHOLD_CM = 20
@@ -50,6 +48,8 @@ DISTANCE_THRESHOLD_CM = 20
 VELOCITY_CMS = 4  # linear constant velocity in cm / s
 TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
 TIME_FORWARD = 60  # seconds, time to move forward in BLIND mode
+
+MAG_THRESH = 1e-3
 
 
 class State(Enum):
@@ -78,10 +78,10 @@ def get_distance_distribution(diff_dict):
     distance_estimator = DistanceEstimator()
     for mic_i, (diff, prob_mic) in diff_dict.items():
         distance_estimator.add_distribution(diff * 1e-2, prob_mic, mic_i)
-    __, prob = distance_estimator.get_distance_distribution(
-        distances_m=LOCAL_DISTANCES_CM * 1e-2, azimuth_deg=WALL_ANGLE_DEG
+    dists_cm, prob = distance_estimator.get_distance_distribution(
+        angle_deg=WALL_ANGLE_DEG
     )
-    return LOCAL_DISTANCES_CM, prob
+    return dists_cm, prob
 
 
 def get_angle_distribution(dslices, resolve_side=False):
@@ -143,12 +143,11 @@ class WallDetection(NodeWithParams):
     # N_CALIBRATION = 10
 
     ALPHA_IIR = 0.2  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
-    N_WINDOW = 5
-
     SIMPLIFY_ANGLES = True
 
+    # estimator variables
+    N_WINDOW = 5
     RELATIVE_MOVEMENT_STD = 1.0
-
     N_PARTICLES = 100
 
     def __init__(self, python_only=False, estimator="moving"):
@@ -197,11 +196,6 @@ class WallDetection(NodeWithParams):
         self.start_time = 0  # use absolute time
         self.start_timestamp = None
 
-        # initialize wall detection stuff
-        self.data_collector = DataCollector()
-        self.inf_machine = Inference()
-        self.inf_machine.add_geometry(LOCAL_DIST_RANGE_CM, WALL_ANGLE_DEG)
-
         if estimator == "moving":
             self.estimator = MovingEstimator(
                 n_window=self.N_WINDOW,
@@ -218,6 +212,19 @@ class WallDetection(NodeWithParams):
             self.estimator = ParticleEstimator(
                 n_particles=self.N_PARTICLES, global_=False
             )
+        elif type(estimator) in [MovingEstimator, ParticleEstimator]:
+            self.estimator = estimator
+        else:
+            raise ValueError(estimator)
+
+        # initialize wall detection stuff
+        self.data_collector = DataCollector()
+        self.inf_machine = Inference()
+        distance_range_cm = [
+            self.estimator.distances_cm[0],
+            self.estimator.distances_cm[-1],
+        ]
+        self.inf_machine.add_geometry(distance_range_cm, WALL_ANGLE_DEG)
 
         self.calibration_count = 0
 
@@ -356,7 +363,7 @@ class WallDetection(NodeWithParams):
         return diff_dict
 
     def mask_bad_measurements(self, magnitudes, freqs, verbose=False):
-        magnitudes[magnitudes <= 0] = np.nan
+        magnitudes[magnitudes <= MAG_THRESH] = np.nan
         if self.MASK_BAD == "fixed":
             remove = np.zeros(magnitudes.shape[1], dtype=bool)
             for freq_range in self.BAD_FREQ_RANGES:

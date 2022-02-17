@@ -12,7 +12,7 @@ def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=Fa
     data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
     data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
 
-    n_cols = len(list(itertools.product(*parameters.values())))
+    n_rows = len(list(itertools.product(*parameters.values())))
     result_df = pd.DataFrame(
         columns=[
             "calibration name",
@@ -24,10 +24,13 @@ def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=Fa
             "simplify angles",
             "matrix distances",
             "matrix angles",
-        ]
+            "distances_cm",
+            "angles_deg",
+        ],
+        index=range(n_rows),
     )
     counter = 0
-    progressbar = ProgressBar(maxval=n_cols)
+    progressbar = ProgressBar(maxval=n_rows)
     progressbar.start()
     for calib, mask_bad, n_window, std, simplify in itertools.product(
         *parameters.values()
@@ -54,6 +57,8 @@ def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=Fa
         result_df.loc[counter, "n window"] = n_window
         result_df.loc[counter, "simplify angles"] = simplify
         result_df.loc[counter, "relative std"] = std
+        result_df.loc[counter, "distances_cm"] = wall_detection.estimator.distances_cm
+        result_df.loc[counter, "angles_deg"] = wall_detection.estimator.angles_deg
 
         matrix_distances = None
         matrix_angles = None
@@ -93,7 +98,7 @@ def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=Fa
         progressbar.update(counter)
         if fname != "":
             result_df.to_pickle(fname)
-            print(f"Saved intermediate as {fname}")
+            print(f"Saved intermediate {counter}/{n_rows} as {fname}")
     return result_df
 
 
@@ -103,10 +108,10 @@ if __name__ == "__main__":
 
     parameters = {
         "calibration": [  # [("iir", 0.2)],
-            ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 0.9, step=0.1)
+            ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
         ]
-        + [("window", n_calib) for n_calib in np.arange(2, 11, step=1)]
-        + [("fixed", n_calib) for n_calib in np.arange(2, 11, step=1)],
+        + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
+        + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
         "mask_bad": [
             ("fixed", None),
             ("adaptive", 2),
@@ -114,12 +119,12 @@ if __name__ == "__main__":
             ("adaptive", 10),
             (None, None),
         ],
-        "n_window": [3, 5, 10],
+        "n_window": [5],  # [1, 3, 5],
         "std": [0.0, 1.0],
         "simplify": [True, False],
     }
 
-    fname = "results/DistanceFlying_matrices.pkl"
+    fname = "results/demo_results_matrices.pkl"
     matrix_df = generate_matrix_results(
         exp_name, appendix, parameters, fname=fname, verbose=True
     )
