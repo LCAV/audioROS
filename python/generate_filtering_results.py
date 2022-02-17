@@ -40,10 +40,6 @@ PARAMETERS_ALL = dict(
 
 MAG_THRESH = 1e-3
 
-# for debugging only.
-# TODO(FD) remove this option, because it gives worse results.
-USE_DATA_COLLECTOR = False
-
 
 def get_magnitudes(stft, mag_thresh=MAG_THRESH):
     stft[np.abs(stft) < mag_thresh] = np.nan
@@ -149,19 +145,12 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
 
     inf_machine = Inference()
 
-    if USE_DATA_COLLECTOR:
-        from utils.calibration import get_calibration_function_median
-
-        calib_function_median, __ = get_calibration_function_median(
-            mic_type="audio_deck", exp_name="2021_07_08_stepper_fast", motors=0, snr=5
-        )
-        df_matrix, distances, frequencies = df_chosen.get_df_matrix()
-    else:
-        distances = df_chosen.distance.values
-        df_chosen.loc[:, "distance"] += WALL_DISTANCE_CM_STEPPER
-        all_magnitudes = np.abs(np.concatenate([*df_chosen.stft.values]))
-        calibration_magnitudes = np.median(all_magnitudes, axis=0)
-        frequencies = df_chosen.iloc[0].frequencies_matrix[0, :]
+    df_chosen.sort_values("distance", ascending=False, inplace=True)
+    distances = df_chosen.distance.values
+    df_chosen.loc[:, "distance"] += WALL_DISTANCE_CM_STEPPER
+    all_magnitudes = np.abs(np.concatenate([*df_chosen.stft.values]))
+    calibration_magnitudes = np.median(all_magnitudes, axis=0)
+    frequencies = df_chosen.iloc[0].frequencies_matrix[0, :]
 
     inf_machine.add_geometry([min(distances), max(distances)], azimuth_deg)
 
@@ -249,17 +238,10 @@ if __name__ == "__main__":
     motors = "all45000"
     bin_selection = 5
 
-    if USE_DATA_COLLECTOR:
-        from utils.data_collector import DataCollector
-
-        mic_type = "audio_deck"
-        df_chosen = DataCollector()
-        df_chosen.fill_from_backup(exp_name, mic_type, motors, bin_selection)
-    else:
-        df_all = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
-        df_chosen = df_all.loc[
-            (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
-        ].copy()
+    df_all = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
+    df_chosen = df_all.loc[
+        (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
+    ].copy()
 
     parameters = dict(
         discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
