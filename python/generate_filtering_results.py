@@ -41,10 +41,13 @@ PARAMETERS_ALL = dict(
 
 MAG_THRESH = 1e-3
 
-DMIN = 7
 # d_max is c / 4 * \delta_f = 330 / (4 * 62) = 1.33m  for stepper experiments,
 # d_max is c / 4 * \delta_f = 330 / (4 * 94) = 0.91m for flying experiments
+DMIN = 7
 DMAX = 80
+
+CALIBRATION = "iir"
+ALPHA_IIR = 0.3
 
 
 def get_magnitudes(stft, mag_thresh=MAG_THRESH):
@@ -187,9 +190,9 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 angles_deg=angles_deg,
             )
 
-            WallDetection.CALIBRATION = "iir"  # fixed, iir, window
+            WallDetection.CALIBRATION = CALIBRATION  # fixed, iir, window
             WallDetection.N_CALIBRATION = 2  # for iir, at least two.
-            WallDetection.ALPHA_IIR = 0.2
+            WallDetection.ALPHA_IIR = ALPHA_IIR
             WallDetection.MASK_BAD = None
             WallDetection.SIMPLIFY_ANGLES = False
             wall_detection_dict = {

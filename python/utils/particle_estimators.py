@@ -127,7 +127,7 @@ class ParticleEstimator(BaseEstimator):
                 loc=angle_deg, scale=STD_ANGLE_DEG, size=self.n_particles
             )
 
-        if not state == State.READY:
+        if not self.state == State.READY:
             self.predict()
             self.update(simplify_angles=simplify_angles)
             self.resample()

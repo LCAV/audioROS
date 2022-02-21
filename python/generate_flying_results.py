@@ -1,4 +1,5 @@
 import itertools
+import sys
 
 import numpy as np
 import pandas as pd
@@ -7,11 +8,33 @@ from progressbar import ProgressBar
 from crazyflie_demo.wall_detection import WallDetection
 from utils.moving_estimators import get_estimate
 
+ESTIMATOR = "particle"  # or moving
 
-def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=False):
-    data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
-    data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
 
+def combine_stepper_df(data_df, motors="all45000", bin_selection=5):
+    """ combine all rows of a stepper dataset to one, as in flying datasets."""
+    chosen_df = data_df.loc[
+        (data_df.motors == motors) & (data_df.bin_selection == bin_selection)
+    ]
+    data_row = pd.Series(index=chosen_df.columns, dtype=object)
+    data_row.positions = np.concatenate(
+        [np.r_[[[0, -distance, 50, 0]]] for distance in chosen_df.distance.values]
+    )
+    data_row.stft = np.concatenate(
+        [np.r_[[np.median(stft, axis=0)]] for stft in chosen_df.stft.values]
+    )
+    data_row.frequencies_matrix = np.concatenate(
+        [
+            np.r_[[frequencies_mat[0, :]]]
+            for frequencies_mat in chosen_df.frequencies_matrix.values
+        ],
+        axis=0,
+    )
+    data_row.seconds = chosen_df.seconds.values
+    return data_row
+
+
+def generate_matrix_results(data_row, parameters, fname="", verbose=False):
     n_rows = len(list(itertools.product(*parameters.values())))
     result_df = pd.DataFrame(
         columns=[
@@ -48,7 +71,7 @@ def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=Fa
         WallDetection.RELATIVE_MOVEMENT_STD = std
         WallDetection.SIMPLIFY_ANGLES = simplify
 
-        wall_detection = WallDetection(python_only=True)
+        wall_detection = WallDetection(python_only=True, estimator=ESTIMATOR)
 
         result_df.loc[counter, "calibration name"] = calib[0]
         result_df.loc[counter, "calibration param"] = calib[1]
@@ -103,28 +126,84 @@ def generate_matrix_results(exp_name, appendix, parameters, fname="", verbose=Fa
 
 
 if __name__ == "__main__":
-    exp_name = "2022_01_27_demo"
-    appendix = "test4"
+    if 0:
+        exp_name = "2022_01_27_demo"
+        appendix = "test4"
+        parameters = {
+            "calibration": [  # [("iir", 0.2)],
+                ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
+            ]
+            + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
+            + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
+            "mask_bad": [
+                ("fixed", None),
+                ("adaptive", 2),
+                ("adaptive", 4),
+                ("adaptive", 10),
+                (None, None),
+            ],
+            "n_window": [5],  # [1, 3, 5],
+            "std": [0.0, 1.0],
+            "simplify": [True, False],
+        }
 
-    parameters = {
-        "calibration": [  # [("iir", 0.2)],
-            ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
-        ]
-        + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
-        + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
-        "mask_bad": [
-            ("fixed", None),
-            ("adaptive", 2),
-            ("adaptive", 4),
-            ("adaptive", 10),
-            (None, None),
-        ],
-        "n_window": [5],  # [1, 3, 5],
-        "std": [0.0, 1.0],
-        "simplify": [True, False],
-    }
+        fname = "results/demo_results_matrices.pkl"
+        data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
+        data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
+        matrix_df = generate_matrix_results(
+            data_row, parameters, fname=fname, verbose=True
+        )
+    elif 0:
+        exp_name = "2021_11_27_demo"
+        appendix = "new3"
+        parameters = {
+            "calibration": [  # [("iir", 0.2)],
+                ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
+            ]
+            + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
+            + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
+            "mask_bad": [
+                ("fixed", None),
+                ("adaptive", 2),
+                ("adaptive", 4),
+                ("adaptive", 10),
+                (None, None),
+            ],
+            "n_window": [5],  # [1, 3, 5],
+            "std": [0.0, 1.0],
+            "simplify": [True, False],
+        }
 
-    fname = "results/demo_results_matrices.pkl"
-    matrix_df = generate_matrix_results(
-        exp_name, appendix, parameters, fname=fname, verbose=True
-    )
+        fname = "results/flying_results_matrices.pkl"
+        data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
+        data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
+        matrix_df = generate_matrix_results(
+            data_row, parameters, fname=fname, verbose=True
+        )
+    else:
+        exp_name = "2021_07_08_stepper_fast"
+        appendix = ""
+        parameters = {
+            "calibration": [  # [("iir", 0.2)],
+                ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
+            ]
+            + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
+            + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
+            "mask_bad": [
+                # ("fixed", None),
+                # ("adaptive", 2),
+                # ("adaptive", 4),
+                # ("adaptive", 10),
+                (None, None),
+            ],
+            "n_window": [1] if ESTIMATOR == "particle" else [1, 3, 5],
+            "std": [1.0],
+            "simplify": [False],
+        }
+
+        fname = "results/stepper_results_matrices.pkl"
+        data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
+        data_row = combine_stepper_df(data_df, motors="all45000", bin_selection=5)
+        matrix_df = generate_matrix_results(
+            data_row, parameters, fname=fname, verbose=True
+        )

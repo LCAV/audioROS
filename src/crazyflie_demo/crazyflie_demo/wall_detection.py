@@ -35,9 +35,10 @@ N_MAX = 14  # how many distances to use
 PUBLISH_MOVING = True
 PUBLISH_RAW = False
 
+# corresponds to discretization "fine":
 DISTANCES_CM = np.arange(7, 80, step=2)
-# ANGLES_DEG = np.arange(360, step=90)
-ANGLES_DEG = np.array([0, 90, 180, 270])
+ANGLES_DEG = np.arange(360, step=10)
+# ANGLES_DEG = np.array([0, 90, 180, 270])
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
 N_MICS = 4
@@ -432,6 +433,7 @@ class WallDetection(NodeWithParams):
             diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
         except Exception as e:
             print("could not process calibrated magnitudes:", e)
+            raise e
             return None
 
         distances_cm, probabilities = get_distance_distribution(diff_dict)

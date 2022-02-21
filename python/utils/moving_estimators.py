@@ -428,7 +428,6 @@ class MovingEstimator(BaseEstimator):
             for i_time, probs_mics in distance_p.items():  # all measurement times
                 if len(probs_mics):
                     time_lag = current_time - self.times[i_time]
-                    # print(f"current index {self.index}: other index {i_time}, lag: {time_lag}")
                     lambdas.append(
                         1 / (1 + self.relative_movement_std ** 2) ** time_lag
                     )
