@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import progressbar
 
+from utils.constants import SPEED_OF_SOUND
 from utils.estimators import DistanceEstimator, get_estimate
 from utils.inference import Inference
 from utils.simulation import get_freq_slice_theory
@@ -39,6 +40,11 @@ PARAMETERS_ALL = dict(
 )
 
 MAG_THRESH = 1e-3
+
+DMIN = 7
+# d_max is c / 4 * \delta_f = 330 / (4 * 62) = 1.33m  for stepper experiments,
+# d_max is c / 4 * \delta_f = 330 / (4 * 94) = 0.91m for flying experiments
+DMAX = 80
 
 
 def get_magnitudes(stft, mag_thresh=MAG_THRESH):
@@ -152,13 +158,15 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
     calibration_magnitudes = np.median(all_magnitudes, axis=0)
     frequencies = df_chosen.iloc[0].frequencies_matrix[0, :]
 
+    # dmax = 1e2 * SPEED_OF_SOUND / (4 * np.min(np.diff(frequencies)))
+
     inf_machine.add_geometry([min(distances), max(distances)], azimuth_deg)
 
     for discretization in parameters["discretizations"]:
         step_cm, step_deg = DISCRETIZATIONS[discretization]
         print(f"----------------- discretization {discretization} -------------------")
 
-        distances_cm = np.arange(7, 100, step=step_cm)
+        distances_cm = np.arange(DMIN, DMAX, step=step_cm)
         angles_deg = np.arange(360, step=step_deg)
         n_particles = len(distances_cm) * len(angles_deg) // 2
         print(f"Nd = {len(distances_cm)}, Na = {len(angles_deg)} -> Np = {n_particles}")
@@ -222,6 +230,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                     runtime = time.time() - t1
                     fill_distance(err_df, probs_dist, method=f"{method} {name}")
                     fill_angle(err_df, probs_angles, method=f"{method} {name}")
+
                 p.update(i_d)
 
             if fname != "":
@@ -233,7 +242,6 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
 
 
 if __name__ == "__main__":
-
     exp_name = "2021_07_08_stepper_fast"
     motors = "all45000"
     bin_selection = 5
@@ -249,12 +257,18 @@ if __name__ == "__main__":
         methods=["calibrated"],
     )
     fname = "results/stepper_results_timing.pkl"
-    # generate_results(df_chosen, fname=fname, parameters=parameters)
+    generate_results(df_chosen, fname=fname, parameters=parameters)
 
     parameters = dict(
-        discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
+        discretizations=[
+            "superfine",
+            "fine",
+            "medium",
+            "coarse",
+            "supercoarse",
+        ],  # ["superfine", "fine", "medium", "coarse", "supercoarse"],
         n_windows=[1, 3, 5],
         methods=["theoretical", "calibrated"],
     )
-    fname = "results/stepper_results_online.pkl"
-    generate_results(df_chosen, fname=fname, parameters=parameters)
+    fname = "results/stepper_results_online_new.pkl"
+    # generate_results(df_chosen, fname=fname, parameters=parameters)

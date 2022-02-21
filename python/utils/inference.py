@@ -23,8 +23,33 @@ if PLATFORM == "crazyflie":
     # BAD_FREQ_RANGES = [[0, 2995]]
 else:
     BAD_FREQ_RANGES = [[0, 2500]]
+
 INTERPOLATE = True
 N_MAX = 1000
+
+
+def get_uniform_grid(xvalues):
+    """ Fill too large spaces of xvalues with uniform sampling of the median spacing of xvalues.
+    Example:
+    [0, 2, 4, 10, 12, 14]
+    becomes
+    [0, 2, 4, 6, 8, 10, 12, 14]
+    """
+    max_count = 10  # to not loop forever
+    for i in range(max_count):
+        diffs = np.diff(xvalues)
+        median = np.median(diffs)
+        diffs = np.r_[median, diffs]
+        split = np.where(diffs > median * 1.5)[0]
+        if not len(split):
+            return xvalues
+        s = split[0]
+        xvalues = np.r_[
+            xvalues[: s - 1],
+            np.arange(xvalues[s - 1], xvalues[s], step=median),
+            xvalues[s:],
+        ]
+    raise ValueError(f"Did not finish in {max_count} iterations")
 
 
 def interpolate_parts(xvalues, values, step=None, verbose=False):
@@ -36,14 +61,21 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
     """
     import scipy.interpolate
 
-    if step is None:
-        step = np.median(np.diff(xvalues))
+    if step is not None:
+        raise ValueError("Giving step is depcreated")
 
-    xvalues_grid = np.arange(min(xvalues), max(xvalues) + step, step=step)
+    xvalues_grid = get_uniform_grid(xvalues)
+    step = np.median(np.diff(xvalues_grid))
+
     # valid points are no more than 2*step from actual data.
     valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) <= 2 * step, axis=1)
+    if np.sum(~valid):
+        print("Warning: removing some values before interpolation!")
+
     if verbose:
+        print(f"uniform: {len(xvalues_grid)}, original: {len(xvalues)}")
         print(f"interpolating at {np.sum(valid)} points")
+
     xvalues_grid = xvalues_grid[valid]
     assert np.abs(np.median(np.diff(xvalues_grid)) - step) < 1e-10, (
         np.median(np.diff(xvalues_grid)),
