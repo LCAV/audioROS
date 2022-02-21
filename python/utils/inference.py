@@ -69,8 +69,8 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
 
     # valid points are no more than 2*step from actual data.
     valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) <= 2 * step, axis=1)
-    if np.sum(~valid):
-        print("Warning: removing some values before interpolation!")
+    # if np.sum(~valid):
+    #    print("Warning: removing some values before interpolation!")
 
     if verbose:
         print(f"uniform: {len(xvalues_grid)}, original: {len(xvalues)}")

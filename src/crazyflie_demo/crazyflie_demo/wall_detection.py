@@ -38,7 +38,6 @@ PUBLISH_RAW = False
 # corresponds to discretization "fine":
 DISTANCES_CM = np.arange(7, 80, step=2)
 ANGLES_DEG = np.arange(360, step=10)
-# ANGLES_DEG = np.array([0, 90, 180, 270])
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
 N_MICS = 4
@@ -134,16 +133,16 @@ class WallDetection(NodeWithParams):
     BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
     OUTLIER_FACTOR = 10  # reject values outside of OUTLIER_FACTOR * std window
 
-    CALIBRATION = "iir"
     # need at least two, otherwise end up with all-ones magnitudes_calib.
     N_CALIBRATION = 2
-
+    CALIBRATION = "iir"
+    ALPHA_IIR = 0.3  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
+    # N_CALIBRATION = 10
     # CALIBRATION = "window"
+
     # N_CALIBRATION = 10
     # CALIBRATION= "fixed"
-    # N_CALIBRATION = 10
 
-    ALPHA_IIR = 0.2  # 1: overwrite with new data, 1: ignore new data. The higher, the shorter the window.
     SIMPLIFY_ANGLES = True
 
     # estimator variables
@@ -254,6 +253,8 @@ class WallDetection(NodeWithParams):
             return True
         if (position_cm is not None) and (position_cm[2] < FLYING_HEIGHT_CM):
             return False
+        elif any(np.isnan(position_cm)):
+            return False
         return True
 
     def add_to_calib(self, magnitudes):
@@ -340,7 +341,9 @@ class WallDetection(NodeWithParams):
                 )
                 return magnitudes
 
-            self.calibration_std = np.sqrt(self.calibrationsq - self.calibration ** 2)
+            var = self.calibrationsq - self.calibration ** 2
+            self.calibration_std = np.full(var.shape, np.nan)
+            self.calibration_std[var > 0] = np.sqrt(var[var > 0])
             self.calibration_std[self.calibration_std == 0] = np.nan
 
         if self.calibration.shape[1] != magnitudes.shape[1]:

@@ -25,11 +25,9 @@ def get_normal_vector(angle_deg):
 # very uniform, doesn't miss important samples:
 from filterpy.monte_carlo import stratified_resample as resample
 
-
-DISTANCES_CM = np.arange(7, 80, step=1.0)
-# ANGLES_DEG = np.arange(360, step=1.0)
-# ANGLES_DEG = np.arange(360, step=90)
-ANGLES_DEG = np.arange(360, step=90)
+# corresponds to discretization "fine":
+DISTANCES_CM = np.arange(7, 80, step=2.0)
+ANGLES_DEG = np.arange(360, step=10)
 
 
 STD_DISTANCE_CM = 5.0

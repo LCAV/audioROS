@@ -45,7 +45,7 @@ METHODS = [
     # "distance-max",
     "std-mean",
     # "std-max",
-    "tail",
+    # "tail",
 ]
 
 
@@ -74,7 +74,9 @@ def detect_wall(
         return np.log10(mean_tail) < thresh
 
 
-def get_groundtruth_distances(exp_name, appendix, walls=None, flying=False):
+def get_groundtruth_distances(
+    exp_name, appendix, walls=None, flying=False, angles=False
+):
     def normal(angle_deg):
         return np.r_[
             [np.cos(angle_deg / 180 * np.pi)], [np.sin(angle_deg / 180 * np.pi)]
@@ -85,22 +87,32 @@ def get_groundtruth_distances(exp_name, appendix, walls=None, flying=False):
     if flying:
         from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
 
-        positions_cm = (
-            row.positions[row.positions[:, 2] > FLYING_HEIGHT_CM * 1e-2, :2] * 1e2
-        )
+        mask_flying = row.positions[:, 2] > FLYING_HEIGHT_CM * 1e-2
+        positions_cm = row.positions[mask_flying, :2] * 1e2
+        yaws_deg = row.positions[mask_flying, 3]
     else:
         positions_cm = row.positions[:, :2] * 1e2
+        yaws_deg = row.positions[:, 3]
 
     if walls is None:
         walls = WALLS_DICT[exp_name]
-    distances = []
-    distances_wall = np.full(positions_cm.shape[0], np.nan)
+    distances_wall = None  # np.full(positions_cm.shape[0], np.nan)
+    angles_wall = None  # np.full(positions_cm.shape[0], np.nan)
     for wall in walls:
-        distances = wall[0] - positions_cm.dot(normal(wall[1]))
-        mask = np.isnan(distances_wall)
-        distances_wall[mask] = distances[mask]
-        distances_wall[~mask] = np.minimum(distances[~mask], distances_wall[~mask])
-    return distances_wall
+        distances_here = wall[0] - positions_cm.dot(normal(wall[1]))
+        angles_here = wall[1] - yaws_deg
+        if distances_wall is None:
+            distances_wall = distances_here
+        else:
+            distances_wall = np.min(np.c_[distances_here, distances_wall], axis=1)
+        if angles_wall is None:
+            angles_wall = angles_here
+        else:
+            angles_wall = np.min(np.c_[angles_here, angles_wall], axis=1)
+    if not angles:
+        return distances_wall
+    else:
+        return distances_wall, angles_wall
 
 
 def get_precision_recall(matrix, distances_wall, method, verbose=False, sort=True):
@@ -183,10 +195,15 @@ def generate_classifier_results(matrix_df, fname="", verbose=False):
         for method in METHODS:
 
             precision, recall = get_precision_recall(
-                matrix, distances_wall, method, verbose=verbose
+                matrix, distances_wall, method, verbose=False
             )
+            try:
+                metric = auc(precision, recall)
+            except:
+                print(method, matrix.shape)
+                print(precision, recall)
+                raise
 
-            metric = auc(precision, recall)
             fill_dict = {
                 "method": method,
                 "auc": metric,
@@ -217,13 +234,14 @@ def generate_classifier_results(matrix_df, fname="", verbose=False):
 
 if __name__ == "__main__":
     try:
-        matrix_df = pd.read_pickle("results/DistanceFlying_matrices.pkl")
+        matrix_df = pd.read_pickle("results/demo_results_matrices_moving.pkl")
         # matrix_df_0 = pd.read_pickle("results/DistanceFlying_matrices_std0.pkl")
         # matrix_df_1 = pd.read_pickle("results/DistanceFlying_matrices_std1.pkl")
         # matrix_df = pd.concat([matrix_df_0, matrix_df_1])
     except FileNotFoundError:
         print("Run generate_flying_results.py to generate results.")
+        raise
 
-    fname = "results/DistanceFlying_classifier.pkl"
+    fname = "results/demo_results_classifier.pkl"
     # fname = "results/DistanceFlying_classifier_test.pkl"
     generate_classifier_results(matrix_df, fname, verbose=False)

@@ -8,6 +8,10 @@ from progressbar import ProgressBar
 from crazyflie_demo.wall_detection import WallDetection
 from utils.moving_estimators import get_estimate
 
+# DATASET = "flying"
+# DATASET = "stepper"
+DATASET = "demo"
+
 ESTIMATOR = "particle"  # or moving
 
 
@@ -34,7 +38,9 @@ def combine_stepper_df(data_df, motors="all45000", bin_selection=5):
     return data_row
 
 
-def generate_matrix_results(data_row, parameters, fname="", verbose=False):
+def generate_matrix_results(
+    data_row, parameters, fname="", verbose=False, estimator=ESTIMATOR
+):
     n_rows = len(list(itertools.product(*parameters.values())))
     result_df = pd.DataFrame(
         columns=[
@@ -71,7 +77,7 @@ def generate_matrix_results(data_row, parameters, fname="", verbose=False):
         WallDetection.RELATIVE_MOVEMENT_STD = std
         WallDetection.SIMPLIFY_ANGLES = simplify
 
-        wall_detection = WallDetection(python_only=True, estimator=ESTIMATOR)
+        wall_detection = WallDetection(python_only=True, estimator=estimator)
 
         result_df.loc[counter, "calibration name"] = calib[0]
         result_df.loc[counter, "calibration param"] = calib[1]
@@ -100,7 +106,7 @@ def generate_matrix_results(data_row, parameters, fname="", verbose=False):
             res = wall_detection.listener_callback_offline(
                 signals_f, freqs, position_cm, yaw_deg, timestamp=time,
             )
-            if res is None:
+            if res is None:  # if flight check did not pass, for instance
                 continue
 
             distances_cm_raw, prob_raw_dist, prob_moving_dist, prob_moving_angle = res
@@ -126,61 +132,60 @@ def generate_matrix_results(data_row, parameters, fname="", verbose=False):
 
 
 if __name__ == "__main__":
-    if 0:
+    if DATASET == "demo":
         exp_name = "2022_01_27_demo"
         appendix = "test4"
-        parameters = {
-            "calibration": [  # [("iir", 0.2)],
-                ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
-            ]
-            + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
-            + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
-            "mask_bad": [
-                ("fixed", None),
-                ("adaptive", 2),
-                ("adaptive", 4),
-                ("adaptive", 10),
-                (None, None),
-            ],
-            "n_window": [5],  # [1, 3, 5],
-            "std": [0.0, 1.0],
-            "simplify": [True, False],
-        }
-
-        fname = "results/demo_results_matrices.pkl"
         data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
         data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
-        matrix_df = generate_matrix_results(
-            data_row, parameters, fname=fname, verbose=True
-        )
-    elif 0:
-        exp_name = "2021_11_27_demo"
-        appendix = "new3"
-        parameters = {
-            "calibration": [  # [("iir", 0.2)],
-                ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
-            ]
-            + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
-            + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
-            "mask_bad": [
-                ("fixed", None),
-                ("adaptive", 2),
-                ("adaptive", 4),
-                ("adaptive", 10),
-                (None, None),
-            ],
-            "n_window": [5],  # [1, 3, 5],
-            "std": [0.0, 1.0],
-            "simplify": [True, False],
-        }
 
-        fname = "results/flying_results_matrices.pkl"
+        for estimator in ["moving", "particle"]:
+            parameters = {
+                "calibration": [  # [("iir", 0.2)],
+                    ("iir", alpha_iir) for alpha_iir in [0.3]
+                ]
+                + [("window", n_calib) for n_calib in [7]],
+                # + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
+                "mask_bad": [
+                    ("fixed", None),
+                    # ("adaptive", 2),
+                    # ("adaptive", 4),
+                    # ("adaptive", 10),
+                    # (None, None),
+                ],
+                "n_window": [1] if estimator == "particle" else [1, 3, 5],
+                "std": [1.0]
+                if estimator == "particle"
+                else [1.0, 0.0],  # only for moving
+                "simplify": [True, False],
+            }
+            fname = f"results/demo_results_matrices_{estimator}.pkl"
+            matrix_df = generate_matrix_results(
+                data_row, parameters, fname=fname, verbose=True
+            )
+    elif DATASET == "flying":
+        exp_name = "2021_10_12_flying"
+        appendix = "_new3"
         data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
         data_row = data_df.loc[data_df.appendix == appendix, :].iloc[0]
-        matrix_df = generate_matrix_results(
-            data_row, parameters, fname=fname, verbose=True
-        )
-    else:
+        for estimator in ["moving", "particle"]:
+            parameters = {
+                "calibration": [  # [("iir", 0.2)],
+                    ("iir", alpha_iir) for alpha_iir in [0.3, 0.5, 0.7]
+                ]
+                + [("window", n_calib) for n_calib in [5, 7]],
+                "mask_bad": [("fixed", None),],
+                "n_window": [1] if estimator == "particle" else [1, 3, 5],
+                "std": [1.0]
+                if estimator == "particle"
+                else [1.0, 0.0],  # only for moving
+                "simplify": [True, False],
+            }
+            fname = f"results/flying_results_matrices_{estimator}.pkl"
+            matrix_df = generate_matrix_results(
+                data_row, parameters, fname=fname, verbose=True, estimator=estimator
+            )
+    elif DATASET == "stepper":
+        estimator = "particle"
         exp_name = "2021_07_08_stepper_fast"
         appendix = ""
         parameters = {
@@ -196,7 +201,7 @@ if __name__ == "__main__":
                 # ("adaptive", 10),
                 # (None, None),
             ],
-            "n_window": [1] if ESTIMATOR == "particle" else [1, 3, 5],
+            "n_window": [1] if estimator == "particle" else [1, 3, 5],
             "std": [1.0],  # only used for "moving"
             "simplify": [False],
         }
@@ -205,5 +210,7 @@ if __name__ == "__main__":
         data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
         data_row = combine_stepper_df(data_df, motors="all45000", bin_selection=5)
         matrix_df = generate_matrix_results(
-            data_row, parameters, fname=fname, verbose=True
+            data_row, parameters, fname=fname, verbose=True, estimator=estimator
         )
+    else:
+        raise ValueError(DATASET)
