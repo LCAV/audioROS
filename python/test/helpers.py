@@ -27,7 +27,7 @@ def measure_wall(pose):
     return distance, angle
 
 
-def get_delta_distribution(distance, angle, mic_idx, prob_method="delta"):
+def get_delta_distribution(distance, angle, mic_idx, prob_method="delta", scale=10):
     delta = (
         get_deltas_from_global(
             azimuth_deg=angle, distances_cm=distance, mic_idx=mic_idx
@@ -38,5 +38,5 @@ def get_delta_distribution(distance, angle, mic_idx, prob_method="delta"):
         probs = np.zeros(len(DELTA_GRID))
         probs[np.argmin(np.abs(DELTA_GRID - delta))] = 1.0
     elif prob_method == "normal":
-        probs = norm.pdf(DELTA_GRID, loc=delta, scale=10)
+        probs = norm.pdf(DELTA_GRID, loc=delta, scale=scale)
     return DELTA_GRID, probs
