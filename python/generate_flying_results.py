@@ -190,14 +190,14 @@ if __name__ == "__main__":
             + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
             + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
             "mask_bad": [
-                # ("fixed", None),
+                ("fixed", None),
                 # ("adaptive", 2),
                 # ("adaptive", 4),
                 # ("adaptive", 10),
-                (None, None),
+                # (None, None),
             ],
             "n_window": [1] if ESTIMATOR == "particle" else [1, 3, 5],
-            "std": [1.0],
+            "std": [1.0],  # only used for "moving"
             "simplify": [False],
         }
 

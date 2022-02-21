@@ -37,7 +37,7 @@ STD_ANGLE_DEG = 5.0
 
 # ignore pose estimates and predict particles by adding
 # uniform disturbance.
-PREDICT_UNIFORM = False
+PREDICT_UNIFORM = True
 
 
 class State(Enum):
@@ -252,7 +252,11 @@ class ParticleEstimator(BaseEstimator):
             return
 
         if True:  # self.effective_n() < self.particles.shape[0] / 2:
-            indices = resample(self.weights)
+            try:
+                indices = resample(self.weights)
+            except:
+                print(self.weights)
+                raise
             resample_from_index(self.particles, self.weights, indices)
         else:
             print("Warning: not resampling")

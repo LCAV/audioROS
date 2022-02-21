@@ -260,7 +260,7 @@ if __name__ == "__main__":
         methods=["calibrated"],
     )
     fname = "results/stepper_results_timing.pkl"
-    generate_results(df_chosen, fname=fname, parameters=parameters)
+    # generate_results(df_chosen, fname=fname, parameters=parameters)
 
     parameters = dict(
         discretizations=[
@@ -273,5 +273,6 @@ if __name__ == "__main__":
         n_windows=[1, 3, 5],
         methods=["theoretical", "calibrated"],
     )
-    fname = "results/stepper_results_online_new.pkl"
-    # generate_results(df_chosen, fname=fname, parameters=parameters)
+    # fname = "results/stepper_results_online_new.pkl" # non-uniform
+    fname = "results/stepper_results_online_new_uniform.pkl"
+    generate_results(df_chosen, fname=fname, parameters=parameters)
