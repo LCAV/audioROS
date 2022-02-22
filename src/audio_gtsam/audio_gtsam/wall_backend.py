@@ -32,6 +32,10 @@ LIMIT_DISTANCE_CM = 20  # threshold for adding wall to factor graph
 
 ESTIMATION_METHOD = "peak"
 
+import matplotlib.pylab as plt
+
+PLOT_YAW_LENGTH = 0.1
+
 
 def angle_difference(a1, a2):
     # return smallest angle from a1 to a2, signed.
@@ -107,6 +111,9 @@ class WallBackend(object):
         self.all_initial_estimates = gtsam.Values()
 
         self.need_to_update_results = True
+
+        self.plot_planes = {}
+        self.plot_poses = {}
 
     def set_confidence(
         self,
@@ -451,12 +458,120 @@ class WallBackend(object):
         plane_estimate_from_pose = plane_estimate.transform(latest_pose_estimate)
         return plane_estimate_from_pose.distance()
 
-    def get_angle_estimate(self):
+    def get_global_distance_estimate(self):
         if self.plane_index < 0:
             return None
 
-        plane_estimate = self.result.atOrientedPlane3(
-            P(self.plane_index)
-        )  # in global coordinates!
-        normal = plane_estimate.normal().point3()
-        return get_azimuth_angle(normal, degrees=True)
+        if self.need_to_update_results:
+            self.get_results()
+
+        plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        return plane_estimate.distance()
+
+    def get_global_normal_estimate(self):
+        if self.pose_index < 0:
+            return None
+
+        if self.need_to_update_results:
+            self.get_results()
+
+        plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        return plane_estimate.normal().point3()
+
+    def get_angle_estimate(self):
+        if self.plane_index < 0:
+            return None
+        return get_azimuth_angle(self.get_global_normal_estimate(), degrees=True)
+
+    def get_distance_estimate(self):
+        if (self.pose_index < 0) or (self.plane_index < 0):
+            return None
+
+        if self.need_to_update_results:
+            self.get_results()
+
+        plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        latest_pose_estimate = self.result.atPose3(X(self.pose_index))
+        plane_estimate_from_pose = plane_estimate.transform(latest_pose_estimate)
+        return plane_estimate_from_pose.distance()
+
+    def get_normal_estimate(self):
+        if (self.pose_index < 0) or (self.plane_index < 0):
+            return None
+
+        if self.need_to_update_results:
+            self.get_results()
+
+        plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        latest_pose_estimate = self.result.atPose3(X(self.pose_index))
+        plane_estimate_from_pose = plane_estimate.transform(latest_pose_estimate)
+        return plane_estimate_from_pose.normal().point3()
+
+    def get_angle_estimate(self):
+        if (self.plane_index < 0) or (self.plane_index < 0):
+            return None
+        return get_azimuth_angle(self.get_normal_estimate(), degrees=True)
+
+    def plot(self, fig, ax, n_poses=20):
+        if self.need_to_update_results:
+            self.get_results()
+
+        cmap = plt.get_cmap("inferno", n_poses)
+
+        distance = self.get_global_distance_estimate()
+        if distance is not None:
+            normal = -self.get_global_normal_estimate()
+            endpoint = distance * normal[:2]
+            if self.plane_index in self.plot_planes.keys():
+                # arrow does not have a remove function.
+                self.plot_planes[self.plane_index]["arrow"].remove()
+                self.plot_planes[self.plane_index]["line"].remove()
+            self.plot_planes[self.plane_index] = {
+                "arrow": ax.arrow(
+                    0,
+                    0,
+                    *endpoint,
+                    color=f"C{self.plane_index}",
+                    width=0.02,
+                    length_includes_head=True,
+                ),
+                "line": ax.plot(
+                    [endpoint[0] + normal[1] * 1, endpoint[0] - normal[1] * 1],
+                    [endpoint[1] - normal[0] * 1, endpoint[1] + normal[0] * 1],
+                    color=f"C{self.plane_index}",
+                )[0],
+            }
+
+        xyz = self.result.atPose3(X(self.pose_index)).translation()
+        if xyz is not None:
+            yaw = self.result.atPose3(X(self.pose_index)).rotation().yaw()
+            yaw_normal = np.r_[np.cos(yaw), np.sin(yaw)]
+            line = np.c_[xyz[:2], xyz[:2] + PLOT_YAW_LENGTH * yaw_normal]
+            assert line.shape == (2, 2)
+            if self.pose_index > n_poses:
+                print(f"Plot warning: {self.pose_index} > {n_poses}")
+            if self.pose_index in self.plot_poses.keys():
+                self.plot_poses[self.pose_index]["point"].set_offsets(
+                    np.c_[[xyz[0]], xyz[1]]
+                )
+                # self.plot_poses[self.pose_index]["line"].set_data(line[0, :], line[1, :])
+            else:
+                self.plot_poses[self.pose_index] = {
+                    "point": ax.scatter(
+                        xyz[0], xyz[1], marker="o", color=cmap(self.pose_index)
+                    ),
+                    # "line": ax.plot(line[0, :], line[1, :], color=cmap(self.pose_index))[0]
+                }
+
+    def add_decorations(self, fig, ax, n_poses):
+        fig.set_size_inches(5, 5)
+        ax.grid(True)
+        ax.axis("equal")
+        ax.set_xlabel("x [cm]")
+        ax.set_ylabel("y [cm]")
+        for i in range(self.plane_index + 1):
+            ax.plot([], [], color=f"C{i}", label=f"wall {i}")
+        cmap = plt.get_cmap("inferno", n_poses)
+        ax.plot([], [], marker="o", color=cmap(0), label="start")
+        ax.plot([], [], marker="o", color=cmap(n_poses), label="end")
+        ax.legend()
