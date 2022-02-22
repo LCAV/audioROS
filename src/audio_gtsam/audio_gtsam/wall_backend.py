@@ -35,6 +35,39 @@ ESTIMATION_METHOD = "peak"
 import matplotlib.pylab as plt
 
 PLOT_YAW_LENGTH = 0.1
+ARROW_WIDTH = 0.02
+FIGSIZE = 5
+
+
+def plot_wall(distance, normal, ax, plane_index, label=None):
+    endpoint = distance * normal[:2]
+    arrow = ax.arrow(
+        0,
+        0,
+        *endpoint,
+        color=f"C{plane_index}",
+        width=ARROW_WIDTH,
+        length_includes_head=True,
+    )
+    (line,) = ax.plot(
+        [endpoint[0] + normal[1] * 1, endpoint[0] - normal[1] * 1],
+        [endpoint[1] - normal[0] * 1, endpoint[1] + normal[0] * 1],
+        color=f"C{plane_index}",
+        label=label,
+    )
+    return arrow, line
+
+
+def add_decorations(fig, ax, n_poses):
+    fig.set_size_inches(FIGSIZE, FIGSIZE)
+    ax.grid(True)
+    ax.axis("equal")
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
+    cmap = plt.get_cmap("inferno", n_poses)
+    ax.plot([], [], marker="o", color=cmap(0), label="start")
+    ax.plot([], [], marker="o", color=cmap(n_poses), label="end")
+    ax.legend()
 
 
 def angle_difference(a1, a2):
@@ -521,26 +554,15 @@ class WallBackend(object):
         distance = self.get_global_distance_estimate()
         if distance is not None:
             normal = -self.get_global_normal_estimate()
-            endpoint = distance * normal[:2]
+
+            label = f"wall {self.plane_index}"
             if self.plane_index in self.plot_planes.keys():
                 # arrow does not have a remove function.
                 self.plot_planes[self.plane_index]["arrow"].remove()
                 self.plot_planes[self.plane_index]["line"].remove()
-            self.plot_planes[self.plane_index] = {
-                "arrow": ax.arrow(
-                    0,
-                    0,
-                    *endpoint,
-                    color=f"C{self.plane_index}",
-                    width=0.02,
-                    length_includes_head=True,
-                ),
-                "line": ax.plot(
-                    [endpoint[0] + normal[1] * 1, endpoint[0] - normal[1] * 1],
-                    [endpoint[1] - normal[0] * 1, endpoint[1] + normal[0] * 1],
-                    color=f"C{self.plane_index}",
-                )[0],
-            }
+
+            arrow, line = plot_wall(distance, normal, ax, self.plane_index, label=label)
+            self.plot_planes[self.plane_index] = {"arrow": arrow, "line": line}
 
         xyz = self.result.atPose3(X(self.pose_index)).translation()
         if xyz is not None:
@@ -562,16 +584,3 @@ class WallBackend(object):
                     ),
                     # "line": ax.plot(line[0, :], line[1, :], color=cmap(self.pose_index))[0]
                 }
-
-    def add_decorations(self, fig, ax, n_poses):
-        fig.set_size_inches(5, 5)
-        ax.grid(True)
-        ax.axis("equal")
-        ax.set_xlabel("x [cm]")
-        ax.set_ylabel("y [cm]")
-        for i in range(self.plane_index + 1):
-            ax.plot([], [], color=f"C{i}", label=f"wall {i}")
-        cmap = plt.get_cmap("inferno", n_poses)
-        ax.plot([], [], marker="o", color=cmap(0), label="start")
-        ax.plot([], [], marker="o", color=cmap(n_poses), label="end")
-        ax.legend()

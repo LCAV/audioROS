@@ -233,15 +233,12 @@ def generate_classifier_results(matrix_df, fname="", verbose=False):
 
 
 if __name__ == "__main__":
-    try:
-        matrix_df = pd.read_pickle("results/demo_results_matrices_moving.pkl")
-        # matrix_df_0 = pd.read_pickle("results/DistanceFlying_matrices_std0.pkl")
-        # matrix_df_1 = pd.read_pickle("results/DistanceFlying_matrices_std1.pkl")
-        # matrix_df = pd.concat([matrix_df_0, matrix_df_1])
-    except FileNotFoundError:
-        print("Run generate_flying_results.py to generate results.")
-        raise
+    for estimator in ["particle", "moving"]:
+        try:
+            matrix_df = pd.read_pickle(f"results/demo_results_matrices_{estimator}.pkl")
+        except FileNotFoundError:
+            print("Run generate_flying_results.py to generate results.")
+            raise
 
-    fname = "results/demo_results_classifier.pkl"
-    # fname = "results/DistanceFlying_classifier_test.pkl"
-    generate_classifier_results(matrix_df, fname, verbose=False)
+        fname = f"results/demo_results_classifier_{estimator}.pkl"
+        generate_classifier_results(matrix_df, fname, verbose=False)
