@@ -4,14 +4,13 @@ import cv2
 from constants import ROI_X, ROI_Y
 
 DEBUG = False
-COUNT_FOR_BACKGROUND = 50
+
+N_FRAMES = 20
 
 
 def cancel_roi(frame):
     height, width, *_ = frame.shape
     # return frame[int(height * ROI_Y[0]) : int(height * ROI_Y[1]),int(width * ROI_X[0]) : int(width * ROI_X[1]),	:,]
-    print(f"height, width = {height}, {width}")
-
     mask = np.zeros(frame.shape)
     mask[
         int(height * ROI_Y[0]) : int(height * ROI_Y[1]),
@@ -37,25 +36,20 @@ def cancel_roi(frame):
     return frame
 
 
-def get_background(container):
+def get_background(container, verbose=True):
     # we will randomly select 50 frames for the calculating the median
-    frame_number = container.streams.video[0].frames
-    sampling = int(frame_number / COUNT_FOR_BACKGROUND / 2)
-    print(
-        f"number of frame: {container.streams.video[0].frames}/{COUNT_FOR_BACKGROUND} = {sampling}",
-        end="",
-    )
+    total_frames = container.streams.video[0].frames
+    sampling = total_frames // N_FRAMES
+    print(f"using each {sampling}th frame")
 
     index = 0
-
     frames = []
     for frame in container.decode(video=0):
         index += 1
-
         if index % sampling == 0:
-            # frame = extract_roi(frame)
             frames.append(frame.to_ndarray(format="rgb24"))
 
     # calculate the median
+    print("calculate median of", len(frames))
     median_frame = np.median(frames, axis=0).astype(np.uint8)
     return median_frame

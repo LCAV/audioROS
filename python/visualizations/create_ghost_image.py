@@ -1,6 +1,5 @@
 """
 Create an image from video where moving parts are overlaid. 
-
 """
 import argparse
 import math
@@ -14,14 +13,18 @@ import signal
 
 from get_background import get_background, cancel_roi
 
-MARGIN_NEXT_FRAME = 1.6
-DEBUG = True
-DEBUG_PLOT_IMAGE = True
-DEBUG_BACKGROUND = False
-DEBUG_IMAGE_FRAMES = False
-DEBUG_LAST = False
+DEBUG_IMAGE_FRAMES = True
 
-EPUCK = False
+CONSECUTIVE_FRAME = 90  # use every nth frame
+
+START_TIME = 16
+END_TIME = 170
+
+MIN_AREA = 30
+MAX_AREA = 3000
+
+FLIP_VERTICAL = True
+# ROTATE = 180 # rotate image
 
 
 class main:
@@ -48,172 +51,125 @@ class main:
         return
 
     def debug_image(self, title, image):
-        if DEBUG_PLOT_IMAGE:
-            cv2.imshow(title, image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+        from PIL import Image
+
+        img = Image.fromarray(image)
+        if not os.path.exists("tests/"):
+            os.makedirs("tests/")
+        img.save(f"tests/test_{title}.jpg", quality=95)
+        # cv2.imshow(title, image)
+        # cv2.waitKey(0)
 
     def run(self):
         signal.signal(signal.SIGTERM, self.signal_term_handler)
 
-        # self.cap = cv2.VideoCapture(self.input_file)
-        # self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        # self.count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        # pos = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         self.container = av.open(self.input_file)
-        self.count = self.container.streams.video[0].frames
-        print("counts", self.count, 0)
+        count = self.container.streams.video[0].frames
+        frame_rate_frac = self.container.streams.video[0].average_rate
+        frame_rate = frame_rate_frac.numerator / frame_rate_frac.denominator
+        print("frame_rate:", frame_rate)
 
         #  get the background model
-        print("getting background...", end="")
-        background = get_background(self.container)
+        background = cv2.imread(self.input_file.split(".")[0] + ".jpg")
+        background = cv2.cvtColor(background, cv2.COLOR_BGR2RGB)
+        if background is None:
+            print("getting background...")
+            background = get_background(self.container)
 
-        self.container.close()
+            self.container.close()
+            cv2.imwrite(
+                self.input_file.split(".")[0] + ".jpg",
+                cv2.cvtColor(background, cv2.COLOR_RGB2BGR),
+            )
+            print("...done")
 
-        print("...done")
+        if FLIP_VERTICAL:
+            background = background[::-1, :, :]
 
         # copy backroung to insert drone position
         final_patchwork = background.copy()
 
         background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
 
-        if DEBUG_BACKGROUND:
-            self.debug_image("Background image", background)
-
-        frame_counter = 0
-
-        consecutive_frame = 3  # CONSECUTIVE_FRAMES
-
-        frame_list = []
-        radius_vect = []
-        last_snapshot_position = []
-
         self.container = av.open(self.input_file)
-        for frame_obj in self.container.decode(video=0):
+        for frame_counter, frame_obj in enumerate(self.container.decode(video=0)):
+            if (frame_counter % CONSECUTIVE_FRAME) != 0:
+                continue
+            time = frame_counter / frame_rate
+            if time < START_TIME:
+                continue
+            elif time > END_TIME:
+                break
 
             frame = frame_obj.to_ndarray(format="rgb24")
+            if FLIP_VERTICAL:
+                frame = frame[::-1, :, :]
 
             if self.stop_by_signal is True:
                 print("Want to stop...")
                 raise KeyboardInterrupt
 
-            frame_counter += 1
+            print(
+                f"treating frame {frame_counter}/{count}, {frame_counter / frame_rate:.1f}s/{count/frame_rate:.1f}s"
+            )
 
-            # append the final result into the `frame_list`
-            # if we have reached `consecutive_frame` number of frames
-            if (frame_counter % consecutive_frame) == 0:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                print(f"treating frame {frame_counter}/{self.count}...", end="")
+            # find the difference between current frame and base frame
+            frame_diff = cv2.absdiff(gray, background)
+            # threshold for noise reduction
+            frame_diff[frame_diff < 10] = 0
 
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # thresholding to convert the frame to binary
+            ret, frame_diff = cv2.threshold(frame_diff, 40, 255, cv2.THRESH_BINARY)
 
-                # find the difference between current frame and base frame
-                frame_diff = cv2.absdiff(gray, background)
+            # dilatatation to enclose the whole drone without separate blobs
+            dilated_frame = cv2.erode(frame_diff, None, iterations=2)
+            dilated_frame = cv2.dilate(dilated_frame, None, iterations=7)
+            dilated_frame = cv2.erode(dilated_frame, None, iterations=1)
 
-                # threshold for noise reduction
-                frame_diff[frame_diff < 50] = 0
+            if DEBUG_IMAGE_FRAMES:
+                self.debug_image("frame_diff", frame_diff)
+                self.debug_image("dilated_frame", dilated_frame)
 
-                # thresholding to convert the frame to binary
-                ret, frame_diff = cv2.threshold(frame_diff, 40, 255, cv2.THRESH_BINARY)
+            # find the contours around the white segmented areas
+            if int(cv2.__version__[0]) > 3:
+                contours, hierarchy = cv2.findContours(
+                    dilated_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+            else:
+                im2, contours, hierarchy = cv2.findContours(
+                    dilated_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
 
-                # dilatatation to enclose the whole drone without separate blobs
-                if not EPUCK:
-                    dilated_frame = cv2.dilate(frame_diff, None, iterations=7)
-                else:
-                    dilated_frame = cv2.erode(frame_diff, None, iterations=4)
-                    dilated_frame = cv2.dilate(dilated_frame, None, iterations=14)
+            if not len(contours):
+                continue
 
-                if DEBUG_IMAGE_FRAMES:
-                    self.debug_image("dilated_frame", dilated_frame)
-
-                dilated_frame = cancel_roi(dilated_frame)
-
-                if DEBUG_IMAGE_FRAMES:
-                    self.debug_image("dilated_frame after ROI", dilated_frame)
-
-                # find the contours around the white segmented areas
-                if int(cv2.__version__[0]) > 3:
-                    contours, hierarchy = cv2.findContours(
-                        dilated_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                    )
-                else:
-                    im2, contours, hierarchy = cv2.findContours(
-                        dilated_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                    )
-
-                if contours == []:
-                    continue
-                else:
-                    contour_max = max(contours, key=cv2.contourArea)
+            contour_max = max(contours, key=cv2.contourArea)
+            for contour_max in [contour_max]:  # contours:
 
                 im_contour = frame.copy()
 
-                # continue through the loop if contour area is too small...
-                # ... helps in removing noise detection
                 area = cv2.contourArea(contour_max)
-
-                print(f"contour area is {area}")
-
                 if DEBUG_IMAGE_FRAMES:
-                    # debug print
                     cv2.drawContours(im_contour, contour_max, -1, (0, 255, 0), 3)
 
-                if EPUCK:
-                    min_area = 500
-                else:
-                    min_area = 7000
-
-                if area < min_area:
-                    print("Contour not used, too small")
+                if area < MIN_AREA:
+                    print(f"Contour not used, too small: {area:.0f}")
                     continue
 
-                if EPUCK:
-                    max_area = 30000
-                else:
-                    max_area = 35000
-
-                if area > max_area:
-                    print(f"Contour not used, too big area: {area}")
+                if area > MAX_AREA:
+                    print(f"Contour not used, too big area: {area:.0f}")
                     continue
+
+                print("contour used:", area)
 
                 # find enclosing circle
                 circle_center, radius = cv2.minEnclosingCircle(contour_max)
-
-                # for e-puck
-                if EPUCK:
-                    radius = 1.3 * radius
-
                 circle_center = (int(circle_center[0]), int(circle_center[1]))
-                radius_vect.append(radius)
 
-                if len(last_snapshot_position) >= 1:
-                    dist = np.linalg.norm(
-                        np.array(circle_center) - np.array(last_snapshot_position[-1])
-                    )
-                    if DEBUG_LAST:
-                        print(
-                            f"radius is : {radius}, last position {last_snapshot_position[-1]}, current position {circle_center}"
-                        )
-                    if dist > MARGIN_NEXT_FRAME * radius:
-                        last_snapshot_position.append(circle_center)
-                        print("Snapshot taken")
-                    else:
-                        print(
-                            f"Snapshot passed, no movement big enough, distance: {dist}"
-                        )
-                        continue
-                else:
-                    last_snapshot_position.append(circle_center)
-
+                radius *= 1.5
                 if DEBUG_IMAGE_FRAMES:
-                    print(f"enclosing diameter {radius}")
-
-                if radius > 200:
-                    print("Contour not used, too large enclosing diameter")
-                    continue
-
-                if DEBUG_IMAGE_FRAMES:
-                    # plot for debug
                     cv2.circle(
                         im_contour,
                         circle_center,
@@ -223,10 +179,6 @@ class main:
                     )
                     self.debug_image("im_contour", im_contour)
 
-                    print(
-                        f"last_snapshot_position: {last_snapshot_position[-1]}, type {type(last_snapshot_position)}, length {len(last_snapshot_position)}"
-                    )
-
                 # creating circle mask arround the area of interrest
                 circle_mask = np.zeros_like(frame_diff)
                 cv2.circle(circle_mask, circle_center, int(radius), 255, -1)
@@ -234,43 +186,14 @@ class main:
                 ajusted_mask = dilated_frame.copy()
                 ajusted_mask[circle_mask == 0] = 0
 
-                if EPUCK:
-                    ajusted_mask = circle_mask
-
-                if DEBUG_IMAGE_FRAMES:
-                    self.debug_image("ajusted_mask", ajusted_mask)
-
                 final_patchwork[ajusted_mask > 0, :] = frame[ajusted_mask > 0, :]
 
-                if DEBUG_IMAGE_FRAMES:
-                    self.debug_image("final_patchwork", final_patchwork)
-
-                frame_list.append(frame_diff)
-
-        # TODO: Plot last one
-        # TODO: Lower resolution on 2021_07_14_flying_hover
-        # TODO: epuck
-
-        # print(f"data: {data[abs(data - np.mean(data)) < m * np.std(data)]}")
-        self.debug_image("final_patchwork", final_patchwork)
-        print("end of stream")
-        print("Writing to output file: ", end="")
-        print(self.output_file)
-        cv2.imwrite(self.output_file, final_patchwork)
-
-        if 0:
-            fig = plt.figure()
-            plt.plot(radius_vect, ".-")
-            plt.title("Radius of detected drones")
-            plt.show()
-            print(f"radius_vect = {radius_vect}")
-            print(f"std radius_vect = {np.std(radius_vect)}")
+        print("Writing to output file: ", self.output_file)
+        cv2.imwrite(self.output_file, cv2.cvtColor(final_patchwork, cv2.COLOR_RGB2BGR))
         self.stop()
 
     def stop(self):
-        print("stopping main...")
         self.container.close()
-        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
@@ -288,7 +211,7 @@ if __name__ == "__main__":
         "--ext",
         help="extension name for the output image",
         required=False,
-        default="_merged_new",
+        default="_merged",
     )
     parser.add_argument(
         "-ip",
