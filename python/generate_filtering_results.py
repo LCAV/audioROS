@@ -57,18 +57,26 @@ def get_magnitudes(stft, mag_thresh=MAG_THRESH):
     return np.nanmedian(np.abs(stft), axis=0)
 
 
+def angle_error(a1_deg, a2_deg):
+    error = (a2_deg - a1_deg) % 360  # between 0 and 360
+    if np.ndim(error) == 0:
+        if error > 180:
+            error -= 360  # between -180 and 180
+    else:
+        error[error > 180] -= 360
+    return error
+    # return (
+    #    np.diff(np.unwrap([a1_deg / 180 * np.pi, a2_deg / 180 * np.pi]))[0]
+    #    * 180
+    #    / np.pi
+    # )
+
+
 def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
     def save():
         save_df = err_df.apply(pd.to_numeric, axis=0, errors="ignore")
         save_df.to_pickle(fname)
         print("Saved intermediate as", fname)
-
-    def angle_error(a1_deg, a2_deg):
-        return (
-            np.diff(np.unwrap([a1_deg / 180 * np.pi, a2_deg / 180 * np.pi]))[0]
-            * 180
-            / np.pi
-        )
 
     def fill_distance(err_df, probs_dist, method):
         d = get_estimate(distances_cm, probs_dist)

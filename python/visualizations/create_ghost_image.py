@@ -15,15 +15,25 @@ from get_background import get_background, cancel_roi
 
 DEBUG_IMAGE_FRAMES = True
 
-CONSECUTIVE_FRAME = 90  # use every nth frame
+# for demo
+# CONSECUTIVE_FRAME = 90  # use every nth frame
+# START_TIME = 16
+# RADIUS_FACTOR = 1.5
+# MAX_AREA = 3000
+# FLIP_VERTICAL = True
+# END_TIME = 170
 
-START_TIME = 16
-END_TIME = 170
+# for flying
+CONSECUTIVE_FRAME = 60  # use every nth frame
+START_TIME = 8
+END_TIME = 28
+RADIUS_FACTOR = 1.0
+MAX_AREA = 15000
+FLIP_VERTICAL = False
+
 
 MIN_AREA = 30
-MAX_AREA = 3000
 
-FLIP_VERTICAL = True
 # ROTATE = 180 # rotate image
 
 
@@ -71,7 +81,6 @@ class main:
 
         #  get the background model
         background = cv2.imread(self.input_file.split(".")[0] + ".jpg")
-        background = cv2.cvtColor(background, cv2.COLOR_BGR2RGB)
         if background is None:
             print("getting background...")
             background = get_background(self.container)
@@ -82,6 +91,8 @@ class main:
                 cv2.cvtColor(background, cv2.COLOR_RGB2BGR),
             )
             print("...done")
+        else:
+            background = cv2.cvtColor(background, cv2.COLOR_BGR2RGB)
 
         if FLIP_VERTICAL:
             background = background[::-1, :, :]
@@ -124,9 +135,10 @@ class main:
             ret, frame_diff = cv2.threshold(frame_diff, 40, 255, cv2.THRESH_BINARY)
 
             # dilatatation to enclose the whole drone without separate blobs
-            dilated_frame = cv2.erode(frame_diff, None, iterations=2)
+            # dilated_frame = cv2.erode(frame_diff, None, iterations=2)
+            dilated_frame = frame_diff
             dilated_frame = cv2.dilate(dilated_frame, None, iterations=7)
-            dilated_frame = cv2.erode(dilated_frame, None, iterations=1)
+            # dilated_frame = cv2.erode(dilated_frame, None, iterations=1)
 
             if DEBUG_IMAGE_FRAMES:
                 self.debug_image("frame_diff", frame_diff)
@@ -168,7 +180,7 @@ class main:
                 circle_center, radius = cv2.minEnclosingCircle(contour_max)
                 circle_center = (int(circle_center[0]), int(circle_center[1]))
 
-                radius *= 1.5
+                radius *= RADIUS_FACTOR
                 if DEBUG_IMAGE_FRAMES:
                     cv2.circle(
                         im_contour,
@@ -187,6 +199,7 @@ class main:
                 ajusted_mask[circle_mask == 0] = 0
 
                 final_patchwork[ajusted_mask > 0, :] = frame[ajusted_mask > 0, :]
+                # final_patchwork[circle_mask > 0, :] = frame[circle_mask > 0, :]
 
         print("Writing to output file: ", self.output_file)
         cv2.imwrite(self.output_file, cv2.cvtColor(final_patchwork, cv2.COLOR_RGB2BGR))

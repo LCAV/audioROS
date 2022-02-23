@@ -75,7 +75,7 @@ def detect_wall(
 
 
 def get_groundtruth_distances(
-    exp_name, appendix, walls=None, flying=False, angles=False
+    exp_name, appendix, walls=None, flying=False, angles=False, correct=False
 ):
     def normal(angle_deg):
         return np.r_[
@@ -109,6 +109,12 @@ def get_groundtruth_distances(
             angles_wall = angles_here
         else:
             angles_wall = np.min(np.c_[angles_here, angles_wall], axis=1)
+
+    # we correct the distances using the fact that the last distance
+    # should be equal to 7 i.e. hitting the wall
+    if correct:
+        distances_wall -= distances_wall[-1] - 10
+
     if not angles:
         return distances_wall
     else:
