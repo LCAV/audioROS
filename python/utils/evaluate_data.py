@@ -364,7 +364,7 @@ def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=Fa
                 print(f"Warning: using {pos_idx} again.")
         pos_row = df_pos.loc[pos_idx]
         lag = timestamp - pos_row.timestamp
-        print(f"for audio {timestamp}, using position {pos_row.timestamp}")
+        # print(f"for audio {timestamp}, using position {pos_row.timestamp}")
 
         # find position columns
         pos_columns = list(set(pos_row.index).intersection(df.columns))

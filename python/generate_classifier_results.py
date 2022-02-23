@@ -33,8 +33,8 @@ WALLS_DICT = {
 }
 
 THRESHOLDS_DICT = {
-    "distance-mean": np.arange(40, step=2)[::-1],
-    "distance-max": np.arange(40, step=2)[::-1],
+    "distance-mean": np.arange(40, step=1)[::-1],
+    "distance-max": np.arange(40, step=1)[::-1],
     "std-mean": np.arange(10, step=0.5)[::-1],
     "std-max": np.arange(10, step=0.5)[::-1],
     "tail": np.arange(-7, 0, step=0.5)[::-1],

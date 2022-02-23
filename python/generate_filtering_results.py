@@ -18,7 +18,7 @@ import progressbar
 from utils.constants import SPEED_OF_SOUND
 from utils.estimators import DistanceEstimator, get_estimate
 from utils.inference import Inference
-from utils.simulation import get_freq_slice_theory
+from utils.simulation import get_freq_slice_theory, get_freq_slice_pyroom
 
 from utils.moving_estimators import MovingEstimator
 from utils.particle_estimators import ParticleEstimator
@@ -48,6 +48,8 @@ DMAX = 80
 
 CALIBRATION = "iir"
 ALPHA_IIR = 0.3
+
+USE_PYROOMACOUSTICS = True
 
 
 def get_magnitudes(stft, mag_thresh=MAG_THRESH):
@@ -174,6 +176,11 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
         n_particles = len(distances_cm) * len(angles_deg) // 2
         print(f"Nd = {len(distances_cm)}, Na = {len(angles_deg)} -> Np = {n_particles}")
 
+        if USE_PYROOMACOUSTICS:
+            # from utils.simulation import create_wideband_signal
+            # signal = create_wideband_signal(frequencies)
+            signal = np.load("results/wideband.npy")
+
         for method in parameters["methods"]:
             print("running", method)
 
@@ -205,12 +212,23 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
 
             for i_d, distance in enumerate(distances):
                 if method == "theoretical":
-                    magnitudes = get_freq_slice_theory(
-                        frequencies,
-                        distance,
-                        azimuth_deg=azimuth_deg,
-                        chosen_mics=chosen_mics,
-                    )
+
+                    if USE_PYROOMACOUSTICS:
+                        magnitudes = get_freq_slice_pyroom(
+                            frequencies,
+                            distance,
+                            azimuth_deg=azimuth_deg,
+                            chosen_mics=chosen_mics,
+                            signal=signal,
+                        )
+                        magnitudes = magnitudes.T
+                    else:
+                        magnitudes = get_freq_slice_theory(
+                            frequencies,
+                            distance,
+                            azimuth_deg=azimuth_deg,
+                            chosen_mics=chosen_mics,
+                        )
                     magnitudes = np.sqrt(magnitudes.T)  # now it's 4x32
                 else:
                     stft_exp = df_chosen.loc[
@@ -245,6 +263,8 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
 
 
 if __name__ == "__main__":
+    np.random.seed(1)
+
     exp_name = "2021_07_08_stepper_fast"
     motors = "all45000"
     bin_selection = 5
@@ -274,5 +294,7 @@ if __name__ == "__main__":
         methods=["theoretical", "calibrated"],
     )
     # fname = "results/stepper_results_online_new.pkl" # non-uniform
-    fname = "results/stepper_results_online_new_uniform.pkl"
+    # fname = "results/stepper_results_online_new_uniform.pkl"
+    # fname = "results/stepper_results_online_seed1.pkl"
+    fname = "results/stepper_results_online_seed1_uniform.pkl"
     generate_results(df_chosen, fname=fname, parameters=parameters)

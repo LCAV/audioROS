@@ -281,6 +281,7 @@ kwargs_datasets = {
     "2021_10_12_hover": {"appendix": ["", "_7", "_11", "_12", "_40", "_41", "_42"],},
     "2021_10_12_flying": {
         "appendix": ["_new3", "_new4", "_new6", "_new7", "_new8", "_new10"]
-    },  # {"appendix": [f"_{i}" for i in range(1, 7)],},
+        + [f"_{i}" for i in range(1, 7)]
+    },
     "2021_10_12_linear": {"appendix": ["", "_1", "_2", "_6", "_8", "_9", "_10"],},
 }

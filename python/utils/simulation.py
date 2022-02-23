@@ -209,7 +209,11 @@ def get_df_theory(
 
 
 def get_freq_slice_pyroom(
-    frequencies, distance_cm, signal, azimuth_deg=WALL_ANGLE_DEG_STEPPER
+    frequencies,
+    distance_cm,
+    signal,
+    azimuth_deg=WALL_ANGLE_DEG_STEPPER,
+    chosen_mics=None,
 ):
     room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
 
@@ -222,7 +226,10 @@ def get_freq_slice_pyroom(
         bins_ = [get_bin(freqs_all, f) for f in frequencies]
     else:
         bins_ = np.arange(len(frequencies))
-    return mag[:, bins_] ** 2
+    if chosen_mics is None:
+        return mag[:, bins_] ** 2
+    else:
+        return mag[chosen_mics][:, bins_] ** 2
 
 
 def get_dist_slice_pyroom(

@@ -96,8 +96,8 @@ def reset_lims(ax, frequencies, times):
 def get_bin(freqs, freq):
     error = np.abs(freqs - freq)
     bin_ = np.argmin(error)
-    if error[bin_] > 1:
-        print(f"Warning: chosen bin differs from {freq} by {error[bin_]}")
+    # if error[bin_] > 1:
+    # print(f"Warning: chosen bin differs from {freq} by {error[bin_]}")
     return bin_
 
 
