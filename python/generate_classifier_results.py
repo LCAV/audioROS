@@ -29,6 +29,8 @@ USE_FIXED_THRESH = True
 # walls location per dataset, [distance_cm, angle_deg]
 WALLS_DICT = {
     "2021_10_12_flying": [[100, 90]],
+    "2021_11_23_demo": [[100, 90]],  # , [0.1, -90]],
+    "2022_01_25": [[80, 90]],  # , [0.1, -90]],
     "2022_01_27_demo": [[100, 90], [100, -90]],
 }
 

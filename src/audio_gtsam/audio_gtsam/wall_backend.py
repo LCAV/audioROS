@@ -22,7 +22,9 @@ P = gtsam.symbol_shorthand.P
 
 EPS = 1e-10
 
-WALL_THRESH_M = 0.5  # difference of normal points of walls
+WALL_THRESH_CM = (
+    30  # if wall difference is bigger than this, new plane is considered different.
+)
 USE_ISAM = True
 
 N_VELOCITY_ESTIMATE = 3  # how many points to use for velocity estimate
@@ -39,21 +41,25 @@ ARROW_WIDTH = 0.02
 FIGSIZE = 5
 
 
-def plot_wall(distance, normal, ax, plane_index, label=None):
+def plot_wall(distance, normal, ax, plane_index, label=None, arrow=True, **kwargs):
     endpoint = distance * normal[:2]
-    arrow = ax.arrow(
-        0,
-        0,
-        *endpoint,
-        color=f"C{plane_index}",
-        width=ARROW_WIDTH,
-        length_includes_head=True,
-    )
+    if (kwargs.get("ls", "") != ":") and arrow:
+        arrow = ax.arrow(
+            0,
+            0,
+            *endpoint,
+            color=f"C{plane_index}",
+            width=ARROW_WIDTH,
+            length_includes_head=True,
+        )
+    else:
+        arrow = ax.arrow(0, 0, 0, 0)
     (line,) = ax.plot(
         [endpoint[0] + normal[1] * 1, endpoint[0] - normal[1] * 1],
         [endpoint[1] - normal[0] * 1, endpoint[1] + normal[0] * 1],
         color=f"C{plane_index}",
         label=label,
+        **kwargs,
     )
     return arrow, line
 
@@ -64,9 +70,10 @@ def add_decorations(fig, ax, n_poses):
     ax.axis("equal")
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
-    cmap = plt.get_cmap("inferno", n_poses)
-    ax.plot([], [], marker="o", color=cmap(0), label="start")
-    ax.plot([], [], marker="o", color=cmap(n_poses), label="end")
+    if n_poses > 0:
+        cmap = plt.get_cmap("inferno", n_poses)
+        ax.plot([], [], marker="o", color=cmap(0), label="start")
+        ax.plot([], [], marker="o", color=cmap(n_poses), label="end")
     ax.legend()
 
 
@@ -91,8 +98,9 @@ def plane_error(current_plane, new_plane):
     instead of associating it with current_plane.
 
     """
-    current_point = -current_plane.normal().point3() * current_plane.distance()
-    new_point = -new_plane.normal().point3() * new_plane.distance()
+    current_point = current_plane.normal().point3() * current_plane.distance() * 1e2
+    new_point = new_plane.normal().point3() * new_plane.distance() * 1e2
+    # print("current", np.round(current_point), "new", np.round(new_point))
     return np.linalg.norm(new_point - current_point)
 
 
@@ -140,6 +148,7 @@ class WallBackend(object):
 
         self.pose_index = -1
         self.plane_index = -1
+        self.plane_index_max = -1  # keep track of current max indices to assign new
 
         self.all_initial_estimates = gtsam.Values()
 
@@ -147,6 +156,7 @@ class WallBackend(object):
 
         self.plot_planes = {}
         self.plot_poses = {}
+        self.alphas = {i: 0.3 for i in range(20)}  # works for up to 20 planes
 
     def set_confidence(
         self,
@@ -204,24 +214,26 @@ class WallBackend(object):
 
         # Figure out when we are next to a new plane
         current_plane_global = None
-        try:
-            current_plane_global = self.result.atOrientedPlane3(P(self.plane_index))
-        except:
-            pass
-
-        if current_plane_global is not None:
-            current_pose = self.result.atPose3(X(self.pose_index))
+        current_pose = self.result.atPose3(X(self.pose_index))
+        found_match = False
+        for plane_index in range(self.plane_index_max + 1):
+            current_plane_global = self.result.atOrientedPlane3(P(plane_index))
             current_plane = current_plane_global.transform(current_pose)
             error = plane_error(current_plane, new_plane)
 
-            if error > WALL_THRESH_M:
-                print("adding new plane!")
-                self.plane_index += 1
-            else:
-                # print("not adding new plane, match error:", error)
-                pass
+            if error < WALL_THRESH_CM:
+                # print("found matching plane:", plane_index, error)
+                self.plane_index = plane_index
+                found_match = True
+                break
+            # print(f"{plane_index} is not a match:", error)
+
+        if not found_match:
+            self.plane_index = self.plane_index_max + 1
+            self.plane_index_max = self.plane_index
+            print("adding new plane", self.plane_index)
         else:
-            self.plane_index += 1
+            print("  adding to plane", self.plane_index)
 
         if (self.result is None) or not self.result.exists(P(self.plane_index)):
             initial_estimates.insert(P(self.plane_index), new_plane)
@@ -491,24 +503,30 @@ class WallBackend(object):
         plane_estimate_from_pose = plane_estimate.transform(latest_pose_estimate)
         return plane_estimate_from_pose.distance()
 
-    def get_global_distance_estimate(self):
-        if self.plane_index < 0:
+    def get_global_distance_estimate(self, index):
+        if index is None:
+            index = self.plane_index
+
+        if index < 0:
             return None
 
         if self.need_to_update_results:
             self.get_results()
 
-        plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        plane_estimate = self.result.atOrientedPlane3(P(index))
         return plane_estimate.distance()
 
-    def get_global_normal_estimate(self):
-        if self.pose_index < 0:
+    def get_global_normal_estimate(self, index):
+        if index is None:
+            index = self.plane_index
+
+        if index < 0:
             return None
 
         if self.need_to_update_results:
             self.get_results()
 
-        plane_estimate = self.result.atOrientedPlane3(P(self.plane_index))
+        plane_estimate = self.result.atOrientedPlane3(P(index))
         return plane_estimate.normal().point3()
 
     def get_angle_estimate(self):
@@ -545,24 +563,15 @@ class WallBackend(object):
             return None
         return get_azimuth_angle(self.get_normal_estimate(), degrees=True)
 
-    def plot(self, fig, ax, n_poses=20):
+    def plot(self, fig, ax, n_poses=20, live_update=True, final=False):
+        """
+        live_update: overwrite planes, otherwise will plat each as decreasingly transparent one. 
+        final: add final estimates of all planes and label.
+        """
         if self.need_to_update_results:
             self.get_results()
 
         cmap = plt.get_cmap("inferno", n_poses)
-
-        distance = self.get_global_distance_estimate()
-        if distance is not None:
-            normal = -self.get_global_normal_estimate()
-
-            label = f"wall {self.plane_index}"
-            if self.plane_index in self.plot_planes.keys():
-                # arrow does not have a remove function.
-                self.plot_planes[self.plane_index]["arrow"].remove()
-                self.plot_planes[self.plane_index]["line"].remove()
-
-            arrow, line = plot_wall(distance, normal, ax, self.plane_index, label=label)
-            self.plot_planes[self.plane_index] = {"arrow": arrow, "line": line}
 
         xyz = self.result.atPose3(X(self.pose_index)).translation()
         if xyz is not None:
@@ -572,7 +581,7 @@ class WallBackend(object):
             assert line.shape == (2, 2)
             if self.pose_index > n_poses:
                 print(f"Plot warning: {self.pose_index} > {n_poses}")
-            if self.pose_index in self.plot_poses.keys():
+            if live_update and (self.pose_index in self.plot_poses.keys()):
                 self.plot_poses[self.pose_index]["point"].set_offsets(
                     np.c_[[xyz[0]], xyz[1]]
                 )
@@ -584,3 +593,47 @@ class WallBackend(object):
                     ),
                     # "line": ax.plot(line[0, :], line[1, :], color=cmap(self.pose_index))[0]
                 }
+        if final:
+            plane_indexes = np.arange(self.plane_index_max + 1)
+        else:
+            plane_indexes = [self.plane_index]
+
+        for plane_index in plane_indexes:
+            distance = self.get_global_distance_estimate(plane_index)
+            if distance is not None:
+                normal = -self.get_global_normal_estimate(plane_index)
+
+                label = f"wall {plane_index}"
+                if live_update and (plane_index in self.plot_planes.keys()):
+                    # arrow does not have a remove function.
+                    self.plot_planes[plane_index]["arrow"].remove()
+                    self.plot_planes[plane_index]["line"].remove()
+
+                if live_update:
+                    arrow, line = plot_wall(
+                        distance, normal, ax, plane_index, label=label
+                    )
+                else:
+                    if not final:
+                        arrow, line = plot_wall(
+                            distance,
+                            normal,
+                            ax,
+                            plane_index,
+                            alpha=self.alphas[plane_index],
+                            arrow=False,
+                        )
+                        self.alphas[self.plane_index] = min(
+                            self.alphas[plane_index] + 0.05, 0.8
+                        )
+                    else:
+                        arrow, line = plot_wall(
+                            distance,
+                            normal,
+                            ax,
+                            plane_index,
+                            alpha=1.0,
+                            arrow=True,
+                            label=f"estimate $\pi^{plane_index}$",
+                        )
+                self.plot_planes[plane_index] = {"arrow": arrow, "line": line}

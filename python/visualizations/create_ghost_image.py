@@ -15,26 +15,32 @@ from get_background import get_background, cancel_roi
 
 DEBUG_IMAGE_FRAMES = True
 
-# for demo
-# CONSECUTIVE_FRAME = 90  # use every nth frame
+# for demo...
+RADIUS_FACTOR = 1.5
+MAX_AREA = 3000
+FLIP_VERTICAL = True
+ERODE = True
+
+# ...test4
+# CONSECUTIVE_FRAME = 60  # use every nth frame
 # START_TIME = 16
-# RADIUS_FACTOR = 1.5
-# MAX_AREA = 3000
-# FLIP_VERTICAL = True
 # END_TIME = 170
 
-# for flying
-CONSECUTIVE_FRAME = 60  # use every nth frame
-START_TIME = 8
-END_TIME = 28
-RADIUS_FACTOR = 1.0
-MAX_AREA = 15000
-FLIP_VERTICAL = False
+# ...test3
+CONSECUTIVE_FRAME = 90  # use every nth frame
+START_TIME = 20
+END_TIME = 150
 
+# for flying
+# CONSECUTIVE_FRAME = 60  # use every nth frame
+# START_TIME = 8
+# END_TIME = 28
+# RADIUS_FACTOR = 1.0
+# MAX_AREA = 15000
+# FLIP_VERTICAL = False
+# ERODE = False
 
 MIN_AREA = 30
-
-# ROTATE = 180 # rotate image
 
 
 class main:
@@ -135,10 +141,13 @@ class main:
             ret, frame_diff = cv2.threshold(frame_diff, 40, 255, cv2.THRESH_BINARY)
 
             # dilatatation to enclose the whole drone without separate blobs
-            # dilated_frame = cv2.erode(frame_diff, None, iterations=2)
-            dilated_frame = frame_diff
-            dilated_frame = cv2.dilate(dilated_frame, None, iterations=7)
-            # dilated_frame = cv2.erode(dilated_frame, None, iterations=1)
+            if ERODE:
+                dilated_frame = cv2.erode(frame_diff, None, iterations=1)
+                dilated_frame = cv2.dilate(dilated_frame, None, iterations=5)
+                # dilated_frame = cv2.erode(dilated_frame, None, iterations=1)
+            else:
+                dilated_frame = frame_diff
+                dilated_frame = cv2.dilate(dilated_frame, None, iterations=7)
 
             if DEBUG_IMAGE_FRAMES:
                 self.debug_image("frame_diff", frame_diff)
