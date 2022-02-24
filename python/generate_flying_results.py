@@ -96,6 +96,7 @@ def generate_matrix_results(data_row, parameters, estimator, fname="", verbose=F
         freqs_all = data_row.frequencies_matrix[0, :]  # is same across times
         freqs = freqs_all[freqs_all > 0]
         n_positions = data_row.positions.shape[0]
+        times = []
         for i in range(n_positions):
             # print(f"{i+1} / {n_positions}")
             position_cm = data_row.positions[i, :3] * 1e2
@@ -124,6 +125,7 @@ def generate_matrix_results(data_row, parameters, estimator, fname="", verbose=F
 
         result_df.loc[counter, "matrix distances"] = [matrix_distances]
         result_df.loc[counter, "matrix angles"] = [matrix_angles]
+        result_df.loc[counter, "average_time"] = np.mean(times)
         counter += 1
         progressbar.update(counter)
         if fname != "":
