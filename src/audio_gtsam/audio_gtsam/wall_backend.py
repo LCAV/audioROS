@@ -7,6 +7,7 @@ wall_backend.py: Estiamte plane and pose information using factor graphs
 
 import itertools
 
+import matplotlib.pylab as plt
 import numpy as np
 import scipy
 
@@ -34,11 +35,18 @@ LIMIT_DISTANCE_CM = 20  # threshold for adding wall to factor graph
 
 ESTIMATION_METHOD = "peak"
 
-import matplotlib.pylab as plt
 
 PLOT_YAW_LENGTH = 0.1
 ARROW_WIDTH = 0.02
 FIGSIZE = 5
+
+SIGMA_AZ_DEG = 20
+SIGMA_EL_DEG = EPS
+SIGMA_D_CM = 2
+SIGMA_ROT_DEG = 5
+SIGMA_X_CM = 1
+SIGMA_Y_CM = 1
+SIGMA_Z_CM = EPS
 
 
 def plot_wall(distance, normal, ax, plane_index, label=None, arrow=True, **kwargs):
@@ -160,15 +168,13 @@ class WallBackend(object):
 
     def set_confidence(
         self,
-        plane_azimuth_deg=EPS,
-        plane_elevation_deg=EPS,
-        plane_distance_cm=2,
-        pose_roll_deg=EPS,
-        pose_pitch_deg=EPS,
-        pose_yaw_deg=EPS,
-        pose_x_cm=EPS,
-        pose_y_cm=EPS,
-        pose_z_cm=EPS,
+        plane_azimuth_deg=SIGMA_AZ_DEG,
+        plane_elevation_deg=SIGMA_EL_DEG,
+        plane_distance_cm=SIGMA_D_CM,
+        pose_rot_deg=SIGMA_ROT_DEG,
+        pose_x_cm=SIGMA_X_CM,
+        pose_y_cm=SIGMA_Y_CM,
+        pose_z_cm=SIGMA_Z_CM,
     ):
         # below are verified with unit tests tests/test_NoiseOrder.py
         self.plane_noise = gtsam.noiseModel.Diagonal.Sigmas(
@@ -180,9 +186,9 @@ class WallBackend(object):
         )
         self.pose_noise = gtsam.noiseModel.Diagonal.Sigmas(
             [
-                rad(pose_roll_deg),
-                rad(pose_pitch_deg),
-                rad(pose_yaw_deg),
+                rad(pose_rot_deg),
+                rad(pose_rot_deg),
+                rad(pose_rot_deg),
                 pose_x_cm * 1e-2,
                 pose_y_cm * 1e-2,
                 pose_z_cm * 1e-2,
@@ -333,6 +339,8 @@ class WallBackend(object):
 
             distance = distance_estimates[d_i]
             azimuth = angle_estimates[a_i]
+            distance_std = distance_stds[d_i]
+            azimuth_stds = angle_stds[a_i]
             if (distance is None) or (azimuth is None):
                 continue
 
@@ -369,13 +377,18 @@ class WallBackend(object):
                     if verbose:
                         print(f"  replacing with wall ahead of us")
                     azimuth = azimuth_estimated
+                    azimuth_std = SIGMA_AZ_DEG
                 # else:
                 # print(f"ok angle estimate, using {azimuth} instead of {azimuth_estimated}")
 
             # because normal points in opposite direction than what we defined for the azimuth angle.
+            plane_noise = [azimuth_std, SIGMA_EL_DEG, distance_std]
             wall_angle_rad = rad(azimuth) + np.pi
             self.add_plane(
-                distance * 1e-2, wall_angle_rad, plane_noise=None, verbose=verbose
+                distance * 1e-2,
+                wall_angle_rad,
+                plane_noise=plane_noise,
+                verbose=verbose,
             )
 
     def add_plane_from_distances(
@@ -398,6 +411,7 @@ class WallBackend(object):
             return
 
         distance = distances[0]
+        distance_std = distance_stds[0]
 
         if (distance is None) or (distance > limit_distance):
             return
@@ -425,7 +439,7 @@ class WallBackend(object):
         self.add_plane(
             distance * 1e-2,
             wall_angle_rad,
-            plane_noise=None,
+            plane_noise=[SIGMA_AZ_DEG, SIGMA_EL_DEG, distance_std],
             verbose=verbose,
             logger=logger,
         )
@@ -634,6 +648,6 @@ class WallBackend(object):
                             plane_index,
                             alpha=1.0,
                             arrow=True,
-                            label=f"estimate $\pi^{plane_index}$",
+                            label=f"estimate $\pi^{{({plane_index})}}$",
                         )
                 self.plot_planes[plane_index] = {"arrow": arrow, "line": line}
