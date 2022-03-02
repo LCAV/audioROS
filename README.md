@@ -1,5 +1,7 @@
 # audioROS
 
+![The Crazylie drone and e-puck robot in front of the EPFL logo](doc/epuck-drone.png)
+
 This repository contains the ROS2-powered stack to do audio processing for sound source localization on robots. The system was tested on the Crazyflie drone 2.1 and the e-puck2 robot.
 
 ## Installation
