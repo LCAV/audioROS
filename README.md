@@ -2,13 +2,13 @@
 
 ![The Crazylie drone and e-puck robot in front of the EPFL logo](doc/epuck-drone.png)
 
-This repository contains the ROS2-powered stack to do audio processing for sound source localization on robots. The system was tested on the Crazyflie drone 2.1 and the e-puck2 robot.
+This repository contains the ROS2-powered stack to do audio processing for sound-based localization on robots. The system was tested on the Crazyflie drone 2.1 and the e-puck2 robot, shown in the image above.
 
 ## Installation
 
-The repository was built for Ubuntu 20.04 (Focal Fossa) with ROS2 (Galactic) and Python 3.8.12. If you are testing with newer versions and run into problems please do not hesitate to get in touch (e-mail or pull request). 
+The repository was built for Ubuntu 20.04 (Focal Fossa) with ROS2 (Galactic) and Python 3.8.12. 
 
-Make sure to clone this repo including submodules(including datasets) by running
+To install, make sure to clone this repo including submodules (e.g. datasets) by running
 ```
 git clone --recurse-submodules https://github.com/LCAV/audioROS
 ```
@@ -24,21 +24,18 @@ colcon build --symlink-install
 . install/local_setup.bash
 ```
 
-If you want to setup the git precommit hooks for automatic formatting and jupyter output removal (required for development), run
-```
-pre-commit install
-```
-
 ## Contents
 
 The stack is separated into the following modules:
 
 - `audio_interfaces` (C++): Custom ROS message definintions.
-- `audio_bringup` (python): Contains pipeline for recording measurements (`measurement_pipeline.py`) and some commonly used launch files.
+- `audio_bringup` (python): Pipeline for recording measurements (`measurement_pipeline.py`) and launch files.
+- `audio_gtsam` (python): Classes to build a factor graph from audio and pose measurements.
 - `audio_stack` (python): Read and process audio signals.
 - `audio_simulation` (python): Simulated audio using pyroomacoustics.
 - `audio_publisher` (python): Publish signals from file or computer's audio input stream.
 - `crazyflie_crtp` (python): Publish audio signals received over CRTP from Crazyflie drone.
+- `crazyflie_demo` (python): Demo of drone detecting and avoiding walls.
 - `crazyflie_description` (python): Commonly used global parameters of Crazyflie drone.
 - `topic_plotter` (python): Create plots of the different topics.
 - `topic_writer` (python): Convert data from topics to different formats (e.g. csv format) and save.
@@ -104,15 +101,17 @@ Descriptions:
 
 We took inspiration from [this](https://roboticsbackend.com/package-organization-for-a-ros-stack-best-practices/) helpful article for the structure of this repo.
 
-## Reference
+## References
 
 Please refer to the below publications for more information.
 
 ```
-F. Dümbgen, A. Hoffet, A. Scholefield, and M. Vetterli, "Blind as a bat: audible echolocation on tiny robots", submitted to IEEE/RSJ International Conference on Intelligent Robotis and Systems, 2022.
+F. Dümbgen, A. Hoffet, A. Scholefield, and M. Vetterli, "Blind as a bat: audible 
+echolocation on tiny robots", submitted to IEEE/RSJ International Conference on 
+Intelligent Robotis and Systems, 2022.
 ```
 
-
 ```
-F. Dümbgen, "Blind as a bat: spatial perception without sight", Ph.D. disseration, École Polytechnique Fédérale de Lausanne, 2021.
+F. Dümbgen, "Blind as a bat: spatial perception without sight", Ph.D. disseration, 
+École Polytechnique Fédérale de Lausanne, 2021.
 ```

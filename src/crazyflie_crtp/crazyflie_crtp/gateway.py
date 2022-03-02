@@ -108,7 +108,7 @@ class Gateway(Node):
         )
 
         self._server_command = self.create_service(
-            CrazyflieCommands, "send_command_manual", self.commands_callback,
+            CrazyflieCommands, "send_command", self.commands_callback,
         )
 
         self.ground_truth_published = False

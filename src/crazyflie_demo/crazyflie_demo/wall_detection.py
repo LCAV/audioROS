@@ -156,9 +156,7 @@ class WallDetection(NodeWithParams):
             super().__init__("wall_detection")
             self.logger = self.get_logger()
 
-            self._client_command = self.create_client(
-                CrazyflieCommands, "send_command_manual"
-            )
+            self._client_command = self.create_client(CrazyflieCommands, "send_command")
             self._client_wall = self.create_client(StateMachine, "check_wall")
             self.already_asking = (
                 False  # semaphore to make sure we only ask once at a time
