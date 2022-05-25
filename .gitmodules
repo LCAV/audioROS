@@ -7,3 +7,6 @@
 [submodule "datasets"]
 	path = datasets
 	url = ./datasets
+[submodule "audio-localization-dataset"]
+	path = audio-localization-dataset
+	url = git@github.com:lcav/audio-localization-dataset
