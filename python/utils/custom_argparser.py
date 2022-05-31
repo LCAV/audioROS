@@ -5,6 +5,12 @@ custom_argparser.py: Command line argument parsers used by multiple scripts
 import argparse
 
 def exp_parser(description=""):
+    """
+    Usage: 
+    parser = exp_parser("DESCRIPTION OF SCRIPT")
+    parser.
+
+    """
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--experiment_names', type=str, nargs='+',
             default = [], help='list of experiment names to process (folders inside "experiment_root".')

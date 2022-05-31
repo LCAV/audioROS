@@ -15,13 +15,14 @@ import numpy as np
 import pandas as pd
 import progressbar
 
-from utils.constants import SPEED_OF_SOUND
+from utils.constants import SPEED_OF_SOUND, PLATFORM
 from utils.estimators import DistanceEstimator, get_estimate
 from utils.inference import Inference
-from utils.simulation import get_freq_slice_theory, get_freq_slice_pyroom
-
+from utils.simulation import get_freq_slice_theory, get_freq_slice_pyroom, WIDEBAND_FILE
 from utils.moving_estimators import MovingEstimator
+from utils.pandas_utils import save_pickle
 from utils.particle_estimators import ParticleEstimator
+from utils.plotting_tools import make_dirs
 
 from crazyflie_demo.wall_detection import WallDetection
 
@@ -73,10 +74,7 @@ def angle_error(a1_deg, a2_deg):
 
 
 def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
-    def save():
-        save_df = err_df.apply(pd.to_numeric, axis=0, errors="ignore")
-        save_df.to_pickle(fname)
-        print("Saved intermediate as", fname)
+    from utils.pandas_utils import save_pickle
 
     def fill_distance(err_df, probs_dist, method):
         d = get_estimate(distances_cm, probs_dist)
@@ -148,7 +146,6 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
     azimuth_deg = WALL_ANGLE_DEG_STEPPER
     chosen_mics = range(4)  # [0, 1, 3]
     algo = "bayes"  # could do cost to
-    use_uniform_prior = True
 
     err_df = pd.DataFrame(
         columns=[
@@ -185,9 +182,14 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
         print(f"Nd = {len(distances_cm)}, Na = {len(angles_deg)} -> Np = {n_particles}")
 
         if USE_PYROOMACOUSTICS:
-            # from utils.simulation import create_wideband_signal
-            # signal = create_wideband_signal(frequencies)
-            signal = np.load("results/wideband.npy")
+            try:
+                signal = np.load(WIDEBAND_FILE)
+            except Exception as e:
+                from utils.simulation import create_wideband_signal
+                signal = create_wideband_signal(frequencies)
+                make_dirs(WIDEBAND_FILE)
+                np.save(WIDEBAND_FILE, signal)
+                print("saved new file as", WIDEBAND_FILE)
 
         for method in parameters["methods"]:
             print("running", method)
@@ -263,46 +265,49 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 p.update(i_d)
 
             if fname != "":
-                save()
+                save_pickle(err_df, fname)
 
         fill_random_and_fixed(err_df)
         if fname != "":
-            save()
+            save_pickle(err_df, fname)
 
 
 if __name__ == "__main__":
     np.random.seed(1)
 
-    exp_name = "2021_07_08_stepper_fast"
-    motors = "all45000"
-    bin_selection = 5
+    if PLATFORM == "crazyflie": 
+        exp_name = "2021_07_08_stepper_fast"
+        motors = "all45000"
+        bin_selection = 5
 
-    df_all = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
-    df_chosen = df_all.loc[
-        (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
-    ].copy()
+        df_all = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
+        df_chosen = df_all.loc[
+            (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
+        ].copy()
 
-    parameters = dict(
-        discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
-        n_windows=[1, 3, 5],
-        methods=["calibrated"],
-    )
-    fname = "results/stepper_results_timing.pkl"
-    # generate_results(df_chosen, fname=fname, parameters=parameters)
+        parameters = dict(
+            discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
+            n_windows=[1, 3, 5],
+            methods=["calibrated"],
+        )
+        fname = "results/stepper_results_timing.pkl"
+        generate_results(df_chosen, fname=fname, parameters=parameters)
 
-    parameters = dict(
-        discretizations=[
-            "superfine",
-            "fine",
-            "medium",
-            "coarse",
-            "supercoarse",
-        ],  # ["superfine", "fine", "medium", "coarse", "supercoarse"],
-        n_windows=[1, 3, 5],
-        methods=["theoretical", "calibrated"],
-    )
-    # fname = "results/stepper_results_online_new.pkl" # non-uniform
-    # fname = "results/stepper_results_online_new_uniform.pkl"
-    # fname = "results/stepper_results_online_seed1.pkl"
-    fname = "results/stepper_results_online_seed1_uniform.pkl"
-    generate_results(df_chosen, fname=fname, parameters=parameters)
+        parameters = dict(
+            discretizations=[
+                "superfine",
+                "fine",
+                "medium",
+                "coarse",
+                "supercoarse",
+            ],  # ["superfine", "fine", "medium", "coarse", "supercoarse"],
+            n_windows=[1, 3, 5],
+            methods=["theoretical", "calibrated"],
+        )
+        # fname = "results/stepper_results_online_new.pkl" # non-uniform
+        # fname = "results/stepper_results_online_new_uniform.pkl"
+        #fname = "results/stepper_results_online_seed1.pkl"
+        fname = "results/stepper_results_online_seed1_uniform.pkl"
+        generate_results(df_chosen, fname=fname, parameters=parameters)
+    else:
+        print("nothing to be done for epuck")

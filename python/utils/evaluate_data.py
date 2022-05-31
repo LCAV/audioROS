@@ -310,7 +310,7 @@ def get_positions_absolute(df_pos):
     """
     if isinstance(df_pos, pd.DataFrame):
         if not len({"x", "y", "z", "yaw_deg"}.intersection(df_pos.columns.values)):
-            warnings.warn("no position information found")
+            #warnings.warn("no position information found")
             n_times = len(df_pos)
             return np.zeros((n_times, 4))
         xs = df_pos.x.values

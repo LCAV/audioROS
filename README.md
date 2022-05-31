@@ -15,13 +15,20 @@ git clone --recurse-submodules https://github.com/LCAV/audioROS
 
 To install all packages contained in this repo, including dependencies, run (from the root of this repository):
 ```
-sudo apt-get install python3-rosdep python3-colcon-common-extensions
+sudo apt install python3-rosdep python3-colcon-common-extensions
 sudo rosdep init
 cp 19-custom.list /etc/ros/rosdep/sources.list.d/ #might need sudo here
 rosdep update 
 rosdep install --from-path src/ --rosdistro $ROS_DISTRO
 colcon build --symlink-install
 . install/local_setup.bash
+```
+
+Update from May 25 2022: because of an inconsistency in matplotlib, in order to run all of the 
+analysis notebooks (using latex rendering), the following two
+non-standard libraries had to be installed:
+```
+sudo apt install cm-super dvipng
 ```
 
 ## Contents

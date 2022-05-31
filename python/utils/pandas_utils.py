@@ -8,6 +8,14 @@ pandas_utils.py: Commonly used pandas functions
 import numpy as np
 import pandas as pd
 
+from .plotting_tools import make_dirs
+
+def save_pickle(results_df, fname):
+    results_df = results_df.apply(pd.to_numeric, axis=0, errors="ignore",downcast='integer')
+    make_dirs(fname)
+    pd.to_pickle(results_df, fname)
+    print("saved as", fname)
+
 
 def filter_by_dict(df, dict_):
     """ Return the rows of df for which dict_ applies. """

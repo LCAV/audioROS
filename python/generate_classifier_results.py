@@ -85,7 +85,11 @@ def get_groundtruth_distances(
         ]
 
     data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
-    row = data_df.loc[data_df.appendix == appendix].iloc[0]
+    try:
+        row = data_df.loc[data_df.appendix == appendix].iloc[0]
+    except:
+        print(f"did not found {appendix} in {data_df.appendix.unique()} for {exp_name}")
+
     if flying:
         from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
 
@@ -241,9 +245,10 @@ def generate_classifier_results(matrix_df, fname="", verbose=False):
 
 
 if __name__ == "__main__":
+    appendix = "test4"
     for estimator in ["particle", "moving"]:
         try:
-            matrix_df = pd.read_pickle(f"results/demo_results_matrices_{estimator}.pkl")
+            matrix_df = pd.read_pickle(f"results/demo_results_matrices_{estimator}{appendix}.pkl")
         except FileNotFoundError:
             print("Run generate_flying_results.py to generate results.")
             raise

@@ -81,9 +81,8 @@ if __name__ == "__main__":
             df_all = pd.read_pickle(fname)
         except Exception as e:
             print("Error: run wall_analysis.py to parse experiments.")
+            print(e)
             sys.exit()
-
-        print("done", df_all)
 
         for mic_type, motors, bin_selection in itertools.product(
             mic_types, motors_types, bin_selection_types

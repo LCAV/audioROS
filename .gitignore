@@ -79,3 +79,4 @@ epuck-audio/
 lost+found/
 .Trash*
 env/
+venv/

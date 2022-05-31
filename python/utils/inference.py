@@ -62,7 +62,7 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
     import scipy.interpolate
 
     if step is not None:
-        raise ValueError("Giving step is depcreated")
+        print("Warning: giving step is depcreated")
 
     xvalues_grid = get_uniform_grid(xvalues)
     step = np.median(np.diff(xvalues_grid))
@@ -471,11 +471,8 @@ def get_approach_angle_fft(
     )  # 1/m in terms of orthogonal distance
 
     if interpolate:
-        # important to choose small enough step size to insure
-        # to capture interference!
-        step = 1 / freq_theoretical * 1e2 / 20
         relative_distances_cm_grid, d_slice_grid = interpolate_parts(
-            relative_distances_cm, d_slice, step=step
+            relative_distances_cm, d_slice
         )
         freqs_m, probs = get_periods_fft(
             d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma

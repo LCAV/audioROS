@@ -1,7 +1,6 @@
 import sys
 
 import numpy as np
-import pyroomacoustics as pra
 
 from audio_stack.beam_former import rotate_mics
 from audio_simulation.geometry import ROOM_DIM
@@ -67,6 +66,8 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
 def generate_room(
     distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS
 ):
+    import pyroomacoustics as pra
+
     """ Generate two-dimensional setup using pyroomacoustics. """
     source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
