@@ -143,7 +143,10 @@ class WallDetection(NodeWithParams):
     # N_CALIBRATION = 10
     # CALIBRATION= "fixed"
 
-    SIMPLIFY_ANGLES = True
+    # if set to true, we use simplify the angles, meaning that we use
+    # the forward direction as our angle estimate. If we do not simplify
+    # angles, we simply use a uniform prior on the angle estimate. 
+    SIMPLIFY_ANGLES = False 
 
     # estimator variables
     N_WINDOW = 5
@@ -414,7 +417,6 @@ class WallDetection(NodeWithParams):
         if not self.flight_check(position_cm):
             # print("did not pass flight check:", position_cm)
             return
-
         from audio_stack.parameters import WINDOW_CORRECTION
 
         magnitudes = np.abs(signals_f).T  # 4 x 20

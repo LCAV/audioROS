@@ -471,8 +471,11 @@ def get_approach_angle_fft(
     )  # 1/m in terms of orthogonal distance
 
     if interpolate:
+        # important to choose small enough step size to insure
+        # to capture interference!
+        step = 1 / freq_theoretical * 1e2 / 20
         relative_distances_cm_grid, d_slice_grid = interpolate_parts(
-            relative_distances_cm, d_slice
+            relative_distances_cm, d_slice, step=step
         )
         freqs_m, probs = get_periods_fft(
             d_slice_grid, frequency, relative_distances_cm_grid, n_max, bayes, sigma

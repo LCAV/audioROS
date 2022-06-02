@@ -17,7 +17,6 @@ import progressbar
 
 from utils.constants import SPEED_OF_SOUND, PLATFORM
 from utils.estimators import DistanceEstimator, get_estimate
-from utils.inference import Inference
 from utils.simulation import get_freq_slice_theory, get_freq_slice_pyroom, WIDEBAND_FILE
 from utils.moving_estimators import MovingEstimator
 from utils.pandas_utils import save_pickle
@@ -38,6 +37,7 @@ PARAMETERS_ALL = dict(
     discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
     n_windows=[1, 3, 5],
     methods=["raw", "theoretical", "calibrated"],
+    chosen_mics=[[0,1,2,3]],
 )
 
 MAG_THRESH = 1e-3
@@ -76,6 +76,9 @@ def angle_error(a1_deg, a2_deg):
 def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
     from utils.pandas_utils import save_pickle
 
+    # to ensure reproducibility for particle filter
+    np.random.seed(1)
+
     def fill_distance(err_df, probs_dist, method):
         d = get_estimate(distances_cm, probs_dist)
         err_df.loc[len(err_df), :] = {
@@ -86,6 +89,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
             "algorithm": algo + " distance",
             "runtime": runtime,
             "discretization": discretization,
+            "chosen_mics": chosen_mics
         }
 
     def fill_angle(err_df, probs_angles, method):
@@ -100,6 +104,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
             "algorithm": algo + " angle",
             "runtime": runtime,
             "discretization": discretization,
+            "chosen_mics": chosen_mics
         }
 
     def fill_random_and_fixed(err_df):
@@ -112,6 +117,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 algorithm=f"{algo} distance",
                 runtime=0,
                 discretization=discretization,
+                chosen_mics=chosen_mics
             )
             err_df.loc[len(err_df), :] = dict(
                 method="random",
@@ -121,6 +127,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 algorithm=f"{algo} angle",
                 runtime=0,
                 discretization=discretization,
+                chosen_mics=chosen_mics
             )
             # fill with constant zero distance estimate
             err_df.loc[len(err_df), :] = dict(
@@ -131,6 +138,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 algorithm=f"{algo} distance",
                 runtime=0,
                 discretization=discretization,
+                chosen_mics=chosen_mics
             )
             # fill with constant zero angle estimate
             err_df.loc[len(err_df), :] = dict(
@@ -141,12 +149,12 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 algorithm=f"{algo} angle",
                 runtime=0,
                 discretization=discretization,
+                chosen_mics=chosen_mics
             )
 
-    azimuth_deg = WALL_ANGLE_DEG_STEPPER
-    chosen_mics = range(4)  # [0, 1, 3]
-    algo = "bayes"  # could do cost to
 
+    azimuth_deg = WALL_ANGLE_DEG_STEPPER
+    algo = "bayes"  # bayes or cost 
     err_df = pd.DataFrame(
         columns=[
             "method",
@@ -156,10 +164,9 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
             "algorithm",
             "runtime",
             "discretization",
+            "chosen_mics"
         ]
     )
-
-    inf_machine = Inference()
 
     df_chosen.sort_values("distance", ascending=False, inplace=True)
     distances = df_chosen.distance.values
@@ -167,10 +174,6 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
     all_magnitudes = np.abs(np.concatenate([*df_chosen.stft.values]))
     calibration_magnitudes = np.median(all_magnitudes, axis=0)
     frequencies = df_chosen.iloc[0].frequencies_matrix[0, :]
-
-    # dmax = 1e2 * SPEED_OF_SOUND / (4 * np.min(np.diff(frequencies)))
-
-    inf_machine.add_geometry([min(distances), max(distances)], azimuth_deg)
 
     for discretization in parameters["discretizations"]:
         step_cm, step_deg = DISCRETIZATIONS[discretization]
@@ -180,6 +183,12 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
         angles_deg = np.arange(360, step=step_deg)
         n_particles = len(distances_cm) * len(angles_deg) // 2
         print(f"Nd = {len(distances_cm)}, Na = {len(angles_deg)} -> Np = {n_particles}")
+
+        WallDetection.CALIBRATION = CALIBRATION  # fixed, iir, window
+        WallDetection.N_CALIBRATION = 2  # for iir, at least two.
+        WallDetection.ALPHA_IIR = ALPHA_IIR
+        WallDetection.MASK_BAD = None
+        WallDetection.SIMPLIFY_ANGLES = False
 
         if USE_PYROOMACOUSTICS:
             try:
@@ -193,79 +202,75 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
 
         for method in parameters["methods"]:
             print("running", method)
-
-            estimator_dict = {
-                f"histogram {n_window}": MovingEstimator(
-                    n_window=n_window, distances_cm=distances_cm, angles_deg=angles_deg
-                )
-                for n_window in parameters["n_windows"]
-            }
-            estimator_dict[f"particle {n_particles}"] = ParticleEstimator(
-                n_particles=n_particles,
-                global_=False,
-                distances_cm=distances_cm,
-                angles_deg=angles_deg,
-            )
-
-            WallDetection.CALIBRATION = CALIBRATION  # fixed, iir, window
-            WallDetection.N_CALIBRATION = 2  # for iir, at least two.
-            WallDetection.ALPHA_IIR = ALPHA_IIR
-            WallDetection.MASK_BAD = None
-            WallDetection.SIMPLIFY_ANGLES = False
-            wall_detection_dict = {
-                key: WallDetection(python_only=True, estimator=value)
-                for key, value in estimator_dict.items()
-            }
-
-            p = progressbar.ProgressBar(maxval=len(distances))
-            p.start()
-
-            for i_d, distance in enumerate(distances):
-                if method == "theoretical":
-
-                    if USE_PYROOMACOUSTICS:
-                        magnitudes = get_freq_slice_pyroom(
-                            frequencies,
-                            distance,
-                            azimuth_deg=azimuth_deg,
-                            chosen_mics=chosen_mics,
-                            signal=signal,
-                        )
-                        magnitudes = magnitudes.T
-                    else:
-                        magnitudes = get_freq_slice_theory(
-                            frequencies,
-                            distance,
-                            azimuth_deg=azimuth_deg,
-                            chosen_mics=chosen_mics,
-                        )
-                    magnitudes = np.sqrt(magnitudes.T)  # now it's 4x32
-                else:
-                    stft_exp = df_chosen.loc[
-                        df_chosen.distance == distance, "stft"
-                    ].iloc[0]
-                    magnitudes = get_magnitudes(stft_exp)[chosen_mics, :]
-
-                position_cm = [0, -distance, 50]
-                yaw_deg = 0
-                for name, wall_detection in wall_detection_dict.items():
-                    t1 = time.time()
-                    (
-                        __,
-                        __,
-                        probs_dist,
-                        probs_angles,
-                    ) = wall_detection.listener_callback_offline(
-                        magnitudes.T, frequencies, position_cm, yaw_deg
+            for chosen_mics in parameters["chosen_mics"]:
+                estimator_dict = {
+                    f"histogram {n_window}": MovingEstimator(
+                        n_window=n_window, distances_cm=distances_cm, angles_deg=angles_deg
                     )
-                    runtime = time.time() - t1
-                    fill_distance(err_df, probs_dist, method=f"{method} {name}")
-                    fill_angle(err_df, probs_angles, method=f"{method} {name}")
+                    for n_window in parameters["n_windows"]
+                }
+                estimator_dict[f"particle {n_particles}"] = ParticleEstimator(
+                    n_particles=n_particles,
+                    global_=False,
+                    distances_cm=distances_cm,
+                    angles_deg=angles_deg,
+                )
 
-                p.update(i_d)
+                wall_detection_dict = {
+                    key: WallDetection(python_only=True, estimator=value)
+                    for key, value in estimator_dict.items()
+                }
+                print(f"Using mics: {chosen_mics}")
+                p = progressbar.ProgressBar(maxval=len(distances))
+                p.start()
 
-            if fname != "":
-                save_pickle(err_df, fname)
+                for i_d, distance in enumerate(distances):
+                    if method == "theoretical":
+                        if USE_PYROOMACOUSTICS:
+                            magnitudes = get_freq_slice_pyroom(
+                                frequencies,
+                                distance,
+                                azimuth_deg=azimuth_deg,
+                                chosen_mics=chosen_mics,
+                                signal=signal,
+                            )
+                            magnitudes = magnitudes.T
+                        else:
+                            magnitudes = get_freq_slice_theory(
+                                frequencies,
+                                distance,
+                                azimuth_deg=azimuth_deg,
+                                chosen_mics=chosen_mics,
+                            )
+                        magnitudes = np.sqrt(magnitudes.T)  # now it's 4x32
+                    else:
+                        stft_exp = df_chosen.loc[
+                            df_chosen.distance == distance, "stft"
+                        ].iloc[0]
+                        magnitudes = get_magnitudes(stft_exp)[chosen_mics, :]
+
+                    position_cm = [0, -distance, 50]
+                    yaw_deg = 0
+                    for name, wall_detection in wall_detection_dict.items():
+                        assert wall_detection.CALIBRATION == CALIBRATION
+                        assert wall_detection.MASK_BAD is None
+                        t1 = time.time()
+                        (
+                            __,
+                            __,
+                            probs_dist,
+                            probs_angles,
+                        ) = wall_detection.listener_callback_offline(
+                            magnitudes.T, frequencies, position_cm, yaw_deg
+                        )
+                        runtime = time.time() - t1
+                        fill_distance(err_df, probs_dist, method=f"{method} {name}")
+                        fill_angle(err_df, probs_angles, method=f"{method} {name}")
+
+                    p.update(i_d)
+
+                if fname != "":
+                    save_pickle(err_df, fname)
 
         fill_random_and_fixed(err_df)
         if fname != "":
@@ -286,28 +291,40 @@ if __name__ == "__main__":
         ].copy()
 
         parameters = dict(
-            discretizations=["superfine", "fine", "medium", "coarse", "supercoarse"],
-            n_windows=[1, 3, 5],
-            methods=["calibrated"],
-        )
-        fname = "results/stepper_results_timing.pkl"
-        generate_results(df_chosen, fname=fname, parameters=parameters)
-
-        parameters = dict(
             discretizations=[
                 "superfine",
                 "fine",
                 "medium",
                 "coarse",
                 "supercoarse",
-            ],  # ["superfine", "fine", "medium", "coarse", "supercoarse"],
+            ],  
             n_windows=[1, 3, 5],
             methods=["theoretical", "calibrated"],
+            chosen_mics=[[0,1,2,3]]
         )
-        # fname = "results/stepper_results_online_new.pkl" # non-uniform
-        # fname = "results/stepper_results_online_new_uniform.pkl"
-        #fname = "results/stepper_results_online_seed1.pkl"
-        fname = "results/stepper_results_online_seed1_uniform.pkl"
+        #fname = "results/stepper_results_online_seed1_uniform_new.pkl"
+        #generate_results(df_chosen, fname=fname, parameters=parameters)
+
+
+        #all_mics = [[0,1,2,3],[0,1,2,3]]
+        #all_mics = [[0],[1],[2],[3],[0,1],[0,2],[0,3],[1,2],[1,3],[2,3],[0,1,2],[0,1,3],[0,2,3],[1,2,3],[0,1,2,3]]
+        #discretizations = ["coarse"]
+        #fname = "results/stepper_results_mics_ablation_coarse.pkl"
+
+        #all_mics = [[0],[0,1],[0,1,2],[0,1,2,3]]
+        #discretizations = ["fine", "medium", "coarse"]
+        #fname = "results/stepper_results_mics_ablation_all.pkl"
+
+        all_mics = [[0],[1],[2],[3],[0,1],[0,2],[0,3],[1,2],[1,3],[2,3],[0,1,2],[0,1,3],[0,2,3],[1,2,3],[0,1,2,3]]
+        discretizations = ["superfine", "fine", "medium", "coarse", "supercoarse"]
+        fname = "results/stepper_results_mics_ablation_final.pkl"
+
+        parameters = dict(
+            discretizations=discretizations,
+            n_windows=[], # use only particle anyways
+            methods=["calibrated"],
+            chosen_mics=all_mics
+        )
         generate_results(df_chosen, fname=fname, parameters=parameters)
     else:
         print("nothing to be done for epuck")

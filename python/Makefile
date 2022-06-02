@@ -6,6 +6,9 @@ EXPERIMENT_ROOT=../datasets
 
 all: crazyflie_demo crazyflie_flying crazyflie_stepper_paper epuck_results
 
+one:
+	python generate_flying_results.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2021_10_12_flying
+
 crazyflie_demo:
 	#python csv_or_wav_parser.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2021_11_23_demo --demo
 	#python csv_or_wav_parser.py --experiment_root $(EXPERIMENT_ROOT) --experiment_names 2022_01_27_demo --demo
