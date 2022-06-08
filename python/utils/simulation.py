@@ -55,7 +55,11 @@ def simulate_distance_estimator(
 
 def create_wideband_signal(frequencies, duration_sec=1.0):
     phase = np.random.uniform(0, 2 * np.pi)
-    kwargs = dict(signal_type="mono", duration_sec=duration_sec, Fs=FS,)
+    kwargs = dict(
+        signal_type="mono",
+        duration_sec=duration_sec,
+        Fs=FS,
+    )
     signal = generate_signal(frequency_hz=frequencies[1], phase_offset=phase, **kwargs)
     for f in frequencies[2:]:
         phase = np.random.uniform(0, 2 * np.pi)
@@ -64,24 +68,25 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
 
 
 def generate_room(
-    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS
+    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS, source=True
 ):
     import pyroomacoustics as pra
 
     """ Generate two-dimensional setup using pyroomacoustics. """
-    source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
+    source_position, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
 
     m = pra.Material(energy_absorption="glass_3mm")
     room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM[:2], max_order=1, materials=m)
 
     beam_former = pra.Beamformer(mic_positions.T, room.fs)
     room.add_microphone_array(beam_former)
-    room.add_source(source)
+    if source:
+        room.add_source(source_position)
     return room
 
 
 def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, zoom=True):
-    """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
+    """Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
 
     context = Context.get_platform_setup()
 
@@ -151,15 +156,15 @@ def get_df_theory_simple(
         frequencies_hz = np.array(frequencies_hz).reshape((1, -1))
 
     mag_squared = (
-        alpha0 ** 2
-        + alpha1 ** 2
+        alpha0**2
+        + alpha1**2
         + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / c)
     )  # n_deltas x n_freqs or n_freqs
     return mag_squared * gain
 
 
 def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
-    """ 
+    """
     :param signal: signal to use for simulation, array
     :param n_buffer: buffer size for "STFT"
     :param n_times: number of buffers to average. Will start fromsecond buffer.
@@ -169,14 +174,15 @@ def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
 
 
 def get_buffers(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
-    """ 
+    """
     :param signal: signal to use for simulation, array
     :param n_buffer: buffer size for "STFT"
     :param n_times: number of buffers to average. Will start fromsecond buffer.
     """
-    assert len(room.sources) == 1
 
-    room.sources[0].add_signal(signal)
+    for i in range(len(room.sources)):
+        if room.sources[i].signal is None:
+            room.sources[i].add_signal(signal)
     room.simulate()
 
     assert (n_times * n_buffer) < room.mic_array.signals.shape[
@@ -240,7 +246,10 @@ def get_dist_slice_pyroom(
 
     duration_sec = N_BUFFER * n_times / FS
     signal = generate_signal(
-        FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency,
+        FS,
+        duration_sec=duration_sec,
+        signal_type="mono",
+        frequency_hz=frequency,
     )
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
     bin_ = get_bin(freqs_all, frequency)
@@ -256,9 +265,9 @@ def get_dist_slice_pyroom(
 def get_freq_slice_theory(
     frequencies, distance_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, chosen_mics=range(4)
 ):
-    """ 
+    """
     We can incorporate relative movement by providing
-    distance_cm and azimuth_deg of same length as frequencies. 
+    distance_cm and azimuth_deg of same length as frequencies.
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
@@ -278,9 +287,9 @@ def get_dist_slice_theory(
     wall_absorption=WALL_ABSORPTION,
     gains=[GAIN] * 4,
 ):
-    """ 
+    """
     We can incorporate relative movement by providing
-    distance_cm and azimuth_deg of same length as frequencies. 
+    distance_cm and azimuth_deg of same length as frequencies.
     """
     if np.ndim(gains) == 0:
         gains = [gains] * len(chosen_mics)

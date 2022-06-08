@@ -8,17 +8,17 @@ from progressbar import ProgressBar
 from crazyflie_demo.wall_detection import WallDetection
 from utils.moving_estimators import get_estimate
 
-#DATASET = "flying" #exp_name = "2021_10_12_flying":
-#DATASET = "stepper" #exp_name = "2021_07_08_stepper_fast"
-#DATASET = "demo" # exp_name = "2022_01_27_demo"
+# DATASET = "flying" #exp_name = "2021_10_12_flying":
+# DATASET = "stepper" #exp_name = "2021_07_08_stepper_fast"
+# DATASET = "demo" # exp_name = "2022_01_27_demo"
 
 ESTIMATORS = ["moving", "particle"]  # ["moving", "particle"]  # or moving
 
 REL_STD = 0.0  # was found not to have a significant influce on results.
 
 
-def combine_stepper_df(data_df, motors="all45000", bin_selection=5):
-    """ combine all rows of a stepper dataset to one, as in flying datasets."""
+def combine_stepper_df(data_df, motors="all45000", bin_selection=5, average=True):
+    """Combine all rows of a stepper dataset to one, as in flying datasets."""
     chosen_df = data_df.loc[
         (data_df.motors == motors) & (data_df.bin_selection == bin_selection)
     ]
@@ -26,9 +26,15 @@ def combine_stepper_df(data_df, motors="all45000", bin_selection=5):
     data_row.positions = np.concatenate(
         [np.r_[[[0, -distance, 50, 0]]] for distance in chosen_df.distance.values]
     )
-    data_row.stft = np.concatenate(
-        [np.r_[[np.median(stft, axis=0)]] for stft in chosen_df.stft.values]
-    )
+    if average:
+        data_row.stft = np.concatenate(
+            [np.r_[[np.median(stft, axis=0)]] for stft in chosen_df.stft.values]
+        )
+    else:
+        middle = chosen_df.iloc[0].stft.shape[0] // 2
+        data_row.stft = np.concatenate(
+            [np.r_[stft[middle]] for stft in chosen_df.stft.values]
+        )
     data_row.frequencies_matrix = np.concatenate(
         [
             np.r_[[frequencies_mat[0, :]]]
@@ -64,7 +70,6 @@ def generate_matrix_results(data_row, parameters, estimator, fname="", verbose=F
     for calib, mask_bad, n_window, std, simplify in itertools.product(
         *parameters.values()
     ):
-        # print("experiment", calib, mask_bad, n_window, std, simplify)
         WallDetection.CALIBRATION = calib[0]
         if calib[0] == "iir":
             WallDetection.N_CALIBRATION = 2
@@ -97,7 +102,6 @@ def generate_matrix_results(data_row, parameters, estimator, fname="", verbose=F
         n_positions = data_row.positions.shape[0]
         times = []
         for i in range(n_positions):
-            # print(f"{i+1} / {n_positions}")
             position_cm = data_row.positions[i, :3] * 1e2
 
             signals_f = data_row.stft[i, :, freqs_all > 0]
@@ -105,7 +109,11 @@ def generate_matrix_results(data_row, parameters, estimator, fname="", verbose=F
             time = data_row.seconds[i]
 
             res = wall_detection.listener_callback_offline(
-                signals_f, freqs, position_cm, yaw_deg, timestamp=time,
+                signals_f,
+                freqs,
+                position_cm,
+                yaw_deg,
+                timestamp=time,
             )
             if res is None:  # if flight check did not pass, for instance
                 continue
@@ -136,9 +144,12 @@ def generate_matrix_results(data_row, parameters, estimator, fname="", verbose=F
 if __name__ == "__main__":
 
     np.random.seed(1)
-    
+
     from utils.custom_argparser import exp_parser, check_platform
-    parser = exp_parser("Apply the moving or particle estimator to flying or stepper datasets.")
+
+    parser = exp_parser(
+        "Apply the moving or particle estimator to flying or stepper datasets."
+    )
     args = parser.parse_args()
 
     check_platform(args)
@@ -169,7 +180,11 @@ if __name__ == "__main__":
                     }
                     fname = f"results/demo_results_matrices_{estimator}{appendix}.pkl"
                     matrix_df = generate_matrix_results(
-                        data_row, parameters, fname=fname, verbose=True, estimator=estimator
+                        data_row,
+                        parameters,
+                        fname=fname,
+                        verbose=True,
+                        estimator=estimator,
                     )
 
         elif exp_name == "2021_10_12_flying":
@@ -180,16 +195,23 @@ if __name__ == "__main__":
                     parameters = {
                         "calibration": [  # [("iir", 0.2)],
                             ("iir", alpha_iir) for alpha_iir in [0.3]  # [0.3, 0.5, 0.7]
+                        ],  # + [("window", n_calib) for n_calib in [5, 7]],
+                        "mask_bad": [
+                            ("fixed", None),
                         ],
-                        # + [("window", n_calib) for n_calib in [5, 7]],
-                        "mask_bad": [("fixed", None),],
-                        "n_window": [1] if estimator == "particle" else [5],  # [1, 3, 5],
+                        "n_window": [1]
+                        if estimator == "particle"
+                        else [5],  # [1, 3, 5],
                         "std": [REL_STD],
-                        "simplify": [True, False],
+                        "simplify": [False],
                     }
                     fname = f"results/flying_results_matrices_{estimator}{appendix}.pkl"
                     matrix_df = generate_matrix_results(
-                        data_row, parameters, fname=fname, verbose=True, estimator=estimator
+                        data_row,
+                        parameters,
+                        fname=fname,
+                        verbose=True,
+                        estimator=estimator,
                     )
         elif exp_name == "2021_07_08_stepper_fast":
             appendix = ""
@@ -198,7 +220,8 @@ if __name__ == "__main__":
             for estimator in ESTIMATORS:
                 parameters = {
                     "calibration": [  # [("iir", 0.2)],
-                        ("iir", alpha_iir) for alpha_iir in np.arange(0.1, 1.0, step=0.2)
+                        ("iir", alpha_iir)
+                        for alpha_iir in np.arange(0.1, 1.0, step=0.2)
                     ]
                     + [("window", n_calib) for n_calib in np.arange(1, 10, step=2)]
                     + [("fixed", n_calib) for n_calib in np.arange(1, 10, step=2)],
@@ -218,5 +241,6 @@ if __name__ == "__main__":
                     data_row, parameters, fname=fname, verbose=True, estimator=estimator
                 )
         else:
-            print("got:", exp_name)
-            raise ValueError("Only use one of the allowed datasets: 2022_01_27_demo, 2021_07_08_stepper_fast, 2021_10_12_flying")
+            raise ValueError(
+                "Only use one of the allowed datasets: 2022_01_27_demo, 2021_07_08_stepper_fast, 2021_10_12_flying"
+            )

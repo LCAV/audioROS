@@ -24,9 +24,11 @@ from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
 sys.path.append("python/")
 from utils.data_collector import DataCollector
 from utils.inference import Inference, get_approach_angle_fft
+from utils.inference import get_angle_distribution as get_beamform_distribution
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 from utils.particle_estimators import ParticleEstimator
+from utils.histogram_estimators import HistogramEstimator
 
 # dslice
 FREQ = 3000  # mono frequency signal
@@ -111,7 +113,7 @@ def get_angle_distribution(dslices, resolve_side=False):
 
 
 class PythonLogger(object):
-    """ Simple wrapper for ROS2 logger that doesn't require ROS """
+    """Simple wrapper for ROS2 logger that doesn't require ROS"""
 
     def warn(self, msg):
         print("Warn:", msg)
@@ -125,6 +127,8 @@ class PythonLogger(object):
 
 class WallDetection(NodeWithParams):
     PARAMS_DICT = {"mode": Mode.FSLICE.value, "drone": int(DRONE)}
+
+    BEAMFORM = True
 
     MASK_BAD = "fixed"
     # MASK_BAD = "adaptive"
@@ -145,8 +149,8 @@ class WallDetection(NodeWithParams):
 
     # if set to true, we use simplify the angles, meaning that we use
     # the forward direction as our angle estimate. If we do not simplify
-    # angles, we simply use a uniform prior on the angle estimate. 
-    SIMPLIFY_ANGLES = False 
+    # angles, we simply use a uniform prior on the angle estimate.
+    SIMPLIFY_ANGLES = False
 
     # estimator variables
     N_WINDOW = 5
@@ -175,7 +179,10 @@ class WallDetection(NodeWithParams):
                 SignalsFreq, "audio/signals_f", self.signals_synch.listener_callback, 10
             )
             self.subscription_pose = self.create_subscription(
-                PoseRaw, "geometry/pose_raw_synch", self.listener_callback, 10,
+                PoseRaw,
+                "geometry/pose_raw_synch",
+                self.listener_callback,
+                10,
             )
 
             if PUBLISH_RAW:
@@ -203,6 +210,11 @@ class WallDetection(NodeWithParams):
                 distances_cm=DISTANCES_CM,
                 angles_deg=ANGLES_DEG,
                 relative_movement_std=self.RELATIVE_MOVEMENT_STD,
+            )
+        elif estimator == "histogram":
+            self.estimator = HistogramEstimator(
+                distances_cm=DISTANCES_CM,
+                angles_deg=ANGLES_DEG,
             )
         elif estimator == "particle":
             ParticleEstimator.ANGLES_DEG = ANGLES_DEG
@@ -245,10 +257,10 @@ class WallDetection(NodeWithParams):
         self.start_forward = None
 
     def flight_check(self, position_cm=None):
-        """ 
+        """
         drone=0: analyzing bag file, should be "flying" to do analysis
         drone=1: only buzzer, for debugging, don't mind if not flying
-        drone=2: full experiment, has to be flying. 
+        drone=2: full experiment, has to be flying.
         """
         if self.current_params["drone"] == 1:
             return True
@@ -293,7 +305,7 @@ class WallDetection(NodeWithParams):
     def add_to_calib_iir(self, magnitudes):
         if self.calibration is None:
             self.calibration = magnitudes
-            self.calibrationsq = magnitudes ** 2
+            self.calibrationsq = magnitudes**2
         else:
             valid = ~np.isnan(self.calibration)
             self.calibration[valid] = (1 - self.ALPHA_IIR) * self.calibration[
@@ -308,7 +320,7 @@ class WallDetection(NodeWithParams):
         self.calibration_count += 1
 
     def calibrate(self, magnitudes):
-        """  Note that invalid values are masked (set to zero). """
+        """Note that invalid values are masked (set to zero)."""
         if self.CALIBRATION in ("fixed", "window"):
             if self.calibration is None:
                 if self.calibration_data.shape[2] <= 1:
@@ -342,7 +354,7 @@ class WallDetection(NodeWithParams):
                 )
                 return magnitudes
 
-            var = self.calibrationsq - self.calibration ** 2
+            var = self.calibrationsq - self.calibration**2
             self.calibration_std = np.full(var.shape, np.nan)
             self.calibration_std[var > 0] = np.sqrt(var[var > 0])
             self.calibration_std[self.calibration_std == 0] = np.nan
@@ -360,7 +372,8 @@ class WallDetection(NodeWithParams):
     def get_raw_distributions(self, magnitudes_calib, freqs):
         diff_dict = {}
         self.inf_machine.add_data(
-            magnitudes_calib, freqs,  # 4 x 32
+            magnitudes_calib,
+            freqs,  # 4 x 32
         )
         for mic_i in range(magnitudes_calib.shape[0]):
             __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
@@ -439,23 +452,46 @@ class WallDetection(NodeWithParams):
             raise e
             return None
 
-        distances_cm, probabilities = get_distance_distribution(diff_dict)
+        return_dict = {}
 
+        # get the distance probabilities without considering movement
+        dist_static, prob_dist_static = get_distance_distribution(diff_dict)
+        return_dict["dist_static"] = dist_static
+        return_dict["prob_dist_static"] = prob_dist_static
+
+        # get distance and angle probabilities, considering movement.
+        # diff_dict is in centimeters
         self.estimator.add_distributions(
-            diff_dict, position_cm=position_cm, rot_deg=yaw_deg,
+            diff_dict,
+            position_cm=position_cm,
+            rot_deg=yaw_deg,
         )
+        if self.BEAMFORM:
+            angle_static, prob_angle_static = get_beamform_distribution(
+                signals_f, freqs, self.estimator.context.mics.T
+            )
+            self.estimator.add_angle_distribution(angle_static, prob_angle_static)
+            return_dict["angle_static"] = angle_static
+            return_dict["prob_angle_static"] = prob_angle_static
+
         (
-            distances_cm,
-            probabilities_moving,
-            angles_deg,
-            probabilities_moving_angle,
+            dist_moving,
+            prob_dist_moving,
+            angle_moving,
+            prob_angle_moving,
         ) = self.estimator.get_distributions(simplify_angles=self.SIMPLIFY_ANGLES)
-        return (
-            distances_cm,
-            probabilities,
-            probabilities_moving,
-            probabilities_moving_angle,
-        )
+        return_dict["angle_moving"] = angle_moving
+        return_dict["prob_angle_moving"] = prob_angle_moving
+        return_dict["dist_moving"] = dist_moving
+        return_dict["prob_dist_moving"] = prob_dist_moving
+
+        return return_dict
+        # return (
+        #    dist_static,
+        #    prob_dist_static,
+        #    prob_dist_moving,
+        #    prob_angle_moving,
+        # )
 
     def listener_callback(self, msg_pose):
         if not self.state in [State.WAIT_DISTANCE, State.WAIT_ANGLE, State.WAIT_CALIB]:
@@ -523,11 +559,15 @@ class WallDetection(NodeWithParams):
 
             if PUBLISH_MOVING:
                 self.estimator.add_distributions(
-                    diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
+                    diff_dict,
+                    position_cm=r_world * 1e2,
+                    rot_deg=yaw,
                 )
-                (distances_cm, probabilities, *_,) = self.estimator.get_distributions(
-                    simplify_angles=SIMPLIFY_ANGLES
-                )
+                (
+                    distances_cm,
+                    probabilities,
+                    *_,
+                ) = self.estimator.get_distributions(simplify_angles=SIMPLIFY_ANGLES)
                 # self.logger.warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")
 
                 # TODO(FD) to save time, we could consider only publishing the distribution

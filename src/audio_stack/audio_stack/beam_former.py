@@ -15,8 +15,10 @@ from scipy.spatial.transform import Rotation
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
-from algos_beamforming import get_lcmv_beamformer_fast, get_das_beamformer, get_powers
+from algos_beamforming import get_das_beamformer, get_powers
+from algos_beamforming import get_lcmv_beamformer_fast as get_lcmv_beamformer
 
+# from algos_beamforming import get_lcmv_beamformer as get_lcmv_beamformer
 
 LAMDA = 1e-5  # 1e-10
 INVERSE = "pinv"  # use standard pseudoinverse
@@ -24,7 +26,7 @@ INVERSE = "pinv"  # use standard pseudoinverse
 
 
 def normalize_rows(matrix, method):
-    """ Normalizes last dimension of matrix (can be more than 2-dimensional) """
+    """Normalizes last dimension of matrix (can be more than 2-dimensional)"""
     if np.all(np.isnan(matrix)):
         print("Warning: not normalizeing, all nan.")
         return matrix
@@ -106,21 +108,87 @@ class BeamFormer(object):
         self.theta_scan = BeamFormer.theta_scan
         self.params = {}
 
+    def beamform_lcmv(
+        self,
+        R,
+        theta,
+        frequencies_hz,
+        mic_positions=None,
+        lamda=LAMDA,
+        inverse=INVERSE,
+        extra_constraints=[],
+        cancel_centre=False,
+    ):
+        if mic_positions is None:
+            mic_positions = self.mic_positions
+        constraints = extra_constraints + [(theta, 1)]
+        H_lcmv = get_lcmv_beamformer(
+            R,
+            frequencies_hz,
+            mic_positions,
+            constraints,
+            lamda=lamda,
+            inverse=inverse,
+            cancel_centre=cancel_centre,
+        )
+        return H_lcmv
+
+    def get_lcmv_spectrum(
+        self,
+        R,
+        frequencies_hz,
+        mic_positions=None,
+        lamda=LAMDA,
+        inverse=INVERSE,
+        extra_constraints=[],
+        cancel_centre=False,
+    ):
+        """Get LCMV spatial spectrum.
+
+        :param R: autocorrelation tensor (n_frequencies x n_mics x n_mics)
+        :param frequencies_hz: list of frequencies (in Hz)
+        :param extra_constraints: list of additional constraints to be added to
+        LCMV (d(theta)*w=1 is always added). Given in the form [angle, value].
+
+        :return: spectrum of shape (n_frequencies x n_angles)
+        """
+        if mic_positions is None:
+            mic_positions = self.mic_positions
+        spectrum = np.empty((len(frequencies_hz), len(self.theta_scan)))
+        for i, theta in enumerate(self.theta_scan):
+            H_mvdr = self.beamform_lcmv(
+                R,
+                theta,
+                frequencies_hz,
+                mic_positions,
+                lamda,
+                inverse,
+                extra_constraints=extra_constraints,
+                cancel_centre=cancel_centre,
+            )
+            spectrum[:, i] = get_powers(H_mvdr, R)
+        return spectrum
+
     def beamform_mvdr(
         self, R, theta, frequencies_hz, mic_positions=None, lamda=LAMDA, inverse=INVERSE
     ):
         if mic_positions is None:
             mic_positions = self.mic_positions
         constraints = [(theta, 1)]
-        H_mvdr = get_lcmv_beamformer_fast(
-            R, frequencies_hz, mic_positions, constraints, lamda=lamda, inverse=inverse,
+        H_mvdr = get_lcmv_beamformer(
+            R,
+            frequencies_hz,
+            mic_positions,
+            constraints,
+            lamda=lamda,
+            inverse=inverse,
         )
         return H_mvdr
 
     def get_mvdr_spectrum(
         self, R, frequencies_hz, mic_positions=None, lamda=LAMDA, inverse=INVERSE
     ):
-        """ Get MVDR spatial spectrum.
+        """Get MVDR spatial spectrum.
 
         :param R: autocorrelation tensor (n_frequencies x n_mics x n_mics)
         :param frequencies_hz: list of frequencies (in Hz)
@@ -134,7 +202,6 @@ class BeamFormer(object):
             H_mvdr = self.beamform_mvdr(
                 R, theta, frequencies_hz, mic_positions, lamda, inverse
             )
-
             spectrum[:, i] = get_powers(H_mvdr, R)
         return spectrum
 
@@ -143,22 +210,27 @@ class BeamFormer(object):
             mic_positions = self.mic_positions
         return get_das_beamformer(theta, frequencies_hz, mic_positions)
 
-    def get_das_spectrum(self, R, frequencies, mic_positions=None):
-        """ Get DAS spatial spectrum.
+    def get_das_spectrum(self, R, frequencies_hz, mic_positions=None, phat=False):
+        """Get DAS spatial spectrum.
 
-        see get_mvdr_spectrum for parameters. 
+        :param phat: use phase transform, i.e. divide R by its magnitude.
+        see get_mvdr_spectrum for other parameters.
         """
         if mic_positions is None:
             mic_positions = self.mic_positions
 
-        spectrum = np.empty((len(frequencies), len(self.theta_scan)))
+        spectrum = np.empty((len(frequencies_hz), len(self.theta_scan)))
         for i, theta in enumerate(self.theta_scan):
-            H_das = self.beamform_das(theta, frequencies, mic_positions)
-            spectrum[:, i] = get_powers(H_das, R)
+            H_das = self.beamform_das(theta, frequencies_hz, mic_positions)
+
+            if phat:
+                spectrum[:, i] = get_powers(H_das, R / np.abs(R))
+            else:
+                spectrum[:, i] = get_powers(H_das, R)
         return spectrum
 
     def get_correlation(self, signals_f):
-        """ Get autocorrelation tensor. 
+        """Get autocorrelation tensor.
         :param signals_f: frequency response (n_frequencies x n_mics)
         """
         if signals_f.shape[0] < signals_f.shape[1]:
@@ -172,7 +244,7 @@ class BeamFormer(object):
         )
 
     def shift_spectrum(self, spectrum, delta_deg):
-        """ shift spectrum by delta_deg. 
+        """shift spectrum by delta_deg.
 
         :param spectrum: spatial spectrum (n_frequencies x n_angles)
         :param delta_deg: by how many angles to shfit the spectrum
@@ -206,7 +278,7 @@ class BeamFormer(object):
         )
 
     def add_to_dynamic_estimates(self, spectrum, orientation_deg=0):
-        """ Add new spectrum to list and remove outdated ones.
+        """Add new spectrum to list and remove outdated ones.
 
         :param spectrum: spatial spectrum of shape (n_frequencies, n_angles)
         :param orientation_deg: drone orientation_deg in degrees
@@ -224,7 +296,7 @@ class BeamFormer(object):
     def add_signals_to_dynamic_estimates(
         self, signals_f, frequencies, orientation_deg=0, method="das"
     ):
-        """ Add new spectrum to list and remove outdated ones.
+        """Add new spectrum to list and remove outdated ones.
 
         :param orientation_deg: drone orientation_deg in degrees
         """
@@ -236,7 +308,7 @@ class BeamFormer(object):
         return self.add_to_dynamic_estimates(spectrum, orientation_deg)
 
     def get_dynamic_estimate(self):
-        """ Get current estimate
+        """Get current estimate
 
         :return: spectrum estimate of shape (n_angles,)
         """
@@ -263,7 +335,9 @@ class BeamFormer(object):
             np.nan,
         )
         self.index_multi = 0
-        self.params["multi"] = dict(combination_n=combination_n,)
+        self.params["multi"] = dict(
+            combination_n=combination_n,
+        )
 
     def add_to_multi_estimate(
         self, signals_f, frequencies, time_sec, orientation_deg, offset=0, position=None
@@ -319,7 +393,7 @@ class BeamFormer(object):
         return self.get_correlation(signals_f_aligned)
 
     def get_multi_estimate(self, method="mvdr", lamda=LAMDA):
-        """ Get current estimate
+        """Get current estimate
 
         :return: spectrum of shape (n_frequencies x n_angles)
         """

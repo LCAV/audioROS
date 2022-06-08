@@ -29,7 +29,7 @@ N_MAX = 1000
 
 
 def get_uniform_grid(xvalues):
-    """ Fill too large spaces of xvalues with uniform sampling of the median spacing of xvalues.
+    """Fill too large spaces of xvalues with uniform sampling of the median spacing of xvalues.
     Example:
     [0, 2, 4, 10, 12, 14]
     becomes
@@ -53,10 +53,10 @@ def get_uniform_grid(xvalues):
 
 
 def interpolate_parts(xvalues, values, step=None, verbose=False):
-    """ Smart interpolation scheme. 
+    """Smart interpolation scheme.
 
     Interpolate at uniform grid, leaving out points that are further
-    from recorded data than two times the average or given spacing. 
+    from recorded data than two times the average or given spacing.
 
     """
     import scipy.interpolate
@@ -246,7 +246,10 @@ class Inference(object):
             slice_mic = standardize_vec(slice_mic)
 
         ax.plot(
-            self.values[self.valid_idx], slice_mic, label=label, **kwargs,
+            self.values[self.valid_idx],
+            slice_mic,
+            label=label,
+            **kwargs,
         )
 
 
@@ -274,12 +277,12 @@ def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
 
 def get_posterior(abs_fft, sigma=None, data=None):
     N = len(abs_fft)
-    periodogram = 1 / N * abs_fft ** 2
+    periodogram = 1 / N * abs_fft**2
     # print('periodogram:', np.min(periodogram), np.max(periodogram))
 
     if sigma is not None:
         if np.any(sigma > 0):
-            periodogram /= sigma ** 2
+            periodogram /= sigma**2
             # TODO(FD) we do below for numerical reasons. its effect
             # is undone by later exponentiation anyways. Make sure
             # this really as no effect on the result.
@@ -322,7 +325,8 @@ def get_probability_bayes(
 
     if interpolate:
         frequencies_grid, f_slice_grid = interpolate_parts(
-            frequencies, f_slice,  # step=20
+            frequencies,
+            f_slice,  # step=20
         )
         abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
@@ -422,7 +426,12 @@ def get_probability_cost(
 
 
 def get_periods_fft(
-    d_slice, frequency, relative_distances_cm, n_max=N_MAX, bayes=False, sigma=None,
+    d_slice,
+    frequency,
+    relative_distances_cm,
+    n_max=N_MAX,
+    bayes=False,
+    sigma=None,
 ):
     # the distribution over measured period.
     d_m = np.mean(np.diff(relative_distances_cm)) * 1e-2
@@ -456,7 +465,7 @@ def get_approach_angle_fft(
     interpolate=INTERPOLATE,
     factor=2,
 ):
-    """ 
+    """
     Get probabilities over approach angles.
 
     :param d_slice: amplitude measurements along distance
@@ -546,3 +555,36 @@ def get_approach_angle_cost(
     probs_angle = np.nanmax(probs, axis=0)  # take maximum across distances
     probs_angle /= np.nansum(probs_angle)
     return probs_angle
+
+
+def get_1d_spectrum(spec):
+    """Get one-dimensional angle distribution from freq-angle spectrum.
+
+    :param spec: spectrum of shape n_freqs x n_angles
+    :returns: a distribution of length n_angles
+
+    """
+    tol = max(np.min(spec[spec > 0]), 1e-2)
+    spec[spec < tol] = tol
+    vals = np.sum(np.log10(spec), axis=0)
+    vals = (vals - np.nanmin(vals)) / (np.nanmax(vals) - np.nanmin(vals))
+    return vals
+
+
+def get_angle_distribution(signals_f, frequencies, mics):
+    from audio_stack.beam_former import BeamFormer
+
+    assert (
+        mics.shape[1] == signals_f.shape[1]
+    ), "mics should be dxN, signals_df should be FxN"
+    assert (
+        len(frequencies) == signals_f.shape[0]
+    ), "signals_df should be FxN, frequencies of length F"
+
+    beamformer = BeamFormer(mic_positions=mics.T)
+    R = beamformer.get_correlation(signals_f)
+    spectrum = beamformer.get_lcmv_spectrum(
+        R, frequencies_hz=frequencies, extra_constraints=[], cancel_centre=True
+    )
+    probs = get_1d_spectrum(spectrum)
+    return beamformer.theta_scan_deg, probs
