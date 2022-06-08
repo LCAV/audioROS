@@ -13,6 +13,7 @@ from .base_estimator import (
     get_normal_vector,
     get_estimate,
     get_estimates,
+    from_0_to_360,
 )
 
 # RELATIVE_MOVEMENT_STD implicityly defines the forgetting factor when
@@ -33,12 +34,6 @@ def get_std_of_peaks(values, probs, peaks):
     widths, *__ = scipy.signal.peak_widths(probs, peaks)
     fwhm = widths * (values[1] - values[0])  # assumes uniform values
     return fwhm / 2 / np.sqrt(2 * np.log(2))
-
-
-def from_0_to_360(angle):
-    angle %= 360
-    angle = angle + 360 if angle < 0 else angle
-    return angle
 
 
 def get_normal(angle_deg):

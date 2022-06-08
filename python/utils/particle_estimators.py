@@ -21,7 +21,7 @@ from filterpy.monte_carlo import stratified_resample as resample
 
 # corresponds to discretization "fine":
 DISTANCES_CM = np.arange(7, 80, step=2.0)
-ANGLES_DEG = np.arange(360, step=10)
+ANGLES_DEG = np.arange(360, step=10.0)
 
 
 STD_DISTANCE_CM = 5.0

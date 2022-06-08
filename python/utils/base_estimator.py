@@ -9,6 +9,26 @@ import scipy.interpolate
 from .geometry import Context
 
 
+def from_0_to_360(angle):
+    if np.ndim(angle) > 0:
+        angle = np.mod(angle, 360)
+        angle[angle < 0] += 360
+    else:
+        angle %= 360
+        angle = angle + 360 if angle < 0 else angle
+    return angle
+
+
+def from_0_to_180(angle):
+    if np.ndim(angle) > 0:
+        angle = np.mod(angle, 360)  # between
+        angle[angle >= 180] = 360 - angle[angle >= 180]
+    else:
+        angle %= 360
+        angle = 360 - angle if angle > 180 else angle
+    return angle
+
+
 def get_std_sample(values, probs, means, unbiased=True):
     if np.isclose(np.nansum(probs), 1) or (
         np.nansum(probs) < 1
