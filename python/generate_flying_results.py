@@ -28,12 +28,14 @@ def combine_stepper_df(data_df, motors="all45000", bin_selection=5, average=True
     )
     if average:
         data_row.stft = np.concatenate(
-            [np.r_[[np.median(stft, axis=0)]] for stft in chosen_df.stft.values]
+            [np.median(stft, axis=0)[None, :, :] for stft in chosen_df.stft.values], 
+            axis=0
         )
     else:
         middle = chosen_df.iloc[0].stft.shape[0] // 2
         data_row.stft = np.concatenate(
-            [np.r_[stft[middle]] for stft in chosen_df.stft.values]
+            [stft[middle][None, :, :] for stft in chosen_df.stft.values],
+            axis=0
         )
     data_row.frequencies_matrix = np.concatenate(
         [
