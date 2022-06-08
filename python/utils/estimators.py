@@ -21,11 +21,11 @@ def get_estimate(values, probs):
 
 def get_window(points, i, max_delta=10):
     """
-    Get window around index i, splitting each interval in half. 
+    Get window around index i, splitting each interval in half.
     At boundaries: use nearest interval's width for extrapolation.
 
     :param max_delta: maximum (double) width of window to use for integration. important when
-    we use coarse discretization grids. 
+    we use coarse discretization grids.
     """
     if i > 0:
         delta = min((points[i] - points[i - 1]) / 2, max_delta)
@@ -64,6 +64,19 @@ class DistanceEstimator(object):
         self.distances_cm = distances_cm
         self.angles_deg = angles_deg
 
+    def add_distributions(self, signals_f, frequencies, azimuth_deg, chosen_mics=None):
+        from .inference import get_probability_bayes
+
+        if chosen_mics is None:
+            chosen_mics = range(signals_f.shape[1])
+
+        for i, mic_idx in enumerate(chosen_mics):
+            slice_f = np.abs(signals_f[:, i]) ** 2
+            d_bayes, p_bayes, diff_cm = get_probability_bayes(
+                slice_f, frequencies, azimuth_deg=azimuth_deg
+            )
+            self.add_distribution(diff_cm * 1e-2, p_bayes, mic_idx)
+
     def add_distribution(self, path_differences_m, probabilities, mic_idx):
         if np.any(path_differences_m > 100):
             print("Warning: make sure path_differences_m is in meters!")
@@ -75,7 +88,10 @@ class DistanceEstimator(object):
         )
 
     def get_distance_distribution(
-        self, chosen_mics=None, verbose=False, angle_deg=None,
+        self,
+        chosen_mics=None,
+        verbose=False,
+        angle_deg=None,
     ):
         if angle_deg is None:
             angles_deg = self.ANGLES_DEG_PRIOR

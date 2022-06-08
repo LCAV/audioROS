@@ -2,20 +2,14 @@
 # -*- coding: utf-8 -*-
 
 """
-particle_estimators.py: 
+particle_estimators.py: Provides particle filter implementation
 """
 from enum import Enum
 
 import numpy as np
 from scipy.stats import norm
 
-from utils.moving_estimators import BaseEstimator
-
-
-def get_normal_vector(angle_deg):
-    return np.r_[
-        np.cos(angle_deg / 180 * np.pi), np.sin(angle_deg / 180 * np.pi),
-    ]
+from utils.base_estimator import BaseEstimator, get_normal_vector
 
 
 # simplest, but expensive and might miss important particles:
@@ -76,7 +70,8 @@ class ParticleEstimator(BaseEstimator):
         predict_uniform=PREDICT_UNIFORM,
     ):
         super().__init__(
-            n_window=2, platform=platform,
+            n_window=2,
+            platform=platform,
         )
 
         self.n_particles = n_particles
@@ -155,7 +150,7 @@ class ParticleEstimator(BaseEstimator):
 
     def update(self, simplify_angles=False):
         """
-        Update particle weights based on path difference measurements. 
+        Update particle weights based on path difference measurements.
 
         If particles are in global reference frame, use the equation:
         a_local = a_global - rotation
@@ -175,20 +170,19 @@ class ParticleEstimator(BaseEstimator):
             # print(f"for global {d_particle:.1f}, local distance and angle: {d_local:.1f}, {a_local:.0f}")
             weight = 1.0
             for mic, diff_dist in self.difference_p[self.index].items():
-                # if mic == 0:
-                #    print(f"maximum of interpolator: {diff_dist.x[np.argmax(diff_dist.y)]}")
                 delta = self.context.get_delta(a_local, d_local, mic)
-                weight *= diff_dist(delta)
-                # if mic == 0:
-                # print(f"  m0: delta for angle {a_local:.0f} d {d_local:.0f}", diff_dist(delta))
+                weight *= diff_dist(delta)  # interpolate at delta
+
+            if self.angle_probs[self.index] is not None:
+                weight *= self.angle_probs[self.index](a_local)  # interpolate at angle
+
             self.weights[i] *= weight
         self.weights /= np.sum(self.weights)
 
         self.state = State.NEED_RESAMPLE
 
     def predict(self):
-        """ Predict new particles based on movement estimates.
-        """
+        """Predict new particles based on movement estimates."""
         if not self.state == State.NEED_PREDICT:
             return
 
@@ -222,7 +216,7 @@ class ParticleEstimator(BaseEstimator):
         self.state = State.NEED_UPDATE
 
     def estimate(self):
-        """ Returns mean and variance of the weighted particles. """
+        """Returns mean and variance of the weighted particles."""
         import scipy.stats
 
         if not self.state == State.READY:
@@ -242,7 +236,7 @@ class ParticleEstimator(BaseEstimator):
         )
         mean_angle = 180 / np.pi * np.arctan2(sin_, cos_)
         mean_angle %= 360
-        var_angle = 180 / np.pi * np.sqrt(sin_ ** 2 + cos_ ** 2)
+        var_angle = 180 / np.pi * np.sqrt(sin_**2 + cos_**2)
         return (mean_distance, mean_angle), (var_distance, var_angle)
 
     def resample(self):

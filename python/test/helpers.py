@@ -15,10 +15,22 @@ ANGLE_GLOB = 90
 
 DELTA_GRID = np.arange(100)
 
+MIC_IDX = [0, 1]
+
+
+def get_diff_dict(distance, angle, prob_method):
+    diff_dict = {}
+    for mic_idx in MIC_IDX:
+        delta_grid, probs = get_delta_distribution(
+            distance, angle, mic_idx, prob_method
+        )
+        diff_dict[mic_idx] = (delta_grid, probs)
+    return diff_dict
+
 
 def measure_wall(pose):
-    """ 
-    simplified function for measuring the wall distance and angle in 
+    """
+    simplified function for measuring the wall distance and angle in
     local coordinates. Works for this geometry only.
     """
     distance = DISTANCE_GLOB - pose[1]
