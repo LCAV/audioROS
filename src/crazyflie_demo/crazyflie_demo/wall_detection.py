@@ -25,9 +25,11 @@ sys.path.append("python/")
 from utils.data_collector import DataCollector
 from utils.inference import Inference, get_approach_angle_fft
 from utils.inference import get_angle_distribution as get_beamform_distribution
+
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 from utils.particle_estimators import ParticleEstimator
+from utils.split_particle_estimators import SplitParticleEstimator
 from utils.histogram_estimators import HistogramEstimator
 
 # dslice
@@ -128,14 +130,14 @@ class PythonLogger(object):
 class WallDetection(NodeWithParams):
     PARAMS_DICT = {"mode": Mode.FSLICE.value, "drone": int(DRONE)}
 
-    BEAMFORM = True
+    BEAMFORM = False
 
     MASK_BAD = "fixed"
     # MASK_BAD = "adaptive"
     # MASK_BAD = None
 
     BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
-    OUTLIER_FACTOR = 10  # reject values outside of OUTLIER_FACTOR * std window
+    OUTLIER_FACTOR = None  # reject values outside of OUTLIER_FACTOR * std window
 
     # need at least two, otherwise end up with all-ones magnitudes_calib.
     N_CALIBRATION = 2
@@ -154,10 +156,10 @@ class WallDetection(NodeWithParams):
 
     # estimator variables
     N_WINDOW = 5
-    RELATIVE_MOVEMENT_STD = 1.0
+    RELATIVE_MOVEMENT_STD = 0.0
     N_PARTICLES = 100
 
-    def __init__(self, python_only=False, estimator="moving"):
+    def __init__(self, python_only=False, estimator="moving", angles_deg=ANGLES_DEG):
         if not python_only:
             print("initializing ros stuff")
             super().__init__("wall_detection")
@@ -208,24 +210,31 @@ class WallDetection(NodeWithParams):
             self.estimator = MovingEstimator(
                 n_window=self.N_WINDOW,
                 distances_cm=DISTANCES_CM,
-                angles_deg=ANGLES_DEG,
+                angles_deg=angles_deg,
                 relative_movement_std=self.RELATIVE_MOVEMENT_STD,
             )
         elif estimator == "histogram":
             self.estimator = HistogramEstimator(
                 distances_cm=DISTANCES_CM,
-                angles_deg=ANGLES_DEG,
+                angles_deg=angles_deg,
             )
         elif estimator == "particle":
-            ParticleEstimator.ANGLES_DEG = ANGLES_DEG
-            ParticleEstimator.DISTANCE_RANGE_CM = [
-                np.min(DISTANCES_CM),
-                np.max(DISTANCES_CM),
-            ]
             self.estimator = ParticleEstimator(
-                n_particles=self.N_PARTICLES, global_=False
+                n_particles=self.N_PARTICLES, 
+                angles_deg=angles_deg, 
+                distances_cm=DISTANCES_CM
             )
-        elif type(estimator) in [MovingEstimator, ParticleEstimator]:
+        elif estimator == "split_particle":
+            if not self.BEAMFORM:
+                raise ValueError("Need beamforming to use split particle filter")
+            self.estimator = SplitParticleEstimator(
+                n_particles=self.N_PARTICLES, 
+                angles_deg=angles_deg, 
+                distances_cm=DISTANCES_CM
+            )
+        elif type(estimator) in [MovingEstimator, ParticleEstimator, HistogramEstimator, SplitParticleEstimator]:
+            if type(estimator) == SplitParticleEstimator:
+                assert self.BEAMFORM, "Need beamforming to use split particle filter"
             self.estimator = estimator
         else:
             raise ValueError(estimator)
@@ -307,7 +316,7 @@ class WallDetection(NodeWithParams):
             self.calibration = magnitudes
             self.calibrationsq = magnitudes**2
         else:
-            valid = ~np.isnan(self.calibration)
+            valid = ~np.isnan(self.calibration) 
             self.calibration[valid] = (1 - self.ALPHA_IIR) * self.calibration[
                 valid
             ] + self.ALPHA_IIR * magnitudes[valid]
@@ -811,6 +820,18 @@ class WallDetection(NodeWithParams):
                 self.logger.warn(f"Avoiding detected wall!")
             self.already_asking = False
 
+    def print_params(self):
+        print("calibration:", self.CALIBRATION)
+        print("n_calibration:", self.N_CALIBRATION)
+        print("alpha_iir:", self.ALPHA_IIR)
+        print("mask bad:", self.MASK_BAD )
+        print("outlier factor:", self.OUTLIER_FACTOR )
+        print("n_window:", self.N_WINDOW)
+        print("relative_movement_std:", self.RELATIVE_MOVEMENT_STD)
+        print("simplify_angles:", self.SIMPLIFY_ANGLES )
+        print("beamform:", self.BEAMFORM)
+        print("bad freq ranges:", self.BAD_FREQ_RANGES)
+        print("n_particles:", self.N_PARTICLES)
 
 def main(args=None):
     rclpy.init(args=args)

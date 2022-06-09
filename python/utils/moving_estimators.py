@@ -30,12 +30,6 @@ from .base_estimator import (
 RELATIVE_MOVEMENT_STD = 0.3  #
 
 
-def get_std_of_peaks(values, probs, peaks):
-    widths, *__ = scipy.signal.peak_widths(probs, peaks)
-    fwhm = widths * (values[1] - values[0])  # assumes uniform values
-    return fwhm / 2 / np.sqrt(2 * np.log(2))
-
-
 def get_normal(angle_deg):
     return -get_normal_vector(angle_deg)
 

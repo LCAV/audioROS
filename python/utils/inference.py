@@ -567,7 +567,8 @@ def get_1d_spectrum(spec):
     tol = max(np.min(spec[spec > 0]), 1e-2)
     spec[spec < tol] = tol
     vals = np.sum(np.log10(spec), axis=0)
-    vals = (vals - np.nanmin(vals)) / (np.nanmax(vals) - np.nanmin(vals))
+    if ((np.nanmax(vals) - np.nanmin(vals)) > 0):
+        vals = (vals - np.nanmin(vals)) / (np.nanmax(vals) - np.nanmin(vals))
     return vals
 
 

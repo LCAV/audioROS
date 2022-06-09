@@ -10,6 +10,7 @@ from scipy.stats import norm
 from .base_estimator import (
     BaseEstimator,
     get_estimate,
+    get_normal_matrix,
     get_normal_vector,
     from_0_to_180,
     from_0_to_360,
@@ -50,9 +51,10 @@ class HistogramEstimator(BaseEstimator):
 
     def initialize_states(self, angles_deg, distances_cm):
         aa, dd = np.meshgrid(angles_deg, distances_cm)
-        self.states = np.r_[[aa.flatten()], [dd.flatten()]]
-        self.prior = np.full(self.states.shape[1], 1 / self.states.shape[1])
-        self.posterior = np.full(self.states.shape[1], 1 / self.states.shape[1])
+        self.states = np.c_[aa.flatten(), dd.flatten()] # N x 2
+        self.n_states = self.states.shape[0]
+        self.prior = np.full(self.n_states, 1 / self.n_states)
+        self.posterior = np.full(self.n_states, 1 / self.n_states)
 
     def add_distributions(self, *args, **kwargs):
         super().add_distributions(*args, **kwargs)
@@ -65,34 +67,31 @@ class HistogramEstimator(BaseEstimator):
 
     def predict_slow(self, verbose=False):
         if self.filled:
-            t_1 = np.mod(self.index, self.n_window)
-            t_0 = np.mod(self.index - 1, self.n_window)
+            self.index = np.mod(self.index, self.n_window)
+            previous = np.mod(self.index - 1, self.n_window)
         elif self.index == 0:
             return self.prior
         else:
-            t_1 = self.index
-            t_0 = self.index - 1
+            self.index = self.index
+            previous = self.index - 1
         sigma_d = sigma_a = 1.0
 
-        u_t = self.positions[t_1] - self.positions[t_0]
-        u_a = self.rotations[t_1] - self.rotations[t_0]
+        u_t = self.positions[self.index] - self.positions[previous]
+        u_a = self.rotations[self.index] - self.rotations[previous]
 
-        for k in range(self.states.shape[1]):
+        for k, (a_k, d_k) in enumerate(self.states):
             sum_ = 0
-            a_k, d_k = self.states[:, k]
 
-            for i in range(self.states.shape[1]):
-                a_i, d_i = self.states[:, i]
+            for i, (a_i, d_i) in enumerate(self.states):
 
                 # worked for backwards
-                # a_glob_i = a_i - self.rotations[t_0]
+                # a_glob_i = a_i - self.rotations[previous]
                 # mu_d = d_i - u_t.dot(get_normal_vector(a_glob_i)) # mean of current distance estimate
 
-                a_glob_i = a_i + self.rotations[t_0]
-                mu_d = d_i - u_t.dot(
-                    get_normal_vector(a_glob_i)
-                )  # mean of current distance estimate
-                mu_a = a_i - u_a  # mean of current angle estimate
+                # mean of current distance and angle estimates
+                a_glob_i = a_i + self.rotations[previous]
+                mu_d = d_i - u_t.dot(get_normal_vector(a_glob_i))
+                mu_a = a_i - u_a
 
                 norm_d = normal_dist(d_k - mu_d, SIGMA_D)
                 norm_a = normal_dist(from_0_to_180(a_k - mu_a), SIGMA_A)
@@ -100,7 +99,7 @@ class HistogramEstimator(BaseEstimator):
                 sum_ += norm_d * norm_a * self.posterior[i]
 
                 # if (d_i == 20) and (d_k == 10) and (a_i == 180) :
-                #    print(f"global {a_glob_i:.0f}?=90, {a_i:.0f}?=180, {self.rotations[t_0]:.0f}?=270")
+                #    print(f"global {a_glob_i:.0f}?=90, {a_i:.0f}?=180, {self.rotations[previous]:.0f}?=270")
                 #    print(f"for current angle {a_k}: previous global {a_glob_i}?=90 {mu_d:.0f}?=10, {mu_a:.0f}?=270")
                 # if (d_i == 10) and (d_k == 20) and (a_i == 270) :
                 # print(f"for current angle {a_k}: previous global {a_glob_i}?=90 {mu_d:.0f}?=20, {mu_a:.0f}?=0")
@@ -109,36 +108,26 @@ class HistogramEstimator(BaseEstimator):
         return self.prior
 
     def predict(self, verbose=False):
-        def normal_matrix(angles_vec):
-            """return N x 2"""
-            return np.c_[
-                np.cos(angles_vec / 180 * np.pi), np.sin(angles_vec / 180 * np.pi)
-            ]
 
-        if self.filled:
-            t_1 = np.mod(self.index, self.n_window)
-            t_0 = np.mod(self.index - 1, self.n_window)
-        elif self.index == 0:
+        if (not self.filled) and (self.index == 0):
             return self.prior
-        else:
-            t_1 = self.index
-            t_0 = self.index - 1
 
-        u_t = self.positions[t_1] - self.positions[t_0]
-        u_a = self.rotations[t_1] - self.rotations[t_0]
+        # rolling window with two elements:
+        previous = 1 if self.index == 0 else 0
+
+        pos_delta = self.positions[self.index] - self.positions[previous]
+        rot_delta = self.rotations[self.index] - self.rotations[previous]
 
         # print("distance correction:", -normal_matrix(self.states[0, :]) @ u_t)
-        # a_glob_i = a_i + self.rotations[t_0]
-        mu_d = (
-            self.states[1, :]
-            - normal_matrix(self.states[0, :] + self.rotations[t_0]) @ u_t
-        )
-        mu_a = from_0_to_360(self.states[0, :] - u_a)
+        # a_glob_i = a_i + self.rotations[previous]
+        a_global = self.rotations[previous] + self.states[:, 0] 
+        mu_a = from_0_to_360(self.states[:, 0] - rot_delta)
+        mu_d = self.states[:, 1] - get_normal_matrix(a_global) @ pos_delta
 
-        arg_d_mat = self.states[1, :][:, None] - mu_d[None, :]
+        arg_d_mat = self.states[:, 1][:, None] - mu_d[None, :]
         norm_d = normal_dist(arg_d_mat.astype(float), SIGMA_D)
 
-        arg_a_mat = from_0_to_180(self.states[0, :][:, None] - mu_a[None, :])
+        arg_a_mat = from_0_to_180(self.states[:, 0][:, None] - mu_a[None, :])
         norm_a = normal_dist(arg_a_mat.astype(float), SIGMA_A)
 
         self.prior = np.sum(norm_d * norm_a * self.posterior[None, :], axis=1)
@@ -146,19 +135,18 @@ class HistogramEstimator(BaseEstimator):
         return self.prior
 
     def update(self, verbose=False):
-        probs = np.empty(self.states.shape[1])
-        for k in range(self.states.shape[1]):
-            a_k, d_k = self.states[:, k]
-            prob = self.prior[k]
+        probs = np.empty(self.n_states)
+        for k, (a_local, d_local) in enumerate(self.states):
+            prob = 1.0
             for mic, diff_p in self.difference_p[self.index].items():
-                delta_k_cm = self.context.get_delta(a_k, d_k, mic_idx=mic)
-                # note that diff_p is in centimeters.
-                prob *= diff_p(delta_k_cm)
+                delta_local_cm = self.context.get_delta(a_local, d_local, mic_idx=mic)
+                prob *= diff_p(delta_local_cm) # interpolate at delta
+
             if self.angle_probs[self.index] is not None:
-                prob *= self.angle_probs[self.index](a_k)
-            probs[k] = prob
+                prob *= self.angle_probs[self.index](a_local) # inteprolate at angle
+
+            probs[k] = self.prior[k] * prob
         self.posterior = probs / np.sum(probs)
-        return
 
     def get_marginal(self, distance_cm=None, angle_deg=None, posterior=True):
         if posterior:

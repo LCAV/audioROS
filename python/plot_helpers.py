@@ -1,3 +1,4 @@
+
 color = {
     "theoretical": "black",
     "calibrated": "C2",
@@ -9,13 +10,17 @@ ls = {
     "histogram 1": ":",
     "histogram 3": "-.",
     "histogram 5": "--",
+    "histogram": (0, (1, 1)),
     "particle": "-",
+    "split particle": (0, (3, 1, 1, 1, 1, 1)),
     "single": (0, (1, 4)),
     "": "-"  # random
     # "": (0, (5, 7)), # random
 }
 labels = {f"histogram {i}": f"hist. $N_w={i}$" for i in [1, 3, 5]}
 labels["particle"] = "particle"
+labels["histogram"] = "histogram"
+labels["split particle"] = "split particle"
 units = {
     "bayes angle": "deg",
     "bayes distance": "cm",

@@ -8,6 +8,8 @@ import scipy.interpolate
 
 from .geometry import Context
 
+import warnings
+
 
 def from_0_to_360(angle):
     if np.ndim(angle) > 0:
@@ -47,6 +49,14 @@ def get_std_sample(values, probs, means, unbiased=True):
     else:
         var = np.nansum(np.multiply(probs, (values - means) ** 2), axis=0) / norm
     return np.sqrt(var)
+
+
+def get_std_of_peaks(values, probs, peaks):
+    widths, *__ = scipy.signal.peak_widths(probs, peaks)
+    fwhm = widths * (values[1] - values[0])  # assumes uniform values
+    return fwhm / 2 / np.sqrt(2 * np.log(2))
+
+
 
 
 def get_estimate(values, probs, method, unbiased=True):
@@ -106,10 +116,9 @@ def get_estimates(values, probs, method, sort=True, n_estimates=None):
 
         indices, properties = scipy.signal.find_peaks(probs, width=True)
         if n_estimates and len(indices) < n_estimates:
-            warnings.warn("Found less peaks than requested")
-            return None, None
-        stds = get_std_of_peaks(indices)
+            print(f"Warning: found less peaks than requested: {len(indices)}")
 
+        stds = get_std_of_peaks(values, probs, indices)
         estimates = values[indices]
         prob_estimates = probs[indices]
         if sort:
@@ -128,6 +137,12 @@ def get_normal_vector(angle_deg):
     return np.r_[
         np.cos(angle_deg / 180 * np.pi),
         np.sin(angle_deg / 180 * np.pi),
+    ]
+
+def get_normal_matrix(angles_vec):
+    """return N x 2"""
+    return np.c_[
+        np.cos(angles_vec / 180 * np.pi), np.sin(angles_vec / 180 * np.pi)
     ]
 
 

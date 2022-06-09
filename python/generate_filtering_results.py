@@ -15,13 +15,16 @@ import numpy as np
 import pandas as pd
 import progressbar
 
-from utils.constants import SPEED_OF_SOUND, PLATFORM
-from utils.estimators import DistanceEstimator, get_estimate
+from utils.constants import PLATFORM
+from utils.estimators import get_estimate
 from utils.simulation import get_freq_slice_theory, get_freq_slice_pyroom, WIDEBAND_FILE
-from utils.moving_estimators import MovingEstimator
 from utils.pandas_utils import save_pickle
-from utils.particle_estimators import ParticleEstimator
 from utils.plotting_tools import make_dirs
+
+from utils.moving_estimators import MovingEstimator
+from utils.particle_estimators import ParticleEstimator
+from utils.split_particle_estimators import SplitParticleEstimator
+from utils.histogram_estimators import HistogramEstimator
 
 from crazyflie_demo.wall_detection import WallDetection
 
@@ -49,9 +52,9 @@ DMAX = 80
 
 CALIBRATION = "iir"
 ALPHA_IIR = 0.3
+BEAMFORM = True
 
 USE_PYROOMACOUSTICS = True
-
 
 def get_magnitudes(stft, mag_thresh=MAG_THRESH):
     stft[np.abs(stft) < mag_thresh] = np.nan
@@ -73,7 +76,7 @@ def angle_error(a1_deg, a2_deg):
     # )
 
 
-def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
+def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BEAMFORM):
     from utils.pandas_utils import save_pickle
 
     # to ensure reproducibility for particle filter
@@ -189,6 +192,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
         WallDetection.ALPHA_IIR = ALPHA_IIR
         WallDetection.MASK_BAD = None
         WallDetection.SIMPLIFY_ANGLES = False
+        WallDetection.BEAMFORM = beamform
 
         if USE_PYROOMACOUSTICS:
             try:
@@ -211,15 +215,28 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                 }
                 estimator_dict[f"particle {n_particles}"] = ParticleEstimator(
                     n_particles=n_particles,
-                    global_=False,
+                    distances_cm=distances_cm,
+                    angles_deg=angles_deg,
+                )
+                estimator_dict[f"split particle {n_particles}"] = SplitParticleEstimator(
+                    n_particles=n_particles,
                     distances_cm=distances_cm,
                     angles_deg=angles_deg,
                 )
 
-                wall_detection_dict = {
-                    key: WallDetection(python_only=True, estimator=value)
-                    for key, value in estimator_dict.items()
-                }
+                #estimator_dict["histogram"] = HistogramEstimator(
+                #    distances_cm=distances_cm,
+                #    angles_deg=angles_deg
+                #)
+
+                
+                wall_detection_dict = {}
+                for key, value in estimator_dict.items():
+                    try: 
+                        wall_detection_dict[key] = WallDetection(python_only=True, estimator=value)
+                    except:
+                        print(f"Skipping {key}")
+
                 print(f"Using mics: {chosen_mics}")
                 p = progressbar.ProgressBar(maxval=len(distances))
                 p.start()
@@ -255,14 +272,12 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL):
                         assert wall_detection.CALIBRATION == CALIBRATION
                         assert wall_detection.MASK_BAD is None
                         t1 = time.time()
-                        (
-                            __,
-                            __,
-                            probs_dist,
-                            probs_angles,
-                        ) = wall_detection.listener_callback_offline(
+                        
+                        res = wall_detection.listener_callback_offline(
                             magnitudes.T, frequencies, position_cm, yaw_deg
                         )
+                        probs_dist = res["prob_dist_moving"]
+                        probs_angles = res["prob_angle_moving"]
                         runtime = time.time() - t1
                         fill_distance(err_df, probs_dist, method=f"{method} {name}")
                         fill_angle(err_df, probs_angles, method=f"{method} {name}")
@@ -299,21 +314,23 @@ if __name__ == "__main__":
                 "supercoarse",
             ],  
             n_windows=[1, 3, 5],
+            #n_windows=[],
             methods=["theoretical", "calibrated"],
-            chosen_mics=[[0,1,2,3]]
+            #methods=["calibrated"],
+            chosen_mics=[[0,1,2,3]],
         )
-        #fname = "results/stepper_results_online_seed1_uniform_new.pkl"
-        #generate_results(df_chosen, fname=fname, parameters=parameters)
+        for beamform in [True]:
+            df_chosen = df_all.loc[
+                (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
+            ].copy()
+            if beamform:
+                fname = "results/stepper_results_beamform_test.pkl"
+                print("running with beamforming")
+            else:
+                fname = "results/stepper_results_test.pkl"
+                print("running without beamforming")
+            generate_results(df_chosen, fname=fname, parameters=parameters, beamform=beamform)
 
-
-        #all_mics = [[0,1,2,3],[0,1,2,3]]
-        #all_mics = [[0],[1],[2],[3],[0,1],[0,2],[0,3],[1,2],[1,3],[2,3],[0,1,2],[0,1,3],[0,2,3],[1,2,3],[0,1,2,3]]
-        #discretizations = ["coarse"]
-        #fname = "results/stepper_results_mics_ablation_coarse.pkl"
-
-        #all_mics = [[0],[0,1],[0,1,2],[0,1,2,3]]
-        #discretizations = ["fine", "medium", "coarse"]
-        #fname = "results/stepper_results_mics_ablation_all.pkl"
 
         all_mics = [[0],[1],[2],[3],[0,1],[0,2],[0,3],[1,2],[1,3],[2,3],[0,1,2],[0,1,3],[0,2,3],[1,2,3],[0,1,2,3]]
         discretizations = ["superfine", "fine", "medium", "coarse", "supercoarse"]
@@ -325,6 +342,6 @@ if __name__ == "__main__":
             methods=["calibrated"],
             chosen_mics=all_mics
         )
-        generate_results(df_chosen, fname=fname, parameters=parameters)
+        #generate_results(df_chosen, fname=fname, parameters=parameters)
     else:
         print("nothing to be done for epuck")
