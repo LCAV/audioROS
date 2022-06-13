@@ -118,7 +118,9 @@ class Inference(object):
         :param stds: standard deviations (n_mics, )
         """
         assert slices.shape[1] == len(values), slices.shape
-        self.slices = slices
+        self.slices = {}
+        for mic_idx, slice_ in zip(mics, slices):
+            self.slices[mic_idx] = slice_
         self.values = values
         self.stds = stds
         self.distances_cm = distances
@@ -145,8 +147,9 @@ class Inference(object):
         self.valid_idx &= valid_idx
 
         f_calib = self.calibration_function(self.values[self.valid_idx])
-        f_calib_mics = f_calib[self.mics, :]
-        self.slices[:, self.valid_idx] /= f_calib_mics
+        #f_calib_mics = f_calib[self.mics, :]
+        for k in self.slices.keys():
+            self.slices[k][self.valid_idx] /= f_calib[k]
         self.is_calibrated = True
 
     def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES, verbose=False):
@@ -166,15 +169,19 @@ class Inference(object):
         """
         Perform distance inference on current data.
         """
+        from copy import deepcopy
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
-        valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
+        valid = deepcopy(self.valid_idx)
+        for mic, slice_ in self.slices.items():
+            valid = valid & (~np.isnan(slice_))
+        #valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
 
         if algorithm == "bayes":
             sigma = self.stds[mic_idx] if self.stds is not None else None
             dists_cm, proba, diffs_cm = get_probability_bayes(
-                self.slices[mic_idx, valid] ** 2,
+                self.slices[mic_idx][valid] ** 2, 
                 self.values[valid],
                 mic_idx=mic_idx,
                 distance_range=self.distance_range_cm,
@@ -192,7 +199,7 @@ class Inference(object):
             diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists_cm, mic_idx)
             diffs_cm = diffs_m * 1e2
             proba = get_probability_cost(
-                self.slices[mic_idx, valid] ** 2,
+                self.slices[mic_idx][valid] ** 2,
                 self.values[valid],
                 dists_cm,
                 mic_idx=mic_idx,
@@ -213,7 +220,7 @@ class Inference(object):
             diffs_cm = diffs_m * 1e2
             azimuth_degs = np.arange(360, step=10)
             proba_2d = get_probability_cost_2d(
-                self.slices[mic_idx, valid],
+                self.slices[mic_idx][valid],
                 self.values[valid],
                 dists_cm,
                 mic_idx=mic_idx,
@@ -241,7 +248,7 @@ class Inference(object):
     def plot(self, i_mic, ax, label=None, standardize=False, **kwargs):
         from copy import deepcopy
 
-        slice_mic = deepcopy(self.slices[i_mic, self.valid_idx])
+        slice_mic = deepcopy(self.slices[i_mic][self.valid_idx])
         if standardize:
             slice_mic = standardize_vec(slice_mic)
 

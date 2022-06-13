@@ -55,7 +55,6 @@ TIME_FORWARD = 60  # seconds, time to move forward in BLIND mode
 
 MAG_THRESH = 1e-3
 
-
 class State(Enum):
     GROUND = 0
     HOVER = 1
@@ -378,13 +377,16 @@ class WallDetection(NodeWithParams):
         magnitudes_calib[~valid] = np.nan
         return magnitudes_calib
 
-    def get_raw_distributions(self, magnitudes_calib, freqs):
+    def get_raw_distributions(self, magnitudes_calib, freqs, chosen_mics=None):
         diff_dict = {}
+        if chosen_mics is None:
+            chosen_mics = range(magnitudes_calib.shape[0])
         self.inf_machine.add_data(
             magnitudes_calib,
             freqs,  # 4 x 32
+            mics=chosen_mics
         )
-        for mic_i in range(magnitudes_calib.shape[0]):
+        for mic_i in chosen_mics:
             __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
             diff_dict[mic_i] = (diff, prob_mic)
         return diff_dict
@@ -434,19 +436,22 @@ class WallDetection(NodeWithParams):
             raise ValueError(self.MASK_BAD)
 
     def listener_callback_offline(
-        self, signals_f, freqs, position_cm, yaw_deg, timestamp=0
+        self, signals_f, freqs, position_cm, yaw_deg, timestamp=0, chosen_mics=None
     ):
+
         if not self.flight_check(position_cm):
             # print("did not pass flight check:", position_cm)
             return
+
         from audio_stack.parameters import WINDOW_CORRECTION
 
-        magnitudes = np.abs(signals_f).T  # 4 x 20
+        assert signals_f.shape[1] == len(freqs)
+        magnitudes = np.abs(signals_f)
+
         # just a formality to compare bag file to csv file.
         magnitudes *= WINDOW_CORRECTION[2]
 
         magnitudes = self.mask_bad_measurements(magnitudes, freqs)
-
         self.add_to_calib(magnitudes)
 
         magnitudes_calib = self.calibrate(deepcopy(magnitudes))
@@ -455,11 +460,12 @@ class WallDetection(NodeWithParams):
             return
 
         try:
-            diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
+            diff_dict = self.get_raw_distributions(magnitudes_calib, freqs, chosen_mics)
         except Exception as e:
-            print("could not process calibrated magnitudes:", e)
-            raise e
-            return None
+            #print("could not process calibrated magnitudes:", e)
+            #print(magnitudes)
+            #print(magnitudes_calib, freqs, chosen_mics)
+            return 
 
         return_dict = {}
 
@@ -476,8 +482,13 @@ class WallDetection(NodeWithParams):
             rot_deg=yaw_deg,
         )
         if self.BEAMFORM:
+            if chosen_mics is not None:
+                mics = self.estimator.context.mics[chosen_mics, :].T
+            else:
+                mics = self.estimator.context.mics.T
+            #print("beamforming with", mics.shape, signals_f.shape)
             angle_static, prob_angle_static = get_beamform_distribution(
-                signals_f, freqs, self.estimator.context.mics.T
+                signals_f.T, freqs, mics # 32 x 4, 32, 2 x 4
             )
             self.estimator.add_angle_distribution(angle_static, prob_angle_static)
             return_dict["angle_static"] = angle_static

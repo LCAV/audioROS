@@ -14,6 +14,10 @@ DISTANCE_GLOB = 30
 ANGLE_GLOB = 90
 
 DELTA_GRID = np.arange(100)
+ANGLE_GRID = np.arange(360)
+
+DIFF_STD = 3.0
+ANGLE_STD = 10
 
 MIC_IDX = [0, 1]
 
@@ -38,8 +42,15 @@ def measure_wall(pose):
     angle %= 360
     return distance, angle
 
+def get_angle_distribution(angle, prob_method="delta", scale=ANGLE_STD):
+    if prob_method == "delta":
+        probs = np.zeros(len(ANGLE_GRID))
+        probs[np.argmin(np.abs(ANGLE_GRID - angle))] = 1.0
+    elif prob_method == "normal":
+        probs = norm.pdf(ANGLE_GRID, loc=angle, scale=ANGLE_STD)
+    return ANGLE_GRID, probs
 
-def get_delta_distribution(distance, angle, mic_idx, prob_method="delta", scale=10):
+def get_delta_distribution(distance, angle, mic_idx, prob_method="delta", scale=DIFF_STD):
     delta = (
         get_deltas_from_global(
             azimuth_deg=angle, distances_cm=distance, mic_idx=mic_idx

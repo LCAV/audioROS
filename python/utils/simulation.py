@@ -68,12 +68,14 @@ def create_wideband_signal(frequencies, duration_sec=1.0):
 
 
 def generate_room(
-    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS, source=True
+    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS, source=True, chosen_mics=None
 ):
     import pyroomacoustics as pra
 
     """ Generate two-dimensional setup using pyroomacoustics. """
     source_position, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
+    if chosen_mics is not None:
+        mic_positions = mic_positions[chosen_mics, :]
 
     m = pra.Material(energy_absorption="glass_3mm")
     room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM[:2], max_order=1, materials=m)
@@ -163,14 +165,14 @@ def get_df_theory_simple(
     return mag_squared * gain
 
 
-def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
+def get_average_signals(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
     """
     :param signal: signal to use for simulation, array
     :param n_buffer: buffer size for "STFT"
     :param n_times: number of buffers to average. Will start fromsecond buffer.
     """
     buffers_f = get_buffers(room, signal, n_buffer, n_times)
-    return np.mean(np.abs(buffers_f), axis=0)
+    return np.mean(buffers_f, axis=0)
 
 
 def get_buffers(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
@@ -221,11 +223,12 @@ def get_freq_slice_pyroom(
     signal,
     azimuth_deg=WALL_ANGLE_DEG_STEPPER,
     chosen_mics=None,
+    return_complex=False
 ):
-    room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
+    room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg, chosen_mics=chosen_mics)
 
     n_times = len(signal) // N_BUFFER
-    mag = get_average_magnitude(
+    avg_signal = get_average_signals(
         room, signal, n_buffer=N_BUFFER, n_times=n_times
     )  # n_mics x n_frequencies
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
@@ -233,14 +236,15 @@ def get_freq_slice_pyroom(
         bins_ = [get_bin(freqs_all, f) for f in frequencies]
     else:
         bins_ = np.arange(len(frequencies))
-    if chosen_mics is None:
-        return mag[:, bins_] ** 2
+
+    if return_complex:
+        return avg_signal[:, bins_] 
     else:
-        return mag[chosen_mics][:, bins_] ** 2
+        return np.abs(avg_signal)[:, bins_] ** 2
 
 
 def get_dist_slice_pyroom(
-    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100
+    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100, return_complex=False
 ):
     from .frequency_analysis import get_bin
 
@@ -257,8 +261,11 @@ def get_dist_slice_pyroom(
     Hs = []
     for d in distances_cm:
         room = generate_room(distance_cm=d, azimuth_deg=azimuth_deg)
-        mag = get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=n_times)
-        Hs.append(mag[:, bin_] ** 2)
+        avg_signal = get_average_signals(room, signal, n_buffer=N_BUFFER, n_times=n_times)
+        if return_complex:
+            Hs.append(avg_signal[:, bin_])
+        else:
+            Hs.append(np.abs(avg_signal)[:, bin_] ** 2)
     return np.array(Hs)
 
 

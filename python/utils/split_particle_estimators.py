@@ -152,7 +152,10 @@ class SplitParticleEstimator(BaseEstimator):
         if not len(candidate_angles):
             print("Warning: did not find any valid angles. Using uniform")
             candidate_anlges = self.angles_deg
+        elif (len(candidate_angles) == 1) and (candidate_angles[0] is None):
+            print("Warning: no valid estimtae. Using uniform")
 
+            candidate_anlges = self.angles_deg
         for k, d_local in enumerate(self.states[:, 1]):
             prob = 1.0
             for mic, diff_dist in self.difference_p[self.index].items():
@@ -160,6 +163,9 @@ class SplitParticleEstimator(BaseEstimator):
                 ## expectation over all angles:
                 prob_angle = 0.0
                 for a_local in candidate_angles:
+                    if a_local is None:
+                        print("Warning: angle is None")
+                        continue
                     delta_local_cm = self.context.get_delta(a_local, d_local, mic_idx=mic)
                     prob_angle += diff_dist(delta_local_cm)  # interpolate at delta
                 prob *= prob_angle / len(candidate_angles)

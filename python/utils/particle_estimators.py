@@ -25,7 +25,7 @@ ANGLES_DEG = np.arange(360, step=10.0)
 
 
 STD_DISTANCE_CM = 5.0
-STD_ANGLE_DEG = 5.0
+STD_ANGLE_DEG = 20.0
 
 # if True, ignore pose estimates and predict particles by adding
 # uniform disturbance.
