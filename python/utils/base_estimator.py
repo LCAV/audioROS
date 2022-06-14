@@ -6,6 +6,7 @@ base_estimator.py: Provides abstract base class for hisogram and particle filter
 import numpy as np
 import scipy.interpolate
 
+from .constants import PLATFORM
 from .geometry import Context
 
 import warnings
@@ -150,7 +151,7 @@ class BaseEstimator(object):
     def __init__(
         self,
         n_window=2,
-        platform="crazyflie",
+        platform=PLATFORM,
     ):
         self.difference_p = {n: {} for n in range(n_window)}
         self.angle_probs = {n: None for n in range(n_window)}

@@ -136,6 +136,7 @@ class WallDetection(NodeWithParams):
     # MASK_BAD = None
 
     BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
+    BAD_FREQ_RANGES_EPUCK = [[0, 1000], [5300, 6000]]  # removes two frequencies
     OUTLIER_FACTOR = None  # reject values outside of OUTLIER_FACTOR * std window
 
     # need at least two, otherwise end up with all-ones magnitudes_calib.
@@ -155,8 +156,7 @@ class WallDetection(NodeWithParams):
 
     # estimator variables
     N_WINDOW = 5
-    RELATIVE_MOVEMENT_STD = 0.0
-    N_PARTICLES = 100
+    N_PARTICLES = 200
 
     def __init__(self, python_only=False, estimator="moving", angles_deg=ANGLES_DEG):
         if not python_only:
@@ -210,7 +210,6 @@ class WallDetection(NodeWithParams):
                 n_window=self.N_WINDOW,
                 distances_cm=DISTANCES_CM,
                 angles_deg=angles_deg,
-                relative_movement_std=self.RELATIVE_MOVEMENT_STD,
             )
         elif estimator == "histogram":
             self.estimator = HistogramEstimator(
@@ -399,6 +398,12 @@ class WallDetection(NodeWithParams):
                 remove |= (freq_range[0] <= freqs) & (freqs <= freq_range[1])
             magnitudes[:, remove] = np.nan
             return magnitudes
+        elif self.MASK_BAD == "fixed_epuck":
+            remove = np.zeros(magnitudes.shape[1], dtype=bool)
+            for freq_range in self.BAD_FREQ_RANGES_EPUCK:
+                remove |= (freq_range[0] <= freqs) & (freqs <= freq_range[1])
+            magnitudes[:, remove] = np.nan
+            return magnitudes
         elif self.MASK_BAD == "adaptive":
             if self.calibration is None:
                 return magnitudes
@@ -440,7 +445,6 @@ class WallDetection(NodeWithParams):
     ):
 
         if not self.flight_check(position_cm):
-            # print("did not pass flight check:", position_cm)
             return
 
         from audio_stack.parameters import WINDOW_CORRECTION
@@ -462,7 +466,8 @@ class WallDetection(NodeWithParams):
         try:
             diff_dict = self.get_raw_distributions(magnitudes_calib, freqs, chosen_mics)
         except Exception as e:
-            #print("could not process calibrated magnitudes:", e)
+            print("could not process calibrated magnitudes:", e)
+            raise 
             #print(magnitudes)
             #print(magnitudes_calib, freqs, chosen_mics)
             return 
@@ -838,10 +843,10 @@ class WallDetection(NodeWithParams):
         print("mask bad:", self.MASK_BAD )
         print("outlier factor:", self.OUTLIER_FACTOR )
         print("n_window:", self.N_WINDOW)
-        print("relative_movement_std:", self.RELATIVE_MOVEMENT_STD)
         print("simplify_angles:", self.SIMPLIFY_ANGLES )
         print("beamform:", self.BEAMFORM)
         print("bad freq ranges:", self.BAD_FREQ_RANGES)
+        print("bad freq ranges epuck:", self.BAD_FREQ_RANGES_EPUCK)
         print("n_particles:", self.N_PARTICLES)
 
 def main(args=None):

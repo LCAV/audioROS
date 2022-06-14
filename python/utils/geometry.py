@@ -142,8 +142,10 @@ class Context(object):
     @staticmethod
     def get_platform_setup(platform=PLATFORM):
         if platform == "crazyflie":
+            #print("using crazyflie in get_platform_setup")
             return Context.get_crazyflie_setup()
         elif platform == "epuck":
+            #print("using epuck in get_platform_setup")
             return Context.get_epuck_setup()
         else:
             raise ValueError(platform)

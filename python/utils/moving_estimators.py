@@ -27,7 +27,7 @@ from .base_estimator import (
 # [1, 0.99, 0.98, 0.97, 0.96]
 # for 0:
 # [1, 1, 1, 1, 1]
-RELATIVE_MOVEMENT_STD = 0.3  #
+RELATIVE_MOVEMENT_STD = 0.0  #
 
 
 def get_normal(angle_deg):

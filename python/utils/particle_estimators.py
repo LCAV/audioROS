@@ -10,6 +10,7 @@ import numpy as np
 from scipy.stats import norm
 
 from utils.base_estimator import BaseEstimator, get_normal_matrix, from_0_to_360
+from utils.constants import PLATFORM
 
 
 # simplest, but expensive and might miss important particles:
@@ -19,17 +20,15 @@ from utils.base_estimator import BaseEstimator, get_normal_matrix, from_0_to_360
 # very uniform, doesn't miss important samples:
 from filterpy.monte_carlo import stratified_resample as resample
 
-# corresponds to discretization "fine":
-DISTANCES_CM = np.arange(7, 80, step=2.0)
-ANGLES_DEG = np.arange(360, step=10.0)
-
+DISTANCES_CM = np.arange(7, 80, step=1.0)
+ANGLES_DEG = np.arange(360, step=1.0)
 
 STD_DISTANCE_CM = 5.0
 STD_ANGLE_DEG = 20.0
 
 # if True, ignore pose estimates and predict particles by adding
 # uniform disturbance.
-PREDICT_UNIFORM = True
+PREDICT_UNIFORM = False
 
 INIT_UNIFORM = True
 
@@ -70,7 +69,7 @@ class ParticleEstimator(BaseEstimator):
     def __init__(
         self,
         n_particles,
-        platform="crazyflie",
+        platform=PLATFORM,
         distances_cm=DISTANCES_CM,
         angles_deg=ANGLES_DEG,
         predict_uniform=PREDICT_UNIFORM,

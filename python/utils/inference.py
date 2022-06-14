@@ -64,11 +64,32 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
     if step is not None:
         print("Warning: giving step is depcreated")
 
-    xvalues_grid = get_uniform_grid(xvalues)
+    step = np.min(np.diff(xvalues))
+    tol = 5
+
+    xvalues_grid = [xvalues[0]]
+    i = 1
+    while i < len(xvalues):
+        previous = xvalues_grid[-1]
+        new = xvalues[i]
+
+        # detect a large jump
+        if abs(new - previous) > 2 * step + tol:
+            xvalues_grid.append(new)
+            i += 1
+        # detect a small jump
+        elif abs(new - previous) > step + tol:
+            xvalues_grid.append(previous + step)
+        else:
+            xvalues_grid.append(new)
+            i += 1
+    xvalues_grid = np.array(xvalues_grid)
+
+    #xvalues_grid = get_uniform_grid(xvalues)
     step = np.median(np.diff(xvalues_grid))
 
     # valid points are no more than 2*step from actual data.
-    valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) <= 2 * step, axis=1)
+    valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) < 2 * step, axis=1)
     # if np.sum(~valid):
     #    print("Warning: removing some values before interpolation!")
 
@@ -77,11 +98,6 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
         print(f"interpolating at {np.sum(valid)} points")
 
     xvalues_grid = xvalues_grid[valid]
-    assert np.abs(np.median(np.diff(xvalues_grid)) - step) < 1e-10, (
-        np.median(np.diff(xvalues_grid)),
-        step,
-    )
-
     interpolator = scipy.interpolate.interp1d(
         xvalues, values, kind="linear", fill_value="extrapolate"
     )
@@ -335,10 +351,13 @@ def get_probability_bayes(
             frequencies,
             f_slice,  # step=20
         )
+        #print("freqs = ", repr(frequencies))
+        #print("freqs_interp = ", repr(frequencies_grid))
         abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
         posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
     else:
+        print("Warning: not interpolating")
         abs_fft = get_abs_fft(f_slice, n_max=n_max)
 
         # get path interference differences corresponding to used frequencies
