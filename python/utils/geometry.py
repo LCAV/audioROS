@@ -8,8 +8,6 @@ import warnings
 
 import numpy as np
 
-from audio_stack.beam_former import rotate_mics
-
 from .constants import PLATFORM
 
 DIM = 2
@@ -129,7 +127,7 @@ def get_angles(mic, source, delta_m, distance_m):
 
 
 class Context(object):
-    def __init__(self, dim=DIM, mics=None, source=None):
+    def __init__(self, dim=DIM, mics=None, source=None, name="unnamed context"):
         assert dim in (2, 3), dim
         self.dim = dim
         if mics is not None:
@@ -138,14 +136,13 @@ class Context(object):
             assert source.shape[0] == dim
         self.mics = mics
         self.source = source
+        self.name = name
 
     @staticmethod
     def get_platform_setup(platform=PLATFORM):
         if platform == "crazyflie":
-            #print("using crazyflie in get_platform_setup")
             return Context.get_crazyflie_setup()
         elif platform == "epuck":
-            #print("using epuck in get_platform_setup")
             return Context.get_epuck_setup()
         else:
             raise ValueError(platform)
@@ -156,7 +153,7 @@ class Context(object):
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
         source = np.array(BUZZER_POSITION)[0, :dim]
-        return Context(dim, mics, source)
+        return Context(dim, mics, source, name="crazyflie")
 
     @staticmethod
     def get_epuck_setup(dim=DIM):
@@ -164,13 +161,13 @@ class Context(object):
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
         source = np.array(BUZZER_POSITION)[0, :dim]
-        return Context(dim, mics, source)
+        return Context(dim, mics, source, name="epuck")
 
     @staticmethod
     def get_random_setup(n_mics=4, dim=DIM):
         mics = np.random.uniform(low=-1.0, high=1.0, size=(n_mics, dim))
         source = np.random.uniform(low=-1.0, high=1.0, size=(dim,))
-        return Context(dim, mics, source)
+        return Context(dim, mics, source, name="random")
 
     @staticmethod
     def get_standard_setup(dim=DIM):
@@ -182,7 +179,7 @@ class Context(object):
         elif dim == 3:
             mics = np.array([[X, X, Z], [-X, X, Z], [-X, -X, Z], [X, -X, Z]])
             source = np.array([2 * X, 2 * X, Z])
-        return Context(dim, mics, source)
+        return Context(dim, mics, source, name="standard")
 
     def get_source_image(self, normal):
         d = np.linalg.norm(normal)

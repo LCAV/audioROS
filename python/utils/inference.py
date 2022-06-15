@@ -64,8 +64,9 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
     if step is not None:
         print("Warning: giving step is depcreated")
 
-    step = np.min(np.diff(xvalues))
-    tol = 5
+    #step = np.min(np.diff(xvalues))
+    step = np.median(np.diff(xvalues))
+    tol = step / 2
 
     xvalues_grid = [xvalues[0]]
     i = 1
@@ -79,6 +80,7 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
             i += 1
         # detect a small jump
         elif abs(new - previous) > step + tol:
+            #print("adding intermediate between", previous, new,"because",new-previous,">", step+tol)
             xvalues_grid.append(previous + step)
         else:
             xvalues_grid.append(new)
@@ -181,7 +183,8 @@ class Inference(object):
         if verbose:
             print("number of frequencies after:", np.sum(self.valid_idx))
 
-    def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None):
+    def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None, 
+                     interpolate=INTERPOLATE):
         """
         Perform distance inference on current data.
         """
@@ -203,8 +206,11 @@ class Inference(object):
                 distance_range=self.distance_range_cm,
                 sigma=sigma,
                 azimuth_deg=self.azimuth_deg,
+                interpolate=interpolate
             )
         elif algorithm == "cost":
+            if interpolate:
+                print("Warning: interpolating for cost algorithm doesn't make sense.")
             distances_cm = (
                 self.distances_cm[valid] if self.distances_cm is not None else None
             )
@@ -598,7 +604,7 @@ def get_1d_spectrum(spec):
     return vals
 
 
-def get_angle_distribution(signals_f, frequencies, mics):
+def get_angle_distribution(signals_f, frequencies, mics, cancel_centre=True):
     from audio_stack.beam_former import BeamFormer
 
     assert (
@@ -611,7 +617,7 @@ def get_angle_distribution(signals_f, frequencies, mics):
     beamformer = BeamFormer(mic_positions=mics.T)
     R = beamformer.get_correlation(signals_f)
     spectrum = beamformer.get_lcmv_spectrum(
-        R, frequencies_hz=frequencies, extra_constraints=[], cancel_centre=True
+        R, frequencies_hz=frequencies, extra_constraints=[], cancel_centre=cancel_centre
     )
     probs = get_1d_spectrum(spectrum)
     return beamformer.theta_scan_deg, probs

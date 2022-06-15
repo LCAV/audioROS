@@ -93,11 +93,11 @@ def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, zoom=T
     context = Context.get_platform_setup()
 
     d_wall_m = distance_cm * 1e-2  # distance of wall
-    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of drone
+    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of robot
     mic_positions = context.mics
     source = context.source + offset
 
-    # note that we need to take the negative azimuth, because the drone has to
+    # note that we need to take the negative azimuth, because the robot has to
     # be moved in the opposite direction.
     mic_positions = offset + rotate_mics(mic_positions, -azimuth_deg)
 
