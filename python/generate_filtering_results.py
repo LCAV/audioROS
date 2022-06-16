@@ -21,13 +21,15 @@ elif PLATFORM == "epuck":
     from epuck_description_py.experiments import DISTANCES_CM
     from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
 
+from generate_flying_results import get_max_signals
+
 from utils.estimators import get_estimate
 from utils.simulation import get_freq_slice_theory, get_freq_slice_pyroom, WIDEBAND_FILE
 from utils.pandas_utils import save_pickle
 from utils.plotting_tools import make_dirs
+from utils.simulation import create_wideband_signal
 
 from utils.moving_estimators import MovingEstimator
-from utils.pandas_utils import save_pickle
 from utils.particle_estimators import ParticleEstimator
 from utils.split_particle_estimators import SplitParticleEstimator
 from utils.histogram_estimators import HistogramEstimator
@@ -40,6 +42,13 @@ DISCRETIZATIONS = dict(
     medium=(3.0, 20),
     coarse=(5.0, 30),
     supercoarse=(10.0, 90),
+)
+N_PARTICLES = dict(
+      superfine=1600,
+           fine=800,
+         medium=400,
+         coarse=200,
+    supercoarse=100,
 )
 
 PARAMETERS_ALL = dict(
@@ -56,7 +65,7 @@ DMAX = 80
 
 CALIBRATION = "iir"
 ALPHA_IIR = 0.3
-BEAMFORM = True
+BEAMFORM = False
 
 USE_PYROOMACOUSTICS = True
 
@@ -83,7 +92,9 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
     # to ensure reproducibility for particle filter
     np.random.seed(1)
 
-    def fill_distance(err_df, probs_dist, method):
+    def fill_distance(err_df, res, method):
+        probs_dist = res["prob_dist_moving"]
+        distances_cm = res["dist_moving"]
         d = get_estimate(distances_cm, probs_dist)
         err_df.loc[len(err_df), :] = {
             "error": d - distance,
@@ -96,7 +107,9 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
             "chosen_mics": chosen_mics
         }
 
-    def fill_angle(err_df, probs_angles, method):
+    def fill_angle(err_df, res, method):
+        probs_angles = res["prob_angle_moving"]
+        angles_deg = res["angle_moving"]
         a = get_estimate(angles_deg, probs_angles)
         error_deg = angle_error(a, gt_azimuth_deg)
         runtime = time.time() - t1
@@ -175,14 +188,13 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
     )
 
     df_chosen.sort_values("distance", ascending=False, inplace=True)
-    frequencies = df_chosen.iloc[0].frequencies_matrix[0, :]
 
     for discretization in parameters["discretizations"]:
         step_cm, step_deg = DISCRETIZATIONS[discretization]
         print(f"----------------- discretization {discretization} -------------------")
         distances_cm = np.arange(DMIN, DMAX, step=step_cm)
         angles_deg = np.arange(360, step=step_deg)
-        n_particles = len(distances_cm) * len(angles_deg) // 2
+        n_particles = N_PARTICLES[discretization]
         print(f"Nd = {len(distances_cm)}, Na = {len(angles_deg)} -> Np = {n_particles}")
 
         WallDetection.CALIBRATION = CALIBRATION  # fixed, iir, window
@@ -191,16 +203,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
         WallDetection.MASK_BAD = None
         WallDetection.SIMPLIFY_ANGLES = False
         WallDetection.BEAMFORM = beamform
-
-        if USE_PYROOMACOUSTICS:
-            try:
-                signal = np.load(WIDEBAND_FILE)
-            except Exception as e:
-                from utils.simulation import create_wideband_signal
-                signal = create_wideband_signal(frequencies)
-                make_dirs(WIDEBAND_FILE)
-                np.save(WIDEBAND_FILE, signal)
-                print("saved new file as", WIDEBAND_FILE)
+        WallDetection.N_PARTICLES = n_particles
 
         for method in parameters["methods"]:
             print("running", method)
@@ -210,16 +213,7 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
                     estimator_dict[f"histogram {n_window}"] = MovingEstimator(
                         n_window=n_window, distances_cm=distances_cm, angles_deg=angles_deg
                     )
-                estimator_dict[f"particle {n_particles}"] = ParticleEstimator(
-                    n_particles=n_particles,
-                    distances_cm=distances_cm,
-                    angles_deg=angles_deg,
-                )
-                #estimator_dict[f"split particle {n_particles}"] = SplitParticleEstimator(
-                #    n_particles=n_particles,
-                #    distances_cm=distances_cm,
-                #    angles_deg=angles_deg,
-                #)
+                estimator_dict[f"particle {n_particles}"] = "particle"
                 ##estimator_dict["histogram"] = HistogramEstimator(
                 #    distances_cm=distances_cm,
                 #    angles_deg=angles_deg
@@ -227,19 +221,27 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
                 
                 wall_detection_dict = {}
                 for key, value in estimator_dict.items():
-                    try: 
-                        wall_detection_dict[key] = WallDetection(python_only=True, estimator=value)
-                    except:
-                        print(f"Skipping {key}")
+                    wall_detection_dict[key] = WallDetection(python_only=True, estimator=value)
 
                 print(f"Using mics: {chosen_mics}")
                 p = progressbar.ProgressBar(maxval=len(df_chosen.distance))
                 p.start()
                 for i, (distance_wrong, df_dist) in enumerate(df_chosen.groupby("distance", sort=False)):
                     distance = gt_distances_cm[i]
+
+                    # need to read signal to find frequencies
+                    stft_exp = df_dist.loc[:, "stft"].iloc[0] # verified: 3 x 4 x 34
+                    if PLATFORM == "epuck":
+                        signals_f, frequencies = get_max_signals(stft_exp[:, chosen_mics, :], df_dist.loc[:, "frequencies_matrix"].iloc[0])
+                        signals_f = signals_f.T
+                    else:
+                        signals_f = average_signals(stft_exp)[chosen_mics, :]
+                        frequencies = df_dist.iloc[0].frequencies_matrix[0, :]
+                    
                     #print("wrong:", distance_wrong, "right:", distance)
                     if method == "theoretical":
                         if USE_PYROOMACOUSTICS:
+                            signal = np.load(WIDEBAND_FILE)
                             signals_f = get_freq_slice_pyroom(
                                 frequencies,
                                 distance,
@@ -257,29 +259,25 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
                                 azimuth_deg=gt_azimuth_deg,
                                 chosen_mics=chosen_mics,
                             )
-                            signals_f = np.sqrt(signals_f)  # now it's 4x32
-                    else:
-                        stft_exp = df_dist.loc[:, "stft"].iloc[0] # verified: 3 x 4 x 34
-                        signals_f = average_signals(stft_exp)[chosen_mics, :]
+                            signals_f = np.sqrt(signals_f.T)  # now it's 4x32
 
                     position_cm = [0, -distance, 50]
-                    yaw_deg = 0
+                    
+                    yaw_deg = 0 #90 - WALL_ANGLE_DEG_STEPPER
                     for name, wall_detection in wall_detection_dict.items():
-                        assert wall_detection.CALIBRATION == CALIBRATION
-                        assert wall_detection.MASK_BAD is None
                         t1 = time.time()
-                        
                         res = wall_detection.listener_callback_offline(
                             signals_f, frequencies, position_cm, yaw_deg, chosen_mics=chosen_mics
                         )
                         if res is None:
                             print("problem with",position_cm, yaw_deg, chosen_mics)
                             continue
+                        #print(res["prob_dist_static"][:10])
                         probs_dist = res["prob_dist_moving"]
                         probs_angles = res["prob_angle_moving"]
                         runtime = time.time() - t1
-                        fill_distance(err_df, probs_dist, method=f"{method} {name}")
-                        fill_angle(err_df, probs_angles, method=f"{method} {name}")
+                        fill_distance(err_df, res, method=f"{method} {name}")
+                        fill_angle(err_df, res, method=f"{method} {name}")
 
                     p.update(i)
 
@@ -297,14 +295,17 @@ if __name__ == "__main__":
         motors = "all45000"
         bin_selection = 5
         name = "stepper"
+        best_mics = [[0,1,2,3]]
     elif PLATFORM == "epuck":
+        #raise NotImplementedError("Cannot run this script because of bin_selection==0 for epuck")
         exp_name = "2021_07_27_epuck_wall"
         motors = "sweep_and_move"
         bin_selection = 0
         name = "epuck"
+        best_mics = [[0,1,2,3]]
 
     df_all = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
-    df_all = df_all.reindex(index=df_all.index[::-1])
+    df_all = df_all.reindex(index=df_all.index[::-1]) # reverse to emulate wall approach
 
     parameters = dict(
         discretizations=[
@@ -317,35 +318,28 @@ if __name__ == "__main__":
         #n_windows=[1, 3, 5],
         n_windows=[],
         methods=["calibrated", "theoretical"],
-        #methods=["calibrated"],
-        chosen_mics=[[0,1,2,3]],
+        chosen_mics=best_mics,
     )
-    for beamform in [True, False]:
-        df_chosen = df_all.loc[
-            (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
-        ].copy()
-        if beamform:
-            fname = f"results/{name}_results_beamform.pkl"
-        else:
-            fname = f"results/{name}_results.pkl"
-        generate_results(df_chosen, fname=fname, parameters=parameters, beamform=beamform)
-
+    df_chosen = df_all.loc[
+        (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
+    ].copy()
+    if BEAMFORM:
+        fname = f"results/{name}_results_beamform.pkl"
+    else:
+        fname = f"results/{name}_results.pkl"
+    generate_results(df_chosen, fname=fname, parameters=parameters, beamform=BEAMFORM)
 
     parameters = dict(
         discretizations=["fine"],
         n_windows=[], # use only particle 
-        #methods=["theoretical", "calibrated"],
         methods=["calibrated"],
-        #chosen_mics= [m for n in range(1, 5) for m in itertools.combinations(range(4), n)]
         chosen_mics= [m for n in range(1, 5) for m in itertools.combinations(range(4), n)]
     )
-    for beamform in [True, False]:
-    #for beamform in [False]:
-        if beamform:
-            fname = f"results/{fname}_results_mics_ablation_beamform.pkl"
-        else:
-            fname = f"results/{name}_results_mics_ablation.pkl"
-        df_chosen = df_all.loc[
-            (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
-        ].copy()
-        generate_results(df_chosen, fname=fname, parameters=parameters, beamform=beamform)
+    if BEAMFORM:
+        fname = f"results/{fname}_results_mics_ablation_beamform.pkl"
+    else:
+        fname = f"results/{name}_results_mics_ablation.pkl"
+    df_chosen = df_all.loc[
+        (df_all.motors == motors) & (df_all.bin_selection == bin_selection)
+    ].copy()
+    generate_results(df_chosen, fname=fname, parameters=parameters, beamform=BEAMFORM)

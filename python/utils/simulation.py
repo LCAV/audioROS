@@ -10,9 +10,11 @@ from .constants import SPEED_OF_SOUND, PLATFORM
 if PLATFORM == "epuck":
     from epuck_description_py.parameters import N_BUFFER, FS
     from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+    WIDEBAND_FILE = "results/wideband_epuck.npy"
 else:
     from crazyflie_description_py.parameters import N_BUFFER, FS
     from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+    WIDEBAND_FILE = "results/wideband_crazyflie.npy"
 from .frequency_analysis import get_bin
 from .geometry import *
 from .signals import generate_signal
@@ -20,7 +22,6 @@ from .signals import generate_signal
 # default wall absorption (percentage of amplitude that is lost in reflection):
 WALL_ABSORPTION = 0.2
 GAIN = 1.0  # default amplitude for input signals
-WIDEBAND_FILE = "results/wideband.npy"
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
 
 
@@ -53,15 +54,15 @@ def simulate_distance_estimator(
     return distance_estimator
 
 
-def create_wideband_signal(frequencies, duration_sec=1.0):
+def create_wideband_signal(frequencies, duration_sec=2.0):
     phase = np.random.uniform(0, 2 * np.pi)
     kwargs = dict(
         signal_type="mono",
         duration_sec=duration_sec,
         Fs=FS,
     )
-    signal = generate_signal(frequency_hz=frequencies[1], phase_offset=phase, **kwargs)
-    for f in frequencies[2:]:
+    signal = generate_signal(frequency_hz=frequencies[0], phase_offset=phase, **kwargs)
+    for f in frequencies[1:]:
         phase = np.random.uniform(0, 2 * np.pi)
         signal += generate_signal(frequency_hz=f, phase_offset=phase, **kwargs)
     return signal

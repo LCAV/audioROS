@@ -65,6 +65,8 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
         print("Warning: giving step is depcreated")
 
     #step = np.min(np.diff(xvalues))
+    #tol = 5
+
     step = np.median(np.diff(xvalues))
     tol = step / 2
 

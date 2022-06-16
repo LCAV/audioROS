@@ -29,7 +29,6 @@ from utils.inference import get_angle_distribution as get_beamform_distribution
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 from utils.particle_estimators import ParticleEstimator
-from utils.split_particle_estimators import SplitParticleEstimator
 from utils.histogram_estimators import HistogramEstimator
 
 # dslice
@@ -41,7 +40,7 @@ PUBLISH_RAW = False
 
 # corresponds to discretization "fine":
 DISTANCES_CM = np.arange(7, 80, step=2)
-ANGLES_DEG = np.arange(360, step=10)
+ANGLES_DEG = np.arange(360, step=1)
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
 N_MICS = 4
@@ -156,7 +155,7 @@ class WallDetection(NodeWithParams):
 
     # estimator variables
     N_WINDOW = 5
-    N_PARTICLES = 200
+    N_PARTICLES = 400
 
     def __init__(self, python_only=False, estimator="moving", angles_deg=ANGLES_DEG):
         if not python_only:
@@ -219,20 +218,8 @@ class WallDetection(NodeWithParams):
         elif estimator == "particle":
             self.estimator = ParticleEstimator(
                 n_particles=self.N_PARTICLES, 
-                angles_deg=angles_deg, 
-                distances_cm=DISTANCES_CM
             )
-        elif estimator == "split_particle":
-            if not self.BEAMFORM:
-                raise ValueError("Need beamforming to use split particle filter")
-            self.estimator = SplitParticleEstimator(
-                n_particles=self.N_PARTICLES, 
-                angles_deg=angles_deg, 
-                distances_cm=DISTANCES_CM
-            )
-        elif type(estimator) in [MovingEstimator, ParticleEstimator, HistogramEstimator, SplitParticleEstimator]:
-            if type(estimator) == SplitParticleEstimator:
-                assert self.BEAMFORM, "Need beamforming to use split particle filter"
+        elif type(estimator) in [MovingEstimator, ParticleEstimator, HistogramEstimator]:
             self.estimator = estimator
         else:
             raise ValueError(estimator)
@@ -491,6 +478,14 @@ class WallDetection(NodeWithParams):
                 mics = self.estimator.context.mics[chosen_mics, :].T
             else:
                 mics = self.estimator.context.mics.T
+
+            # TODO(FD): may need to rotate mics by current yaw?
+            #from audio_stack.beam_former import rotate_mics
+            #print("rotating by", 90)
+            #mics = rotate_mics(mics.T, 90).T
+            #print("-45 works!")
+            #print("mics for beamformer:", repr(mics))
+
             #print("beamforming with", mics.shape, signals_f.shape)
             angle_static, prob_angle_static = get_beamform_distribution(
                 signals_f.T, freqs, mics # 32 x 4, 32, 2 x 4
@@ -509,7 +504,6 @@ class WallDetection(NodeWithParams):
         return_dict["prob_angle_moving"] = prob_angle_moving
         return_dict["dist_moving"] = dist_moving
         return_dict["prob_dist_moving"] = prob_dist_moving
-
         return return_dict
         # return (
         #    dist_static,

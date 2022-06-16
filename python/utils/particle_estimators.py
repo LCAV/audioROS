@@ -21,7 +21,7 @@ from utils.constants import PLATFORM
 from filterpy.monte_carlo import stratified_resample as resample
 
 DISTANCES_CM = np.arange(7, 80, step=1.0)
-ANGLES_DEG = np.arange(360, step=1.0)
+ANGLES_DEG = np.arange(360, step=10.0)
 
 STD_DISTANCE_CM = 5.0
 STD_ANGLE_DEG = 20.0
@@ -187,7 +187,6 @@ class ParticleEstimator(BaseEstimator):
         for k, (a_local, d_local) in enumerate(self.states):
             # print(f"for global {d_particle:.1f}, local distance and angle: {d_local:.1f}, {a_local:.0f}")
             prob = 1.0
-            #print(self.context.name)
             for mic, diff_dist in self.difference_p[self.index].items():
                 delta_local_cm = self.context.get_delta(a_local, d_local, mic_idx=mic)
                 prob *= diff_dist(delta_local_cm)  # interpolate at delta
@@ -224,7 +223,6 @@ class ParticleEstimator(BaseEstimator):
 
             a_global = self.rotations[previous] + self.states[:, 0]
             self.states[:, 0] = from_0_to_360(self.states[:, 0] - rot_delta)
-            #print("correcting distance by", -get_normal_matrix(a_global)[:10] @ pos_delta)
             self.states[:, 1] = self.states[:, 1] - get_normal_matrix(a_global) @ pos_delta
 
         self.states[:, 0] += np.random.normal(
