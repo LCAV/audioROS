@@ -28,6 +28,8 @@ USE_FIXED_THRESH = True
 
 # walls location per dataset, [distance_cm, angle_deg]
 WALLS_DICT = {
+    "2021_07_08_stepper_fast": [[1e-3, 90]],
+    "2021_07_27_epuck_wall": [[1e-3, 90]],
     "2021_10_12_flying": [[100, 90]],
     "2021_11_23_demo": [[100, 90]],  # , [0.1, -90]],
     "2022_01_25": [[80, 90]],  # , [0.1, -90]],
@@ -85,7 +87,11 @@ def get_groundtruth_distances(
         ]
 
     data_df = pd.read_pickle(f"../datasets/{exp_name}/all_data.pkl")
-    row = data_df.loc[data_df.appendix == appendix].iloc[0]
+    try:
+        row = data_df.loc[data_df.appendix == appendix].iloc[0]
+    except:
+        print(f"did not find {appendix} in {data_df.appendix.unique()} for {exp_name}")
+
     if flying:
         from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
 
@@ -100,6 +106,7 @@ def get_groundtruth_distances(
         walls = WALLS_DICT[exp_name]
     distances_wall = None  # np.full(positions_cm.shape[0], np.nan)
     angles_wall = None  # np.full(positions_cm.shape[0], np.nan)
+
     for wall in walls:
         distances_here = wall[0] - positions_cm.dot(normal(wall[1]))
         angles_here = wall[1] - yaws_deg
@@ -241,9 +248,10 @@ def generate_classifier_results(matrix_df, fname="", verbose=False):
 
 
 if __name__ == "__main__":
+    appendix = "test4"
     for estimator in ["particle", "moving"]:
         try:
-            matrix_df = pd.read_pickle(f"results/demo_results_matrices_{estimator}.pkl")
+            matrix_df = pd.read_pickle(f"results/demo_results_matrices_{estimator}{appendix}.pkl")
         except FileNotFoundError:
             print("Run generate_flying_results.py to generate results.")
             raise

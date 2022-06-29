@@ -1,7 +1,6 @@
 import sys
 
 import numpy as np
-import pyroomacoustics as pra
 
 from audio_stack.beam_former import rotate_mics
 from audio_simulation.geometry import ROOM_DIM
@@ -11,9 +10,11 @@ from .constants import SPEED_OF_SOUND, PLATFORM
 if PLATFORM == "epuck":
     from epuck_description_py.parameters import N_BUFFER, FS
     from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+    WIDEBAND_FILE = "results/wideband_epuck.npy"
 else:
     from crazyflie_description_py.parameters import N_BUFFER, FS
     from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+    WIDEBAND_FILE = "results/wideband_crazyflie.npy"
 from .frequency_analysis import get_bin
 from .geometry import *
 from .signals import generate_signal
@@ -21,7 +22,6 @@ from .signals import generate_signal
 # default wall absorption (percentage of amplitude that is lost in reflection):
 WALL_ABSORPTION = 0.2
 GAIN = 1.0  # default amplitude for input signals
-WIDEBAND_FILE = "results/wideband.npy"
 N_TIMES = 10  # number of buffers to use for average (pyroomacoutics)
 
 
@@ -54,42 +54,51 @@ def simulate_distance_estimator(
     return distance_estimator
 
 
-def create_wideband_signal(frequencies, duration_sec=1.0):
+def create_wideband_signal(frequencies, duration_sec=2.0):
     phase = np.random.uniform(0, 2 * np.pi)
-    kwargs = dict(signal_type="mono", duration_sec=duration_sec, Fs=FS,)
-    signal = generate_signal(frequency_hz=frequencies[1], phase_offset=phase, **kwargs)
-    for f in frequencies[2:]:
+    kwargs = dict(
+        signal_type="mono",
+        duration_sec=duration_sec,
+        Fs=FS,
+    )
+    signal = generate_signal(frequency_hz=frequencies[0], phase_offset=phase, **kwargs)
+    for f in frequencies[1:]:
         phase = np.random.uniform(0, 2 * np.pi)
         signal += generate_signal(frequency_hz=f, phase_offset=phase, **kwargs)
     return signal
 
 
 def generate_room(
-    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS
+    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS, source=True, chosen_mics=None
 ):
+    import pyroomacoustics as pra
+
     """ Generate two-dimensional setup using pyroomacoustics. """
-    source, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
+    source_position, mic_positions = get_setup(distance_cm, azimuth_deg, ax)
+    if chosen_mics is not None:
+        mic_positions = mic_positions[chosen_mics, :]
 
     m = pra.Material(energy_absorption="glass_3mm")
     room = pra.ShoeBox(fs=fs_here, p=ROOM_DIM[:2], max_order=1, materials=m)
 
     beam_former = pra.Beamformer(mic_positions.T, room.fs)
     room.add_microphone_array(beam_former)
-    room.add_source(source)
+    if source:
+        room.add_source(source_position)
     return room
 
 
 def get_setup(distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, zoom=True):
-    """ Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
+    """Create a setup for pyroomacoustics that corresponds to distance_cm and azimuth_deg"""
 
     context = Context.get_platform_setup()
 
     d_wall_m = distance_cm * 1e-2  # distance of wall
-    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of drone
+    offset = [ROOM_DIM[0] - d_wall_m, ROOM_DIM[1] / 2]  # location of robot
     mic_positions = context.mics
     source = context.source + offset
 
-    # note that we need to take the negative azimuth, because the drone has to
+    # note that we need to take the negative azimuth, because the robot has to
     # be moved in the opposite direction.
     mic_positions = offset + rotate_mics(mic_positions, -azimuth_deg)
 
@@ -150,32 +159,33 @@ def get_df_theory_simple(
         frequencies_hz = np.array(frequencies_hz).reshape((1, -1))
 
     mag_squared = (
-        alpha0 ** 2
-        + alpha1 ** 2
+        alpha0**2
+        + alpha1**2
         + 2 * alpha0 * alpha1 * np.cos(2 * np.pi * frequencies_hz * deltas_m / c)
     )  # n_deltas x n_freqs or n_freqs
     return mag_squared * gain
 
 
-def get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
-    """ 
+def get_average_signals(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
+    """
     :param signal: signal to use for simulation, array
     :param n_buffer: buffer size for "STFT"
     :param n_times: number of buffers to average. Will start fromsecond buffer.
     """
     buffers_f = get_buffers(room, signal, n_buffer, n_times)
-    return np.mean(np.abs(buffers_f), axis=0)
+    return np.mean(buffers_f, axis=0)
 
 
 def get_buffers(room, signal, n_buffer=N_BUFFER, n_times=N_TIMES):
-    """ 
+    """
     :param signal: signal to use for simulation, array
     :param n_buffer: buffer size for "STFT"
     :param n_times: number of buffers to average. Will start fromsecond buffer.
     """
-    assert len(room.sources) == 1
 
-    room.sources[0].add_signal(signal)
+    for i in range(len(room.sources)):
+        if room.sources[i].signal is None:
+            room.sources[i].add_signal(signal)
     room.simulate()
 
     assert (n_times * n_buffer) < room.mic_array.signals.shape[
@@ -214,11 +224,12 @@ def get_freq_slice_pyroom(
     signal,
     azimuth_deg=WALL_ANGLE_DEG_STEPPER,
     chosen_mics=None,
+    return_complex=False
 ):
-    room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg)
+    room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg, chosen_mics=chosen_mics)
 
     n_times = len(signal) // N_BUFFER
-    mag = get_average_magnitude(
+    avg_signal = get_average_signals(
         room, signal, n_buffer=N_BUFFER, n_times=n_times
     )  # n_mics x n_frequencies
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
@@ -226,20 +237,24 @@ def get_freq_slice_pyroom(
         bins_ = [get_bin(freqs_all, f) for f in frequencies]
     else:
         bins_ = np.arange(len(frequencies))
-    if chosen_mics is None:
-        return mag[:, bins_] ** 2
+
+    if return_complex:
+        return avg_signal[:, bins_] 
     else:
-        return mag[chosen_mics][:, bins_] ** 2
+        return np.abs(avg_signal)[:, bins_] ** 2
 
 
 def get_dist_slice_pyroom(
-    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100
+    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100, return_complex=False
 ):
     from .frequency_analysis import get_bin
 
     duration_sec = N_BUFFER * n_times / FS
     signal = generate_signal(
-        FS, duration_sec=duration_sec, signal_type="mono", frequency_hz=frequency,
+        FS,
+        duration_sec=duration_sec,
+        signal_type="mono",
+        frequency_hz=frequency,
     )
     freqs_all = np.fft.rfftfreq(N_BUFFER, 1 / FS)
     bin_ = get_bin(freqs_all, frequency)
@@ -247,17 +262,20 @@ def get_dist_slice_pyroom(
     Hs = []
     for d in distances_cm:
         room = generate_room(distance_cm=d, azimuth_deg=azimuth_deg)
-        mag = get_average_magnitude(room, signal, n_buffer=N_BUFFER, n_times=n_times)
-        Hs.append(mag[:, bin_] ** 2)
+        avg_signal = get_average_signals(room, signal, n_buffer=N_BUFFER, n_times=n_times)
+        if return_complex:
+            Hs.append(avg_signal[:, bin_])
+        else:
+            Hs.append(np.abs(avg_signal)[:, bin_] ** 2)
     return np.array(Hs)
 
 
 def get_freq_slice_theory(
     frequencies, distance_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, chosen_mics=range(4)
 ):
-    """ 
+    """
     We can incorporate relative movement by providing
-    distance_cm and azimuth_deg of same length as frequencies. 
+    distance_cm and azimuth_deg of same length as frequencies.
     """
     Hs = np.zeros((len(frequencies), len(chosen_mics)))
     for i, mic in enumerate(chosen_mics):
@@ -277,9 +295,9 @@ def get_dist_slice_theory(
     wall_absorption=WALL_ABSORPTION,
     gains=[GAIN] * 4,
 ):
-    """ 
+    """
     We can incorporate relative movement by providing
-    distance_cm and azimuth_deg of same length as frequencies. 
+    distance_cm and azimuth_deg of same length as frequencies.
     """
     if np.ndim(gains) == 0:
         gains = [gains] * len(chosen_mics)

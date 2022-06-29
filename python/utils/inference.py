@@ -29,7 +29,7 @@ N_MAX = 1000
 
 
 def get_uniform_grid(xvalues):
-    """ Fill too large spaces of xvalues with uniform sampling of the median spacing of xvalues.
+    """Fill too large spaces of xvalues with uniform sampling of the median spacing of xvalues.
     Example:
     [0, 2, 4, 10, 12, 14]
     becomes
@@ -53,22 +53,47 @@ def get_uniform_grid(xvalues):
 
 
 def interpolate_parts(xvalues, values, step=None, verbose=False):
-    """ Smart interpolation scheme. 
+    """Smart interpolation scheme.
 
     Interpolate at uniform grid, leaving out points that are further
-    from recorded data than two times the average or given spacing. 
+    from recorded data than two times the average or given spacing.
 
     """
     import scipy.interpolate
 
     if step is not None:
-        raise ValueError("Giving step is depcreated")
+        print("Warning: giving step is depcreated")
 
-    xvalues_grid = get_uniform_grid(xvalues)
+    #step = np.min(np.diff(xvalues))
+    #tol = 5
+
+    step = np.median(np.diff(xvalues))
+    tol = step / 2
+
+    xvalues_grid = [xvalues[0]]
+    i = 1
+    while i < len(xvalues):
+        previous = xvalues_grid[-1]
+        new = xvalues[i]
+
+        # detect a large jump
+        if abs(new - previous) > 2 * step + tol:
+            xvalues_grid.append(new)
+            i += 1
+        # detect a small jump
+        elif abs(new - previous) > step + tol:
+            #print("adding intermediate between", previous, new,"because",new-previous,">", step+tol)
+            xvalues_grid.append(previous + step)
+        else:
+            xvalues_grid.append(new)
+            i += 1
+    xvalues_grid = np.array(xvalues_grid)
+
+    #xvalues_grid = get_uniform_grid(xvalues)
     step = np.median(np.diff(xvalues_grid))
 
     # valid points are no more than 2*step from actual data.
-    valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) <= 2 * step, axis=1)
+    valid = np.any(np.abs(xvalues_grid[:, None] - xvalues[None, :]) < 2 * step, axis=1)
     # if np.sum(~valid):
     #    print("Warning: removing some values before interpolation!")
 
@@ -77,11 +102,6 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
         print(f"interpolating at {np.sum(valid)} points")
 
     xvalues_grid = xvalues_grid[valid]
-    assert np.abs(np.median(np.diff(xvalues_grid)) - step) < 1e-10, (
-        np.median(np.diff(xvalues_grid)),
-        step,
-    )
-
     interpolator = scipy.interpolate.interp1d(
         xvalues, values, kind="linear", fill_value="extrapolate"
     )
@@ -118,7 +138,9 @@ class Inference(object):
         :param stds: standard deviations (n_mics, )
         """
         assert slices.shape[1] == len(values), slices.shape
-        self.slices = slices
+        self.slices = {}
+        for mic_idx, slice_ in zip(mics, slices):
+            self.slices[mic_idx] = slice_
         self.values = values
         self.stds = stds
         self.distances_cm = distances
@@ -145,8 +167,9 @@ class Inference(object):
         self.valid_idx &= valid_idx
 
         f_calib = self.calibration_function(self.values[self.valid_idx])
-        f_calib_mics = f_calib[self.mics, :]
-        self.slices[:, self.valid_idx] /= f_calib_mics
+        #f_calib_mics = f_calib[self.mics, :]
+        for k in self.slices.keys():
+            self.slices[k][self.valid_idx] /= f_calib[k]
         self.is_calibrated = True
 
     def filter_out_freqs(self, freq_ranges=BAD_FREQ_RANGES, verbose=False):
@@ -162,26 +185,34 @@ class Inference(object):
         if verbose:
             print("number of frequencies after:", np.sum(self.valid_idx))
 
-    def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None):
+    def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None, 
+                     interpolate=INTERPOLATE):
         """
         Perform distance inference on current data.
         """
+        from copy import deepcopy
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
-        valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
+        valid = deepcopy(self.valid_idx)
+        for mic, slice_ in self.slices.items():
+            valid = valid & (~np.isnan(slice_))
+        #valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
 
         if algorithm == "bayes":
             sigma = self.stds[mic_idx] if self.stds is not None else None
             dists_cm, proba, diffs_cm = get_probability_bayes(
-                self.slices[mic_idx, valid] ** 2,
+                self.slices[mic_idx][valid] ** 2, 
                 self.values[valid],
                 mic_idx=mic_idx,
                 distance_range=self.distance_range_cm,
                 sigma=sigma,
                 azimuth_deg=self.azimuth_deg,
+                interpolate=interpolate
             )
         elif algorithm == "cost":
+            if interpolate:
+                print("Warning: interpolating for cost algorithm doesn't make sense.")
             distances_cm = (
                 self.distances_cm[valid] if self.distances_cm is not None else None
             )
@@ -192,7 +223,7 @@ class Inference(object):
             diffs_m, __ = get_deltas_from_global(self.azimuth_deg, dists_cm, mic_idx)
             diffs_cm = diffs_m * 1e2
             proba = get_probability_cost(
-                self.slices[mic_idx, valid] ** 2,
+                self.slices[mic_idx][valid] ** 2,
                 self.values[valid],
                 dists_cm,
                 mic_idx=mic_idx,
@@ -213,7 +244,7 @@ class Inference(object):
             diffs_cm = diffs_m * 1e2
             azimuth_degs = np.arange(360, step=10)
             proba_2d = get_probability_cost_2d(
-                self.slices[mic_idx, valid],
+                self.slices[mic_idx][valid],
                 self.values[valid],
                 dists_cm,
                 mic_idx=mic_idx,
@@ -241,12 +272,15 @@ class Inference(object):
     def plot(self, i_mic, ax, label=None, standardize=False, **kwargs):
         from copy import deepcopy
 
-        slice_mic = deepcopy(self.slices[i_mic, self.valid_idx])
+        slice_mic = deepcopy(self.slices[i_mic][self.valid_idx])
         if standardize:
             slice_mic = standardize_vec(slice_mic)
 
         ax.plot(
-            self.values[self.valid_idx], slice_mic, label=label, **kwargs,
+            self.values[self.valid_idx],
+            slice_mic,
+            label=label,
+            **kwargs,
         )
 
 
@@ -274,12 +308,12 @@ def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
 
 def get_posterior(abs_fft, sigma=None, data=None):
     N = len(abs_fft)
-    periodogram = 1 / N * abs_fft ** 2
+    periodogram = 1 / N * abs_fft**2
     # print('periodogram:', np.min(periodogram), np.max(periodogram))
 
     if sigma is not None:
         if np.any(sigma > 0):
-            periodogram /= sigma ** 2
+            periodogram /= sigma**2
             # TODO(FD) we do below for numerical reasons. its effect
             # is undone by later exponentiation anyways. Make sure
             # this really as no effect on the result.
@@ -322,12 +356,16 @@ def get_probability_bayes(
 
     if interpolate:
         frequencies_grid, f_slice_grid = interpolate_parts(
-            frequencies, f_slice,  # step=20
+            frequencies,
+            f_slice,  # step=20
         )
+        #print("freqs = ", repr(frequencies))
+        #print("freqs_interp = ", repr(frequencies_grid))
         abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
         posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
     else:
+        print("Warning: not interpolating")
         abs_fft = get_abs_fft(f_slice, n_max=n_max)
 
         # get path interference differences corresponding to used frequencies
@@ -422,7 +460,12 @@ def get_probability_cost(
 
 
 def get_periods_fft(
-    d_slice, frequency, relative_distances_cm, n_max=N_MAX, bayes=False, sigma=None,
+    d_slice,
+    frequency,
+    relative_distances_cm,
+    n_max=N_MAX,
+    bayes=False,
+    sigma=None,
 ):
     # the distribution over measured period.
     d_m = np.mean(np.diff(relative_distances_cm)) * 1e-2
@@ -456,7 +499,7 @@ def get_approach_angle_fft(
     interpolate=INTERPOLATE,
     factor=2,
 ):
-    """ 
+    """
     Get probabilities over approach angles.
 
     :param d_slice: amplitude measurements along distance
@@ -546,3 +589,37 @@ def get_approach_angle_cost(
     probs_angle = np.nanmax(probs, axis=0)  # take maximum across distances
     probs_angle /= np.nansum(probs_angle)
     return probs_angle
+
+
+def get_1d_spectrum(spec):
+    """Get one-dimensional angle distribution from freq-angle spectrum.
+
+    :param spec: spectrum of shape n_freqs x n_angles
+    :returns: a distribution of length n_angles
+
+    """
+    tol = max(np.min(spec[spec > 0]), 1e-2)
+    spec[spec < tol] = tol
+    vals = np.sum(np.log10(spec), axis=0)
+    if ((np.nanmax(vals) - np.nanmin(vals)) > 0):
+        vals = (vals - np.nanmin(vals)) / (np.nanmax(vals) - np.nanmin(vals))
+    return vals
+
+
+def get_angle_distribution(signals_f, frequencies, mics, cancel_centre=True):
+    from audio_stack.beam_former import BeamFormer
+
+    assert (
+        mics.shape[1] == signals_f.shape[1]
+    ), "mics should be dxN, signals_df should be FxN"
+    assert (
+        len(frequencies) == signals_f.shape[0]
+    ), "signals_df should be FxN, frequencies of length F"
+
+    beamformer = BeamFormer(mic_positions=mics.T)
+    R = beamformer.get_correlation(signals_f)
+    spectrum = beamformer.get_lcmv_spectrum(
+        R, frequencies_hz=frequencies, extra_constraints=[], cancel_centre=cancel_centre
+    )
+    probs = get_1d_spectrum(spectrum)
+    return beamformer.theta_scan_deg, probs

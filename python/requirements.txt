@@ -3,5 +3,7 @@ pandas
 matplotlib
 scipy>=1.7.3
 numpy>=1.22.1
-pyroomacoustics>=0.6.0
+#pyroomacoustics>=0.6.0  optional unless you want to use pyroomacoustics for simulation
 pyaml
+progressbar
+filterpy

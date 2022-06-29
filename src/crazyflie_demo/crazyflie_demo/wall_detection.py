@@ -24,9 +24,12 @@ from crazyflie_description_py.parameters import FLYING_HEIGHT_CM
 sys.path.append("python/")
 from utils.data_collector import DataCollector
 from utils.inference import Inference, get_approach_angle_fft
+from utils.inference import get_angle_distribution as get_beamform_distribution
+
 from utils.estimators import DistanceEstimator, AngleEstimator
 from utils.moving_estimators import MovingEstimator
 from utils.particle_estimators import ParticleEstimator
+from utils.histogram_estimators import HistogramEstimator
 
 # dslice
 FREQ = 3000  # mono frequency signal
@@ -37,7 +40,7 @@ PUBLISH_RAW = False
 
 # corresponds to discretization "fine":
 DISTANCES_CM = np.arange(7, 80, step=2)
-ANGLES_DEG = np.arange(360, step=10)
+ANGLES_DEG = np.arange(360, step=1)
 
 WALL_ANGLE_DEG = 90  # for raw distribution only
 N_MICS = 4
@@ -50,7 +53,6 @@ TIME_BLIND_FLIGHT = 0  # seconds, set to 0 for no effect
 TIME_FORWARD = 60  # seconds, time to move forward in BLIND mode
 
 MAG_THRESH = 1e-3
-
 
 class State(Enum):
     GROUND = 0
@@ -111,7 +113,7 @@ def get_angle_distribution(dslices, resolve_side=False):
 
 
 class PythonLogger(object):
-    """ Simple wrapper for ROS2 logger that doesn't require ROS """
+    """Simple wrapper for ROS2 logger that doesn't require ROS"""
 
     def warn(self, msg):
         print("Warn:", msg)
@@ -126,12 +128,15 @@ class PythonLogger(object):
 class WallDetection(NodeWithParams):
     PARAMS_DICT = {"mode": Mode.FSLICE.value, "drone": int(DRONE)}
 
+    BEAMFORM = False
+
     MASK_BAD = "fixed"
     # MASK_BAD = "adaptive"
     # MASK_BAD = None
 
     BAD_FREQ_RANGES = [[0, 3100], [3600, 3800]]  # removes two frequencies
-    OUTLIER_FACTOR = 10  # reject values outside of OUTLIER_FACTOR * std window
+    BAD_FREQ_RANGES_EPUCK = [[0, 1000], [5300, 6000]]  # removes two frequencies
+    OUTLIER_FACTOR = None  # reject values outside of OUTLIER_FACTOR * std window
 
     # need at least two, otherwise end up with all-ones magnitudes_calib.
     N_CALIBRATION = 2
@@ -143,14 +148,16 @@ class WallDetection(NodeWithParams):
     # N_CALIBRATION = 10
     # CALIBRATION= "fixed"
 
-    SIMPLIFY_ANGLES = True
+    # if set to true, we use simplify the angles, meaning that we use
+    # the forward direction as our angle estimate. If we do not simplify
+    # angles, we simply use a uniform prior on the angle estimate.
+    SIMPLIFY_ANGLES = False
 
     # estimator variables
     N_WINDOW = 5
-    RELATIVE_MOVEMENT_STD = 1.0
-    N_PARTICLES = 100
+    N_PARTICLES = 400
 
-    def __init__(self, python_only=False, estimator="moving"):
+    def __init__(self, python_only=False, estimator="moving", angles_deg=ANGLES_DEG):
         if not python_only:
             print("initializing ros stuff")
             super().__init__("wall_detection")
@@ -172,7 +179,10 @@ class WallDetection(NodeWithParams):
                 SignalsFreq, "audio/signals_f", self.signals_synch.listener_callback, 10
             )
             self.subscription_pose = self.create_subscription(
-                PoseRaw, "geometry/pose_raw_synch", self.listener_callback, 10,
+                PoseRaw,
+                "geometry/pose_raw_synch",
+                self.listener_callback,
+                10,
             )
 
             if PUBLISH_RAW:
@@ -198,19 +208,18 @@ class WallDetection(NodeWithParams):
             self.estimator = MovingEstimator(
                 n_window=self.N_WINDOW,
                 distances_cm=DISTANCES_CM,
-                angles_deg=ANGLES_DEG,
-                relative_movement_std=self.RELATIVE_MOVEMENT_STD,
+                angles_deg=angles_deg,
+            )
+        elif estimator == "histogram":
+            self.estimator = HistogramEstimator(
+                distances_cm=DISTANCES_CM,
+                angles_deg=angles_deg,
             )
         elif estimator == "particle":
-            ParticleEstimator.ANGLES_DEG = ANGLES_DEG
-            ParticleEstimator.DISTANCE_RANGE_CM = [
-                np.min(DISTANCES_CM),
-                np.max(DISTANCES_CM),
-            ]
             self.estimator = ParticleEstimator(
-                n_particles=self.N_PARTICLES, global_=False
+                n_particles=self.N_PARTICLES, 
             )
-        elif type(estimator) in [MovingEstimator, ParticleEstimator]:
+        elif type(estimator) in [MovingEstimator, ParticleEstimator, HistogramEstimator]:
             self.estimator = estimator
         else:
             raise ValueError(estimator)
@@ -242,10 +251,10 @@ class WallDetection(NodeWithParams):
         self.start_forward = None
 
     def flight_check(self, position_cm=None):
-        """ 
+        """
         drone=0: analyzing bag file, should be "flying" to do analysis
         drone=1: only buzzer, for debugging, don't mind if not flying
-        drone=2: full experiment, has to be flying. 
+        drone=2: full experiment, has to be flying.
         """
         if self.current_params["drone"] == 1:
             return True
@@ -290,9 +299,9 @@ class WallDetection(NodeWithParams):
     def add_to_calib_iir(self, magnitudes):
         if self.calibration is None:
             self.calibration = magnitudes
-            self.calibrationsq = magnitudes ** 2
+            self.calibrationsq = magnitudes**2
         else:
-            valid = ~np.isnan(self.calibration)
+            valid = ~np.isnan(self.calibration) 
             self.calibration[valid] = (1 - self.ALPHA_IIR) * self.calibration[
                 valid
             ] + self.ALPHA_IIR * magnitudes[valid]
@@ -305,7 +314,7 @@ class WallDetection(NodeWithParams):
         self.calibration_count += 1
 
     def calibrate(self, magnitudes):
-        """  Note that invalid values are masked (set to zero). """
+        """Note that invalid values are masked (set to zero)."""
         if self.CALIBRATION in ("fixed", "window"):
             if self.calibration is None:
                 if self.calibration_data.shape[2] <= 1:
@@ -339,7 +348,7 @@ class WallDetection(NodeWithParams):
                 )
                 return magnitudes
 
-            var = self.calibrationsq - self.calibration ** 2
+            var = self.calibrationsq - self.calibration**2
             self.calibration_std = np.full(var.shape, np.nan)
             self.calibration_std[var > 0] = np.sqrt(var[var > 0])
             self.calibration_std[self.calibration_std == 0] = np.nan
@@ -354,12 +363,16 @@ class WallDetection(NodeWithParams):
         magnitudes_calib[~valid] = np.nan
         return magnitudes_calib
 
-    def get_raw_distributions(self, magnitudes_calib, freqs):
+    def get_raw_distributions(self, magnitudes_calib, freqs, chosen_mics=None):
         diff_dict = {}
+        if chosen_mics is None:
+            chosen_mics = range(magnitudes_calib.shape[0])
         self.inf_machine.add_data(
-            magnitudes_calib, freqs,  # 4 x 32
+            magnitudes_calib,
+            freqs,  # 4 x 32
+            mics=chosen_mics
         )
-        for mic_i in range(magnitudes_calib.shape[0]):
+        for mic_i in chosen_mics:
             __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
             diff_dict[mic_i] = (diff, prob_mic)
         return diff_dict
@@ -369,6 +382,12 @@ class WallDetection(NodeWithParams):
         if self.MASK_BAD == "fixed":
             remove = np.zeros(magnitudes.shape[1], dtype=bool)
             for freq_range in self.BAD_FREQ_RANGES:
+                remove |= (freq_range[0] <= freqs) & (freqs <= freq_range[1])
+            magnitudes[:, remove] = np.nan
+            return magnitudes
+        elif self.MASK_BAD == "fixed_epuck":
+            remove = np.zeros(magnitudes.shape[1], dtype=bool)
+            for freq_range in self.BAD_FREQ_RANGES_EPUCK:
                 remove |= (freq_range[0] <= freqs) & (freqs <= freq_range[1])
             magnitudes[:, remove] = np.nan
             return magnitudes
@@ -409,20 +428,21 @@ class WallDetection(NodeWithParams):
             raise ValueError(self.MASK_BAD)
 
     def listener_callback_offline(
-        self, signals_f, freqs, position_cm, yaw_deg, timestamp=0
+        self, signals_f, freqs, position_cm, yaw_deg, timestamp=0, chosen_mics=None
     ):
+
         if not self.flight_check(position_cm):
-            # print("did not pass flight check:", position_cm)
             return
 
         from audio_stack.parameters import WINDOW_CORRECTION
 
-        magnitudes = np.abs(signals_f).T  # 4 x 20
+        assert signals_f.shape[1] == len(freqs)
+        magnitudes = np.abs(signals_f)
+
         # just a formality to compare bag file to csv file.
         magnitudes *= WINDOW_CORRECTION[2]
 
         magnitudes = self.mask_bad_measurements(magnitudes, freqs)
-
         self.add_to_calib(magnitudes)
 
         magnitudes_calib = self.calibrate(deepcopy(magnitudes))
@@ -431,29 +451,66 @@ class WallDetection(NodeWithParams):
             return
 
         try:
-            diff_dict = self.get_raw_distributions(magnitudes_calib, freqs)
+            diff_dict = self.get_raw_distributions(magnitudes_calib, freqs, chosen_mics)
         except Exception as e:
             print("could not process calibrated magnitudes:", e)
-            raise e
-            return None
+            raise 
+            #print(magnitudes)
+            #print(magnitudes_calib, freqs, chosen_mics)
+            return 
 
-        distances_cm, probabilities = get_distance_distribution(diff_dict)
+        return_dict = {}
 
+        # get the distance probabilities without considering movement
+        dist_static, prob_dist_static = get_distance_distribution(diff_dict)
+        return_dict["dist_static"] = dist_static
+        return_dict["prob_dist_static"] = prob_dist_static
+
+        # get distance and angle probabilities, considering movement.
+        # diff_dict is in centimeters
         self.estimator.add_distributions(
-            diff_dict, position_cm=position_cm, rot_deg=yaw_deg,
+            diff_dict,
+            position_cm=position_cm,
+            rot_deg=yaw_deg,
         )
+        if self.BEAMFORM:
+            if chosen_mics is not None:
+                mics = self.estimator.context.mics[chosen_mics, :].T
+            else:
+                mics = self.estimator.context.mics.T
+
+            # TODO(FD): may need to rotate mics by current yaw?
+            #from audio_stack.beam_former import rotate_mics
+            #print("rotating by", 90)
+            #mics = rotate_mics(mics.T, 90).T
+            #print("-45 works!")
+            #print("mics for beamformer:", repr(mics))
+
+            #print("beamforming with", mics.shape, signals_f.shape)
+            angle_static, prob_angle_static = get_beamform_distribution(
+                signals_f.T, freqs, mics # 32 x 4, 32, 2 x 4
+            )
+            self.estimator.add_angle_distribution(angle_static, prob_angle_static)
+            return_dict["angle_static"] = angle_static
+            return_dict["prob_angle_static"] = prob_angle_static
+
         (
-            distances_cm,
-            probabilities_moving,
-            angles_deg,
-            probabilities_moving_angle,
+            dist_moving,
+            prob_dist_moving,
+            angle_moving,
+            prob_angle_moving,
         ) = self.estimator.get_distributions(simplify_angles=self.SIMPLIFY_ANGLES)
-        return (
-            distances_cm,
-            probabilities,
-            probabilities_moving,
-            probabilities_moving_angle,
-        )
+        return_dict["angle_moving"] = angle_moving
+        return_dict["prob_angle_moving"] = prob_angle_moving
+        return_dict["dist_moving"] = dist_moving
+        return_dict["prob_dist_moving"] = prob_dist_moving
+        return return_dict
+        # return (
+        #    dist_static,
+        #    prob_dist_static,
+        #    prob_dist_moving,
+        #    prob_angle_moving,
+        # )
 
     def listener_callback(self, msg_pose):
         if not self.state in [State.WAIT_DISTANCE, State.WAIT_ANGLE, State.WAIT_CALIB]:
@@ -521,11 +578,15 @@ class WallDetection(NodeWithParams):
 
             if PUBLISH_MOVING:
                 self.estimator.add_distributions(
-                    diff_dict, position_cm=r_world * 1e2, rot_deg=yaw,
+                    diff_dict,
+                    position_cm=r_world * 1e2,
+                    rot_deg=yaw,
                 )
-                (distances_cm, probabilities, *_,) = self.estimator.get_distributions(
-                    simplify_angles=SIMPLIFY_ANGLES
-                )
+                (
+                    distances_cm,
+                    probabilities,
+                    *_,
+                ) = self.estimator.get_distributions(simplify_angles=SIMPLIFY_ANGLES)
                 # self.logger.warn(f"{timestamp}, after adding {r_world[0] * 1e2:.2f}, {yaw:.1f}: {probabilities[2]}")
 
                 # TODO(FD) to save time, we could consider only publishing the distribution
@@ -769,6 +830,18 @@ class WallDetection(NodeWithParams):
                 self.logger.warn(f"Avoiding detected wall!")
             self.already_asking = False
 
+    def print_params(self):
+        print("calibration:", self.CALIBRATION)
+        print("n_calibration:", self.N_CALIBRATION)
+        print("alpha_iir:", self.ALPHA_IIR)
+        print("mask bad:", self.MASK_BAD )
+        print("outlier factor:", self.OUTLIER_FACTOR )
+        print("n_window:", self.N_WINDOW)
+        print("simplify_angles:", self.SIMPLIFY_ANGLES )
+        print("beamform:", self.BEAMFORM)
+        print("bad freq ranges:", self.BAD_FREQ_RANGES)
+        print("bad freq ranges epuck:", self.BAD_FREQ_RANGES_EPUCK)
+        print("n_particles:", self.N_PARTICLES)
 
 def main(args=None):
     rclpy.init(args=args)

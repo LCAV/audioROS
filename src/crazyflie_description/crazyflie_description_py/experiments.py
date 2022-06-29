@@ -7,6 +7,7 @@ import numpy as np
 # corresponds to the setup in BC325 with stepper motor:
 WALL_ANGLE_DEG_STEPPER = 132  # angle of wall in degrees, at start of experiment
 WALL_DISTANCE_CM_STEPPER = 8  # distance of wall in centimeters, at start of experiment
+DISTANCES_CM = np.arange(50, step=1)[::-1] + WALL_DISTANCE_CM_STEPPER
 
 # corresponds to flying experiments:
 WALL_DISTANCE_M = 0.2  # distance of wall in meters, at start of experiment

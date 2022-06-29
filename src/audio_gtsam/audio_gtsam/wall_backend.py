@@ -340,7 +340,7 @@ class WallBackend(object):
             distance = distance_estimates[d_i]
             azimuth = angle_estimates[a_i]
             distance_std = distance_stds[d_i]
-            azimuth_stds = angle_stds[a_i]
+            azimuth_std = angle_stds[a_i]
             if (distance is None) or (azimuth is None):
                 continue
 
@@ -359,7 +359,7 @@ class WallBackend(object):
                 # hack to get the local normal vector
                 # TODO(FD) in add_plane, we will convert the angle back to normal, so should
                 # probably refactor this. Also, when we don't care about the distance it
-                # is proably much easier to get the normal vector.
+                # is proably much easier to get the normal vector.  
                 plane_global = gtsam.OrientedPlane3(
                     np.r_[normal_vector_global, 0, 10]
                 )  # 10 is distance, doesn't matter
@@ -424,12 +424,13 @@ class WallBackend(object):
             return
         normal_vector_global = -v_estimate_global / np.linalg.norm(v_estimate_global)
 
+
         # hack to get the local normal vector
         # TODO(FD) in add_plane, we will convert the angle back to normal, so should
         # probably refactor this. Also, when we don't care about the distance it
         # is proably much easier to get the normal vector.
         plane_global = gtsam.OrientedPlane3(
-            np.r_[normal_vector_global, 0, 10]
+                np.r_[normal_vector_global, 0, 10]
         )  # 10 is distance, doesn't matter
 
         current_pose = self.result.atPose3(X(self.pose_index))

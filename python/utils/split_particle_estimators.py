@@ -9,67 +9,29 @@ from enum import Enum
 import numpy as np
 from scipy.stats import norm
 
-from utils.base_estimator import BaseEstimator, get_normal_matrix, from_0_to_360
-from utils.constants import PLATFORM
+from utils.base_estimator import BaseEstimator, get_normal_matrix, from_0_to_360, get_estimates
 
-
-# simplest, but expensive and might miss important particles:
-# from filterpy.monte_carlo import multinomial_resample as resample
-# better runtime and more uniform, but might miss important samples:
-# from filterpy.monte_carlo import residual_resample as resample
-# very uniform, doesn't miss important samples:
 from filterpy.monte_carlo import stratified_resample as resample
 
-DISTANCES_CM = np.arange(7, 80, step=1.0)
-ANGLES_DEG = np.arange(360, step=10.0)
+from utils.particle_estimators import resample_from_index, get_bins, State
+from utils.particle_estimators import RANDOM_PARTICLE_RATIO, INIT_UNIFORM, PREDICT_UNIFORM, STD_DISTANCE_CM, STD_ANGLE_DEG
+from utils.particle_estimators import DISTANCES_CM, ANGLES_DEG
 
-STD_DISTANCE_CM = 5.0
-STD_ANGLE_DEG = 20.0
+USE_ANGLE_PARTICLE = False
 
-# if True, ignore pose estimates and predict particles by adding
-# uniform disturbance.
-PREDICT_UNIFORM = False
+def get_histogram(values, states, weights):
+    bins = get_bins(values)
+    if len(bins) == 1:
+        probs = [1.0]
+    else:
+        probs, __ = np.histogram(states, bins=bins, weights=weights)
+    return probs
 
-INIT_UNIFORM = True
-
-# always create this percentage of random particles to make sure we don't get
-# get stuck in local minima. We replace the particles of lowest weight.
-RANDOM_PARTICLE_RATIO = 0.1
-
-class State(Enum):
-    NEED_UPDATE = 0
-    NEED_PREDICT = 1
-    NEED_RESAMPLE = 2
-    READY = 3
-    NEED_INIT = 4
-
-
-def get_bins(centers):
-    # centers: 1, 2, 3, 4
-    # bin_widths: 0.5, 0.5, 0.5
-    # bins = 0.5, 1.5, 2.5,
-    if len(centers) == 1:
-        return centers
-    bin_widths = np.diff(centers)
-    bins = np.r_[
-        centers[:-1] - bin_widths / 2,
-        centers[-1] - bin_widths[-1] / 2,
-        centers[-1] + bin_widths[-1] / 2,
-    ]
-    assert len(bins) == len(centers) + 1
-    return bins
-
-
-def resample_from_index(states, weights, indices):
-    states[:] = states[indices]
-    weights.fill(1.0 / len(weights))
-
-
-class ParticleEstimator(BaseEstimator):
+class SplitParticleEstimator(BaseEstimator):
     def __init__(
         self,
         n_particles,
-        platform=PLATFORM,
+        platform="crazyflie",
         distances_cm=DISTANCES_CM,
         angles_deg=ANGLES_DEG,
         predict_uniform=PREDICT_UNIFORM,
@@ -83,8 +45,8 @@ class ParticleEstimator(BaseEstimator):
         # (more localized in a sphere round center) but it is good enough.
         self.n_particles = n_particles
         self.states = np.empty((n_particles, 2))
-        
-        self.weights = np.ones(n_particles) / n_particles
+        self.weights_d = np.ones(n_particles) / n_particles
+        self.weights_a = np.ones(n_particles) / n_particles
 
         self.distances_cm = distances_cm
         self.angles_deg = angles_deg
@@ -94,19 +56,19 @@ class ParticleEstimator(BaseEstimator):
         # state machine to make sure predict, update and resample are done
         # in the correct order and not more than necessary.
         if INIT_UNIFORM:
-            dd, aa = np.meshgrid(distances_cm, angles_deg)
             self.states[:, 0] = np.random.choice(
-                aa.flatten(), size=n_particles, replace=True
+                self.angles_deg, size=n_particles, replace=True
             )
+
             self.states[:, 1] = np.random.choice(
-                dd.flatten(), size=n_particles, replace=True
+                self.distances_cm, size=n_particles, replace=True
             )
             self.state = State.READY
         else:
             self.state = State.NEED_INIT
 
-    def effective_n(self):
-        return 1.0 / np.sum(self.weights ** 2)
+    def effective_n(self, weights):
+        return 1.0 / np.sum(np.square(weights))
 
     def add_distributions(self, *args, **kwargs):
         super().add_distributions(*args, **kwargs)
@@ -149,21 +111,8 @@ class ParticleEstimator(BaseEstimator):
             self.resample()
 
         if method == "histogram":
-            bins = get_bins(self.distances_cm)
-            if len(bins) == 1:
-                probs_dist = [1.0]
-            else:
-                probs_dist, __ = np.histogram(
-                    self.states[:, 1], bins=bins, weights=self.weights
-                )
-
-            bins = get_bins(self.angles_deg)
-            if len(bins) == 1:
-                probs_angles = [1.0]
-            else:
-                probs_angles, __ = np.histogram(
-                    self.states[:, 0], bins=bins, weights=self.weights
-                )
+            probs_angles = get_histogram(self.angles_deg, self.states[:, 0], self.weights_a)
+            probs_dist = get_histogram(self.distances_cm, self.states[:, 1], self.weights_d)
         elif method == "gaussian":
             (mean_dist, mean_angle), (var_dist, var_angle) = self.estimate()
             norm_dist = norm(loc=mean_dist, scale=np.sqrt(var_dist))
@@ -184,25 +133,52 @@ class ParticleEstimator(BaseEstimator):
         if not self.state == State.NEED_UPDATE:
             return
 
-        for k, (a_local, d_local) in enumerate(self.states):
-            # print(f"for global {d_particle:.1f}, local distance and angle: {d_local:.1f}, {a_local:.0f}")
+        #probs_angles = np.empty(self.n_particles)
+        for k, a_local in enumerate(self.states[:, 0]):
+            if self.angle_probs[self.index] is not None:
+                prob = self.angle_probs[self.index](a_local)  # interpolate at angle
+                #probs_angles[k] = prob
+
+            self.weights_a[k] *= prob
+        self.weights_a /= np.sum(self.weights_a)
+
+        # get most likely angles
+        probs_angles = get_histogram(self.angles_deg, self.states[:, 0], self.weights_a)
+        candidate_angles, __ = get_estimates(self.angles_deg, probs_angles, method="peak", n_estimates=1) 
+
+        # get most likey angles based on beamforming only
+        #candidate_angles = [self.states[np.argmax(probs_angles), 0]]
+
+        if not len(candidate_angles):
+            print("Warning: did not find any valid angles. Using uniform")
+            candidate_anlges = self.angles_deg
+        elif (len(candidate_angles) == 1) and (candidate_angles[0] is None):
+            print("Warning: no valid estimtae. Using uniform")
+
+            candidate_anlges = self.angles_deg
+        for k, d_local in enumerate(self.states[:, 1]):
             prob = 1.0
             for mic, diff_dist in self.difference_p[self.index].items():
-                delta_local_cm = self.context.get_delta(a_local, d_local, mic_idx=mic)
-                prob *= diff_dist(delta_local_cm)  # interpolate at delta
 
-            if self.angle_probs[self.index] is not None:
-                prob *= self.angle_probs[self.index](a_local)  # interpolate at angle
-
-            self.weights[k] *= prob
-        self.weights /= np.sum(self.weights)
+                ## expectation over all angles:
+                prob_angle = 0.0
+                for a_local in candidate_angles:
+                    if a_local is None:
+                        print("Warning: angle is None")
+                        continue
+                    delta_local_cm = self.context.get_delta(a_local, d_local, mic_idx=mic)
+                    prob_angle += diff_dist(delta_local_cm)  # interpolate at delta
+                prob *= prob_angle / len(candidate_angles)
+            self.weights_d[k] *= prob
+        self.weights_d /= np.sum(self.weights_d)
 
         # take the 30% of lowest weight particles and distribute them uniformly.
         if RANDOM_PARTICLE_RATIO > 0:
             n_uniform = int(round(self.n_particles * RANDOM_PARTICLE_RATIO))
-            indices = np.argsort(self.weights)
+            indices = np.argsort(self.weights_a)
             self.states[indices[:n_uniform], 0] = np.random.choice(self.angles_deg, n_uniform)
-            self.states[indices[:n_uniform], 0] = np.random.choice(self.distances_cm, n_uniform)
+            indices = np.argsort(self.weights_d)
+            self.states[indices[:n_uniform], 1] = np.random.choice(self.distances_cm, n_uniform)
 
         # more robust if we always resample.
         if True: #self.effective_n() < self.states.shape[0] / 2:
@@ -248,16 +224,16 @@ class ParticleEstimator(BaseEstimator):
             print("Warning: not ready for estimation yet.")
             return None
 
-        mean_distance = np.average(self.states[:, 1], weights=self.weights)
+        mean_distance = np.average(self.states[:, 1], weights=self.weights_d)
         var_distance = np.average(
-                (self.states[:, 1] - mean_distance) ** 2, weights=self.weights
+                (self.states[:, 1] - mean_distance) ** 2, weights=self.weights_d
         )
 
         sin_ = np.sum(
-            np.multiply(np.sin(self.states[:, 0] / 180 * np.pi), self.weights)
+                np.multiply(np.sin(self.states[:, 0] / 180 * np.pi), self.weights_a)
         )
         cos_ = np.sum(
-            np.multiply(np.cos(self.states[:, 0] / 180 * np.pi), self.weights)
+                np.multiply(np.cos(self.states[:, 0] / 180 * np.pi), self.weights_a)
         )
         mean_angle = 180 / np.pi * np.arctan2(sin_, cos_)
         mean_angle %= 360
@@ -267,9 +243,10 @@ class ParticleEstimator(BaseEstimator):
     def resample(self):
         if not self.state == State.NEED_RESAMPLE:
             return
-        try:
-            indices = resample(self.weights)
-        except:
-            raise
-        resample_from_index(self.states, self.weights, indices)
+
+        indices_a = resample(self.weights_a)
+        resample_from_index(self.states[:, 0], self.weights_a, indices_a)
+
+        indices_d = resample(self.weights_d)
+        resample_from_index(self.states[:, 1], self.weights_d, indices_d)
         self.state = State.READY
