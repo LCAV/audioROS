@@ -290,6 +290,15 @@ def generate_results(df_chosen, fname="", parameters=PARAMETERS_ALL, beamform=BE
 
 
 if __name__ == "__main__":
+    from utils.custom_argparser import exp_parser, check_platform
+
+    parser = exp_parser(
+        "Apply the moving or particle estimator to flying or stepper datasets."
+    )
+    args = parser.parse_args()
+
+    check_platform(args)
+
     if PLATFORM == "crazyflie": 
         exp_name = "2021_07_08_stepper_fast"
         motors = "all45000"

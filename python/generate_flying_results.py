@@ -247,6 +247,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    check_platform(args)
+
     beamform = False
 
     for exp_name in args.experiment_names:
