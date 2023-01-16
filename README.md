@@ -6,10 +6,10 @@ This repository contains the ROS2-powered stack to do audio processing for sound
 
 ## Overview
 
-This repository is part of the experimental framework described in the paper:
+This repository is part of the experimental framework described in the [paper](https://doi.org/10.1109/LRA.2022.3194669):
 ```
 F. Dümbgen, A. Hoffet, M. Kolundžija, A. Scholefield, and M. Vetterli, "Blind as a bat: audible 
-echolocation on small robots", IEEE Robotics and Automation Letters, 2022.
+echolocation on small robots", IEEE Robotics and Automation Letters (Early Access), 2022.
 ```
 
 The framework includes all components listed below. The components are kept modular so that researchers may focus only on what's relevant to them. For instance, to recreate the audio extension deck and perform more research on audio-based navigation on drones, only repository 2. is necessary; to run the audio-based algorithms in ROS but for a different robot, only repository 1. is enough as a starting point.      
@@ -131,7 +131,7 @@ Please refer to the below publications for more information.
 [1] [RA-L paper](https://doi.org/10.1109/LRA.2022.3194669) (main reference)
 ```
 F. Dümbgen, A. Hoffet, M. Kolundžija, A. Scholefield, and M. Vetterli, "Blind as a bat: audible 
-echolocation on small robots", IEEE Robotics and Automation Letters, 2022. 
+echolocation on small robots", IEEE Robotics and Automation Letters (Early Access), 2022. 
 ```
 
 [2] [Ph.D. dissertation](https://infoscience.epfl.ch/record/290057) (including additional methods and experimental analysis):  
