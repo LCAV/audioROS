@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from audio_bringup.helpers import get_filename
-from crazyflie_description_py.parameters import FS, N_BUFFER
+from .constants_crazyflie import FS, N_BUFFER
 
 MAX_ALLOWED_LAG_MS = 20
 
@@ -79,7 +79,6 @@ def read_df(
         arrays = [a for a in arrays if a in row.index]
         ints = [i for i in ints if i in row.index]
         for array_name in arrays:
-
             row[array_name] = np.fromstring(
                 row[array_name].replace("[", "").replace("]", ""),
                 sep=" ",
@@ -267,7 +266,7 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
     from frequency_analysis import get_spectrogram
 
     spectrogram = get_spectrogram(df)  # n_freqs x n_times
-    sound_level = np.mean(spectrogram ** 2, axis=0)  # average over n_frequencies
+    sound_level = np.mean(spectrogram**2, axis=0)  # average over n_frequencies
     df.loc[:, "sound_level"] = sound_level
 
     # detect the end time and cut fixed time before it
@@ -280,8 +279,7 @@ def add_soundlevel(df, threshold=1e-4, duration=1000):
 
 
 def get_positions(df_pos):
-    """ Get absoltue positions from relative estimates. 
-    """
+    """Get absoltue positions from relative estimates."""
     if isinstance(df_pos, pd.DataFrame):
         yaw_degs = df_pos.yaw_deg.values
         dxs = df_pos.dx.values
@@ -298,7 +296,7 @@ def get_positions(df_pos):
     positions = np.empty([len(dxs), 3])
     for i, (yaw_deg, dx, dy, z) in enumerate(zip(yaw_degs, dxs, dys, zs)):
         yaw_rad = yaw_deg / 180 * np.pi
-        length = np.sqrt(dx ** 2 + dy ** 2)
+        length = np.sqrt(dx**2 + dy**2)
         new_pos = start_pos + length * np.array([np.cos(yaw_rad), np.sin(yaw_rad)])
         positions[i, :2] = new_pos
         positions[i, 2] = z
@@ -306,11 +304,10 @@ def get_positions(df_pos):
 
 
 def get_positions_absolute(df_pos):
-    """ Get absolute positions
-    """
+    """Get absolute positions"""
     if isinstance(df_pos, pd.DataFrame):
         if not len({"x", "y", "z", "yaw_deg"}.intersection(df_pos.columns.values)):
-            #warnings.warn("no position information found")
+            # warnings.warn("no position information found")
             n_times = len(df_pos)
             return np.zeros((n_times, 4))
         xs = df_pos.x.values
@@ -343,8 +340,8 @@ def integrate_yaw(times, yaw_rates):
 
 
 def add_pose_to_df(df, df_pos, max_allowed_lag_ms=MAX_ALLOWED_LAG_MS, verbose=False):
-    """ For each row in df, add the latest position estimate, 
-    as long as it is within an allowed time window. """
+    """For each row in df, add the latest position estimate,
+    as long as it is within an allowed time window."""
     last_idx = None
     for i, row in df.iterrows():
         timestamp = row.timestamp

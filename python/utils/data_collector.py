@@ -33,7 +33,7 @@ MONO_FREQ = 3000  # mono frequency.
 
 
 def get_peak_freq(signals_f, frequencies):
-    """ Get highest frequency over all mics """
+    """Get highest frequency over all mics"""
     avg_magnitude = np.nanmedian(np.abs(signals_f), axis=0)
     idx = np.argmax(avg_magnitude)
     magnitude = avg_magnitude[idx]
@@ -108,7 +108,7 @@ def normalize_df_matrix(df_matrix, freqs, method="calibration-offline"):
 
 
 def find_indices(values_here, values):
-    """ find the indices of an array (values_here) inside another array (values) """
+    """find the indices of an array (values_here) inside another array (values)"""
     assert values_here.ndim == 1
     assert values.ndim == 1
     values_here = np.array(values_here)
@@ -126,7 +126,7 @@ def find_indices(values_here, values):
 
 
 def find_closest_indices(values_here, values):
-    """ Find the closest indices of an array (values_here) inside another array (values) """
+    """Find the closest indices of an array (values_here) inside another array (values)"""
     values_here = np.array(values_here)
     values = np.array(values)
     if (len(values_here) != len(values)) or not np.allclose(values, values_here):
@@ -137,9 +137,12 @@ def find_closest_indices(values_here, values):
 
 
 def prune_df_matrix(
-    df_matrix, frequencies, ratio_missing_allowed=RATIO_MISSING_ALLOWED, verbose=False,
+    df_matrix,
+    frequencies,
+    ratio_missing_allowed=RATIO_MISSING_ALLOWED,
+    verbose=False,
 ):
-    """ Remove all rows with more than a certain percentage of missing values """
+    """Remove all rows with more than a certain percentage of missing values"""
     df_matrix[np.isnan(df_matrix)] = 0
 
     # we also consider very small values as missing.
@@ -155,7 +158,7 @@ def prune_df_matrix(
 
 
 def merge_close_freqs(df, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False):
-    """ Merge frequency bins that are closer than delta. """
+    """Merge frequency bins that are closer than delta."""
     if verbose:
         print("merge frequencies closer than", delta_merge_freq)
         print("frequency diff:", np.diff(df.frequency.dropna().unique()))
@@ -166,7 +169,6 @@ def merge_close_freqs(df, delta_merge_freq=DELTA_MERGE_FREQ, verbose=False):
         if f - curr_unique < delta_merge_freq:
             merge_dict[curr_unique] += list(df_here.index)
         else:
-
             # print current merge
             if verbose:
                 for freq in df.loc[merge_dict[curr_unique]].frequency.unique():
@@ -220,7 +222,7 @@ def remove_spurious_freqs(df, n_spurious, verbose=False, dryrun=False):
 
 
 def remove_bad_freqs(df, mag_thresh, std_thresh, verbose=False, dryrun=False):
-    """ Remove the frequencies with too low medians or too high standard deviation. """
+    """Remove the frequencies with too low medians or too high standard deviation."""
     remove_rows = []
     for freq, df_here in df.groupby("frequency", sort=True):
         vals = df_here.magnitude.values
@@ -288,7 +290,7 @@ def cleanup_conservative(df, verbose=False):
 
 
 def cleanup(df, params, verbose=False):
-    """ cleanup df inplace. """
+    """cleanup df inplace."""
 
     mag_thresh = params.get("mag_thresh", MAG_THRESH)
     std_thresh = params.get("std_thresh", STD_THRESH)
@@ -322,7 +324,14 @@ class DataCollector(object):
         self.latest_fslice_time = None
         self.latest_dslice_time = None
         self.df = pd.DataFrame(
-            columns=["time", "mic", "frequency", "distance", "angle", "magnitude",]
+            columns=[
+                "time",
+                "mic",
+                "frequency",
+                "distance",
+                "angle",
+                "magnitude",
+            ]
         )
         self.current_spectrogram = self.current_freqs = None
         self.interpolation = interpolation
@@ -334,7 +343,9 @@ class DataCollector(object):
     @staticmethod
     def init_from_row(exp_name, row, interpolation="", verbose=False):
         data_collector = DataCollector(
-            exp_name=exp_name, mic_type=row.mic_type, interpolation=interpolation,
+            exp_name=exp_name,
+            mic_type=row.mic_type,
+            interpolation=interpolation,
         )
         try:
             data_collector.fill_from_row(row, verbose=verbose)
@@ -390,9 +401,7 @@ class DataCollector(object):
         return sorted_and_unique(self.df, "frequency").astype(float)
 
     def next_fslice_ready(self, signals_f, frequencies, verbose=False):
-        """ find big frequency jump, meaning end of sweep. """
-        fslice_ready = False
-
+        """find big frequency jump, meaning end of sweep."""
         f, magnitude = get_peak_freq(signals_f, frequencies)
 
         if len(self.df) == 0:
@@ -445,12 +454,10 @@ class DataCollector(object):
     def next_dslice_ready(
         self, signals_f, frequencies, position_cm, n_max=100, verbose=False
     ):
-        """ find if we need to start a new dslice, if:
-            - we have a jump in relative_distance measurements.
-            - if we changed frequency significantly since last time.
+        """find if we need to start a new dslice, if:
+        - we have a jump in relative_distance measurements.
+        - if we changed frequency significantly since last time.
         """
-        dslice_ready = False
-
         if self.latest_dslice_time is not None:
             df_current = self.df[self.df.time > self.latest_dslice_time]
         else:
@@ -477,7 +484,6 @@ class DataCollector(object):
         if (magnitude > self.params.get("mag_thresh", MAG_THRESH)) and (
             np.abs(f - latest_frequency) > F_DELTA
         ):
-
             if verbose:
                 print(f"big frequency change: new{f}, old{latest_frequency}")
             return True
@@ -519,8 +525,8 @@ class DataCollector(object):
                 )
 
     def fill_from_row(self, row, verbose=False, mask=True, mode="maximum"):
-        """ 
-        Fill dataset from row containing the spectral contents. 
+        """
+        Fill dataset from row containing the spectral contents.
         :param mode: "maximum" or "all"
         """
         distance = row.get("distance", DISTANCE)
@@ -578,7 +584,7 @@ class DataCollector(object):
         return spec, freqs
 
     def get_frequency_slice(self, distance=None, mics=None):
-        """ 
+        """
         :return: slice along one distance, of shape (mic x frequencies), frequencies, stds
         """
         df = self.filter_by_column(distance, "distance")
@@ -594,11 +600,11 @@ class DataCollector(object):
         verbose=False,
         allowed_delta=50,
     ):
-        """ Give frequency slice for fixed frequencies.
+        """Give frequency slice for fixed frequencies.
 
-        :param frequencies: list of frequencies we want to evaluate at. 
+        :param frequencies: list of frequencies we want to evaluate at.
         :param allowed_delta: if absolute difference between measured frequency and given frequency
-        is smaller than this, we still use it in the frequency slice. 
+        is smaller than this, we still use it in the frequency slice.
 
         :return: slice along one distance, of shape (mic x frequencies), used frequencies, stds.
         """
@@ -621,7 +627,10 @@ class DataCollector(object):
         if verbose:
             diff = freqs_here[f_indices] - frequencies
             print(
-                "evaluating at", freqs_here[f_indices], "instead of", frequencies,
+                "evaluating at",
+                freqs_here[f_indices],
+                "instead of",
+                frequencies,
             )
             print("difference:", diff)
             f_indices = f_indices[np.abs(diff) < allowed_delta]
@@ -666,7 +675,7 @@ class DataCollector(object):
         return f_slice, freqs, stds, d_slice
 
     def get_distance_slice(self, frequency=None, mics=None):
-        """ 
+        """
         :return: slice along one frequency, of shape (mic x distances), distances
         """
         df = self.filter_by_column(frequency, "frequency")
@@ -676,7 +685,6 @@ class DataCollector(object):
         return len(self.df.time.unique())
 
     def get_current_distance_slice(self, verbose=False, n_max=N_MAX):
-
         # TODO(FD) need to do distance-unique before extracting time
         df = cleanup_conservative(self.df, verbose=verbose)
         times = df.time.unique()
@@ -722,7 +730,7 @@ class DataCollector(object):
         merge_close_freqs(self.df, delta_merge_freq, verbose=verbose)
 
     def remove_spurious_freqs(self, verbose=False, dryrun=False):
-        """ Remove the frequencies for which we only have less than n_min measurements. """
+        """Remove the frequencies for which we only have less than n_min measurements."""
         n_spurious = self.params.get("n_spurious", N_SPURIOUS)
         remove_spurious_freqs(self.df, n_spurious, verbose=verbose, dryrun=dryrun)
 
@@ -772,10 +780,10 @@ class DataCollector(object):
         print("saved", fname)
 
     def fit_to_median(self, frequency, mic_idx=None, fit_one_gain=True):
-        """ 
-        Fit anlalytical function to the median measurements (per distance) and given frequency. 
+        """
+        Fit anlalytical function to the median measurements (per distance) and given frequency.
 
-        :return: 
+        :return:
             - coefficients (absorption, offset, gain(s))
             - distances used
             - fitted slice(s)
@@ -847,7 +855,11 @@ class DataCollector(object):
         gains = gains[:, not_all_missing]
 
         calib_function = interp1d(
-            freqs, gains, kind="linear", fill_value="extrapolate", assume_sorted=True,
+            freqs,
+            gains,
+            kind="linear",
+            fill_value="extrapolate",
+            assume_sorted=True,
         )
         if ax is not None:
             plot_calibration(freqs, gains, calib_function, ax=ax)

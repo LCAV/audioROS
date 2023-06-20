@@ -5,7 +5,6 @@ histogram_estimators.py: Provides histogram filter (HistogramEstimator) class.
 """
 
 import numpy as np
-from scipy.stats import norm
 
 from .base_estimator import (
     BaseEstimator,
@@ -51,7 +50,7 @@ class HistogramEstimator(BaseEstimator):
 
     def initialize_states(self, angles_deg, distances_cm):
         aa, dd = np.meshgrid(angles_deg, distances_cm)
-        self.states = np.c_[aa.flatten(), dd.flatten()] # N x 2
+        self.states = np.c_[aa.flatten(), dd.flatten()]  # N x 2
         self.n_states = self.states.shape[0]
         self.prior = np.full(self.n_states, 1 / self.n_states)
         self.posterior = np.full(self.n_states, 1 / self.n_states)
@@ -83,7 +82,6 @@ class HistogramEstimator(BaseEstimator):
             sum_ = 0
 
             for i, (a_i, d_i) in enumerate(self.states):
-
                 # worked for backwards
                 # a_glob_i = a_i - self.rotations[previous]
                 # mu_d = d_i - u_t.dot(get_normal_vector(a_glob_i)) # mean of current distance estimate
@@ -108,7 +106,6 @@ class HistogramEstimator(BaseEstimator):
         return self.prior
 
     def predict(self, verbose=False):
-
         if (not self.filled) and (self.index == 0):
             return self.prior
 
@@ -120,7 +117,7 @@ class HistogramEstimator(BaseEstimator):
 
         # print("distance correction:", -normal_matrix(self.states[0, :]) @ u_t)
         # a_glob_i = a_i + self.rotations[previous]
-        a_global = self.rotations[previous] + self.states[:, 0] 
+        a_global = self.rotations[previous] + self.states[:, 0]
         mu_a = from_0_to_360(self.states[:, 0] - rot_delta)
         mu_d = self.states[:, 1] - get_normal_matrix(a_global) @ pos_delta
 
@@ -140,10 +137,10 @@ class HistogramEstimator(BaseEstimator):
             prob = 1.0
             for mic, diff_p in self.difference_p[self.index].items():
                 delta_local_cm = self.context.get_delta(a_local, d_local, mic_idx=mic)
-                prob *= diff_p(delta_local_cm) # interpolate at delta
+                prob *= diff_p(delta_local_cm)  # interpolate at delta
 
             if self.angle_probs[self.index] is not None:
-                prob *= self.angle_probs[self.index](a_local) # inteprolate at angle
+                prob *= self.angle_probs[self.index](a_local)  # inteprolate at angle
 
             probs[k] = self.prior[k] * prob
         self.posterior = probs / np.sum(probs)

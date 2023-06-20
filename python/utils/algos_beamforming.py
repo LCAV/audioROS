@@ -5,8 +5,7 @@ algos_beamforming.py: algorithms for beamforming
 """
 import numpy as np
 
-from algos_basics import get_autocorrelation, get_mic_delays, low_rank_inverse
-from constants import SPEED_OF_SOUND
+from algos_basics import get_mic_delays, low_rank_inverse
 
 INVERSE = "pinv"
 # INVERSE = 'low-rank'
@@ -19,15 +18,15 @@ def get_lcmv_beamformer(
 
     Solves the problem
     h = min E(|y(t)|**2)
-    s.t. 
+    s.t.
 
     :param Rx: n_frequencies x n_mics x n_mics covariance matrix.
-    :param frequencies: frequencies in Hz. 
+    :param frequencies: frequencies in Hz.
     :param mic_positions: n_mics x dim positions of mic array
     :param constraints: list of constraint tuples of form (angle: response)
-    :param rcond: regularization parameter. 
-    
-    :returns: list of n_mics complex microphone gains for LCMV algorithm. 
+    :param rcond: regularization parameter.
+
+    :returns: list of n_mics complex microphone gains for LCMV algorithm.
     """
 
     print("Deprecation warning: use get_lcmv_beamformer_fast for better performance.")
@@ -45,7 +44,6 @@ def get_lcmv_beamformer(
     condition_numbers = []
     condition_numbers_big = []
     for j, freq in enumerate(frequencies):
-
         # generate constraints
         C = np.zeros((n_mics, 0), dtype=np.complex128)
         c = np.zeros((0,), dtype=np.complex128)
@@ -88,12 +86,12 @@ def get_lcmv_beamformer_fast(
     under the given constraints
 
     :param Rx: n_frequencies x n_mics x n_mics covariance matrix.
-    :param frequencies: frequencies in Hz. 
+    :param frequencies: frequencies in Hz.
     :param mic_positions: n_mics x dim positions of mic array
     :param constraints: list of constraint tuples of form (angle: response)
-    :param rcond: regularization parameter. 
-    
-    :returns: list of n_mics complex microphone gains for LCMV algorithm. 
+    :param rcond: regularization parameter.
+
+    :returns: list of n_mics complex microphone gains for LCMV algorithm.
     """
     assert mic_positions.ndim == 2, "watch out, changed argument order!!"
     n_mics = Rx.shape[1]
@@ -131,8 +129,8 @@ def get_lcmv_beamformer_fast(
 def get_das_beamformer(azimuth, frequencies, mic_positions, elevation=None):
     """
     :param azimuth: azimuth angle in rad
-    :param frequencies: frequencies in Hz. 
-    :returns: list of n_mics complex microphone gains for DAS algorithm. 
+    :param frequencies: frequencies in Hz.
+    :returns: list of n_mics complex microphone gains for DAS algorithm.
     """
     delays = get_mic_delays(mic_positions, azimuth, elevation)
     gains = np.exp(-1j * 2 * np.pi * np.outer(frequencies, delays))
@@ -154,10 +152,10 @@ def get_beampattern(azimuth, frequencies, mic_positions, H):
 
 
 def get_powers(H, Rx):
-    """ Return power of beamformed signal
+    """Return power of beamformed signal
 
     :param H: beamformer (n_frequencies x n_mics)
-    :param Rx: covariance matrix (n_frequencies x n_mics x n_mics) 
+    :param Rx: covariance matrix (n_frequencies x n_mics x n_mics)
 
     :return: vector of powers at each frequency (n_frequencies)
 

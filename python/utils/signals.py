@@ -5,7 +5,7 @@ signals.py: Functions to generate different sound signals.
 """
 
 from abc import ABC, abstractmethod
-from math import ceil, floor
+from math import ceil
 import os
 
 import matplotlib.pylab as plt
@@ -53,7 +53,7 @@ def generate_signal_mono(Fs, duration_sec, frequency_hz=1000, **kwargs):
 
 
 def generate_signal_random(Fs, duration_sec, **kwargs):
-    """ 
+    """
     :returns: ndarray, uniform white noise between -1 and 1
     """
     num_samples = int(ceil(Fs * duration_sec))
@@ -143,10 +143,10 @@ def generate_signal(
 
 
 def get_power(signal, dB=True):
-    """ Get power density of signal (normalized by the length of the signal)
+    """Get power density of signal (normalized by the length of the signal)
 
-    :param signal: either 1-dim array or matrix of signals in rows. If signals has multiple rows, 
-    the average energy is calculated. 
+    :param signal: either 1-dim array or matrix of signals in rows. If signals has multiple rows,
+    the average energy is calculated.
 
     """
     power = np.linalg.norm(signal) ** 2 / signal.size
@@ -192,8 +192,8 @@ class SourceSignal(ABC):
 
     @abstractmethod
     def evaluate(self, times, noise=0):
-        """ 
-        :param t: array or list of time instances. 
+        """
+        :param t: array or list of time instances.
         """
         raise NotImplementedError("needs to be implemented by inheriting classes")
 
@@ -209,8 +209,8 @@ class MonoSignal(SourceSignal):
         super(MonoSignal, self).__init__(f=f, amplitude=amplitude, omega=omega)
 
     def evaluate(self, times, noise=0):
-        """ 
-        :param t: array or list of time instances. 
+        """
+        :param t: array or list of time instances.
         """
         signal = self.params["amplitude"] * np.sin(
             self.params["omega"] * np.array(times)
@@ -225,8 +225,8 @@ class WhiteSignal(SourceSignal):
         super(WhiteSignal, self).__init__(amplitude=amplitude, sigma=sigma)
 
     def evaluate(self, times, noise=0):
-        """ 
-        :param t: array or list of time instances. 
+        """
+        :param t: array or list of time instances.
         """
         signal = np.random.normal(scale=self.params["sigma"], loc=0, size=len(times))
         return signal.flatten()

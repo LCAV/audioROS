@@ -54,6 +54,7 @@ TIME_FORWARD = 60  # seconds, time to move forward in BLIND mode
 
 MAG_THRESH = 1e-3
 
+
 class State(Enum):
     GROUND = 0
     HOVER = 1
@@ -91,9 +92,9 @@ def get_angle_distribution(dslices, resolve_side=False):
     # d_slices is of shape 4x20, rel_distances_cm of shape 20
     for mic_idx in range(dslices.shape[0]):
         angles, proba = get_approach_angle_fft(
-            d_slice=d_slices[mic_idx],  # shape 4 x 20
+            d_slice=dslices[mic_idx],  # shape 4 x 20
             frequency=FREQ,
-            relative_distances_cm=rel_distances_cm,
+            # relative_distances_cm=rel_distances_cm,
             bayes=True,
             reduced=True,
         )
@@ -217,9 +218,13 @@ class WallDetection(NodeWithParams):
             )
         elif estimator == "particle":
             self.estimator = ParticleEstimator(
-                n_particles=self.N_PARTICLES, 
+                n_particles=self.N_PARTICLES,
             )
-        elif type(estimator) in [MovingEstimator, ParticleEstimator, HistogramEstimator]:
+        elif type(estimator) in [
+            MovingEstimator,
+            ParticleEstimator,
+            HistogramEstimator,
+        ]:
             self.estimator = estimator
         else:
             raise ValueError(estimator)
@@ -301,7 +306,7 @@ class WallDetection(NodeWithParams):
             self.calibration = magnitudes
             self.calibrationsq = magnitudes**2
         else:
-            valid = ~np.isnan(self.calibration) 
+            valid = ~np.isnan(self.calibration)
             self.calibration[valid] = (1 - self.ALPHA_IIR) * self.calibration[
                 valid
             ] + self.ALPHA_IIR * magnitudes[valid]
@@ -367,11 +372,7 @@ class WallDetection(NodeWithParams):
         diff_dict = {}
         if chosen_mics is None:
             chosen_mics = range(magnitudes_calib.shape[0])
-        self.inf_machine.add_data(
-            magnitudes_calib,
-            freqs,  # 4 x 32
-            mics=chosen_mics
-        )
+        self.inf_machine.add_data(magnitudes_calib, freqs, mics=chosen_mics)  # 4 x 32
         for mic_i in chosen_mics:
             __, prob_mic, diff = self.inf_machine.do_inference(ALGORITHM, mic_i)
             diff_dict[mic_i] = (diff, prob_mic)
@@ -430,7 +431,6 @@ class WallDetection(NodeWithParams):
     def listener_callback_offline(
         self, signals_f, freqs, position_cm, yaw_deg, timestamp=0, chosen_mics=None
     ):
-
         if not self.flight_check(position_cm):
             return
 
@@ -454,10 +454,10 @@ class WallDetection(NodeWithParams):
             diff_dict = self.get_raw_distributions(magnitudes_calib, freqs, chosen_mics)
         except Exception as e:
             print("could not process calibrated magnitudes:", e)
-            raise 
-            #print(magnitudes)
-            #print(magnitudes_calib, freqs, chosen_mics)
-            return 
+            raise
+            # print(magnitudes)
+            # print(magnitudes_calib, freqs, chosen_mics)
+            return
 
         return_dict = {}
 
@@ -480,15 +480,15 @@ class WallDetection(NodeWithParams):
                 mics = self.estimator.context.mics.T
 
             # TODO(FD): may need to rotate mics by current yaw?
-            #from audio_stack.beam_former import rotate_mics
-            #print("rotating by", 90)
-            #mics = rotate_mics(mics.T, 90).T
-            #print("-45 works!")
-            #print("mics for beamformer:", repr(mics))
+            # from audio_stack.beam_former import rotate_mics
+            # print("rotating by", 90)
+            # mics = rotate_mics(mics.T, 90).T
+            # print("-45 works!")
+            # print("mics for beamformer:", repr(mics))
 
-            #print("beamforming with", mics.shape, signals_f.shape)
+            # print("beamforming with", mics.shape, signals_f.shape)
             angle_static, prob_angle_static = get_beamform_distribution(
-                signals_f.T, freqs, mics # 32 x 4, 32, 2 x 4
+                signals_f.T, freqs, mics  # 32 x 4, 32, 2 x 4
             )
             self.estimator.add_angle_distribution(angle_static, prob_angle_static)
             return_dict["angle_static"] = angle_static
@@ -834,14 +834,15 @@ class WallDetection(NodeWithParams):
         print("calibration:", self.CALIBRATION)
         print("n_calibration:", self.N_CALIBRATION)
         print("alpha_iir:", self.ALPHA_IIR)
-        print("mask bad:", self.MASK_BAD )
-        print("outlier factor:", self.OUTLIER_FACTOR )
+        print("mask bad:", self.MASK_BAD)
+        print("outlier factor:", self.OUTLIER_FACTOR)
         print("n_window:", self.N_WINDOW)
-        print("simplify_angles:", self.SIMPLIFY_ANGLES )
+        print("simplify_angles:", self.SIMPLIFY_ANGLES)
         print("beamform:", self.BEAMFORM)
         print("bad freq ranges:", self.BAD_FREQ_RANGES)
         print("bad freq ranges epuck:", self.BAD_FREQ_RANGES_EPUCK)
         print("n_particles:", self.N_PARTICLES)
+
 
 def main(args=None):
     rclpy.init(args=args)

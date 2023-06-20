@@ -4,11 +4,22 @@
 algos_basics.py: basics for audio algorithms.
 """
 
-from math import ceil
-
 import numpy as np
 
-from constants import SPEED_OF_SOUND
+from .constants import SPEED_OF_SOUND
+from scipy.spatial.transform import Rotation
+
+
+def rotate_mics(mics, orientation_deg=0):
+    """
+    :param mics: mic positions (n_mics, 2)
+    :return mics_rotated: (n_mics, 2)
+    """
+    rot = Rotation.from_euler("z", orientation_deg, degrees=True)
+    R = rot.as_matrix()  # 3 x 3
+    mics_aug = np.c_[mics, np.ones(mics.shape[0])].T  # 3 x 4
+    mics_rotated = R.dot(mics_aug)[:2, :]  # 2 x 4
+    return mics_rotated.T
 
 
 def low_rank_inverse(low_rank_matrix, rank=1):
@@ -32,7 +43,7 @@ def get_mic_delays(mic_positions, azimuth, elevation=None):
 
 
 def get_mic_delays_near(mic_positions, source):
-    """ 
+    """
     :param mic_positions: mic coordinates of shape (n_mics, 2)
     :param source: source coordinates of shape (2,)
     """
@@ -71,7 +82,7 @@ def get_mic_delta(r0, r1, azimuth, elevation=None):
 
 def get_mic_delta_near(r0, r1, source):
     """
-    Get difference in travel distance for r1 w.r.t. r0 for source coming 
+    Get difference in travel distance for r1 w.r.t. r0 for source coming
     from near-field location `source`.
     """
     assert r0.shape == r1.shape
@@ -81,9 +92,9 @@ def get_mic_delta_near(r0, r1, source):
 
 
 def get_autocorrelation(signals, frequency_bins=None):
-    """ Compute autocorrelations (in frequency domain) from time signals
+    """Compute autocorrelations (in frequency domain) from time signals
 
-    :param signals: num_mics x num_samples signal samples. 
+    :param signals: num_mics x num_samples signal samples.
 
     :returns: num_frequencies x num_mics x num_mics autocorrelation matrix.
     """
@@ -115,7 +126,7 @@ def get_autocorrelation(signals, frequency_bins=None):
 
 
 def get_responses_DAS_old(Rx, mic_positions, omega=None, num_angles=1000):
-    """ Apply DAS algorithm.  """
+    """Apply DAS algorithm."""
 
     dimension = mic_positions.shape[1]
     if dimension == 3 and num_angles > 100:
@@ -159,7 +170,7 @@ def get_responses_DAS_old(Rx, mic_positions, omega=None, num_angles=1000):
 
 
 def get_responses_DAS_old(Rx, mic_positions, omega=None, num_angles=1000):
-    """ Apply DAS algorithm.  """
+    """Apply DAS algorithm."""
 
     dimension = mic_positions.shape[1]
     if dimension == 3 and num_angles > 100:
@@ -199,16 +210,16 @@ def get_responses_DAS_old(Rx, mic_positions, omega=None, num_angles=1000):
 
 
 def get_doa_DAS(azimuth_array, responses, elevation_array=np.array([0])):
-    """ Return array of pairs of angles of max response.
-    
+    """Return array of pairs of angles of max response.
+
     :param azimuth_array: length N array of azimuths
     :param elevation_array: length M array of azimuths
-    :param responses: matrix of responses (N x M) 
+    :param responses: matrix of responses (N x M)
 
     :return: list of maximum directions
-        [(azimuth1, elevation1), 
+        [(azimuth1, elevation1),
          (azimuth2, elevation2),
-         ...]  
+         ...]
     """
     if len(elevation_array) == 1:
         assert isinstance(responses, list) or responses.ndim == 1

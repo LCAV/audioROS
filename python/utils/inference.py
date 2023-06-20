@@ -64,8 +64,8 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
     if step is not None:
         print("Warning: giving step is depcreated")
 
-    #step = np.min(np.diff(xvalues))
-    #tol = 5
+    # step = np.min(np.diff(xvalues))
+    # tol = 5
 
     step = np.median(np.diff(xvalues))
     tol = step / 2
@@ -82,14 +82,14 @@ def interpolate_parts(xvalues, values, step=None, verbose=False):
             i += 1
         # detect a small jump
         elif abs(new - previous) > step + tol:
-            #print("adding intermediate between", previous, new,"because",new-previous,">", step+tol)
+            # print("adding intermediate between", previous, new,"because",new-previous,">", step+tol)
             xvalues_grid.append(previous + step)
         else:
             xvalues_grid.append(new)
             i += 1
     xvalues_grid = np.array(xvalues_grid)
 
-    #xvalues_grid = get_uniform_grid(xvalues)
+    # xvalues_grid = get_uniform_grid(xvalues)
     step = np.median(np.diff(xvalues_grid))
 
     # valid points are no more than 2*step from actual data.
@@ -167,7 +167,7 @@ class Inference(object):
         self.valid_idx &= valid_idx
 
         f_calib = self.calibration_function(self.values[self.valid_idx])
-        #f_calib_mics = f_calib[self.mics, :]
+        # f_calib_mics = f_calib[self.mics, :]
         for k in self.slices.keys():
             self.slices[k][self.valid_idx] /= f_calib[k]
         self.is_calibrated = True
@@ -185,30 +185,38 @@ class Inference(object):
         if verbose:
             print("number of frequencies after:", np.sum(self.valid_idx))
 
-    def do_inference(self, algorithm, mic_idx, calibrate=True, normalize=True, ax=None, 
-                     interpolate=INTERPOLATE):
+    def do_inference(
+        self,
+        algorithm,
+        mic_idx,
+        calibrate=True,
+        normalize=True,
+        ax=None,
+        interpolate=INTERPOLATE,
+    ):
         """
         Perform distance inference on current data.
         """
         from copy import deepcopy
+
         if calibrate and not self.is_calibrated:
             self.calibrate()
 
         valid = deepcopy(self.valid_idx)
         for mic, slice_ in self.slices.items():
             valid = valid & (~np.isnan(slice_))
-        #valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
+        # valid = self.valid_idx & np.all(~np.isnan(self.slices), axis=0)
 
         if algorithm == "bayes":
             sigma = self.stds[mic_idx] if self.stds is not None else None
             dists_cm, proba, diffs_cm = get_probability_bayes(
-                self.slices[mic_idx][valid] ** 2, 
+                self.slices[mic_idx][valid] ** 2,
                 self.values[valid],
                 mic_idx=mic_idx,
                 distance_range=self.distance_range_cm,
                 sigma=sigma,
                 azimuth_deg=self.azimuth_deg,
-                interpolate=interpolate
+                interpolate=interpolate,
             )
         elif algorithm == "cost":
             if interpolate:
@@ -291,7 +299,6 @@ def get_abs_fft(f_slice, n_max=N_MAX):
 
 
 def get_differences(frequencies, n_max=N_MAX):
-
     n = max(len(frequencies), n_max)
     df = np.median(np.diff(frequencies))
     deltas_cm = np.fft.rfftfreq(n, df) * SPEED_OF_SOUND * 100
@@ -299,7 +306,6 @@ def get_differences(frequencies, n_max=N_MAX):
 
 
 def convert_differences_to_distances(differences_cm, mic_idx, azimuth_deg):
-
     distances = get_orthogonal_distance_from_global(
         azimuth_deg=azimuth_deg, deltas_cm=differences_cm, mic_idx=mic_idx
     )
@@ -359,8 +365,8 @@ def get_probability_bayes(
             frequencies,
             f_slice,  # step=20
         )
-        #print("freqs = ", repr(frequencies))
-        #print("freqs_interp = ", repr(frequencies_grid))
+        # print("freqs = ", repr(frequencies))
+        # print("freqs_interp = ", repr(frequencies_grid))
         abs_fft = get_abs_fft(f_slice_grid, n_max=n_max)
         differences = get_differences(frequencies_grid, n_max=n_max)
         posterior = get_posterior(abs_fft, sigma, data=f_slice_grid)
@@ -601,7 +607,7 @@ def get_1d_spectrum(spec):
     tol = max(np.min(spec[spec > 0]), 1e-2)
     spec[spec < tol] = tol
     vals = np.sum(np.log10(spec), axis=0)
-    if ((np.nanmax(vals) - np.nanmin(vals)) > 0):
+    if (np.nanmax(vals) - np.nanmin(vals)) > 0:
         vals = (vals - np.nanmin(vals)) / (np.nanmax(vals) - np.nanmin(vals))
     return vals
 

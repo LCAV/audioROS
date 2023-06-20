@@ -9,12 +9,12 @@ import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 
+from .constants_crazyflie import FS, N_BUFFER
+
 PAD_FACTOR = 5  # for interpolating peaks
 
 
 def interpolate_peak(spec_slice, freqs, pad_factor=PAD_FACTOR, ax=None):
-    from crazyflie_description_py.parameters import FS, N_BUFFER
-
     assert len(spec_slice) == len(freqs), (len(spec_slice), len(freqs))
 
     # create full frequency response by padding with zeros
@@ -44,9 +44,9 @@ def interpolate_peak(spec_slice, freqs, pad_factor=PAD_FACTOR, ax=None):
 
 
 def fit_peak(abs_spec_slice, bin_max=None):
-    """ 
-    Peak parabola fitting as explained in 
-    https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html 
+    """
+    Peak parabola fitting as explained in
+    https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html
     """
     assert not np.any(
         np.iscomplex(abs_spec_slice)
@@ -127,9 +127,9 @@ def _get_spectrogram_constant_bins(stft):
 
 
 def get_spectrogram(df):
-    """ 
+    """
     :param df: pandas dataframe with signals_f (n_mics x n_freqs) and frequencies (n_freqs) in each row.
-    :return: spectrogram (absolute value squared) n_freqs x n_mics x n_times  
+    :return: spectrogram (absolute value squared) n_freqs x n_mics x n_times
     """
     frequencies_matrix = np.array([*df.frequencies.values])
     frequencies_start = df.iloc[0].frequencies
@@ -145,8 +145,7 @@ def get_spectrogram(df):
 
 
 def get_spectrogram_raw(frequencies_matrix, stft):
-    """ 
-    """
+    """ """
     frequencies_start = frequencies_matrix[0, :]
     varying_bins = np.any(
         np.any(frequencies_start[None, :] - frequencies_matrix, axis=0)
@@ -159,9 +158,9 @@ def get_spectrogram_raw(frequencies_matrix, stft):
 
 
 def add_spectrogram(row):
-    """  Add spectrogram to rows (preprocessed, so they have stft and frequencies_matrix).
+    """Add spectrogram to rows (preprocessed, so they have stft and frequencies_matrix).
 
-    Usage: 
+    Usage:
     df = df.assign(spectrogram=None)
     df = df.apply(add_spectrogram, axis=1)
 
@@ -262,9 +261,9 @@ def psd_df_from_spec(
 
     :param spec: spectrogram (n_freqs x n_mics x n_times)
     :param freqs: frequencies (n_freqs,)
-    :param mode: "maximum" or "all". 
+    :param mode: "maximum" or "all".
 
-    structure of output: 
+    structure of output:
     | mic | frequency | distance | time | magnitude
 
     :param return: psd_df

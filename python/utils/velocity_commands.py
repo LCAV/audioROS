@@ -11,20 +11,17 @@ import matplotlib.pylab as plt
 
 def compute_velocity_commands(times, accelerations, control_time=0.1, ax=None):
     """
-    Compute velocity commands that approximate the given accelerations. 
+    Compute velocity commands that approximate the given accelerations.
 
     :param times: list of durations (seconds)
     :param accelerations: list of corresponding accelerations (m/s^2)
     :param control_time: time (seconds) between two velocity commands (the smaller the better the approximation)
     :param ax: optional ax to plot results on.
 
-    :returns: 
+    :returns:
         control_times: list of control times (simply range of times with given spacing)
-        control_velocities: list of velocities to be sent at given control times. 
+        control_velocities: list of velocities to be sent at given control times.
     """
-
-    end_velocity = 0
-    end_time = 0
     control_velocities = np.array([0])
     control_times = [0]
     for t, a in zip(times, accelerations):

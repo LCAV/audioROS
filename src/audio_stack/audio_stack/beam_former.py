@@ -17,6 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + "/../../../crazyflie-audio/python/")
 from algos_beamforming import get_das_beamformer, get_powers
 from algos_beamforming import get_lcmv_beamformer_fast as get_lcmv_beamformer
+from utils.algos_basics import rotate_mics
 
 # from algos_beamforming import get_lcmv_beamformer as get_lcmv_beamformer
 
@@ -77,18 +78,6 @@ def combine_rows(matrix, method, keepdims=False):
     else:
         raise ValueError(method)
     return combined_matrix
-
-
-def rotate_mics(mics, orientation_deg=0):
-    """
-    :param mics: mic positions (n_mics, 2)
-    :return mics_rotated: (n_mics, 2)
-    """
-    rot = Rotation.from_euler("z", orientation_deg, degrees=True)
-    R = rot.as_matrix()  # 3 x 3
-    mics_aug = np.c_[mics, np.ones(mics.shape[0])].T  # 3 x 4
-    mics_rotated = R.dot(mics_aug)[:2, :]  # 2 x 4
-    return mics_rotated.T
 
 
 class BeamFormer(object):

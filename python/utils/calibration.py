@@ -12,7 +12,6 @@ from scipy.optimize import minimize, brute
 
 from .constants import PLATFORM
 from .data_collector import DataCollector, prune_df_matrix
-from .pandas_utils import filter_by_dict
 from .simulation import get_dist_slice_theory, WALL_ABSORPTION
 
 if PLATFORM == "epuck":
@@ -63,7 +62,11 @@ def get_calibration_function_median(
         gains = np.nanmedian(matrix, axis=2)
 
     calib_function = interp1d(
-        frequencies, gains, kind=KIND, fill_value=FILL_VALUE, bounds_error=BOUNDS_ERROR,
+        frequencies,
+        gains,
+        kind=KIND,
+        fill_value=FILL_VALUE,
+        bounds_error=BOUNDS_ERROR,
     )
     if ax is not None:
         plot_calibration(frequencies, gains, calib_function, ax=ax)
@@ -192,7 +195,12 @@ def fit_distance_slice(
         coeffs = brute(distance_slice_cost, bounds, args=(chosen_mics,))
     elif method == "minimize":
         x0 = [(b[1] + b[0]) / 2 for b in bounds]
-        sol = minimize(distance_slice_cost, x0, args=(chosen_mics), bounds=bounds,)
+        sol = minimize(
+            distance_slice_cost,
+            x0,
+            args=(chosen_mics),
+            bounds=bounds,
+        )
         if not sol.success:
             print("Warning: did not converge", sol.message)
         coeffs = sol.x

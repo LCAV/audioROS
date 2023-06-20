@@ -15,7 +15,7 @@ DIM = 2
 
 # standalone functions
 def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
-    """ Return path differences in m """
+    """Return path differences in m"""
     context = Context.get_platform_setup()
     delta = (
         context.get_delta(
@@ -28,7 +28,7 @@ def get_deltas_from_global(azimuth_deg, distances_cm, mic_idx, ax=None):
 
 
 def get_orthogonal_distance_from_global(azimuth_deg, deltas_cm, mic_idx, ax=None):
-    """ Return distances in cm """
+    """Return distances in cm"""
     context = Context.get_platform_setup()
     distances_cm = context.get_distance(deltas_cm, azimuth_deg, mic_idx)
     return distances_cm
@@ -81,12 +81,12 @@ def get_normal(distance, azimuth_deg, elevation_deg=0):
 
 def get_source_image(normal, source):
     d = np.linalg.norm(normal)
-    l = 2 * (1 - source.dot(normal) / (d ** 2))
+    l = 2 * (1 - source.dot(normal) / (d**2))
     return source + l * normal
 
 
 def get_delta_from_normal(mic, source, normal):
-    """ 
+    """
     :param normal: can be of shape (n_distances x dim)
     """
     vec = source - mic
@@ -97,8 +97,8 @@ def get_delta_from_normal(mic, source, normal):
     else:
         d = np.linalg.norm(normal)
 
-    l = 2 * (1 - np.inner(source, normal) / (d ** 2))
-    r1_sq = r0 ** 2 + 2 * l * np.inner(vec, normal) + (l * d) ** 2
+    l = 2 * (1 - np.inner(source, normal) / (d**2))
+    r1_sq = r0**2 + 2 * l * np.inner(vec, normal) + (l * d) ** 2
     delta = np.sqrt(r1_sq) - r0
     return delta
 
@@ -110,7 +110,7 @@ def get_angles(mic, source, delta_m, distance_m):
     r1 = delta_m + r0
     # import pudb; pudb.set_trace()
 
-    cos = (r1 ** 2 - r0 ** 2 - 4 * distance_m ** 2) / (4 * distance_m * r0)
+    cos = (r1**2 - r0**2 - 4 * distance_m**2) / (4 * distance_m * r0)
 
     EPS = 1e-10
     if np.abs(cos) > 1 + EPS:
@@ -149,7 +149,7 @@ class Context(object):
 
     @staticmethod
     def get_crazyflie_setup(dim=DIM):
-        from crazyflie_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
+        from .constants_crazyflie import MIC_POSITIONS, BUZZER_POSITION
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
         source = np.array(BUZZER_POSITION)[0, :dim]
@@ -157,7 +157,7 @@ class Context(object):
 
     @staticmethod
     def get_epuck_setup(dim=DIM):
-        from epuck_description_py.parameters import MIC_POSITIONS, BUZZER_POSITION
+        from .constants_epuck import MIC_POSITIONS, BUZZER_POSITION
 
         mics = np.array(MIC_POSITIONS)[:, :dim]
         source = np.array(BUZZER_POSITION)[0, :dim]
@@ -183,7 +183,7 @@ class Context(object):
 
     def get_source_image(self, normal):
         d = np.linalg.norm(normal)
-        l = 2 * (1 - self.source.dot(normal) / (d ** 2))
+        l = 2 * (1 - self.source.dot(normal) / (d**2))
         return self.source + l * normal
 
     def get_normal(self, distances_cm, azimuth_deg):
@@ -197,7 +197,7 @@ class Context(object):
         return get_delta_from_normal(self.mics[mic_idx], self.source, normal)
 
     def get_delta(self, azimuth_deg, distances_cm, mic_idx=0):
-        """ 
+        """
         :return: path difference in cm.
         """
         r0_cm = self.get_direct_path(mic_idx) * 1e2
@@ -205,12 +205,12 @@ class Context(object):
         theta = azimuth_deg / 180 * np.pi
         cos = np.cos(theta - theta0)
         return (
-            np.sqrt(r0_cm ** 2 + 4 * distances_cm ** 2 - 4 * distances_cm * r0_cm * cos)
+            np.sqrt(r0_cm**2 + 4 * distances_cm**2 - 4 * distances_cm * r0_cm * cos)
             - r0_cm
         )
 
     def get_distance(self, delta_cm, azimuth_deg, mic_idx=0):
-        """ 
+        """
         :return: distance to wall in cm.
         """
         r0_cm = self.get_direct_path(mic_idx) * 1e2
@@ -219,26 +219,26 @@ class Context(object):
         cos = np.cos(theta - theta0)
         return 0.5 * (
             r0_cm * cos
-            + np.sqrt(delta_cm * (delta_cm + 2 * r0_cm) + r0_cm ** 2 * cos ** 2)
+            + np.sqrt(delta_cm * (delta_cm + 2 * r0_cm) + r0_cm**2 * cos**2)
         )
 
     def get_delta_gradient(self, azimuth_deg, distances_cm, mic_idx):
-        """ gradient of delta differentiated by angle """
+        """gradient of delta differentiated by angle"""
         r0_cm = self.get_direct_path(mic_idx) * 1e2
         theta0 = self.get_theta0(mic_idx)  # in rad
         theta = azimuth_deg / 180 * np.pi
         return np.abs(
             (4 * distances_cm - 2 * r0_cm * np.cos(theta - theta0))
             / np.sqrt(
-                r0_cm ** 2
-                + 4 * distances_cm ** 2
+                r0_cm**2
+                + 4 * distances_cm**2
                 - 4 * distances_cm * r0_cm * np.cos(theta - theta0)
             )
         )
 
     # TODO(FD) test below function
     def get_delta_gradient_angle(self, distance_m, azimuths_deg, mic_idx):
-        """ gradient of delta differentiated by angle """
+        """gradient of delta differentiated by angle"""
         r0_m = self.get_direct_path(mic_idx)
         theta0 = self.get_theta0(mic_idx)  # in rad
         azimuths = azimuths_deg / 180 * np.pi
@@ -248,14 +248,14 @@ class Context(object):
             * r0_m
             * np.sin(azimuths - theta0)
             / np.sqrt(
-                r0_m ** 2
-                + 4 * distance_m ** 2
+                r0_m**2
+                + 4 * distance_m**2
                 - 4 * distance_m * r0_m * np.cos(azimuths - theta0)
             )
         )
 
     def get_total_distance(self, delta_m, azimuth_deg, mic_idx):
-        """ 
+        """
         :return: distance of centre to wall in m.
         """
         warnings.warn(

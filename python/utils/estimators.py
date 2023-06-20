@@ -2,9 +2,6 @@
 estimators.py: Combine angle or distance distributions from multiple mics to yield one final distribution.
 
 """
-import warnings
-import time
-
 import numpy as np
 from scipy.interpolate import interp1d
 

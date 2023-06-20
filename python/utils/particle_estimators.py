@@ -36,6 +36,7 @@ INIT_UNIFORM = True
 # get stuck in local minima. We replace the particles of lowest weight.
 RANDOM_PARTICLE_RATIO = 0.1
 
+
 class State(Enum):
     NEED_UPDATE = 0
     NEED_PREDICT = 1
@@ -83,7 +84,7 @@ class ParticleEstimator(BaseEstimator):
         # (more localized in a sphere round center) but it is good enough.
         self.n_particles = n_particles
         self.states = np.empty((n_particles, 2))
-        
+
         self.weights = np.ones(n_particles) / n_particles
 
         self.distances_cm = distances_cm
@@ -106,15 +107,14 @@ class ParticleEstimator(BaseEstimator):
             self.state = State.NEED_INIT
 
     def effective_n(self):
-        return 1.0 / np.sum(self.weights ** 2)
+        return 1.0 / np.sum(self.weights**2)
 
     def add_distributions(self, *args, **kwargs):
         super().add_distributions(*args, **kwargs)
-        if (self.state != State.NEED_INIT):
+        if self.state != State.NEED_INIT:
             self.state = State.NEED_PREDICT
 
     def get_distributions(self, simplify_angles=False, method="histogram"):
-
         if simplify_angles:
             # sample angles from current direction.
             angle_deg = self.get_forward_angle()
@@ -123,22 +123,26 @@ class ParticleEstimator(BaseEstimator):
             )
 
         # sample from the first measurements for initialization.
-        if (self.state == State.NEED_INIT):
+        if self.state == State.NEED_INIT:
             # use only first mic and the approximation that delta = 2*d
             print("initializing from measurements")
             mics = list(self.difference_p[self.index].keys())
             difference_p = self.difference_p[self.index][mics[0]]
             difference_hist = difference_p(self.distances_cm)
             difference_hist /= np.sum(difference_hist)
-            self.states[:, 1] = np.random.choice(self.distances_cm, self.n_particles, p=difference_hist)
+            self.states[:, 1] = np.random.choice(
+                self.distances_cm, self.n_particles, p=difference_hist
+            )
 
             # use angles from beamforming if possible, otherwise uniform.
             if self.angle_probs[self.index] is not None:
                 print("using angles from beamforming")
-                angle_p = self.angle_probs[self.index]  
+                angle_p = self.angle_probs[self.index]
                 angle_hist = angle_p(self.angles_deg)
                 angle_hist /= np.sum(angle_hist)
-                self.states[:, 0] = np.random.choice(self.angles_deg, self.n_particles, p=angle_hist)
+                self.states[:, 0] = np.random.choice(
+                    self.angles_deg, self.n_particles, p=angle_hist
+                )
             else:
                 self.states[:, 0] = np.random.choice(self.angles_deg, self.n_particles)
             self.state = State.NEED_PREDICT
@@ -201,11 +205,15 @@ class ParticleEstimator(BaseEstimator):
         if RANDOM_PARTICLE_RATIO > 0:
             n_uniform = int(round(self.n_particles * RANDOM_PARTICLE_RATIO))
             indices = np.argsort(self.weights)
-            self.states[indices[:n_uniform], 0] = np.random.choice(self.angles_deg, n_uniform)
-            self.states[indices[:n_uniform], 0] = np.random.choice(self.distances_cm, n_uniform)
+            self.states[indices[:n_uniform], 0] = np.random.choice(
+                self.angles_deg, n_uniform
+            )
+            self.states[indices[:n_uniform], 0] = np.random.choice(
+                self.distances_cm, n_uniform
+            )
 
         # more robust if we always resample.
-        if True: #self.effective_n() < self.states.shape[0] / 2:
+        if True:  # self.effective_n() < self.states.shape[0] / 2:
             self.state = State.NEED_RESAMPLE
         else:
             self.state = State.READY
@@ -223,7 +231,9 @@ class ParticleEstimator(BaseEstimator):
 
             a_global = self.rotations[previous] + self.states[:, 0]
             self.states[:, 0] = from_0_to_360(self.states[:, 0] - rot_delta)
-            self.states[:, 1] = self.states[:, 1] - get_normal_matrix(a_global) @ pos_delta
+            self.states[:, 1] = (
+                self.states[:, 1] - get_normal_matrix(a_global) @ pos_delta
+            )
 
         self.states[:, 0] += np.random.normal(
             scale=STD_ANGLE_DEG, size=self.n_particles
@@ -250,7 +260,7 @@ class ParticleEstimator(BaseEstimator):
 
         mean_distance = np.average(self.states[:, 1], weights=self.weights)
         var_distance = np.average(
-                (self.states[:, 1] - mean_distance) ** 2, weights=self.weights
+            (self.states[:, 1] - mean_distance) ** 2, weights=self.weights
         )
 
         sin_ = np.sum(

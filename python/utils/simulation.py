@@ -1,19 +1,18 @@
-import sys
-
 import numpy as np
 
-from audio_stack.beam_former import rotate_mics
-from audio_simulation.geometry import ROOM_DIM
-
+from .algos_basics import rotate_mics
+from .constants import ROOM_DIM
 from .constants import SPEED_OF_SOUND, PLATFORM
 
 if PLATFORM == "epuck":
-    from epuck_description_py.parameters import N_BUFFER, FS
-    from epuck_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+    from .constants_epuck import N_BUFFER, FS
+    from .constants_epuck import WALL_ANGLE_DEG_STEPPER
+
     WIDEBAND_FILE = "results/wideband_epuck.npy"
 else:
-    from crazyflie_description_py.parameters import N_BUFFER, FS
-    from crazyflie_description_py.experiments import WALL_ANGLE_DEG_STEPPER
+    from .constants_crazyflie import N_BUFFER, FS
+    from .constants_crazyflie import WALL_ANGLE_DEG_STEPPER
+
     WIDEBAND_FILE = "results/wideband_crazyflie.npy"
 from .frequency_analysis import get_bin
 from .geometry import *
@@ -69,7 +68,12 @@ def create_wideband_signal(frequencies, duration_sec=2.0):
 
 
 def generate_room(
-    distance_cm=0, azimuth_deg=WALL_ANGLE_DEG_STEPPER, ax=None, fs_here=FS, source=True, chosen_mics=None
+    distance_cm=0,
+    azimuth_deg=WALL_ANGLE_DEG_STEPPER,
+    ax=None,
+    fs_here=FS,
+    source=True,
+    chosen_mics=None,
 ):
     import pyroomacoustics as pra
 
@@ -147,7 +151,6 @@ def get_df_theory_simple(
     gain=GAIN,
     c=SPEED_OF_SOUND,
 ):
-
     alpha0 = 1 / (4 * np.pi * d0)  #
     alpha1 = (1 - wall_absorption) / (4 * np.pi * (deltas_m + d0))
 
@@ -224,9 +227,11 @@ def get_freq_slice_pyroom(
     signal,
     azimuth_deg=WALL_ANGLE_DEG_STEPPER,
     chosen_mics=None,
-    return_complex=False
+    return_complex=False,
 ):
-    room = generate_room(distance_cm=distance_cm, azimuth_deg=azimuth_deg, chosen_mics=chosen_mics)
+    room = generate_room(
+        distance_cm=distance_cm, azimuth_deg=azimuth_deg, chosen_mics=chosen_mics
+    )
 
     n_times = len(signal) // N_BUFFER
     avg_signal = get_average_signals(
@@ -239,13 +244,17 @@ def get_freq_slice_pyroom(
         bins_ = np.arange(len(frequencies))
 
     if return_complex:
-        return avg_signal[:, bins_] 
+        return avg_signal[:, bins_]
     else:
         return np.abs(avg_signal)[:, bins_] ** 2
 
 
 def get_dist_slice_pyroom(
-    frequency, distances_cm, azimuth_deg=WALL_ANGLE_DEG_STEPPER, n_times=100, return_complex=False
+    frequency,
+    distances_cm,
+    azimuth_deg=WALL_ANGLE_DEG_STEPPER,
+    n_times=100,
+    return_complex=False,
 ):
     from .frequency_analysis import get_bin
 
@@ -262,7 +271,9 @@ def get_dist_slice_pyroom(
     Hs = []
     for d in distances_cm:
         room = generate_room(distance_cm=d, azimuth_deg=azimuth_deg)
-        avg_signal = get_average_signals(room, signal, n_buffer=N_BUFFER, n_times=n_times)
+        avg_signal = get_average_signals(
+            room, signal, n_buffer=N_BUFFER, n_times=n_times
+        )
         if return_complex:
             Hs.append(avg_signal[:, bin_])
         else:

@@ -1,0 +1,26 @@
+name: audioROS
+channels:
+    - defaults
+    - conda-forge
+    - anaconda
+
+dependencies:
+    - python=3.10
+    - pip=22.3
+
+    - numpy>=1.23.5
+    - scipy>=1.9.3
+    - seaborn>=0.12.2
+    - pytest>=7.2.2
+    - jupyter>=1.0.0
+    - black>=23.1.0
+    - pyserial
+      # for audio notebook
+    - bokeh
+    - pyaudio
+    - librosa
+
+    - pip:
+      - pyroomacoustics
+      - cflib
+      - sounddevice
